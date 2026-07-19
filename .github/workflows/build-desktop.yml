@@ -40,8 +40,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # windows-2022, not windows-latest: node-gyp 11.x can't detect the
+          # newer Visual Studio on the windows-latest image, and the native
+          # rebuild (better-sqlite3, node-pty) needs a VS it recognizes.
           - arch: x64
-            os: windows-latest
+            os: windows-2022
           - arch: arm64
             os: windows-11-arm
 
