@@ -1,0 +1,77 @@
+{
+	"display_information": {
+		"name": "GatedSpace",
+		"description": "GatedSpace's agentic development assistant",
+		"background_color": "#0a0a0a",
+		"long_description": "Manage coding tasks and agent workflows with GatedSpace. Create and update tasks from Slack, then continue the work in isolated GatedSpace workspaces. Just start a DM with GatedSpace or mention it in a channel.\r\n\r\nAI agents can make mistakes. Review generated work before shipping it."
+	},
+	"features": {
+		"app_home": {
+			"home_tab_enabled": true,
+			"messages_tab_enabled": true,
+			"messages_tab_read_only_enabled": false
+		},
+		"bot_user": {
+			"display_name": "GatedSpace",
+			"always_online": true
+		},
+		"assistant_view": {
+			"assistant_description": "GatedSpace assistant - plan tasks, coordinate coding agents, and review work",
+			"suggested_prompts": [
+				{
+					"title": "Create Task",
+					"message": "Help me create a task for learning about how the GatedSpace Slack assistant works"
+				}
+			]
+		},
+		"rich_previews": {
+			"is_active": true,
+			"entity_types": ["slack#/entities/task"]
+		}
+	},
+	"oauth_config": {
+		"redirect_urls": [
+			"{{INTEGRATIONS_PUBLIC_API_URL}}/api/integrations/slack/callback"
+		],
+		"scopes": {
+			"bot": [
+				"app_mentions:read",
+				"chat:write",
+				"reactions:write",
+				"channels:history",
+				"groups:history",
+				"im:history",
+				"im:read",
+				"im:write",
+				"mpim:history",
+				"users:read",
+				"files:read",
+				"assistant:write",
+				"links:read",
+				"links:write",
+				"incoming-webhook"
+			]
+		}
+	},
+	"settings": {
+		"event_subscriptions": {
+			"request_url": "{{INTEGRATIONS_PUBLIC_API_URL}}/api/integrations/slack/events",
+			"bot_events": [
+				"app_mention",
+				"app_home_opened",
+				"assistant_thread_context_changed",
+				"assistant_thread_started",
+				"entity_details_requested",
+				"link_shared",
+				"message.im"
+			]
+		},
+		"interactivity": {
+			"is_enabled": true,
+			"request_url": "{{INTEGRATIONS_PUBLIC_API_URL}}/api/integrations/slack/interactions"
+		},
+		"org_deploy_enabled": false,
+		"socket_mode_enabled": false,
+		"token_rotation_enabled": false
+	}
+}

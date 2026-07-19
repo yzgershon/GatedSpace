@@ -1,0 +1,200 @@
+name: Build Desktop App
+
+# GatedSpace ships Windows only (x64 + arm64). The upstream macOS/Linux jobs
+# were removed — see git history if they're ever needed again.
+
+on:
+  workflow_call:
+    inputs:
+      channel:
+        description: "Release channel (stable or canary)"
+        required: true
+        type: string
+      version_suffix:
+        description: "Version suffix to append (e.g., -canary). Empty for stable."
+        required: false
+        type: string
+        default: ""
+      electron_builder_config:
+        description: "Electron builder config file"
+        required: false
+        type: string
+        default: "electron-builder.ts"
+      artifact_prefix:
+        description: "Prefix for artifact names"
+        required: false
+        type: string
+        default: "desktop"
+      artifact_retention_days:
+        description: "Number of days to retain artifacts"
+        required: false
+        type: number
+        default: 30
+
+jobs:
+  build-windows:
+    name: Build - Windows (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: windows-latest
+          - arch: arm64
+            os: windows-11-arm
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # The repo has deeply nested paths that overflow MAX_PATH without this.
+      - name: Enable long paths
+        run: git config --system core.longpaths true
+
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        id: setup-bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: .bun-version
+
+      - name: Cache dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ steps.setup-bun.outputs.bun-revision }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-bun-${{ steps.setup-bun.outputs.bun-revision }}-
+
+      - name: Install dependencies
+        run: bun install --frozen --ignore-scripts
+
+      # postinstall (which normally runs this) is skipped by --ignore-scripts
+      # and exits early in CI. win32-arm64 needs the hand-built binaries that
+      # upstream packages don't publish to npm.
+      - name: Install vendored win32-arm64 native binaries
+        if: matrix.arch == 'arm64'
+        run: bun scripts/vendor-native-win-arm64.ts
+
+      - name: Install desktop native dependencies
+        working-directory: apps/desktop
+        run: bun run install:deps
+
+      - name: Set version suffix
+        if: inputs.version_suffix != ''
+        working-directory: apps/desktop
+        run: |
+          # Read current version and append suffix
+          CURRENT_VERSION=$(node -p "require('./package.json').version")
+          NEW_VERSION="${CURRENT_VERSION}${{ inputs.version_suffix }}"
+          echo "Setting version to: $NEW_VERSION"
+          # Update package.json version using node
+          node -e "
+            const fs = require('fs');
+            const pkg = require('./package.json');
+            pkg.version = '$NEW_VERSION';
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, '\t') + '\n');
+          "
+          echo "Updated package.json version to $NEW_VERSION"
+
+      - name: Clean dev folder
+        working-directory: apps/desktop
+        run: bun run clean:dev
+
+      - name: Generate file icons
+        working-directory: apps/desktop
+        run: bun run generate:icons
+
+      # All NEXT_PUBLIC_* config has schema defaults; no secrets are required.
+      # Analytics/Sentry keys are intentionally not baked into public builds.
+      - name: Compile app with electron-vite
+        working-directory: apps/desktop
+        env:
+          SUPERSET_WORKSPACE_NAME: superset
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bun run compile:app
+
+      - name: Build Electron app
+        working-directory: apps/desktop
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bun run package -- --publish never --config ${{ inputs.electron_builder_config }} --${{ matrix.arch }}
+
+      - name: Verify packaged app
+        working-directory: apps/desktop
+        run: |
+          ls -la release
+
+          # NSIS installer + blockmap
+          INSTALLER=$(ls -1 release/*-${{ matrix.arch }}.exe 2>/dev/null | head -1)
+          if [ -z "$INSTALLER" ]; then
+            echo "::error::No ${{ matrix.arch }} NSIS installer generated in apps/desktop/release"
+            exit 1
+          fi
+          echo "Installer: $INSTALLER"
+          test -f "${INSTALLER}.blockmap" || {
+            echo "::error::Missing blockmap for $INSTALLER — differential auto-update will be broken"
+            exit 1
+          }
+
+          # Auto-update manifest (latest.yml for stable; channel ymls for prerelease)
+          MANIFEST=$(ls -1 release/*.yml 2>/dev/null | grep -v builder-debug | head -1)
+          if [ -z "$MANIFEST" ]; then
+            echo "::error::No auto-update manifest generated in apps/desktop/release"
+            exit 1
+          fi
+          echo "Update manifest: $MANIFEST"
+
+          # electron-builder names the unpacked dir win-unpacked (x64) or
+          # win-arm64-unpacked (arm64)
+          UNPACKED=$(find release -maxdepth 1 -type d -name "win*unpacked" | head -1)
+          if [ -z "$UNPACKED" ]; then
+            echo "::error::No win-unpacked directory found in release/"
+            exit 1
+          fi
+
+          test -f "$UNPACKED/resources/app-update.yml" || {
+            echo "::error::app-update.yml missing from $UNPACKED/resources/ — auto-update will be broken"
+            exit 1
+          }
+
+          CLI_BIN="$UNPACKED/resources/resources/bin/superset.exe"
+          test -f "$CLI_BIN" || {
+            echo "::error::Bundled CLI missing at $CLI_BIN"
+            exit 1
+          }
+          "$CLI_BIN" --version
+
+          BINDING="$UNPACKED/resources/app.asar.unpacked/node_modules/@duckdb/node-bindings-win32-${{ matrix.arch }}/duckdb.node"
+          test -f "$BINDING" || {
+            echo "::error::DuckDB native binding missing from packaged app. Expected: $BINDING"
+            ls -la "$UNPACKED/resources/app.asar.unpacked/node_modules/@duckdb" 2>/dev/null || echo "  (no @duckdb directory in app.asar.unpacked)"
+            exit 1
+          }
+          echo "OK: bundled $BINDING ($(du -h "$BINDING" | cut -f1))"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.artifact_prefix }}-win-${{ matrix.arch }}-installer
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.exe.blockmap
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error
+
+      - name: Upload auto-update manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ${{ inputs.artifact_prefix }}-win-${{ matrix.arch }}-update-manifest
+          path: |
+            apps/desktop/release/*.yml
+            !apps/desktop/release/builder-debug.yml
+          retention-days: ${{ inputs.artifact_retention_days }}
+          if-no-files-found: error

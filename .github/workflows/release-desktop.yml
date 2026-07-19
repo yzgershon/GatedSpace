@@ -1,0 +1,135 @@
+name: Release Desktop App
+
+on:
+  push:
+    tags:
+      - "desktop-v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g., 1.0.0)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/build-desktop.yml
+    with:
+      channel: stable
+      electron_builder_config: electron-builder.ts
+      artifact_prefix: desktop
+      artifact_retention_days: 30
+    secrets: inherit
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+
+      - name: Find previous desktop release tag
+        id: prev_tag
+        run: |
+          CURRENT_TAG="${{ github.ref_name }}"
+          # Get all desktop tags sorted by version, find the one before current
+          PREVIOUS_TAG=$(git tag -l 'desktop-v*' | sort -V | grep -B1 "^${CURRENT_TAG}$" | head -1)
+          if [ "$PREVIOUS_TAG" = "$CURRENT_TAG" ] || [ -z "$PREVIOUS_TAG" ]; then
+            # Current tag is the first or no previous found, get the oldest desktop tag
+            PREVIOUS_TAG=""
+          fi
+          echo "current_tag=${CURRENT_TAG}" >> $GITHUB_OUTPUT
+          echo "previous_tag=${PREVIOUS_TAG}" >> $GITHUB_OUTPUT
+          echo "Current tag: ${CURRENT_TAG}"
+          echo "Previous tag: ${PREVIOUS_TAG:-none}"
+
+      # Both arch manifests are named latest.yml, so merge-multiple clobbers
+      # one — harmless, the merge step below overwrites it with the real
+      # two-arch manifest.
+      - name: Download all artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: release-artifacts
+          pattern: desktop-win-*
+          merge-multiple: true
+
+      - name: Merge Windows auto-update manifests
+        uses: ./.github/actions/merge-win-manifests
+        with:
+          artifact-prefix: desktop
+          manifest-name: latest.yml
+
+      - name: Create stable-named copies for latest download URLs
+        run: |
+          cd release-artifacts
+          # Stable-named copies (without version) for /releases/latest/download/ URLs
+          for file in *.exe; do
+            if [[ -f "$file" ]]; then
+              # e.g. GatedSpace-1.14.1-x64.exe -> x64
+              arch=$(echo "$file" | sed -E 's/.*-([^-]+)\.exe$/\1/')
+              cp "$file" "GatedSpace-${arch}.exe"
+              echo "Created stable copy: GatedSpace-${arch}.exe"
+            fi
+          done
+          echo "Release artifacts:"
+          ls -la
+
+      - name: Generate release notes
+        id: release_notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PREVIOUS_TAG="${{ steps.prev_tag.outputs.previous_tag }}"
+          CURRENT_TAG="${{ steps.prev_tag.outputs.current_tag }}"
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            echo "Generating notes from ${PREVIOUS_TAG} to ${CURRENT_TAG}"
+            NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="${CURRENT_TAG}" \
+              -f previous_tag_name="${PREVIOUS_TAG}" \
+              --jq '.body')
+          else
+            echo "No previous tag found, generating notes without comparison"
+            NOTES=$(gh api repos/${{ github.repository }}/releases/generate-notes \
+              -f tag_name="${CURRENT_TAG}" \
+              --jq '.body')
+          fi
+
+          {
+            echo "## Downloads"
+            echo ""
+            echo "| Your PC | Installer |"
+            echo "|---|---|"
+            echo "| Most Windows PCs (Intel/AMD) | \`GatedSpace-*-x64.exe\` |"
+            echo "| Windows on ARM (Snapdragon, Surface Pro X, etc.) | \`GatedSpace-*-arm64.exe\` |"
+            echo ""
+            echo "Not sure? Open Settings > System > About and check \"System type\"."
+            echo ""
+            echo "### Windows SmartScreen"
+            echo ""
+            echo "These installers are not code-signed yet, so Windows SmartScreen may show"
+            echo "\"Windows protected your PC\" on first run. Click **More info**, then"
+            echo "**Run anyway**. The installers are built from this repository's source by"
+            echo "GitHub Actions — you can audit the exact build in the Actions tab."
+            echo ""
+            echo "$NOTES"
+          } > release_notes.md
+          echo "Release notes generated"
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            release-artifacts/* \
+            --title "GatedSpace ${{ github.ref_name }}" \
+            --notes-file release_notes.md \
+            --draft
