@@ -12,6 +12,11 @@ export const env = createEnv({
 		ORGANIZATION_ID: z.string().min(1),
 		DESKTOP_VITE_PORT: z.coerce.number().int().positive(),
 		RELAY_URL: z.string().url().optional(),
+		// "1" = local-only mode: every cloud API call is stubbed out with
+		// CloudDisabledError and cloud mirroring is skipped (see
+		// packages/host-service api/index.ts). Set by the coordinator when the
+		// desktop app runs without an account.
+		SUPERSET_LOCAL_ONLY: z.string().optional(),
 	},
 	runtimeEnv: process.env,
 	emptyStringAsUndefined: true,
