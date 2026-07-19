@@ -49,8 +49,8 @@ import { createTRPCProxyClient, httpBatchLink } from "@trpc/client";
 import type { inferRouterOutputs } from "@trpc/server";
 import { env } from "renderer/env.renderer";
 import { getAuthToken, getJwt } from "renderer/lib/auth-client";
-import { isLocalMode } from "renderer/lib/local-mode";
 import { refreshJwtAfterUnauthorized } from "renderer/lib/jwt-refresh";
+import { isLocalMode } from "renderer/lib/local-mode";
 import superjson from "superjson";
 import { z } from "zod";
 import {

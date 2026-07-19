@@ -125,7 +125,10 @@ export function LocalModeSeeder() {
 		};
 
 		void mirror();
-		const interval = setInterval(() => void mirror(), PROJECT_MIRROR_INTERVAL_MS);
+		const interval = setInterval(
+			() => void mirror(),
+			PROJECT_MIRROR_INTERVAL_MS,
+		);
 		return () => {
 			cancelled = true;
 			clearInterval(interval);

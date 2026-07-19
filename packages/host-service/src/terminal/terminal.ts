@@ -22,6 +22,10 @@ import type { EventBus } from "../events/index.ts";
 import { portManager } from "../ports/port-manager.ts";
 import { getClaudeLaunchEnv } from "../providers/model-providers/LocalModelProvider/utils/activeClaudeConfigDir.ts";
 import {
+	buildAgentResumeCommand,
+	type TerminalAgentStore,
+} from "../terminal-agents/index.ts";
+import {
 	DaemonClient,
 	type Signal as DaemonSignal,
 } from "./DaemonClient/index.ts";
@@ -35,10 +39,6 @@ import {
 	getTerminalBaseEnv,
 	resolveLaunchShell,
 } from "./env.ts";
-import {
-	buildAgentResumeCommand,
-	type TerminalAgentStore,
-} from "../terminal-agents/index.ts";
 import { listTerminalResourceSessions } from "./resource-sessions.ts";
 import {
 	createModeTracker,

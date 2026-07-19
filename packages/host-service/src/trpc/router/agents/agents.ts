@@ -273,8 +273,7 @@ async function runTerminalAgent(
 		// Claude launches under the active account profile (multi-account
 		// setups only; empty overlay otherwise) so the top-left switcher
 		// applies to new agents without needing a wrapper script.
-		envOverlay:
-			config.presetId === "claude" ? getClaudeLaunchEnv() : undefined,
+		envOverlay: config.presetId === "claude" ? getClaudeLaunchEnv() : undefined,
 	});
 
 	if ("error" in result) {
@@ -355,8 +354,7 @@ export const agentsRouter = router({
 				db: ctx.db,
 				eventBus: ctx.eventBus,
 				initialCommand: command,
-				envOverlay:
-					input.agent === "claude" ? getClaudeLaunchEnv() : undefined,
+				envOverlay: input.agent === "claude" ? getClaudeLaunchEnv() : undefined,
 				...(input.cwd ? { cwd: input.cwd } : {}),
 			});
 			if ("error" in result) {

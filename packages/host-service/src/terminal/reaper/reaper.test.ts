@@ -173,7 +173,10 @@ describe("planStaleActiveSweep", () => {
 	it("ignores rows that are already exited or disposed", () => {
 		const stale = planStaleActiveSweep({
 			liveSessionIds: new Set(),
-			rows: [row("t-exited", "exited", OLD), row("t-disposed", "disposed", OLD)],
+			rows: [
+				row("t-exited", "exited", OLD),
+				row("t-disposed", "disposed", OLD),
+			],
 			isLive: noneLive,
 			now: NOW,
 		});

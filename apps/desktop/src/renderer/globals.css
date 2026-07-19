@@ -276,6 +276,7 @@
 	   conversation scroller and directly to xterm's viewport. */
 	.chat-scrollbar,
 	.xterm .xterm-viewport {
+		/* biome-ignore lint/complexity/noImportantStyles: must beat xterm's inline overflow style */
 		overflow-y: scroll !important;
 		scrollbar-gutter: stable;
 		scrollbar-width: auto;

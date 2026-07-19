@@ -302,7 +302,9 @@ function ContributionGraph({
 				continue;
 			}
 			const month = new Date(`${firstDay}T00:00:00Z`).getUTCMonth();
-			monthLabels.push(month === prevMonth ? null : (MONTH_NAMES[month] ?? null));
+			monthLabels.push(
+				month === prevMonth ? null : (MONTH_NAMES[month] ?? null),
+			);
 			prevMonth = month;
 		}
 

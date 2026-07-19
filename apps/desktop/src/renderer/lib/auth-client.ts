@@ -143,4 +143,6 @@ function buildLocalAuthClient(): typeof realAuthClient {
 	};
 }
 
-export const authClient = isLocalMode() ? buildLocalAuthClient() : realAuthClient;
+export const authClient = isLocalMode()
+	? buildLocalAuthClient()
+	: realAuthClient;

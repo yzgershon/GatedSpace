@@ -15,7 +15,11 @@ import { env } from "renderer/env.renderer";
 import { track } from "renderer/lib/analytics";
 import { setAuthToken } from "renderer/lib/auth-client";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import { isLocalMode, isLocalOnlyBuild, setAuthMode } from "renderer/lib/local-mode";
+import {
+	isLocalMode,
+	isLocalOnlyBuild,
+	setAuthMode,
+} from "renderer/lib/local-mode";
 import { SupersetLogo } from "./components/SupersetLogo";
 import { useSessionRecovery } from "./hooks/useSessionRecovery";
 
@@ -145,8 +149,8 @@ function SignInPage() {
 			let result = await postAuthWhenLocalBackendIsReady(
 				"/api/auth/sign-in/email",
 				{
-				email: DEV_EMAIL,
-				password: DEV_PASSWORD,
+					email: DEV_EMAIL,
+					password: DEV_PASSWORD,
 				},
 			);
 			if (!result.ok && result.data.code === "INVALID_EMAIL_OR_PASSWORD") {

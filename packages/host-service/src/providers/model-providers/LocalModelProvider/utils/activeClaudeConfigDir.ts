@@ -43,11 +43,18 @@ function isExhausted(dir: string): boolean {
 			readFileSync(join(dir, "cache", "rate-limits.json"), "utf-8"),
 		);
 		const now = Math.floor(Date.now() / 1000);
-		const spent = (w: any, cap: number) =>
-			w &&
-			w.used_percentage != null &&
-			w.used_percentage >= cap &&
-			(!w.resets_at || w.resets_at > now);
+		const spent = (raw: unknown, cap: number): boolean => {
+			if (!raw || typeof raw !== "object") return false;
+			const w = raw as {
+				used_percentage?: number | null;
+				resets_at?: number | null;
+			};
+			return (
+				w.used_percentage != null &&
+				w.used_percentage >= cap &&
+				(!w.resets_at || w.resets_at > now)
+			);
+		};
 		return spent(rl.five_hour, 95) || spent(rl.seven_day, 98);
 	} catch {
 		return false;

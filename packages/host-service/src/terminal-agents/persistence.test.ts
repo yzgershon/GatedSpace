@@ -40,7 +40,13 @@ function seedSession(
 	},
 ) {
 	db.insert(terminalSessions)
-		.values({ id, status, originWorkspaceId: workspaceId, createdAt: 1, endedAt })
+		.values({
+			id,
+			status,
+			originWorkspaceId: workspaceId,
+			createdAt: 1,
+			endedAt,
+		})
 		.run();
 	db.insert(terminalAgentBindings)
 		.values({

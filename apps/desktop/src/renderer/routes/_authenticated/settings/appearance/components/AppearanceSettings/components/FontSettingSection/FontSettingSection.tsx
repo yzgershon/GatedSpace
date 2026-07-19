@@ -122,7 +122,13 @@ export function FontSettingSection({ variant }: FontSettingSectionProps) {
 			setFontSizeDraft(null);
 			setFontSettings.mutate({ [config.sizeKey]: next });
 		},
-		[fontSizeDraft, currentSize, config.defaultSize, config.sizeKey, setFontSettings],
+		[
+			fontSizeDraft,
+			currentSize,
+			config.defaultSize,
+			config.sizeKey,
+			setFontSettings,
+		],
 	);
 
 	const previewFamily = currentFamily ?? config.defaultFamily;
@@ -166,9 +172,7 @@ export function FontSettingSection({ variant }: FontSettingSectionProps) {
 					size="sm"
 					className="size-8 shrink-0 px-0 font-mono"
 					aria-label={`Decrease ${config.title} size`}
-					disabled={
-						isLoading || (currentSize ?? config.defaultSize) <= 10
-					}
+					disabled={isLoading || (currentSize ?? config.defaultSize) <= 10}
 					onClick={() => stepFontSize(-1)}
 				>
 					−
@@ -192,9 +196,7 @@ export function FontSettingSection({ variant }: FontSettingSectionProps) {
 					size="sm"
 					className="size-8 shrink-0 px-0 font-mono"
 					aria-label={`Increase ${config.title} size`}
-					disabled={
-						isLoading || (currentSize ?? config.defaultSize) >= 24
-					}
+					disabled={isLoading || (currentSize ?? config.defaultSize) >= 24}
 					onClick={() => stepFontSize(1)}
 				>
 					+

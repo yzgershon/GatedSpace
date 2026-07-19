@@ -10,7 +10,7 @@
  * numbers reflect tokens actually processed. Results are cached briefly since
  * parsing walks a few hundred files.
  */
-import { readFileSync, readdirSync, statSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { getClaudeProjectRoots, listClaudeProfiles } from "./claude-profile";
@@ -77,14 +77,17 @@ function readClaudeQuota(
 			"utf8",
 		);
 		const o = JSON.parse(raw);
-		const win = (w: any, minutes: number): QuotaWindow | null =>
-			w && w.used_percentage != null
+		const win = (raw: unknown, minutes: number): QuotaWindow | null => {
+			if (!raw || typeof raw !== "object") return null;
+			const w = raw as { used_percentage?: number | null; resets_at?: number };
+			return w.used_percentage != null
 				? {
 						usedPercent: Math.round(w.used_percentage),
 						windowMinutes: minutes,
 						resetsAt: w.resets_at ?? 0,
 					}
 				: null;
+		};
 		const fiveHour = win(o.five_hour, 300);
 		const weekly = win(o.seven_day, 10080);
 		if (!fiveHour && !weekly) return null;
@@ -153,14 +156,25 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 	const quotas: ProviderQuota[] = [];
 
 	const add = (day: string, name: string, tin: number, tout: number) => {
-		if (!perDayModel.has(day)) perDayModel.set(day, new Map());
-		const dm = perDayModel.get(day)!;
-		if (!dm.has(name)) dm.set(name, { in: 0, out: 0 });
-		dm.get(name)!.in += tin;
-		dm.get(name)!.out += tout;
-		if (!modelTotals.has(name)) modelTotals.set(name, { in: 0, out: 0 });
-		modelTotals.get(name)!.in += tin;
-		modelTotals.get(name)!.out += tout;
+		let dm = perDayModel.get(day);
+		if (!dm) {
+			dm = new Map();
+			perDayModel.set(day, dm);
+		}
+		let cell = dm.get(name);
+		if (!cell) {
+			cell = { in: 0, out: 0 };
+			dm.set(name, cell);
+		}
+		cell.in += tin;
+		cell.out += tout;
+		let total = modelTotals.get(name);
+		if (!total) {
+			total = { in: 0, out: 0 };
+			modelTotals.set(name, total);
+		}
+		total.in += tin;
+		total.out += tout;
 	};
 
 	// ---- Claude Code ----
@@ -173,6 +187,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 		}
 		for (const line of text.split("\n")) {
 			if (!line.trim()) continue;
+			// biome-ignore lint/suspicious/noExplicitAny: untyped JSONL transcript line
 			let o: any;
 			try {
 				o = JSON.parse(line);
@@ -210,6 +225,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 			}
 			for (const line of text.split("\n")) {
 				if (!line.trim()) continue;
+				// biome-ignore lint/suspicious/noExplicitAny: untyped JSONL transcript line
 				let o: any;
 				try {
 					o = JSON.parse(line);
@@ -296,7 +312,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 	const todayNum = Math.floor(now / 86400000);
 	const daySet = new Set(days.map((d) => Math.round(Date.parse(d) / 86400000)));
 	let currentStreak = 0;
-	let s = daySet.has(todayNum)
+	const s = daySet.has(todayNum)
 		? todayNum
 		: daySet.has(todayNum - 1)
 			? todayNum - 1

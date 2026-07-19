@@ -69,9 +69,9 @@ export function PreviewTab({ workspaceId, onOpenUrl }: PreviewTabProps) {
 						No dev server detected
 					</p>
 					<p className="max-w-56 text-[11px] leading-relaxed text-muted-foreground/70">
-						Start the project's dev server in a terminal (or ask an agent
-						to). Detected ports appear here so you can preview changes
-						before committing them.
+						Start the project's dev server in a terminal (or ask an agent to).
+						Detected ports appear here so you can preview changes before
+						committing them.
 					</p>
 				</div>
 			) : (

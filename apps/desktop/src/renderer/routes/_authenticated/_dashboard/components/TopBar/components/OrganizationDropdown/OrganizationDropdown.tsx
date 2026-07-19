@@ -41,7 +41,8 @@ export function OrganizationDropdown({
 	const navigate = useNavigate();
 
 	const utils = electronTrpc.useUtils();
-	const { data: claudeProfile } = electronTrpc.usage.getClaudeProfile.useQuery();
+	const { data: claudeProfile } =
+		electronTrpc.usage.getClaudeProfile.useQuery();
 	const setClaudeProfileMode =
 		electronTrpc.usage.setClaudeProfileMode.useMutation({
 			onSuccess: () => utils.usage.getClaudeProfile.invalidate(),
