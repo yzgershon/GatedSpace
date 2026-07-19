@@ -25,9 +25,9 @@ and workspace management.
 
 <br />
 
-![GatedSpace running four agents in parallel: Claude Code on three different models plus OpenAI Codex, each in its own pane](.github/assets/hero.png)
+![GatedSpace running Claude Code, OpenAI Codex, and Kimi Code in parallel, with the built-in diff review open](.github/assets/hero.png)
 
-<sub>Four agents, four models, one workspace — Claude Code (Fable 5, Opus 4.8, Sonnet 5) and OpenAI Codex running side by side.</sub>
+<sub>Claude Code, OpenAI Codex, and Kimi Code working the same repo in parallel — each in its own pane, with the built-in diff review on the right.</sub>
 
 </div>
 
