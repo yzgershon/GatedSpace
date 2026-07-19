@@ -59,8 +59,9 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the community leaders responsible for enforcement by emailing
-[founders@superset.sh](mailto:founders@superset.sh).
+reported to the maintainer, [@yzgershon](https://github.com/yzgershon), by
+opening an issue or, for sensitive reports, via a
+[private security advisory](https://github.com/yzgershon/GatedSpace/security/advisories/new).
 All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the

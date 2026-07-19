@@ -1,39 +1,51 @@
-When contributing to this repository, please first discuss the change you wish to make via [issues](https://github.com/superset-sh/superset/issues) before making a change. 
+# Contributing to GatedSpace
 
-Please note we have a [code of conduct](./CODE_OF_CONDUCT.md), please follow it in all your interactions with the project.
+Thanks for wanting to help. For anything beyond a small fix, please open an
+[issue](https://github.com/yzgershon/GatedSpace/issues) first so we can discuss
+the change before you invest time in it.
 
-## Local Development Setup
+There is a [code of conduct](./CODE_OF_CONDUCT.md); please follow it in all
+your interactions with the project.
 
-See [**DEVELOPMENT.md**](./DEVELOPMENT.md) for the full guide. TL;DR:
+## Local development setup
+
+See [**DEVELOPMENT.md**](./DEVELOPMENT.md) for the full guide. Short version:
 
 ```bash
-./.superset/setup.local.sh
+bun install
+cd apps/desktop
 bun run dev
 ```
 
-No Neon or third-party credentials required for local development.
+On Windows you also need the Visual Studio 2022 C++ build tools (for native
+modules) and [Git](https://git-scm.com/) on your PATH. No cloud credentials are
+required; public builds run fully local.
 
-## Pull Request Process
+## Before you open a PR
 
-1. To create a Pull Request (PR), [create a fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo) of the project. 
+1. Format and lint: `bun x biome check .` must come back clean. The lint
+   pipeline fails on any diagnostic, including warnings.
+2. Typecheck: `bun run typecheck --filter='!electric-proxy'`.
+3. Tests: `bun run test`. Heads up if you develop on Windows: a number of
+   upstream tests assume Unix (symlinks, socket paths, `/Users` paths) and fail
+   locally while passing in CI. Judge your run against CI, not a local zero.
 
-![fork](https://github.com/user-attachments/assets/d1c3b3a3-a170-4507-8ccc-e10d5afcfb69)
+## Pull request process
 
-2. Create your changes in your fork and [open a PR from that fork.](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork)
+1. [Fork the repo](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/fork-a-repo)
+   and create a branch from `main`.
+2. Make your changes and [open a PR from your fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request-from-a-fork).
+   Describe what changed and link the related issue.
+3. Check **Allow edits from maintainers** so the PR can be updated during
+   review.
+4. CI must be green before merge.
 
-![contribute](https://github.com/user-attachments/assets/2617f366-145d-4418-ba2e-582fc9aedc54)
+One note on history: the public `main` branch is a curated release history.
+Merged contributions are applied to the internal development branch and ship in
+the next release; your PR and commits stay visible on GitHub either way.
 
-3. Update the PR description with details of the changes. Link the issue if relevant.
+## Style
 
-4. Be sure to check the box to "Allow edits from maintainer". This allows maintainers to update your PR if necessary which speeds up the review process. [See more here](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/allowing-changes-to-a-pull-request-branch-created-from-a-fork).
-
-<img width="1327" alt="Screenshot_2024-10-22_at_11 31 50_PM" src="https://github.com/user-attachments/assets/5434ad69-bf5e-4136-be47-81aa8328f9ab">
-
-
-5. Request a review of one of the maintainers. Once accepted, they will be able to merge your PR. 
-
-## Style guide
-
-We try to follow guidelines from [Clean Code](https://gist.github.com/wojteklu/73c6914cc446146b8b533c0988cf8d29) and the boy scoute rule:
-
-"Leave the code cleaner, not messier, than how you found it". 
+The codebase is formatted and linted by [Biome](https://biomejs.dev) (tabs,
+double quotes; see `biome.jsonc`). Match the style of the code around you and
+leave things cleaner than you found them.

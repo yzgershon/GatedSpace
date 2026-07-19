@@ -1,0 +1,48 @@
+name: 🐞 Bug report
+description: Something in GatedSpace is broken or behaving strangely
+title: "[bug] "
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: GatedSpace version
+      description: Shown in Settings, or the installer file name you used.
+      placeholder: "1.14.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x64 (Intel / AMD)
+        - ARM64 (Snapdragon, Surface Pro X, etc.)
+        - Built from source
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a workspace
+        2. Click ...
+        3. See error
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Anything from the app, DevTools console (Ctrl+Shift+I), or a screenshot.

@@ -1,91 +1,79 @@
-# Developing Superset
+# Developing GatedSpace
 
-This guide is for contributors building Superset from source. If you just want to use Superset, [download the macOS app](https://github.com/superset-sh/superset/releases/latest) instead.
+This guide is for contributors building GatedSpace from source. If you just
+want to use the app, [download the installer](https://github.com/yzgershon/GatedSpace/releases/latest)
+instead.
 
 ## Prerequisites
 
-| Tool | Install |
-|:-----|:--------|
-| [Bun](https://bun.sh/) (v1.0+) | `curl -fsSL https://bun.sh/install \| bash` |
-| [Docker](https://docs.docker.com/get-docker/) | Docker Desktop or OrbStack |
-| `jq` | `brew install jq` |
-| [Caddy](https://caddyserver.com/docs/install) | `brew install caddy && caddy trust` |
-| Git 2.20+ and [`gh`](https://cli.github.com/) | `brew install gh` |
+| Tool | Notes |
+|:-----|:------|
+| [Bun](https://bun.sh/) | Version pinned in `.bun-version` |
+| [Node.js](https://nodejs.org/) | LTS is fine; needed by electron-builder and native module rebuilds |
+| Visual Studio 2022 C++ build tools | Windows only, for native modules (node-pty, better-sqlite3, etc.) |
+| Git 2.20+ | On PATH |
 
-macOS is the primary supported platform. Windows / Linux are untested.
+Windows x64 and ARM64 are the primary targets of this fork. The upstream
+macOS/Linux paths still exist but are not what this repository tests.
 
-## Run it (one command)
-
-```bash
-git clone https://github.com/superset-sh/superset.git
-cd superset
-./.superset/setup.local.sh
-bun run dev
-```
-
-That's it. **You do not need a Neon account, Stripe keys, or any other third-party credentials** — `.env.local.example` ships fake placeholders that pass env validation, and `setup.local.sh` runs everything against a local Docker stack.
-
-### What `setup.local.sh` does
-
-1. Copies `.env.local.example` → `.env`
-2. Allocates a per-workspace port range so multiple worktrees don't collide
-3. Brings up Postgres + neon-proxy + Electric + Redis (behind an HTTP shim, for the relay) via `docker compose` (project-scoped to this worktree)
-4. Runs `bun install` and `bun run db:migrate`
-5. Seeds a `Local Admin` dev account via `bun run db:seed-dev`
-6. Writes a gitignored `.superset/config.local.json` overlay so subsequent worktrees automatically use this setup
-
-Re-run the script any time to refresh the workspace. To tear the local DB stack down:
+## Build and run the desktop app
 
 ```bash
-./.superset/teardown.local.sh
-```
-
-### Signing in
-
-After `bun run dev`, open the web app and click the **"Sign in as dev"** button on the sign-in page (also available in the desktop sign-in screen). Or use the credentials directly:
-
-- Email: `admin@local.test`
-- Password: `supersetdev`
-
-The dev sign-in button and email/password auth are gated on `NODE_ENV=development` — they don't ship in production.
-
-## Manual setup (advanced)
-
-If you need to point at real Neon / third-party services instead of the local Docker stack:
-
-```bash
-cp .env.example .env             # fill in real Neon, Stripe, etc. credentials
-cp Caddyfile.example Caddyfile   # HTTPS reverse proxy for Electric streams
+git clone https://github.com/yzgershon/GatedSpace.git
+cd GatedSpace
 bun install
-bun run dev
+cd apps/desktop
+bun run dev          # run the app in dev mode
 ```
 
-## Building the desktop app
+To produce an installer like the released ones:
 
 ```bash
-bun run build
-open apps/desktop/release
+bun run compile:app
+bun run package -- --publish never
+# result lands in apps/desktop/release/
+```
+
+Public release builds additionally set `NEXT_PUBLIC_LOCAL_ONLY=1` in the
+compile environment, which bakes in local-only mode (no sign-in, every feature
+unlocked). Building without that flag produces an app that expects the
+upstream cloud backend; you almost always want the flag.
+
+Cross-building x64 installers from an ARM64 machine (or vice versa) works:
+
+```bash
+TARGET_ARCH=x64 bun run package -- --publish never
 ```
 
 ## Common commands
 
 ```bash
-bun dev                # Start all dev servers
-bun test               # Run tests
-bun run lint:fix       # Fix lint + format
-bun run typecheck      # Type-check all packages
-bun run build          # Build all packages
+bun run test                                 # run tests (turbo, all packages)
+bun x biome check .                          # lint + format check
+bun run typecheck --filter='!electric-proxy' # type-check (electric-proxy is upstream cloud infra)
 ```
 
-See [`AGENTS.md`](./AGENTS.md) for repo structure, monorepo conventions, and database/migration workflow.
+Notes for Windows contributors:
 
-## Troubleshooting
+- A number of upstream tests assume Unix (symlinks, socket paths, `/Users`
+  paths) and fail locally while passing on Linux CI. Judge your branch against
+  CI results, not a local zero.
+- The lint pipeline fails on **any** Biome diagnostic, including warnings, and
+  Biome caps console output at 20 diagnostics, so run the repo-wide check
+  before pushing.
 
-- **`caddy trust` prompts for sudo** — expected, once per machine. Without it Chromium rejects `https://localhost:*` with `ERR_CERT_AUTHORITY_INVALID`.
-- **Port collision** — `setup.local.sh` allocates a fresh port window per worktree. If you ran the script before this change landed, re-run it to migrate.
-- **DB connection errors after pulling main** — re-run `./.superset/setup.local.sh`; it's idempotent and will apply any new migrations.
-- **Stuck Docker stack** — `./.superset/teardown.local.sh` then re-run setup.
+## Repository layout
+
+- `apps/desktop` — the Electron app (main, renderer, preload)
+- `packages/host-service` — the local host service that manages worktrees,
+  agent sessions, and the SQLite store in `~/.superset`
+- `packages/ui`, `packages/shared`, ... — shared libraries
+- `.github/workflows/build-desktop.yml` — the CI pipeline that builds the
+  released installers (x64 on `windows-2022`, ARM64 on `windows-11-arm`)
+
+See [`AGENTS.md`](./AGENTS.md) for monorepo conventions.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the PR process and code-of-conduct expectations.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the PR process and
+[`SECURITY.md`](./SECURITY.md) for reporting vulnerabilities.

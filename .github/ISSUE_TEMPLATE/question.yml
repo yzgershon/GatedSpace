@@ -1,0 +1,12 @@
+name: ❓ Question
+description: Ask for help using GatedSpace
+title: "[question] "
+labels: [question]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: What do you need help with?
+      description: Include what you've already tried if relevant.
+    validations:
+      required: true
