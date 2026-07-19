@@ -22,13 +22,17 @@ const repoRoot = resolve(import.meta.dirname, "..");
 const vendorDir = join(repoRoot, "vendored", "win32-arm64");
 const bunStore = join(repoRoot, "node_modules", ".bun");
 
-const glob = new Bun.Glob("@anush008+tokenizers@*/node_modules/@anush008/tokenizers");
+const glob = new Bun.Glob(
+	"@anush008+tokenizers@*/node_modules/@anush008/tokenizers",
+);
 for (const match of glob.scanSync({ cwd: bunStore, onlyFiles: false })) {
 	const src = join(vendorDir, "tokenizers.win32-arm64-msvc.node");
 	const dest = join(bunStore, match, "tokenizers.win32-arm64-msvc.node");
 	if (existsSync(src) && !existsSync(dest)) {
 		copyFileSync(src, dest);
-		console.log(`[vendor-native] installed tokenizers.win32-arm64-msvc.node -> ${match}`);
+		console.log(
+			`[vendor-native] installed tokenizers.win32-arm64-msvc.node -> ${match}`,
+		);
 	}
 }
 
@@ -46,7 +50,8 @@ for (const match of libsqlGlob.scanSync({ cwd: bunStore, onlyFiles: false })) {
 				{
 					name: "@libsql/win32-arm64-msvc",
 					version: "0.5.22",
-					description: "Vendored local build (upstream publishes no win32-arm64 binary)",
+					description:
+						"Vendored local build (upstream publishes no win32-arm64 binary)",
 					main: "index.node",
 					files: ["index.node"],
 				},
@@ -55,6 +60,8 @@ for (const match of libsqlGlob.scanSync({ cwd: bunStore, onlyFiles: false })) {
 			),
 		);
 		copyFileSync(src, dest);
-		console.log(`[vendor-native] materialized @libsql/win32-arm64-msvc -> ${match}`);
+		console.log(
+			`[vendor-native] materialized @libsql/win32-arm64-msvc -> ${match}`,
+		);
 	}
 }

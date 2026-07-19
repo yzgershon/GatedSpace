@@ -22,12 +22,7 @@
  * hidden. New agents pick up the active profile at launch; running agents
  * keep whichever account they started with.
  */
-import {
-	existsSync,
-	readFileSync,
-	realpathSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 
@@ -51,9 +46,14 @@ export interface ClaudeProfileState {
 
 const PROFILE_FILE = () => join(homedir(), ".superset", "claude-profile.json");
 
-function readJson(path: string): any | null {
+type JsonRecord = Record<string, unknown>;
+
+function readJson(path: string): JsonRecord | null {
 	try {
-		return JSON.parse(readFileSync(path, "utf8"));
+		const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+		return typeof parsed === "object" && parsed !== null
+			? (parsed as JsonRecord)
+			: null;
 	} catch {
 		return null;
 	}
@@ -63,15 +63,24 @@ function hasCreds(dir: string): boolean {
 	return existsSync(join(dir, ".credentials.json"));
 }
 
+interface RateLimitWindow {
+	used_percentage?: number | null;
+	resets_at?: number | null;
+}
+
 function exhausted(dir: string): boolean {
 	const rl = readJson(join(dir, "cache", "rate-limits.json"));
 	if (!rl) return false;
 	const now = Math.floor(Date.now() / 1000);
-	const spent = (w: any, cap: number) =>
-		w &&
-		w.used_percentage != null &&
-		w.used_percentage >= cap &&
-		(!w.resets_at || w.resets_at > now);
+	const spent = (raw: unknown, cap: number): boolean => {
+		if (!raw || typeof raw !== "object") return false;
+		const w = raw as RateLimitWindow;
+		return (
+			w.used_percentage != null &&
+			w.used_percentage >= cap &&
+			(!w.resets_at || w.resets_at > now)
+		);
+	};
 	return spent(rl.five_hour, 95) || spent(rl.seven_day, 98);
 }
 
@@ -90,13 +99,19 @@ export function listClaudeProfiles(): ClaudeAccountProfile[] {
 	const state = readJson(PROFILE_FILE()) ?? {};
 	const declared =
 		state.profiles && typeof state.profiles === "object"
-			? Object.entries(state.profiles as Record<string, any>)
+			? Object.entries(state.profiles as Record<string, unknown>)
 			: [];
 
 	const profiles: ClaudeAccountProfile[] = [];
 	const seenDirs = new Set<string>();
-	for (const [id, entry] of declared) {
-		if (!entry || typeof entry.configDir !== "string") continue;
+	for (const [id, rawEntry] of declared) {
+		if (!rawEntry || typeof rawEntry !== "object") continue;
+		const entry = rawEntry as {
+			configDir?: unknown;
+			label?: unknown;
+			email?: unknown;
+		};
+		if (typeof entry.configDir !== "string") continue;
 		const configDir = resolveConfigDir(entry.configDir);
 		if (seenDirs.has(configDir)) continue;
 		seenDirs.add(configDir);
@@ -133,9 +148,7 @@ export function getClaudeProfile(): ClaudeProfileState {
 	if (mode !== "auto") {
 		activeProfileId = mode;
 	} else {
-		const available = profiles.find(
-			(p) => p.ready && !exhausted(p.configDir),
-		);
+		const available = profiles.find((p) => p.ready && !exhausted(p.configDir));
 		if (available) activeProfileId = available.id;
 	}
 	return { mode, activeProfileId, profiles };

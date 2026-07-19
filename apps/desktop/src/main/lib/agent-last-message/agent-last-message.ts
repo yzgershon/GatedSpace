@@ -58,7 +58,6 @@ function readTail(filePath: string): string[] {
 	return buffer.toString("utf8").split("\n").filter(Boolean);
 }
 
-
 const claudePathCache = new Map<string, string>();
 
 function findClaudeTranscriptPath(sessionId: string): string | null {

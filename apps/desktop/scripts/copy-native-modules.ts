@@ -490,7 +490,11 @@ function copyParcelWatcherPlatformPackages(nodeModulesDir: string): void {
 		const isTargetPkg = platformPkg.name.includes(targetSuffix);
 		const destPath = join(nodeModulesDir, platformPkg.name);
 		if (isMaterializedPackage(destPath)) {
-			const copied = copyModuleIfSymlink(nodeModulesDir, platformPkg.name, false);
+			const copied = copyModuleIfSymlink(
+				nodeModulesDir,
+				platformPkg.name,
+				false,
+			);
 			if (isTargetPkg && (copied || isMaterializedPackage(destPath))) {
 				resolvedTargetPackage = true;
 			}

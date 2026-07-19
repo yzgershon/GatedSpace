@@ -43,7 +43,10 @@ export const createHostServiceCoordinatorRouter = () => {
 	return router({
 		start: publicProcedure.input(orgInput).mutation(async ({ input }) => {
 			const coordinator = getHostServiceCoordinator();
-			return coordinator.start(input.organizationId, await resolveSpawnConfig());
+			return coordinator.start(
+				input.organizationId,
+				await resolveSpawnConfig(),
+			);
 		}),
 
 		getConnection: publicProcedure.input(orgInput).query(({ input }) => {
@@ -66,7 +69,10 @@ export const createHostServiceCoordinatorRouter = () => {
 
 		reset: publicProcedure.input(orgInput).mutation(async ({ input }) => {
 			const coordinator = getHostServiceCoordinator();
-			return coordinator.reset(input.organizationId, await resolveSpawnConfig());
+			return coordinator.reset(
+				input.organizationId,
+				await resolveSpawnConfig(),
+			);
 		}),
 
 		onStatusChange: publicProcedure.subscription(() => {

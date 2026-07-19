@@ -144,8 +144,10 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen --ignore-scripts
 
+      # electric-proxy is upstream cloud infra GatedSpace doesn't ship; its
+      # typecheck needs generated Cloudflare Worker types that don't exist here.
       - name: Typecheck
-        run: bun run typecheck
+        run: bun run typecheck --filter='!electric-proxy'
 
   build:
     name: Build

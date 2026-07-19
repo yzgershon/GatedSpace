@@ -117,10 +117,12 @@ function readSlice(filePath: string, size: number, fromEnd: boolean): string[] {
  * environment context, AGENTS.md instructions, and similar wrapped blobs.
  */
 export function isCodexPlumbingText(text: string): boolean {
-	return text.startsWith("<environment_context") ||
+	return (
+		text.startsWith("<environment_context") ||
 		text.startsWith("<user_instructions") ||
 		text.startsWith("<turn_context") ||
-		text.startsWith("<permissions");
+		text.startsWith("<permissions")
+	);
 }
 
 export function extractCodexUserText(
@@ -267,9 +269,10 @@ function extractContextTokens(tail: string[]): number | null {
 
 /** Filename fallback: rollout-<timestamp>-<uuid>.jsonl → uuid. */
 function sessionIdFromFileName(filePath: string): string | null {
-	const match = /rollout-.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(
-		filePath,
-	);
+	const match =
+		/rollout-.*-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i.exec(
+			filePath,
+		);
 	return match ? (match[1] as string) : null;
 }
 
