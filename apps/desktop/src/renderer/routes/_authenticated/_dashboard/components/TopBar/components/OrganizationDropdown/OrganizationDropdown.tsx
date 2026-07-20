@@ -1,4 +1,4 @@
-import { Avatar } from "@superset/ui/atoms/Avatar";
+﻿import { Avatar } from "@superset/ui/atoms/Avatar";
 import { Badge } from "@superset/ui/badge";
 import {
 	DropdownMenu,
@@ -13,6 +13,7 @@ import {
 } from "@superset/ui/dropdown-menu";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { FiUsers } from "react-icons/fi";
 import {
 	HiCheck,
@@ -20,15 +21,17 @@ import {
 	HiOutlineArrowRightOnRectangle,
 	HiOutlineCog6Tooth,
 	HiOutlinePlus,
-	HiOutlineSparkles,
 } from "react-icons/hi2";
 import { HotkeyMenuShortcut } from "renderer/components/HotkeyMenuShortcut";
 import { useCurrentPlan } from "renderer/hooks/useCurrentPlan";
 import { useSignOut } from "renderer/hooks/useSignOut";
 import { authClient } from "renderer/lib/auth-client";
-import { electronTrpc } from "renderer/lib/electron-trpc";
 import { isLocalMode, setAuthMode } from "renderer/lib/local-mode";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
+import {
+	AddClaudeAccountDialog,
+	ClaudeAccountSubmenu,
+} from "./ClaudeAccountMenu";
 
 export function OrganizationDropdown({
 	variant = "topbar",
@@ -40,13 +43,9 @@ export function OrganizationDropdown({
 	const signOut = useSignOut();
 	const navigate = useNavigate();
 
-	const utils = electronTrpc.useUtils();
-	const { data: claudeProfile } =
-		electronTrpc.usage.getClaudeProfile.useQuery();
-	const setClaudeProfileMode =
-		electronTrpc.usage.setClaudeProfileMode.useMutation({
-			onSuccess: () => utils.usage.getClaudeProfile.invalidate(),
-		});
+	// Lives here rather than in the submenu: the dropdown unmounts its content
+	// on select, which would take the dialog down with it.
+	const [addAccountOpen, setAddAccountOpen] = useState(false);
 
 	const activeOrganizationId = session?.session?.activeOrganizationId;
 
@@ -206,61 +205,9 @@ export function OrganizationDropdown({
 				)}
 
 				{/* Claude account switcher: routes NEW agents to the chosen
-				    account profile; running agents are untouched. Hidden unless
-				    more than one profile is configured (~/.superset/claude-profile.json). */}
-				{claudeProfile && claudeProfile.profiles.length > 1 && (
-					<DropdownMenuSub>
-						<DropdownMenuSubTrigger className="gap-2">
-							<HiOutlineSparkles className="h-4 w-4" />
-							<span>Claude account</span>
-							<span className="ml-auto text-xs text-muted-foreground">
-								{claudeProfile.profiles.find(
-									(p) => p.id === claudeProfile.activeProfileId,
-								)?.label ?? claudeProfile.activeProfileId}
-							</span>
-						</DropdownMenuSubTrigger>
-						<DropdownMenuSubContent>
-							<DropdownMenuLabel className="font-normal text-muted-foreground text-xs">
-								New agents use this account
-							</DropdownMenuLabel>
-							<DropdownMenuItem
-								onSelect={() => setClaudeProfileMode.mutate({ mode: "auto" })}
-								className="gap-2"
-							>
-								<span className="flex-1">
-									Auto
-									<span className="block text-xs text-muted-foreground">
-										Switch to the next account when one runs out
-									</span>
-								</span>
-								{claudeProfile.mode === "auto" && (
-									<HiCheck className="h-4 w-4 text-primary" />
-								)}
-							</DropdownMenuItem>
-							{claudeProfile.profiles.map((profile) => (
-								<DropdownMenuItem
-									key={profile.id}
-									onSelect={() =>
-										setClaudeProfileMode.mutate({ mode: profile.id })
-									}
-									className="gap-2"
-								>
-									<span className="flex-1">
-										{profile.label}
-										<span className="block text-xs text-muted-foreground">
-											{profile.ready
-												? (profile.email ?? profile.configDir)
-												: `${profile.email ?? profile.configDir} — needs one-time login`}
-										</span>
-									</span>
-									{claudeProfile.mode === profile.id && (
-										<HiCheck className="h-4 w-4 text-primary" />
-									)}
-								</DropdownMenuItem>
-							))}
-						</DropdownMenuSubContent>
-					</DropdownMenuSub>
-				)}
+				    account profile; running agents are untouched. Always shown —
+				    it is also the only place a second account can be added. */}
+				<ClaudeAccountSubmenu onAddAccount={() => setAddAccountOpen(true)} />
 
 				<DropdownMenuSeparator />
 
@@ -283,6 +230,11 @@ export function OrganizationDropdown({
 					</DropdownMenuItem>
 				)}
 			</DropdownMenuContent>
+
+			<AddClaudeAccountDialog
+				open={addAccountOpen}
+				onOpenChange={setAddAccountOpen}
+			/>
 		</DropdownMenu>
 	);
 }

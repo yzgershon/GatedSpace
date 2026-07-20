@@ -28,6 +28,10 @@ export const env = createEnv({
 		RELAY_URL: z.url().default("https://relay.superset.sh"),
 		// "1" bakes local-only mode into the build (no cloud account needed)
 		NEXT_PUBLIC_LOCAL_ONLY: z.string().optional(),
+		// "1" marks a build produced by the release workflow. Only these accept
+		// auto-updates: a locally built app must never be replaced by a
+		// published release behind its developer's back.
+		NEXT_PUBLIC_RELEASE_BUILD: z.string().optional(),
 	},
 
 	runtimeEnv: {
@@ -46,6 +50,7 @@ export const env = createEnv({
 		STREAMS_URL: process.env.STREAMS_URL,
 		RELAY_URL: process.env.RELAY_URL,
 		NEXT_PUBLIC_LOCAL_ONLY: process.env.NEXT_PUBLIC_LOCAL_ONLY,
+		NEXT_PUBLIC_RELEASE_BUILD: process.env.NEXT_PUBLIC_RELEASE_BUILD,
 	},
 	emptyStringAsUndefined: true,
 	// Only allow skipping validation in development (never in production)

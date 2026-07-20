@@ -52,6 +52,16 @@ function findAgentLaunchConfig(
 	return { command: row.command, args };
 }
 
+export interface BuildAgentResumeCommandOptions {
+	/**
+	 * Resume as a forked copy: the CLI keeps the full conversation but mints
+	 * a NEW session id, so the copy can never contend with the original
+	 * session's transcript writer. Claude only (`--fork-session`); Codex has
+	 * no fork mode, so a fork request returns null there.
+	 */
+	fork?: boolean;
+}
+
 /**
  * Compose the shell command that reattaches an agent to its on-disk session
  * after the pty died out from under it (machine reboot, daemon crash). Only
@@ -61,11 +71,13 @@ function findAgentLaunchConfig(
 export function buildAgentResumeCommand(
 	db: HostDb,
 	binding: Pick<TerminalAgentBinding, "agentId" | "agentSessionId">,
+	options: BuildAgentResumeCommandOptions = {},
 ): string | null {
 	const sessionId = binding.agentSessionId;
 	if (!sessionId || !SAFE_SESSION_ID.test(sessionId)) return null;
 
 	if (binding.agentId === "codex") {
+		if (options.fork) return null;
 		const config = findAgentLaunchConfig(db, "codex");
 		const command = config?.command ?? "codex";
 		return `${command} resume ${sessionId}`;
@@ -75,7 +87,13 @@ export function buildAgentResumeCommand(
 		const config = findAgentLaunchConfig(db, "claude");
 		const command = config?.command ?? "claude";
 		const args = config?.args ?? [];
-		return [command, ...args, "--resume", sessionId].join(" ");
+		return [
+			command,
+			...args,
+			"--resume",
+			sessionId,
+			...(options.fork ? ["--fork-session"] : []),
+		].join(" ");
 	}
 
 	return null;

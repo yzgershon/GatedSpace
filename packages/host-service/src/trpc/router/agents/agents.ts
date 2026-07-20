@@ -17,7 +17,11 @@ import type { HostDb } from "../../../db";
 import { hostAgentConfigs } from "../../../db/schema";
 import { getClaudeLaunchEnv } from "../../../providers/model-providers/LocalModelProvider/utils/activeClaudeConfigDir";
 import { createTerminalSessionInternal } from "../../../terminal/terminal";
-import { buildAgentResumeCommand } from "../../../terminal-agents";
+import {
+	agentTranscriptExists,
+	buildAgentResumeCommand,
+	findLiveAgentSessionBinding,
+} from "../../../terminal-agents";
 import type { HostServiceContext } from "../../../types";
 import { protectedProcedure, router } from "../../index";
 import { resolveAttachmentPath } from "../attachments/storage";
@@ -320,6 +324,13 @@ export const agentsRouter = router({
 	 * sessions panel resumes through the same configured launch row (account
 	 * wrappers included) as every other agent start — the renderer never
 	 * assembles agent CLI invocations itself.
+	 *
+	 * Safety gates (see resume-safety.ts for the incident history):
+	 * - A session id already live in another terminal is refused — a second
+	 *   writer silently loses its conversation. Claude callers can pass
+	 *   mode "fork" to open a copy under a fresh session id instead.
+	 * - A session id with no transcript on disk is refused up front rather
+	 *   than spawning a pane doomed to "No conversation found".
 	 */
 	resume: protectedProcedure
 		.input(
@@ -333,13 +344,49 @@ export const agentsRouter = router({
 						"unsupported session id format",
 					),
 				cwd: z.string().min(1).optional(),
+				mode: z.enum(["resume", "fork"]).optional(),
 			}),
 		)
 		.mutation(async ({ ctx, input }): Promise<AgentRunResult> => {
-			const command = buildAgentResumeCommand(ctx.db, {
-				agentId: input.agent,
-				agentSessionId: input.agentSessionId,
-			});
+			const fork = input.mode === "fork";
+			if (fork && input.agent !== "claude") {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message: `Forked copies are only supported for Claude sessions.`,
+				});
+			}
+			if (!agentTranscriptExists(input.agent, input.agentSessionId)) {
+				throw new TRPCError({
+					code: "BAD_REQUEST",
+					message:
+						`No on-disk transcript exists for this ${input.agent} session — ` +
+						`it may never have been saved. Resume aborted so a broken pane isn't spawned.`,
+				});
+			}
+			if (!fork) {
+				const live = findLiveAgentSessionBinding(
+					ctx.terminalAgentStore,
+					input.agent,
+					input.agentSessionId,
+				);
+				if (live) {
+					throw new TRPCError({
+						code: "CONFLICT",
+						message:
+							`This session is already open in a live terminal. Running it twice ` +
+							`silently destroys the newer copy's conversation. Use that pane, ` +
+							`or open a forked copy instead.`,
+					});
+				}
+			}
+			const command = buildAgentResumeCommand(
+				ctx.db,
+				{
+					agentId: input.agent,
+					agentSessionId: input.agentSessionId,
+				},
+				{ fork },
+			);
 			if (!command) {
 				throw new TRPCError({
 					code: "BAD_REQUEST",

@@ -168,6 +168,32 @@ describe("stripTerminalRuntimeEnv", () => {
 		expect(result.SUPERSET_REFRESH_TOKEN).toBeUndefined();
 	});
 
+	test("inherited agent-harness vars do not reach PTY env", () => {
+		// The app itself may have been launched from inside an AI agent's tool
+		// shell (agent-driven relaunch, VS Code extension shell). Its session
+		// vars must not leak into terminals: NO_COLOR turns Claude panes
+		// monochrome, CLAUDECODE/CLAUDE_CODE_* make nested agents think they
+		// are child sessions, CLAUDE_CONFIG_DIR hijacks account routing.
+		const result = stripTerminalRuntimeEnv({
+			CLAUDECODE: "1",
+			NO_COLOR: "1",
+			GIT_TERMINAL_PROMPT: "0",
+			CLAUDE_CODE_ENTRYPOINT: "claude-vscode",
+			CLAUDE_CODE_SESSION_ID: "00000000-0000-0000-0000-000000000000",
+			CLAUDE_CONFIG_DIR: "/Users/test/.claude-other",
+			CLAUDE_PID: "1234",
+			PATH: "/usr/bin",
+		});
+		expect(result.CLAUDECODE).toBeUndefined();
+		expect(result.NO_COLOR).toBeUndefined();
+		expect(result.GIT_TERMINAL_PROMPT).toBeUndefined();
+		expect(result.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
+		expect(result.CLAUDE_CODE_SESSION_ID).toBeUndefined();
+		expect(result.CLAUDE_CONFIG_DIR).toBeUndefined();
+		expect(result.CLAUDE_PID).toBeUndefined();
+		expect(result.PATH).toBe("/usr/bin");
+	});
+
 	test("HOST_* prefix is stripped, DESKTOP_* exact keys only", () => {
 		const env: Record<string, string> = {
 			// HOST_* prefix: all stripped (including HOST_CLIENT_ID, HOST_NAME)

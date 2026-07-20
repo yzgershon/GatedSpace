@@ -30,6 +30,8 @@
  * built-in main.ts directly.
  */
 
+import * as os from "node:os";
+import * as path from "node:path";
 import {
 	clearSnapshot,
 	DAEMON_PACKAGE_VERSION,
@@ -41,6 +43,7 @@ import type { HandoffMessage } from "@superset/pty-daemon/protocol";
 interface CliArgs {
 	socket: string;
 	bufferBytes?: number;
+	scrollbackDir?: string;
 }
 
 function parseFreshArgs(argv: string[]): CliArgs {
@@ -48,6 +51,8 @@ function parseFreshArgs(argv: string[]): CliArgs {
 	for (const arg of argv) {
 		if (arg.startsWith("--socket=")) {
 			args.socket = arg.slice("--socket=".length);
+		} else if (arg.startsWith("--scrollback-dir=")) {
+			args.scrollbackDir = arg.slice("--scrollback-dir=".length);
 		} else if (arg.startsWith("--buffer-bytes=")) {
 			const raw = arg.slice("--buffer-bytes=".length);
 			const parsed = Number.parseInt(raw, 10);
@@ -63,6 +68,17 @@ function parseFreshArgs(argv: string[]): CliArgs {
 		throw new Error("--socket=PATH is required");
 	}
 	return args as CliArgs;
+}
+
+/**
+ * Where session output logs land (the disk backstop; see the package's
+ * SessionLogger). Mirrors packages/pty-daemon/src/main.ts — computed
+ * in-process so fresh spawns and handoff successors both get it without
+ * the spawner passing anything.
+ */
+function resolveScrollbackDir(explicit?: string): string {
+	if (explicit && explicit.length > 0) return explicit;
+	return path.join(os.homedir(), ".superset", "terminal-scrollback");
 }
 
 async function main(): Promise<void> {
@@ -82,6 +98,7 @@ async function runFresh(): Promise<void> {
 		socketPath: args.socket,
 		daemonVersion,
 		bufferCap: args.bufferBytes,
+		scrollbackDir: resolveScrollbackDir(args.scrollbackDir),
 	});
 	await server.listen();
 	process.stderr.write(
@@ -132,7 +149,11 @@ async function runHandoffReceiver(): Promise<void> {
 		return;
 	}
 	log(`read snapshot: sessions=${snapshot.sessions.length}`);
-	const server = new Server({ socketPath, daemonVersion });
+	const server = new Server({
+		socketPath,
+		daemonVersion,
+		scrollbackDir: resolveScrollbackDir(),
+	});
 
 	try {
 		log(`adopting ${snapshot.sessions.length} sessions`);

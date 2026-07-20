@@ -158,7 +158,9 @@ export async function writeVersion(
 	const pkg = JSON.parse(readFileSync(file, "utf8"));
 	pkg.version = version;
 	writeFileSync(file, `${JSON.stringify(pkg, null, 2)}\n`);
-	await $`bunx biome format --write ${rel}`.cwd(root).quiet();
+	// `bun x`, not `bunx`: the standalone bunx shim is not on PATH inside Bun's
+	// own shell on Windows, which failed every release run there.
+	await $`bun x biome format --write ${rel}`.cwd(root).quiet();
 }
 
 export async function syncUnified(

@@ -26,6 +26,25 @@ const HOST_SERVICE_RUNTIME_KEYS = new Set([
 
 const NODE_APP_KEYS = new Set(["NODE_ENV", "NODE_OPTIONS", "NODE_PATH"]);
 
+/**
+ * Vars an AI coding agent's harness sets in its tool shells. When GatedSpace
+ * itself gets launched from inside such a session (an agent-driven relaunch,
+ * a VS Code extension shell), these leak into the app env and from there into
+ * every spawned terminal: Claude renders colorless (NO_COLOR), nested agents
+ * think they're child sessions (CLAUDECODE / CLAUDE_CODE_*), git stops
+ * prompting for credentials (GIT_TERMINAL_PROMPT), and account routing can be
+ * hijacked by an inherited CLAUDE_CONFIG_DIR. Stripping the inherited copies
+ * is always safe: a user's real preferences re-apply via their shell profile
+ * inside the pty, and per-account CLAUDE_CONFIG_DIR is injected explicitly by
+ * the launch overlay when an agent starts. (Found 2026-07-19: an agent-shell
+ * relaunch turned every Claude pane monochrome white.)
+ */
+const AGENT_HARNESS_KEYS = new Set([
+	"CLAUDECODE",
+	"NO_COLOR",
+	"GIT_TERMINAL_PROMPT",
+]);
+
 const STRIP_PREFIXES = [
 	"npm_",
 	"npm_config_",
@@ -34,6 +53,7 @@ const STRIP_PREFIXES = [
 	"NEXT_PUBLIC_",
 	"TURBO_",
 	"HOST_",
+	"CLAUDE_",
 ];
 
 const SUPERSET_KEEP_KEYS = new Set([
@@ -63,6 +83,7 @@ export function stripTerminalRuntimeEnv(
 		if (SENSITIVE_AUTH_KEYS.has(key)) continue;
 		if (HOST_SERVICE_RUNTIME_KEYS.has(key)) continue;
 		if (NODE_APP_KEYS.has(key)) continue;
+		if (AGENT_HARNESS_KEYS.has(key)) continue;
 		if (STRIP_PREFIXES.some((prefix) => key.startsWith(prefix))) continue;
 		if (key.startsWith("SUPERSET_") && !SUPERSET_KEEP_KEYS.has(key)) continue;
 

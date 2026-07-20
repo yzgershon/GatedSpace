@@ -23,6 +23,7 @@ import {
 	type ServerMessage,
 	SUPPORTED_PROTOCOL_VERSIONS,
 } from "../protocol/index.ts";
+import { SessionLogger } from "../SessionLogger/index.ts";
 import type { HandoffSnapshot, Session } from "../SessionStore/index.ts";
 import {
 	SessionStore,
@@ -35,6 +36,12 @@ export interface ServerOptions {
 	daemonVersion: string;
 	bufferCap?: number;
 	outboundBufferCap?: number;
+	/**
+	 * When set, every session's output is appended to
+	 * `<scrollbackDir>/<sessionId>.log` — the disk backstop that survives
+	 * daemon death (see SessionLogger). Unset (tests) disables logging.
+	 */
+	scrollbackDir?: string;
 	/**
 	 * Override for the PTY-spawn factory. Production leaves this unset;
 	 * `defaultSpawn` (real node-pty) is used. Tests inject a fake here so
@@ -56,10 +63,14 @@ export class Server {
 	private readonly store: SessionStore;
 	private readonly conns = new Set<ConnState>();
 	private readonly opts: ServerOptions;
+	private readonly sessionLogger: SessionLogger | null;
 
 	constructor(opts: ServerOptions) {
 		this.opts = opts;
 		this.store = new SessionStore({ bufferCap: opts.bufferCap });
+		this.sessionLogger = opts.scrollbackDir
+			? new SessionLogger(opts.scrollbackDir)
+			: null;
 		this.server = net.createServer((socket) => this.onConnection(socket));
 	}
 
@@ -301,6 +312,9 @@ export class Server {
 
 	async close(opts: { killSessions?: boolean } = {}): Promise<void> {
 		const killSessions = opts.killSessions ?? true;
+		// Flush pending scrollback log bytes first — close() runs on shutdown
+		// and handoff, the exact moments the disk backstop exists for.
+		this.sessionLogger?.closeAll();
 		for (const c of this.conns) c.socket.destroy();
 		this.conns.clear();
 		if (killSessions) {
@@ -481,6 +495,7 @@ export class Server {
 	private wireSession(session: Session): void {
 		session.pty.onData((chunk) => {
 			this.store.appendOutput(session, chunk);
+			this.sessionLogger?.append(session.id, chunk);
 			const out: ServerMessage = { type: "output", id: session.id };
 			for (const c of this.conns) {
 				if (!c.subscriptions.has(session.id)) continue;
@@ -491,6 +506,7 @@ export class Server {
 			session.exited = true;
 			session.exitCode = info.code;
 			session.exitSignal = info.signal;
+			this.sessionLogger?.sessionExited(session.id);
 			const ev: ServerMessage = {
 				type: "exit",
 				id: session.id,

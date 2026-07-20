@@ -22,7 +22,9 @@ import type { EventBus } from "../events/index.ts";
 import { portManager } from "../ports/port-manager.ts";
 import { getClaudeLaunchEnv } from "../providers/model-providers/LocalModelProvider/utils/activeClaudeConfigDir.ts";
 import {
+	agentTranscriptExists,
 	buildAgentResumeCommand,
+	findLiveAgentSessionBinding,
 	type TerminalAgentStore,
 } from "../terminal-agents/index.ts";
 import {
@@ -1428,9 +1430,34 @@ export function registerWorkspaceTerminalRoute({
 				// picks up where the shutdown cut it off.
 				const binding = terminalAgentStore?.get(terminalId);
 				let resumeCommand: string | null = null;
-				if (binding?.agentSessionId) {
+				if (binding?.agentSessionId && terminalAgentStore) {
 					try {
-						resumeCommand = buildAgentResumeCommand(db, binding);
+						// Same safety gates as the picker's resume procedure: never
+						// auto-resume a session id whose transcript doesn't exist
+						// (the pane would dead-end on "No conversation found"), and
+						// never create a second live writer for a session that is
+						// already open in another terminal — that silently destroys
+						// the newer copy's conversation.
+						if (
+							!agentTranscriptExists(binding.agentId, binding.agentSessionId)
+						) {
+							console.warn(
+								`[terminal] not auto-resuming ${binding.agentId} session ${binding.agentSessionId} for ${terminalId}: no transcript on disk`,
+							);
+						} else if (
+							findLiveAgentSessionBinding(
+								terminalAgentStore,
+								binding.agentId,
+								binding.agentSessionId,
+								terminalId,
+							)
+						) {
+							console.warn(
+								`[terminal] not auto-resuming ${binding.agentId} session ${binding.agentSessionId} for ${terminalId}: already live in another terminal`,
+							);
+						} else {
+							resumeCommand = buildAgentResumeCommand(db, binding);
+						}
 					} catch (err) {
 						console.warn(
 							`[terminal] failed to build resume command for ${terminalId}:`,

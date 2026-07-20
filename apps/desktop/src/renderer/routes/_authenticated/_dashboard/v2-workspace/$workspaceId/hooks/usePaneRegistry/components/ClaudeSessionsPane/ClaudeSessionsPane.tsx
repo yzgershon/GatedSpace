@@ -1,5 +1,6 @@
 import { Input } from "@superset/ui/input";
 import { cn } from "@superset/ui/utils";
+import { workspaceTrpc } from "@superset/workspace-client";
 import { useQuery } from "@tanstack/react-query";
 import { History, MessageSquareText, Search } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -12,6 +13,13 @@ export interface ClaudeSessionResumeRequest {
 	sessionId: string;
 	cwd: string | null;
 	title: string;
+	/**
+	 * "fork" opens a copy under a fresh session id (Claude only). Used for
+	 * sessions that are already live in another pane — the host refuses a
+	 * plain resume for those, since a second writer on one session id
+	 * silently destroys the newer copy's conversation.
+	 */
+	mode?: "resume" | "fork";
 }
 
 interface ClaudeSessionsPaneProps {
@@ -63,6 +71,22 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 		retry: 2,
 		staleTime: 15_000,
 	});
+
+	// Live bindings across the whole host (all workspaces): a session id that
+	// is currently hosted by an active terminal must not be plain-resumed —
+	// mark it and route clicks to the fork path instead.
+	const liveBindings = workspaceTrpc.terminalAgents.list.useQuery(undefined, {
+		refetchInterval: 10_000,
+		refetchOnWindowFocus: true,
+	});
+	const liveSessionKeys = useMemo(() => {
+		const keys = new Set<string>();
+		for (const binding of liveBindings.data ?? []) {
+			if (!binding.agentSessionId) continue;
+			keys.add(`${binding.agentId}:${binding.agentSessionId}`);
+		}
+		return keys;
+	}, [liveBindings.data]);
 
 	const filtered = useMemo(() => {
 		const sessions = data ?? [];
@@ -151,44 +175,62 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 					</div>
 				) : (
 					<ul className="flex flex-col">
-						{filtered.map((session) => (
-							<li key={session.filePath}>
-								<button
-									type="button"
-									title={`${session.title}\n${session.cwd ?? session.projectDirName}\nResume this session`}
-									onClick={() =>
-										onResume({
-											provider,
-											sessionId: session.sessionId,
-											cwd: session.cwd,
-											title: session.title,
-										})
-									}
-									className={cn(
-										"group flex w-full flex-col gap-1 border-border/40 border-b px-3 py-2 text-left",
-										"transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none",
-									)}
-								>
-									<div className="flex items-center gap-2">
-										<MessageSquareText className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" />
-										<span className="min-w-0 flex-1 truncate text-xs text-foreground">
-											{session.title}
-										</span>
-									</div>
-									<div className="flex items-center gap-2 pl-[22px] text-[11px] text-muted-foreground">
-										<span>{formatRelativeTime(session.lastModified)}</span>
-										<span aria-hidden>·</span>
-										<span title="Context size">
-											{formatContext(session.contextTokens)} ctx
-										</span>
-										<span aria-hidden>·</span>
-										<span className="min-w-0 truncate">
-											{shortenCwd(session.cwd, session.projectDirName)}
-										</span>
-									</div>
-								</button>
-							</li>
-						))}
+						{filtered.map((session) => {
+							const isLive = liveSessionKeys.has(
+								`${provider}:${session.sessionId}`,
+							);
+							const liveHint =
+								provider === "claude"
+									? "Already open in a live pane — clicking opens a forked copy under a new session id; the original pane keeps this session."
+									: "Already open in a live pane. Close that pane first — Codex sessions can't be forked.";
+							return (
+								<li key={session.filePath}>
+									<button
+										type="button"
+										title={`${session.title}\n${session.cwd ?? session.projectDirName}\n${isLive ? liveHint : "Resume this session"}`}
+										onClick={() =>
+											onResume({
+												provider,
+												sessionId: session.sessionId,
+												cwd: session.cwd,
+												title: session.title,
+												...(isLive && provider === "claude"
+													? { mode: "fork" as const }
+													: {}),
+											})
+										}
+										className={cn(
+											"group flex w-full flex-col gap-1 border-border/40 border-b px-3 py-2 text-left",
+											"transition-colors hover:bg-muted/60 focus-visible:bg-muted/60 focus-visible:outline-none",
+										)}
+									>
+										<div className="flex items-center gap-2">
+											<MessageSquareText className="size-3.5 shrink-0 text-muted-foreground group-hover:text-foreground" />
+											<span className="min-w-0 flex-1 truncate text-xs text-foreground">
+												{session.title}
+											</span>
+											{isLive ? (
+												<span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
+													<span className="size-1.5 rounded-full bg-primary" />
+													{provider === "claude" ? "open · forks" : "open"}
+												</span>
+											) : null}
+										</div>
+										<div className="flex items-center gap-2 pl-[22px] text-[11px] text-muted-foreground">
+											<span>{formatRelativeTime(session.lastModified)}</span>
+											<span aria-hidden>·</span>
+											<span title="Context size">
+												{formatContext(session.contextTokens)} ctx
+											</span>
+											<span aria-hidden>·</span>
+											<span className="min-w-0 truncate">
+												{shortenCwd(session.cwd, session.projectDirName)}
+											</span>
+										</div>
+									</button>
+								</li>
+							);
+						})}
 					</ul>
 				)}
 			</div>

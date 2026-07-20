@@ -22,9 +22,15 @@
  * hidden. New agents pick up the active profile at launch; running agents
  * keep whichever account they started with.
  */
-import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	realpathSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
-import { isAbsolute, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 
 export interface ClaudeAccountProfile {
 	id: string;
@@ -154,14 +160,89 @@ export function getClaudeProfile(): ClaudeProfileState {
 	return { mode, activeProfileId, profiles };
 }
 
+function writeProfileState(state: JsonRecord): void {
+	const path = PROFILE_FILE();
+	mkdirSync(dirname(path), { recursive: true });
+	writeFileSync(path, `${JSON.stringify(state, null, "\t")}\n`);
+}
+
 export function setClaudeProfileMode(mode: string): void {
 	const valid =
 		mode === "auto" || listClaudeProfiles().some((p) => p.id === mode);
 	if (!valid) return;
-	const path = PROFILE_FILE();
-	const state = readJson(path) ?? {};
+	const state = readJson(PROFILE_FILE()) ?? {};
 	state.mode = mode;
-	writeFileSync(path, `${JSON.stringify(state, null, "\t")}\n`);
+	writeProfileState(state);
+}
+
+/** `Work Account` → `work-account`; ids are used as config-dir suffixes. */
+function slugify(label: string): string {
+	return (
+		label
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "")
+			.slice(0, 32) || "account"
+	);
+}
+
+/**
+ * Declare a new Claude account. Only the config dir is created — signing in is
+ * the Claude CLI's job, and happens the first time an agent launches under the
+ * new profile (no credentials there yet, so the CLI runs its login flow).
+ *
+ * The first added account also materialises an explicit entry for the existing
+ * default account, so the file describes every account rather than leaving the
+ * original implicit.
+ */
+export function addClaudeProfile(label: string): ClaudeAccountProfile {
+	const trimmed = label.trim();
+	if (!trimmed) throw new Error("Account name is required.");
+
+	const state = readJson(PROFILE_FILE()) ?? {};
+	const profiles: JsonRecord =
+		state.profiles && typeof state.profiles === "object"
+			? (state.profiles as JsonRecord)
+			: {};
+
+	if (Object.keys(profiles).length === 0) {
+		profiles.default = { label: "Default", configDir: ".claude" };
+	}
+
+	const base = slugify(trimmed);
+	let id = base;
+	for (let i = 2; profiles[id] !== undefined; i++) id = `${base}-${i}`;
+
+	const configDir = join(homedir(), `.claude-${id}`);
+	if (existsSync(configDir) && hasCreds(configDir)) {
+		// Reusing a dir that is already signed in is fine — adopt it as-is.
+	} else {
+		mkdirSync(configDir, { recursive: true });
+	}
+
+	profiles[id] = { label: trimmed, configDir };
+	state.profiles = profiles;
+	writeProfileState(state);
+
+	return { id, label: trimmed, configDir, ready: hasCreds(configDir) };
+}
+
+/**
+ * Forget an account. The config dir (and its credentials) stay on disk so the
+ * account can be re-added without signing in again — and so a mis-click can
+ * never destroy a login.
+ */
+export function removeClaudeProfile(id: string): void {
+	const state = readJson(PROFILE_FILE()) ?? {};
+	const profiles =
+		state.profiles && typeof state.profiles === "object"
+			? (state.profiles as JsonRecord)
+			: {};
+	if (profiles[id] === undefined) return;
+	delete profiles[id];
+	state.profiles = profiles;
+	if (state.mode === id) state.mode = "auto";
+	writeProfileState(state);
 }
 
 /**

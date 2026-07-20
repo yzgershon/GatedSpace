@@ -426,6 +426,17 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 	const codex = quotas.find((q) => q.provider === "Codex");
 	const claudeProfiles = profile?.profiles ?? [];
 
+	// Real Claude limits only exist locally if the status line is writing
+	// them — it snapshots each reply's quota payload to disk. Without it this
+	// dialog can show history but never live limits, so offer it right here.
+	const { data: statusLine } = electronTrpc.usage.getStatusLine.useQuery();
+	const installStatusLine = electronTrpc.usage.installStatusLine.useMutation({
+		onSuccess: () => {
+			utils.usage.getStatusLine.invalidate();
+			utils.usage.getStats.invalidate();
+		},
+	});
+
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} modal>
 			<DialogContent className="sm:max-w-xl">
@@ -475,7 +486,9 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 									}
 									emptyHint={
 										p.ready
-											? "Limits appear after your next Claude reply (your status line snapshots them locally)."
+											? statusLine?.installed
+												? "Limits appear after your next Claude reply (your status line snapshots them locally)."
+												: "Turn on the status line below to see real 5-hour and weekly limits here."
 											: "Not signed in yet. Launch a Claude agent with this account once to log in."
 									}
 								/>
@@ -487,6 +500,33 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 								emptyHint="Limits appear after your next Codex session."
 							/>
 						</div>
+
+						{statusLine && !statusLine.installed && (
+							<div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-accent/30 px-3 py-2.5">
+								<div className="min-w-0">
+									<p className="font-medium text-foreground text-xs">
+										Show usage in the terminal
+									</p>
+									<p className="text-[11px] text-muted-foreground">
+										{statusLine.hasCustom
+											? "You already have a custom Claude status line — leaving it alone."
+											: "Adds a line under Claude's prompt with model, branch, limits, context and cost. It also records the limits shown above."}
+									</p>
+								</div>
+								{!statusLine.hasCustom && (
+									<button
+										type="button"
+										onClick={() =>
+											installStatusLine.mutate({ replaceCustom: false })
+										}
+										disabled={installStatusLine.isPending}
+										className="shrink-0 rounded-md bg-primary px-2.5 py-1 font-medium text-[11px] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
+									>
+										{installStatusLine.isPending ? "Turning on…" : "Turn on"}
+									</button>
+								)}
+							</div>
+						)}
 
 						<ContributionGraph perDay={data?.perDay ?? []} />
 

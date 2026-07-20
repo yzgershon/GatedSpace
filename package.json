@@ -1,4 +1,4 @@
-{
+﻿{
 	"name": "@superset/repo",
 	"version": "0.0.0",
 	"repository": {
@@ -41,6 +41,7 @@
 		"clean": "git clean -xdf node_modules",
 		"clean:workspaces": "turbo clean",
 		"release": "bun scripts/release/release.ts",
+		"ship": "bun scripts/release/ship-public.ts",
 		"release:desktop": "bun scripts/release/desktop.ts",
 		"release:cli": "bun scripts/release/cli.ts",
 		"release:canary": "./scripts/release-canary.sh",

@@ -225,6 +225,7 @@ export function usePaneRegistry({
 					agent: request.provider,
 					agentSessionId: request.sessionId,
 					...(request.cwd ? { cwd: request.cwd } : {}),
+					...(request.mode ? { mode: request.mode } : {}),
 				});
 				const terminalId = result.sessionId;
 				const state = store.getState();

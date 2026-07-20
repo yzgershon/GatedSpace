@@ -118,10 +118,14 @@ jobs:
       # Analytics/Sentry keys are intentionally not baked into public builds.
       # NEXT_PUBLIC_LOCAL_ONLY=1 bakes local-only mode in: public installers
       # run with no account and every feature unlocked.
+      # NEXT_PUBLIC_RELEASE_BUILD=1 marks this as a release build, which is what
+      # enables auto-updates. Locally built apps omit it, so a published release
+      # can never replace a developer's own install mid-session.
       - name: Compile app with electron-vite
         working-directory: apps/desktop
         env:
           NEXT_PUBLIC_LOCAL_ONLY: "1"
+          NEXT_PUBLIC_RELEASE_BUILD: "1"
           SUPERSET_WORKSPACE_NAME: superset
           TARGET_ARCH: ${{ matrix.arch }}
         run: bun run compile:app

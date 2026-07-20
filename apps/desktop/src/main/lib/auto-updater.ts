@@ -48,8 +48,20 @@ function isPrereleaseBuild(): boolean {
 }
 
 const IS_PRERELEASE = isPrereleaseBuild();
+// Only builds produced by the release workflow accept auto-updates. A locally
+// built app must never be replaced by a published release behind its
+// developer's back: the swap restarts the app and kills every running terminal
+// daemon (the 2026-07-19 session-loss incident), and the published build can
+// differ from what the developer is working on.
+//
+// Keyed on an explicit release marker rather than on local-only mode, because
+// build flavour and update channel are separate questions — a public build may
+// be cloud-capable and still deserve updates.
+const IS_RELEASE_BUILD = env.NEXT_PUBLIC_RELEASE_BUILD === "1";
 const IS_AUTO_UPDATE_PLATFORM =
-	PLATFORM.IS_MAC || PLATFORM.IS_LINUX || PLATFORM.IS_WINDOWS;
+	PLATFORM.IS_MAC ||
+	PLATFORM.IS_LINUX ||
+	(PLATFORM.IS_WINDOWS && IS_RELEASE_BUILD);
 
 // Use explicit feed URLs to ensure we always fetch platform-specific manifests
 // (for example latest.yml and latest-mac.yml) from the correct release.
