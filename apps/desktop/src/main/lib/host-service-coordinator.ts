@@ -81,6 +81,68 @@ function isValidPort(port: number | null | undefined): port is number {
 }
 
 /**
+ * Crash supervision. The host-service child loads native addons
+ * (better-sqlite3, and tokenizer/embedding libs pulled in through
+ * @mastra/memory) that can fault the whole process with a Windows access
+ * violation (exit 3221225477 / 0xC0000005) or heap corruption (exit
+ * 3221226356 / 0xC0000374). Those bypass V8, so the child's own
+ * uncaughtException safety net can't catch them — the process just dies.
+ *
+ * The pty-daemon that owns the user's shells is a *separate*, surviving
+ * process, so respawning the host-service re-adopts it and the renderer
+ * reconnects on its 5s getConnection poll — no lost terminals. Restart on
+ * every unexpected crash; if the child starts crash-looping (more than
+ * CRASH_BUDGET deaths within CRASH_WINDOW_MS) back off RESTART_BACKOFF_MS
+ * between attempts instead of hammering, but never permanently give up so a
+ * transient fault still self-heals.
+ */
+const CRASH_BUDGET = 3;
+const CRASH_WINDOW_MS = 60_000;
+const RESTART_BACKOFF_MS = 15_000;
+/** Don't pop the crash-loop dialog more than once per this window. */
+const CRASH_LOOP_ALERT_THROTTLE_MS = 5 * 60_000;
+
+export interface HostServiceRestartPlan {
+	/** ms to wait before respawning; 0 = immediate. */
+	delayMs: number;
+	/** Crash count within the window, this crash included. */
+	crashesInWindow: number;
+	/** True when the crash budget was exceeded — i.e. we're crash-looping. */
+	looping: boolean;
+	/** Crash timestamps to keep going forward. */
+	retained: number[];
+}
+
+/**
+ * Pure crash-supervision policy, split out so the budget/backoff logic is
+ * unit-testable without spawning real processes. Given the recent crash
+ * timestamps and the current time, decide how long to wait before respawning.
+ */
+export function planHostServiceRestart({
+	recentCrashTimestamps,
+	now,
+	budget = CRASH_BUDGET,
+	windowMs = CRASH_WINDOW_MS,
+	backoffMs = RESTART_BACKOFF_MS,
+}: {
+	recentCrashTimestamps: number[];
+	now: number;
+	budget?: number;
+	windowMs?: number;
+	backoffMs?: number;
+}): HostServiceRestartPlan {
+	const withinWindow = recentCrashTimestamps.filter((t) => now - t < windowMs);
+	withinWindow.push(now);
+	const crashesInWindow = withinWindow.length;
+	if (crashesInWindow > budget) {
+		// Reset the window after a backoff so successive loops don't compound
+		// into ever-longer counts — each backoff earns a fresh CRASH_BUDGET.
+		return { delayMs: backoffMs, crashesInWindow, looping: true, retained: [] };
+	}
+	return { delayMs: 0, crashesInWindow, looping: false, retained: withinWindow };
+}
+
+/**
  * Coupled to Electron: each child is spawned attached and SIGTERMed on
  * before-quit. PTYs survive across Electron restarts via the pty-daemon
  * layer host-service supervises, not via host-service itself. Manifests
@@ -93,6 +155,14 @@ export class HostServiceCoordinator extends EventEmitter {
 	private scriptPath = path.join(__dirname, "host-service.js");
 	private machineId = getHostId();
 	private devReloadWatcher: fs.FSWatcher | null = null;
+	/** Recent unexpected-crash timestamps per orgId, for the restart backoff. */
+	private crashTimes = new Map<string, number[]>();
+	/** Pending auto-restart timers per orgId, so stop()/quit can cancel them. */
+	private restartTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	/** Last time the crash-loop dialog was shown per orgId, for throttling. */
+	private lastCrashAlertAt = new Map<string, number>();
+	/** Set on stopAll() (app quit) so a queued restart never respawns a child. */
+	private shuttingDown = false;
 
 	async start(
 		organizationId: string,
@@ -156,6 +226,12 @@ export class HostServiceCoordinator extends EventEmitter {
 	}
 
 	stop(organizationId: string): void {
+		// An intentional stop is a clean slate: cancel any queued auto-restart
+		// and reset crash accounting so a later start isn't instantly throttled.
+		this.clearRestartTimer(organizationId);
+		this.crashTimes.delete(organizationId);
+		this.lastCrashAlertAt.delete(organizationId);
+
 		const instance = this.instances.get(organizationId);
 		if (!instance) return;
 
@@ -173,6 +249,11 @@ export class HostServiceCoordinator extends EventEmitter {
 	}
 
 	stopAll(): void {
+		// App is quitting — block any in-flight or queued auto-restart from
+		// spawning a fresh child that would outlive the window.
+		this.shuttingDown = true;
+		for (const timer of this.restartTimers.values()) clearTimeout(timer);
+		this.restartTimers.clear();
 		for (const [id] of this.instances) {
 			this.stop(id);
 		}
@@ -416,8 +497,8 @@ export class HostServiceCoordinator extends EventEmitter {
 			if (!current || current.pid !== childPid || current.status === "stopped")
 				return;
 
-			// Only alert a crash of a running child; startup deaths surface via
-			// start()'s rejection instead.
+			// Only supervise a crash of a running child; startup deaths surface
+			// via start()'s rejection instead.
 			const previousStatus = current.status;
 			this.rememberPort(organizationId, current.port);
 			this.instances.delete(organizationId);
@@ -425,7 +506,7 @@ export class HostServiceCoordinator extends EventEmitter {
 			this.emitStatus(organizationId, "stopped", previousStatus);
 
 			if (previousStatus === "running") {
-				this.alertChildCrashed(organizationId, code, signal);
+				this.superviseCrash(organizationId, config, code, signal);
 			}
 		});
 		// Don't let the child block Electron's exit — stopAll() handles teardown.
@@ -525,20 +606,82 @@ export class HostServiceCoordinator extends EventEmitter {
 	}
 
 	/**
-	 * Alert on an unexpected crash of a running child. Recovery is the existing
-	 * tray > Host Service > Restart.
+	 * A running host-service child died unexpectedly (not via stop()). These
+	 * are native crashes the child can't catch — see planHostServiceRestart.
+	 * Respawn it so the renderer's getConnection poll reconnects automatically;
+	 * the surviving pty-daemon keeps the user's shells alive across the swap.
+	 * Back off on a crash loop and surface a throttled, honest alert.
 	 */
-	private alertChildCrashed(
+	private superviseCrash(
 		organizationId: string,
+		config: SpawnConfig,
 		code: number | null,
 		signal: NodeJS.Signals | null,
 	): void {
+		if (this.shuttingDown) return;
+
+		const now = Date.now();
+		const plan = planHostServiceRestart({
+			recentCrashTimestamps: this.crashTimes.get(organizationId) ?? [],
+			now,
+		});
+		this.crashTimes.set(organizationId, plan.retained);
+
 		const cause =
 			signal != null ? `signal ${signal}` : `exit code ${code ?? "unknown"}`;
-		log.error(`[host-service:${organizationId}] crashed (${cause})`);
+		log.error(
+			`[host-service:${organizationId}] crashed (${cause}); ` +
+				`${plan.looping ? `crash loop — backing off ${RESTART_BACKOFF_MS}ms` : "auto-restarting"} ` +
+				`(${plan.crashesInWindow} crash(es) in ${CRASH_WINDOW_MS / 1000}s)`,
+		);
+
+		if (plan.looping) this.maybeAlertCrashLoop(organizationId, cause);
+
+		this.clearRestartTimer(organizationId);
+		const timer = setTimeout(() => {
+			this.restartTimers.delete(organizationId);
+			if (this.shuttingDown) return;
+			// Skip if something already brought the org back (a manual restart or
+			// the renderer's start effect) while we were waiting.
+			if (this.instances.has(organizationId)) return;
+			void this.startWithPreferredPorts(
+				organizationId,
+				config,
+				this.getPreferredPorts(organizationId),
+			).catch((err) => {
+				log.error(
+					`[host-service:${organizationId}] auto-restart failed:`,
+					err,
+				);
+			});
+		}, plan.delayMs);
+		// Don't let a queued restart keep the event loop (and the app) alive.
+		timer.unref();
+		this.restartTimers.set(organizationId, timer);
+	}
+
+	private clearRestartTimer(organizationId: string): void {
+		const timer = this.restartTimers.get(organizationId);
+		if (timer) {
+			clearTimeout(timer);
+			this.restartTimers.delete(organizationId);
+		}
+	}
+
+	/**
+	 * Surface a persistent crash loop to the user — throttled so a fast loop
+	 * can't spam modal dialogs. We still keep auto-restarting in the
+	 * background; this only tells the user the service is unstable and that a
+	 * full app relaunch is the fallback (there is no tray on Windows).
+	 */
+	private maybeAlertCrashLoop(organizationId: string, cause: string): void {
+		const now = Date.now();
+		const last = this.lastCrashAlertAt.get(organizationId) ?? 0;
+		if (now - last < CRASH_LOOP_ALERT_THROTTLE_MS) return;
+		this.lastCrashAlertAt.set(organizationId, now);
 		dialog.showErrorBox(
-			"Host service crashed",
-			`The Superset host service stopped unexpectedly (${cause}). Workspaces and terminals for this organization are unavailable until it restarts — use the Superset tray menu > Host Service > Restart.`,
+			"Host service keeps crashing",
+			`Superset's host service for this organization has crashed repeatedly (${cause}) and is being restarted automatically. Your terminals keep running in the background. If workspaces stay unavailable, quit and reopen Superset.`,
 		);
 	}
 }

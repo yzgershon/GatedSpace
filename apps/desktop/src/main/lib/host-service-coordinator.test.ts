@@ -94,7 +94,9 @@ mock.module("./local-db", () => ({
 	},
 }));
 
-const { HostServiceCoordinator } = await import("./host-service-coordinator");
+const { HostServiceCoordinator, planHostServiceRestart } = await import(
+	"./host-service-coordinator"
+);
 
 const baseManifest = (pid: number, endpoint = "http://127.0.0.1:55555") => ({
 	pid,
@@ -236,6 +238,128 @@ describe("HostServiceCoordinator.reset", () => {
 		expect(killedPids).toHaveLength(0);
 		expect(spawnMock).toHaveBeenCalledTimes(1);
 		expect(conn.port).toBe(60000);
+	});
+});
+
+describe("planHostServiceRestart", () => {
+	const opts = { budget: 3, windowMs: 60_000, backoffMs: 15_000 };
+
+	test("first crash restarts immediately and records the timestamp", () => {
+		const plan = planHostServiceRestart({
+			recentCrashTimestamps: [],
+			now: 1_000,
+			...opts,
+		});
+		expect(plan.delayMs).toBe(0);
+		expect(plan.looping).toBe(false);
+		expect(plan.crashesInWindow).toBe(1);
+		expect(plan.retained).toEqual([1_000]);
+	});
+
+	test("crashes up to the budget all restart immediately", () => {
+		const plan = planHostServiceRestart({
+			recentCrashTimestamps: [1_000, 2_000],
+			now: 3_000,
+			...opts,
+		});
+		expect(plan.delayMs).toBe(0);
+		expect(plan.looping).toBe(false);
+		expect(plan.crashesInWindow).toBe(3);
+		expect(plan.retained).toEqual([1_000, 2_000, 3_000]);
+	});
+
+	test("exceeding the budget within the window backs off and resets the window", () => {
+		const plan = planHostServiceRestart({
+			recentCrashTimestamps: [1_000, 2_000, 3_000],
+			now: 4_000,
+			...opts,
+		});
+		expect(plan.delayMs).toBe(15_000);
+		expect(plan.looping).toBe(true);
+		expect(plan.crashesInWindow).toBe(4);
+		// Window reset so the next loop earns a fresh budget rather than
+		// compounding into ever-longer counts.
+		expect(plan.retained).toEqual([]);
+	});
+
+	test("crashes older than the window are dropped, so slow crashes never loop", () => {
+		const plan = planHostServiceRestart({
+			recentCrashTimestamps: [1_000, 2_000, 3_000],
+			now: 100_000,
+			...opts,
+		});
+		expect(plan.delayMs).toBe(0);
+		expect(plan.looping).toBe(false);
+		expect(plan.crashesInWindow).toBe(1);
+		expect(plan.retained).toEqual([100_000]);
+	});
+});
+
+describe("HostServiceCoordinator.superviseCrash", () => {
+	let coordinator: InstanceType<typeof HostServiceCoordinator>;
+	let startMock: ReturnType<typeof mock>;
+
+	interface SuperviseInternals {
+		superviseCrash(
+			organizationId: string,
+			config: typeof spawnConfig,
+			code: number | null,
+			signal: NodeJS.Signals | null,
+		): void;
+		startWithPreferredPorts: ReturnType<typeof mock>;
+		shuttingDown: boolean;
+	}
+
+	beforeEach(() => {
+		resetMocks();
+		testManifestRoot = fs.mkdtempSync(path.join(os.tmpdir(), "hsc-test-"));
+		coordinator = new HostServiceCoordinator();
+		startMock = mock(async () => ({
+			port: 40000,
+			secret: "s",
+			machineId: "host-1",
+		}));
+		(coordinator as unknown as SuperviseInternals).startWithPreferredPorts =
+			startMock;
+	});
+
+	afterEach(() => {
+		coordinator.stopAll();
+		if (testManifestRoot) {
+			fs.rmSync(testManifestRoot, { recursive: true, force: true });
+			testManifestRoot = "";
+		}
+	});
+
+	test("a native crash schedules an automatic respawn", async () => {
+		(coordinator as unknown as SuperviseInternals).superviseCrash(
+			"org-1",
+			spawnConfig,
+			3_221_225_477,
+			null,
+		);
+		await new Promise((r) => setTimeout(r, 25));
+		expect(startMock).toHaveBeenCalledTimes(1);
+	});
+
+	test("does not respawn once the app is shutting down", async () => {
+		(coordinator as unknown as SuperviseInternals).shuttingDown = true;
+		(coordinator as unknown as SuperviseInternals).superviseCrash(
+			"org-1",
+			spawnConfig,
+			139,
+			null,
+		);
+		await new Promise((r) => setTimeout(r, 25));
+		expect(startMock).not.toHaveBeenCalled();
+	});
+
+	test("stopAll cancels a queued restart so no child outlives quit", async () => {
+		const internals = coordinator as unknown as SuperviseInternals;
+		internals.superviseCrash("org-1", spawnConfig, 3_221_226_356, null);
+		coordinator.stopAll();
+		await new Promise((r) => setTimeout(r, 25));
+		expect(startMock).not.toHaveBeenCalled();
 	});
 });
 
