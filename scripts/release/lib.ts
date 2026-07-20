@@ -313,13 +313,20 @@ export async function findWorkflowRun(
 	root: string,
 	workflow: string,
 	sha: string,
-	{ retries = 6, delayMs = 5000 }: { retries?: number; delayMs?: number } = {},
+	{
+		retries = 6,
+		delayMs = 5000,
+		repo,
+	}: { retries?: number; delayMs?: number; repo?: string } = {},
 ): Promise<string> {
+	// Without an explicit -R, gh resolves the repo from the remotes and can pick
+	// `upstream` over `origin` in a fork — querying the wrong project entirely.
+	const repoArgs = repo ? ["-R", repo] : [];
 	const jq = `.[] | select(.headSha == "${sha}" and .event == "push") | .databaseId`;
 	for (let i = 0; i < retries; i++) {
 		await sleep(delayMs);
 		const out =
-			await $`gh run list --workflow=${workflow} --json databaseId,headSha,event --jq ${jq}`
+			await $`gh run list ${repoArgs} --workflow=${workflow} --json databaseId,headSha,event --jq ${jq}`
 				.cwd(root)
 				.nothrow()
 				.text();

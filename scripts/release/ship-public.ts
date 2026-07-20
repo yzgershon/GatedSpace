@@ -151,6 +151,18 @@ async function preflight(root: string, tag: string): Promise<void> {
 }
 
 /**
+ * owner/name of the public remote. Every gh call passes this explicitly:
+ * without -R, gh resolves the repo from the remotes and can pick `upstream`
+ * over `origin` in a fork, operating on the wrong project.
+ */
+async function publicRepoSlug(): Promise<string> {
+	const url = await text($`git remote get-url ${PUBLIC_REMOTE}`);
+	const match = /[:/]([^/:]+\/[^/]+?)(?:\.git)?$/.exec(url);
+	if (!match?.[1]) fail(`Could not parse a repo slug from: ${url}`);
+	return match[1];
+}
+
+/**
  * True when a local tag of this name exists but belongs to someone else
  * (upstream). We then push the release tag to the public repo by SHA rather
  * than creating a conflicting local tag.
@@ -238,17 +250,18 @@ async function publishRelease(
 	opts: ShipOptions,
 ): Promise<void> {
 	const sha = snapshot;
+	const repo = await publicRepoSlug();
 	info("Waiting for the release workflow…");
-	const runId = await findWorkflowRun(root, "release-desktop.yml", sha);
+	const runId = await findWorkflowRun(root, "release-desktop.yml", sha, {
+		repo,
+	});
 	if (!runId) {
 		warn("Could not find the workflow run — check the Actions tab.");
 	} else {
-		console.log(
-			`  https://github.com/yzgershon/GatedSpace/actions/runs/${runId}`,
-		);
-		await $`gh run watch ${runId}`.nothrow();
+		console.log(`  https://github.com/${repo}/actions/runs/${runId}`);
+		await $`gh run watch ${runId} -R ${repo}`.nothrow();
 		const conclusion = await text(
-			$`gh run view ${runId} --json conclusion --jq ${".conclusion"}`,
+			$`gh run view ${runId} -R ${repo} --json conclusion --jq ${".conclusion"}`,
 		);
 		if (conclusion !== "success") {
 			fail(
@@ -263,7 +276,7 @@ async function publishRelease(
 	let found = false;
 	for (let i = 0; i < 10 && !found; i++) {
 		await sleep(3000);
-		found = (await code($`gh release view ${tag}`)) === 0;
+		found = (await code($`gh release view ${tag} -R ${repo}`)) === 0;
 	}
 	if (!found) {
 		warn(`Draft release not visible yet — check the Releases tab for ${tag}.`);
@@ -272,11 +285,13 @@ async function publishRelease(
 
 	if (!opts.publish) {
 		success(`Draft release ${tag} created (not published).`);
-		console.log(`Publish when ready: gh release edit ${tag} --draft=false`);
+		console.log(
+			`Publish when ready: gh release edit ${tag} -R ${repo} --draft=false`,
+		);
 		return;
 	}
 
-	await $`gh release edit ${tag} --draft=false`;
+	await $`gh release edit ${tag} -R ${repo} --draft=false`;
 	success(`Published ${tag} — every installed app will offer this update.`);
 }
 

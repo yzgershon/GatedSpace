@@ -1,4 +1,4 @@
-﻿import { Avatar } from "@superset/ui/atoms/Avatar";
+import { Avatar } from "@superset/ui/atoms/Avatar";
 import { Badge } from "@superset/ui/badge";
 import {
 	DropdownMenu,
