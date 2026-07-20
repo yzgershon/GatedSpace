@@ -2,7 +2,7 @@
 	"name": "@superset/desktop",
 	"productName": "GatedSpace",
 	"description": "GatedSpace - an agentic development environment for Windows (derived from Superset)",
-	"version": "1.15.2",
+	"version": "1.15.3",
 	"main": "./dist/main/index.js",
 	"resources": "src/resources",
 	"repository": {
