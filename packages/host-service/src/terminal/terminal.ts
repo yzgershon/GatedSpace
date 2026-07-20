@@ -25,6 +25,7 @@ import {
 	agentTranscriptExists,
 	buildAgentResumeCommand,
 	findLiveAgentSessionBinding,
+	readAgentSessionCwd,
 	type TerminalAgentStore,
 } from "../terminal-agents/index.ts";
 import {
@@ -1430,6 +1431,7 @@ export function registerWorkspaceTerminalRoute({
 				// picks up where the shutdown cut it off.
 				const binding = terminalAgentStore?.get(terminalId);
 				let resumeCommand: string | null = null;
+				let resumeCwd: string | null = null;
 				if (binding?.agentSessionId && terminalAgentStore) {
 					try {
 						// Same safety gates as the picker's resume procedure: never
@@ -1456,7 +1458,25 @@ export function registerWorkspaceTerminalRoute({
 								`[terminal] not auto-resuming ${binding.agentId} session ${binding.agentSessionId} for ${terminalId}: already live in another terminal`,
 							);
 						} else {
-							resumeCommand = buildAgentResumeCommand(db, binding);
+							// Both CLIs scope their session stores by directory, so a
+							// resume launched from the workspace root instead of the
+							// session's own cwd dead-ends on "No conversation found"
+							// even though the transcript exists. Only auto-resume when
+							// that directory is known and still present; otherwise fall
+							// back to a plain shell, which the user can resume from the
+							// sessions picker (it passes the cwd explicitly).
+							const sessionCwd = readAgentSessionCwd(
+								binding.agentId,
+								binding.agentSessionId,
+							);
+							if (!sessionCwd || !existsSync(sessionCwd)) {
+								console.warn(
+									`[terminal] not auto-resuming ${binding.agentId} session ${binding.agentSessionId} for ${terminalId}: original directory ${sessionCwd ?? "unknown"} is unavailable`,
+								);
+							} else {
+								resumeCommand = buildAgentResumeCommand(db, binding);
+								resumeCwd = sessionCwd;
+							}
 						}
 					} catch (err) {
 						console.warn(
@@ -1480,6 +1500,7 @@ export function registerWorkspaceTerminalRoute({
 					eventBus,
 					restoredNotice: true,
 					...(resumeCommand ? { initialCommand: resumeCommand } : {}),
+					...(resumeCwd ? { cwd: resumeCwd } : {}),
 					...(binding?.agentId === "claude"
 						? { envOverlay: getClaudeLaunchEnv() }
 						: {}),

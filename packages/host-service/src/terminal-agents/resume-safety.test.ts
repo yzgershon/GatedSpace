@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
 	agentTranscriptExists,
 	findLiveAgentSessionBinding,
+	readAgentSessionCwd,
 } from "./resume-safety";
 import { TerminalAgentStore } from "./store";
 
@@ -61,6 +62,59 @@ describe("agentTranscriptExists", () => {
 				home: tmpHome(),
 			}),
 		).toBe(true);
+	});
+});
+
+describe("readAgentSessionCwd", () => {
+	test("reads the claude session's own directory", () => {
+		const home = tmpHome();
+		const slugDir = path.join(home, ".claude", "projects", "C--repo");
+		fs.mkdirSync(slugDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(slugDir, `${SESSION_ID}.jsonl`),
+			`${JSON.stringify({ type: "summary" })}\n${JSON.stringify({
+				type: "user",
+				cwd: "C:\\Dev\\SecondBrain",
+			})}\n`,
+		);
+		expect(readAgentSessionCwd("claude", SESSION_ID, { home })).toBe(
+			"C:\\Dev\\SecondBrain",
+		);
+	});
+
+	test("reads the codex session's directory from its nested payload", () => {
+		const home = tmpHome();
+		const dayDir = path.join(home, ".codex", "sessions", "2026", "07", "20");
+		fs.mkdirSync(dayDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(dayDir, `rollout-2026-07-20T10-00-00-${SESSION_ID}.jsonl`),
+			`${JSON.stringify({
+				type: "session_meta",
+				payload: { cwd: "C:\\Dev\\superset" },
+			})}\n`,
+		);
+		expect(readAgentSessionCwd("codex", SESSION_ID, { home })).toBe(
+			"C:\\Dev\\superset",
+		);
+	});
+
+	test("returns null when the session has no transcript", () => {
+		expect(
+			readAgentSessionCwd("claude", "missing-session-id", { home: tmpHome() }),
+		).toBe(null);
+	});
+
+	test("survives a truncated trailing line", () => {
+		const home = tmpHome();
+		const slugDir = path.join(home, ".claude", "projects", "C--repo");
+		fs.mkdirSync(slugDir, { recursive: true });
+		fs.writeFileSync(
+			path.join(slugDir, `${SESSION_ID}.jsonl`),
+			`{"type":"user","cwd":"C:\\\\Dev\\\\SecondBrain"}\n{"type":"assist`,
+		);
+		expect(readAgentSessionCwd("claude", SESSION_ID, { home })).toBe(
+			"C:\\Dev\\SecondBrain",
+		);
 	});
 });
 

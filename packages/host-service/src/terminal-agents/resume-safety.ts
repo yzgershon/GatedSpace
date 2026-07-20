@@ -1,4 +1,11 @@
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import {
+	closeSync,
+	existsSync,
+	openSync,
+	readdirSync,
+	readFileSync,
+	readSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import type { TerminalAgentStore } from "./store";
@@ -66,7 +73,7 @@ function claudeConfigDirs(home: string): string[] {
 	return [...dirs];
 }
 
-function claudeTranscriptExists(sessionId: string, home: string): boolean {
+function claudeTranscriptPath(sessionId: string, home: string): string | null {
 	for (const configDir of claudeConfigDirs(home)) {
 		const projectsDir = join(configDir, "projects");
 		let slugs: string[];
@@ -76,11 +83,11 @@ function claudeTranscriptExists(sessionId: string, home: string): boolean {
 			continue;
 		}
 		for (const slug of slugs) {
-			if (existsSync(join(projectsDir, slug, `${sessionId}.jsonl`)))
-				return true;
+			const candidate = join(projectsDir, slug, `${sessionId}.jsonl`);
+			if (existsSync(candidate)) return candidate;
 		}
 	}
-	return false;
+	return null;
 }
 
 /**
@@ -88,7 +95,7 @@ function claudeTranscriptExists(sessionId: string, home: string): boolean {
  * rollout-<timestamp>-<sessionId>.jsonl`. Walk the date tree and match on the
  * filename suffix.
  */
-function codexTranscriptExists(sessionId: string, home: string): boolean {
+function codexTranscriptPath(sessionId: string, home: string): string | null {
 	const suffix = `${sessionId}.jsonl`;
 	for (const rootName of ["sessions", "archived_sessions"]) {
 		const root = join(home, ".codex", rootName);
@@ -114,18 +121,77 @@ function codexTranscriptExists(sessionId: string, home: string): boolean {
 					continue;
 				}
 				for (const day of days) {
+					const dayDir = join(root, year, month, day);
 					let files: string[];
 					try {
-						files = readdirSync(join(root, year, month, day));
+						files = readdirSync(dayDir);
 					} catch {
 						continue;
 					}
-					if (files.some((file) => file.endsWith(suffix))) return true;
+					const hit = files.find((file) => file.endsWith(suffix));
+					if (hit) return join(dayDir, hit);
 				}
 			}
 		}
 	}
-	return false;
+	return null;
+}
+
+/** Head of a transcript — enough for the metadata lines, never the whole file. */
+const TRANSCRIPT_HEAD_BYTES = 64 * 1024;
+
+function readTranscriptHead(path: string): string {
+	let fd: number | undefined;
+	try {
+		fd = openSync(path, "r");
+		const buffer = Buffer.alloc(TRANSCRIPT_HEAD_BYTES);
+		const read = readSync(fd, buffer, 0, TRANSCRIPT_HEAD_BYTES, 0);
+		return buffer.subarray(0, read).toString("utf8");
+	} catch {
+		return "";
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
+}
+
+/**
+ * The directory the agent session was started in.
+ *
+ * Both CLIs scope their session stores by project directory, so resuming from
+ * the wrong cwd fails with "No conversation found with session ID" even though
+ * the transcript is right there on disk. That is what made auto-resume produce
+ * dead panes after an app restart: the respawn used the workspace root, not
+ * the directory the conversation actually belonged to.
+ */
+export function readAgentSessionCwd(
+	agentId: string,
+	agentSessionId: string,
+	roots: TranscriptLocatorRoots = {},
+): string | null {
+	const home = roots.home ?? homedir();
+	const path =
+		agentId === "claude"
+			? claudeTranscriptPath(agentSessionId, home)
+			: agentId === "codex"
+				? codexTranscriptPath(agentSessionId, home)
+				: null;
+	if (!path) return null;
+
+	for (const line of readTranscriptHead(path).split("\n")) {
+		if (!line.includes('"cwd"')) continue;
+		try {
+			const parsed = JSON.parse(line) as {
+				cwd?: unknown;
+				payload?: { cwd?: unknown };
+			};
+			// Claude puts cwd at the top level; Codex nests it under payload.
+			const cwd = parsed.payload?.cwd ?? parsed.cwd;
+			if (typeof cwd === "string" && cwd.length > 0) return cwd;
+		} catch {
+			// partial trailing line, or a line that isn't JSON — keep looking
+		}
+	}
+	return null;
 }
 
 /**
@@ -139,7 +205,9 @@ export function agentTranscriptExists(
 	roots: TranscriptLocatorRoots = {},
 ): boolean {
 	const home = roots.home ?? homedir();
-	if (agentId === "claude") return claudeTranscriptExists(agentSessionId, home);
-	if (agentId === "codex") return codexTranscriptExists(agentSessionId, home);
+	if (agentId === "claude")
+		return claudeTranscriptPath(agentSessionId, home) !== null;
+	if (agentId === "codex")
+		return codexTranscriptPath(agentSessionId, home) !== null;
 	return true;
 }

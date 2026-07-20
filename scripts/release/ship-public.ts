@@ -260,9 +260,27 @@ async function publishRelease(
 	} else {
 		console.log(`  https://github.com/${repo}/actions/runs/${runId}`);
 		await $`gh run watch ${runId} -R ${repo}`.nothrow();
-		const conclusion = await text(
-			$`gh run view ${runId} -R ${repo} --json conclusion --jq ${".conclusion"}`,
-		);
+
+		// `gh run watch` exits early on a transient API blip while the run keeps
+		// going, so its exit is not evidence of anything. Poll the run's own
+		// status until it reports completed, and only then read the conclusion.
+		let conclusion = "";
+		let settled = false;
+		for (let i = 0; i < 120 && !settled; i++) {
+			const line = await text(
+				$`gh run view ${runId} -R ${repo} --json status,conclusion --jq ${'.status + "|" + .conclusion'}`,
+			);
+			const [status, value] = line.split("|");
+			if (status === "completed") {
+				conclusion = value ?? "";
+				settled = true;
+				break;
+			}
+			await sleep(15_000);
+		}
+		if (!settled) {
+			fail(`Timed out waiting for the release workflow — nothing published.`);
+		}
 		if (conclusion !== "success") {
 			fail(
 				`Release workflow ${conclusion || "did not succeed"} — nothing published.`,

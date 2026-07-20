@@ -4,6 +4,7 @@ export { buildAgentResumeCommand } from "./resume-command";
 export {
 	agentTranscriptExists,
 	findLiveAgentSessionBinding,
+	readAgentSessionCwd,
 } from "./resume-safety";
 export type {
 	TerminalAgentBindingListFilter,
