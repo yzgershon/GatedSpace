@@ -202,21 +202,66 @@ export async function initLocalRepoInPlace(
 ): Promise<ResolvedRepo> {
 	validateDirectoryPath(repoPath, "Path");
 
+	// Adopt the folder's existing repo if it has one; otherwise init in place.
 	const existingRoot = await tryRevParseGitRoot(repoPath);
-	if (existingRoot) return resolveLocalRepo(existingRoot);
-
-	await gitInitMainBranch(repoPath);
-	try {
-		await createUserSimpleGit(repoPath).raw([
-			"commit",
-			"--allow-empty",
-			"-m",
-			"Initial commit",
-		]);
-	} catch (err) {
-		throw asInitialCommitTrpcError(err);
+	const root = existingRoot ?? repoPath;
+	if (!existingRoot) {
+		await gitInitMainBranch(repoPath);
 	}
-	return resolveLocalRepo(repoPath);
+
+	// A folder that was `git init`ed but never committed — or one we just
+	// initialized — has an unborn HEAD. Workspace/worktree creation then fails
+	// with "fatal: invalid reference: HEAD". Guarantee a real commit exists,
+	// including for a repo we merely adopted, before handing it off.
+	if (!(await hasAnyCommit(root))) {
+		await createInitialCommit(root);
+	}
+	return resolveLocalRepo(root);
+}
+
+/**
+ * True when the repo has at least one commit (HEAD resolves). A freshly
+ * `git init`ed folder has an unborn HEAD and returns false.
+ */
+async function hasAnyCommit(repoPath: string): Promise<boolean> {
+	try {
+		await createUserSimpleGit(repoPath).raw(["rev-parse", "--verify", "HEAD"]);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Create the `--allow-empty` initial commit a workspace needs. Falls back to a
+ * built-in identity when the machine has no `user.name`/`user.email` set, so
+ * adopting a folder never dead-ends on git setup — a common state on a fresh
+ * machine. The user's own commits still use their global config once they set it.
+ */
+async function createInitialCommit(repoPath: string): Promise<void> {
+	const git = createUserSimpleGit(repoPath);
+	const args = ["commit", "--allow-empty", "-m", "Initial commit"];
+	try {
+		await git.raw(args);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		const identityMissing =
+			message.includes("empty ident") ||
+			message.includes("user.email") ||
+			message.includes("user.name");
+		if (!identityMissing) throw asInitialCommitTrpcError(err);
+		try {
+			await git.raw([
+				"-c",
+				"user.name=GatedSpace",
+				"-c",
+				"user.email=noreply@gatedspace.local",
+				...args,
+			]);
+		} catch (fallbackErr) {
+			throw asInitialCommitTrpcError(fallbackErr);
+		}
+	}
 }
 
 /**

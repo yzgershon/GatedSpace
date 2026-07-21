@@ -16,6 +16,15 @@ const currentYear = new Date().getFullYear();
 const targetArch = process.env.TARGET_ARCH ?? process.arch;
 const author = pkg.author?.name ?? pkg.author;
 const productName = pkg.productName;
+
+// Locally-built (developer) installers are cloud-mode and must NOT be confused
+// with the public local-only release, which shares the productName + version.
+// Set GATEDSPACE_PERSONAL=1 for a personal build and the installer gets a
+// "-personal" filename. CI never sets it, so public artifact names are unchanged.
+const isPersonalBuild = process.env.GATEDSPACE_PERSONAL === "1";
+const winArtifactName = isPersonalBuild
+	? `${productName}-personal-${pkg.version}-\${arch}.\${ext}`
+	: `${productName}-${pkg.version}-\${arch}.\${ext}`;
 const macIconPath = join(pkg.resources, "build/icons/icon.icns");
 const linuxIconPath = join(pkg.resources, "build/icons");
 const winIconPath = join(pkg.resources, "build/icons/icon.ico");
@@ -164,7 +173,7 @@ const config: Configuration = {
 				arch: [targetArch === "x64" ? "x64" : "arm64"],
 			},
 		],
-		artifactName: `${productName}-${pkg.version}-\${arch}.\${ext}`,
+		artifactName: winArtifactName,
 	},
 
 	// NSIS installer (Windows)

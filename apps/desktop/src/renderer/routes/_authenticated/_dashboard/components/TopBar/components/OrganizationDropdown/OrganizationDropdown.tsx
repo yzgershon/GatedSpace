@@ -1,3 +1,13 @@
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "@superset/ui/alert-dialog";
 import { Avatar } from "@superset/ui/atoms/Avatar";
 import { Badge } from "@superset/ui/badge";
 import {
@@ -46,6 +56,9 @@ export function OrganizationDropdown({
 	// Lives here rather than in the submenu: the dropdown unmounts its content
 	// on select, which would take the dialog down with it.
 	const [addAccountOpen, setAddAccountOpen] = useState(false);
+	// Same reason: confirm before leaving local mode, since switching to cloud
+	// reloads into a sign-in + setup flow a local user usually doesn't want.
+	const [confirmCloudOpen, setConfirmCloudOpen] = useState(false);
 
 	const activeOrganizationId = session?.session?.activeOrganizationId;
 
@@ -214,10 +227,7 @@ export function OrganizationDropdown({
 				{/* Account */}
 				{localMode ? (
 					<DropdownMenuItem
-						onSelect={() => {
-							setAuthMode("cloud");
-							window.location.reload();
-						}}
+						onSelect={() => setConfirmCloudOpen(true)}
 						className="gap-2"
 					>
 						<HiOutlineArrowRightOnRectangle className="h-4 w-4" />
@@ -235,6 +245,32 @@ export function OrganizationDropdown({
 				open={addAccountOpen}
 				onOpenChange={setAddAccountOpen}
 			/>
+
+			<AlertDialog open={confirmCloudOpen} onOpenChange={setConfirmCloudOpen}>
+				<AlertDialogContent>
+					<AlertDialogHeader>
+						<AlertDialogTitle>Sign in with an account?</AlertDialogTitle>
+						<AlertDialogDescription>
+							This reloads GatedSpace into account mode, where you sign in with
+							GitHub or Google to sync your work across devices and use teams.
+							Your current local setup stays on this machine, and you can switch
+							back anytime with "Use GatedSpace without an account" on the
+							sign-in screen.
+						</AlertDialogDescription>
+					</AlertDialogHeader>
+					<AlertDialogFooter>
+						<AlertDialogCancel>Stay local</AlertDialogCancel>
+						<AlertDialogAction
+							onClick={() => {
+								setAuthMode("cloud");
+								window.location.reload();
+							}}
+						>
+							Sign in with an account
+						</AlertDialogAction>
+					</AlertDialogFooter>
+				</AlertDialogContent>
+			</AlertDialog>
 		</DropdownMenu>
 	);
 }
