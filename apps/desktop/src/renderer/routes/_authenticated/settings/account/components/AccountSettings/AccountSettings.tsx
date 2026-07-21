@@ -76,8 +76,13 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 
 			setAvatarPreview(uploadResult.url);
 			toast.success("Avatar updated!");
-		} catch {
-			toast.error("Failed to update avatar");
+		} catch (error) {
+			// Show what actually went wrong (file too large, unsupported type,
+			// server refused it) — a bare "failed" leaves nothing to act on.
+			console.error("[account-settings] Avatar upload failed:", error);
+			toast.error(
+				error instanceof Error ? error.message : "Failed to update avatar",
+			);
 		}
 	}
 

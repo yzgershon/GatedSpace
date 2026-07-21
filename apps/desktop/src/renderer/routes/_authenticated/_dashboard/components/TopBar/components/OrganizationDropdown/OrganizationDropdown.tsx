@@ -152,6 +152,10 @@ export function OrganizationDropdown({
 			<DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align={contentAlign}
+				// Don't restore focus to the trigger on close: items here open dialogs
+				// (Add Claude account, Sign in with an account), and the focus handoff
+				// otherwise dismisses the dialog the same frame it opens (it flashes).
+				onCloseAutoFocus={(e) => e.preventDefault()}
 				className={
 					variant === "expanded"
 						? "w-[var(--radix-dropdown-menu-trigger-width)] min-w-56"

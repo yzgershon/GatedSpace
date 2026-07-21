@@ -184,8 +184,12 @@ export function OrganizationSettings({
 			setLogoPreview(uploadResult.url);
 			toast.success("Logo updated");
 		} catch (error) {
+			// Surface the real reason (size, type, server refusal) instead of a
+			// generic failure the user can do nothing with.
 			console.error("[organization-settings] Logo upload failed:", error);
-			toast.error("Failed to update logo");
+			toast.error(
+				error instanceof Error ? error.message : "Failed to update logo",
+			);
 		}
 	}
 

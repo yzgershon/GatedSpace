@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import { homedir } from "node:os";
 import type { BrowserWindow } from "electron";
 import { dialog } from "electron";
+import { prepareUploadImage } from "main/lib/prepare-upload-image";
 import { getImageMimeType } from "shared/file-types";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
@@ -111,7 +112,8 @@ export const createWindowRouter = (getWindow: () => BrowserWindow | null) => {
 
 			const result = await dialog.showOpenDialog(window, {
 				properties: ["openFile"],
-				title: "Select Organization Logo",
+				// Also used for account avatars and agent icons, not just logos.
+				title: "Select Image",
 				filters: [
 					{
 						name: "Images",
@@ -125,10 +127,15 @@ export const createWindowRouter = (getWindow: () => BrowserWindow | null) => {
 			}
 
 			const filePath = result.filePaths[0];
-			const buffer = await fs.readFile(filePath);
-			const mimeType = getImageMimeType(filePath) ?? "image/png";
-			const base64 = buffer.toString("base64");
-			const dataUrl = `data:${mimeType};base64,${base64}`;
+			const file = await fs.readFile(filePath);
+			// Scale down before handing it to the renderer: a camera photo is
+			// far past what the upload API accepts, and failing at the server
+			// is a worse answer than uploading a correctly sized version.
+			const { data, mimeType } = prepareUploadImage(
+				file,
+				getImageMimeType(filePath) ?? "image/png",
+			);
+			const dataUrl = `data:${mimeType};base64,${data.toString("base64")}`;
 
 			return { canceled: false, dataUrl };
 		}),

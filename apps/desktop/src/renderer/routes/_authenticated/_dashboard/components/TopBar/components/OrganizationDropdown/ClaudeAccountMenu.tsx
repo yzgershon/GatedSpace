@@ -102,7 +102,13 @@ export function ClaudeAccountSubmenu({
 				))}
 
 				<DropdownMenuSeparator />
-				<DropdownMenuItem onSelect={onAddAccount} className="gap-2">
+				<DropdownMenuItem
+					// Open on the next tick so the closing menu's focus/dismiss cycle
+					// finishes first; opening the dialog in the same tick lets that
+					// cycle dismiss it immediately (it flashes for a frame).
+					onSelect={() => setTimeout(onAddAccount, 0)}
+					className="gap-2"
+				>
 					<HiOutlinePlus className="h-4 w-4" />
 					<span>Add Claude account…</span>
 				</DropdownMenuItem>
