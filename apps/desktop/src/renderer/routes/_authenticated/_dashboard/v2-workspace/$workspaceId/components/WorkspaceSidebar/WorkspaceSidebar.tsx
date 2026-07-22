@@ -2,36 +2,23 @@ import { Button } from "@superset/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
-import { MonitorPlay, Search } from "lucide-react";
+import { Globe, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { LuFile, LuGitCompareArrows } from "react-icons/lu";
 import { useWorkspaceGitStatus } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/providers/WorkspaceGitStatusProvider";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useSettings } from "renderer/stores/settings";
 import type { CommentPaneData, DiffFocusSide } from "../../types";
+import { BrowserTab } from "./components/BrowserTab";
 import { FilesTab } from "./components/FilesTab";
-import { PRActionHeader } from "./components/PRActionHeader";
-import { PreviewTab } from "./components/PreviewTab";
 import { SidebarHeader } from "./components/SidebarHeader";
 import { useChangesTab } from "./hooks/useChangesTab";
-import { type OpenChatFn, usePRFlowDispatch } from "./hooks/usePRFlowDispatch";
-import { usePRFlowState } from "./hooks/usePRFlowState";
 import { useReviewTab } from "./hooks/useReviewTab";
 import type { SidebarTabDefinition } from "./types";
 
-// Gates the "Create PR" button only — the chat-driven create flow doesn't
-// exist in v2 yet. The PR status group (link + merge dropdown for an open PR)
-// always renders so users can see PR state and merge once a PR exists.
-const CREATE_PR_BUTTON_ENABLED = false;
+type SidebarTabId = "changes" | "files" | "browser";
 
-type SidebarTabId = "changes" | "files" | "review" | "preview";
-
-const VALID_TAB_IDS: readonly SidebarTabId[] = [
-	"changes",
-	"files",
-	"review",
-	"preview",
-];
+const VALID_TAB_IDS: readonly SidebarTabId[] = ["changes", "files", "browser"];
 
 function isSidebarTabId(tab: string): tab is SidebarTabId {
 	return (VALID_TAB_IDS as readonly string[]).includes(tab);
@@ -52,10 +39,13 @@ interface WorkspaceSidebarProps {
 		changeKey?: string,
 	) => void;
 	onOpenComment?: (comment: CommentPaneData) => void;
-	onOpenChat?: OpenChatFn;
 	onSearch?: () => void;
-	/** Open a URL in an in-app browser pane (used by the Preview tab). */
+	/** Open a URL in an in-app browser pane (Browser tab pop-out). */
 	onOpenBrowserUrl?: (url: string) => void;
+	/** Whether the sidebar is currently in wide mode (Browser tab toggle). */
+	isWide?: boolean;
+	/** Toggle the sidebar between its normal width and wide. */
+	onToggleWide?: () => void;
 	selectedFilePath?: string;
 	pendingReveal?: PendingReveal | null;
 	workspaceId: string;
@@ -91,9 +81,10 @@ export function WorkspaceSidebar({
 	onSelectFile,
 	onSelectDiffFile,
 	onOpenComment,
-	onOpenChat,
 	onSearch,
 	onOpenBrowserUrl,
+	isWide,
+	onToggleWide,
 	selectedFilePath,
 	pendingReveal,
 	workspaceId,
@@ -107,6 +98,8 @@ export function WorkspaceSidebar({
 				.where(({ localState }) => eq(localState.workspaceId, workspaceId)),
 		[collections, workspaceId],
 	);
+	// Persisted "review"/"preview" values (retired tabs) fail this guard and
+	// fall back to "changes", which is the intended migration.
 	const activeTab: SidebarTabId =
 		localState && isSidebarTabId(localState.sidebarState.activeTab)
 			? localState.sidebarState.activeTab
@@ -128,8 +121,7 @@ export function WorkspaceSidebar({
 		const ro = new ResizeObserver(([entry]) => {
 			if (!entry) return;
 			const width = entry.contentRect.width;
-			// Hysteresis: expand back to labels only once we're clearly past
-			// the breakpoint, so the labels don't jitter on the edge.
+			// Hysteresis so labels don't jitter on the breakpoint edge.
 			setCompact((prev) => (prev ? width < 280 : width < 260));
 		});
 		ro.observe(el);
@@ -145,11 +137,9 @@ export function WorkspaceSidebar({
 			: undefined,
 		onOpenFile: onSelectFile,
 	});
-	const changesTab: SidebarTabDefinition = {
-		...changesTabDef,
-		icon: LuGitCompareArrows,
-	};
 
+	// Review is no longer its own tab — its content is folded into Changes,
+	// shown above the file changes only when a PR or comments exist.
 	const reviewTab = useReviewTab({
 		workspaceId,
 		onOpenComment,
@@ -162,10 +152,22 @@ export function WorkspaceSidebar({
 			: undefined,
 	});
 
-	const { flowState, onRetry } = usePRFlowState(workspaceId);
-	const dispatch = usePRFlowDispatch({
-		onOpenChat: onOpenChat ?? (() => {}),
-	});
+	const changesTab: SidebarTabDefinition = {
+		...changesTabDef,
+		icon: LuGitCompareArrows,
+		content: reviewTab.hasContent ? (
+			<div className="flex min-h-0 flex-1 flex-col">
+				<div className="flex max-h-[45%] shrink-0 flex-col overflow-y-auto border-b border-border">
+					{reviewTab.content}
+				</div>
+				<div className="flex min-h-0 flex-1 flex-col">
+					{changesTabDef.content}
+				</div>
+			</div>
+		) : (
+			changesTabDef.content
+		),
+	};
 
 	const filesTab: SidebarTabDefinition = {
 		id: "files",
@@ -183,21 +185,21 @@ export function WorkspaceSidebar({
 		),
 	};
 
-	const previewTab: SidebarTabDefinition = {
-		id: "preview",
-		label: "Preview",
-		icon: MonitorPlay,
+	const browserTab: SidebarTabDefinition = {
+		id: "browser",
+		label: "Browser",
+		icon: Globe,
 		content: (
-			<PreviewTab workspaceId={workspaceId} onOpenUrl={onOpenBrowserUrl} />
+			<BrowserTab
+				workspaceId={workspaceId}
+				onOpenBrowserUrl={onOpenBrowserUrl}
+				isWide={isWide}
+				onToggleWide={onToggleWide}
+			/>
 		),
 	};
 
-	const tabs: SidebarTabDefinition[] = [
-		filesTab,
-		changesTab,
-		reviewTab,
-		previewTab,
-	];
+	const tabs: SidebarTabDefinition[] = [filesTab, changesTab, browserTab];
 	const activeTabDef = tabs.find((t) => t.id === activeTab);
 
 	return (
@@ -205,13 +207,6 @@ export function WorkspaceSidebar({
 			ref={containerRef}
 			className="isolate flex h-full w-full min-h-0 flex-col overflow-hidden bg-background"
 		>
-			<PRActionHeader
-				workspaceId={workspaceId}
-				state={flowState}
-				dispatch={dispatch}
-				onRetry={onRetry}
-				createPREnabled={CREATE_PR_BUTTON_ENABLED}
-			/>
 			<SidebarHeader
 				tabs={tabs}
 				activeTab={activeTab}

@@ -128,8 +128,11 @@ export const workspaceLocalStateSchema = z.object({
 		sectionId: z.string().uuid().nullable().default(null),
 		changesFilter: changesFilterSchema.default({ kind: "all" }),
 		changesViewMode: z.enum(["folders", "tree"]).default("folders"),
+		// "review"/"preview" are retired tabs kept in the enum so pre-migration
+		// rows still validate on the next write; the sidebar maps them to
+		// "changes" at read time (see isSidebarTabId in WorkspaceSidebar).
 		activeTab: z
-			.enum(["changes", "files", "review", "preview"])
+			.enum(["changes", "files", "review", "preview", "browser"])
 			.default("changes"),
 		isHidden: z.boolean().default(false),
 	}),

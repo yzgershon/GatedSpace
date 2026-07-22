@@ -18,6 +18,20 @@ export interface PersistableBrowserState {
 	faviconUrl: string | null;
 }
 
+/**
+ * Optional device-viewport emulation for a hosted webview. When set, the guest
+ * lays out at `contentWidth` CSS px and is CSS-scaled (origin top-left) to fit
+ * the placeholder's on-screen width — DevTools "fit" behaviour — scrolling
+ * vertically. `null` (the default) keeps the webview sized 1:1 to its
+ * placeholder, so browser *panes* are unaffected.
+ */
+export interface BrowserRuntimeViewport {
+	/** CSS px the guest lays out at (e.g. 375 mobile, 1280 desktop). */
+	contentWidth: number;
+	/** Center in leftover space (mobile 1:1) vs. left-align (scaled desktop). */
+	center: boolean;
+}
+
 interface RegistryEntry {
 	webview: Electron.WebviewTag;
 	state: BrowserRuntimeState;
@@ -26,6 +40,8 @@ interface RegistryEntry {
 	detachHandlers: () => void;
 	placeholder: HTMLElement | null;
 	resizeObserver: ResizeObserver | null;
+	/** Device-viewport emulation, or null for 1:1 (panes). */
+	viewport: BrowserRuntimeViewport | null;
 	visible: boolean;
 	/** True while the page has been discarded (navigated to about:blank). */
 	suspended: boolean;
@@ -163,10 +179,31 @@ class BrowserRuntimeRegistryImpl {
 		if (!entry.placeholder) return;
 		const rect = entry.placeholder.getBoundingClientRect();
 		const w = entry.webview;
+		const vp = entry.viewport;
+
+		if (!vp) {
+			// 1:1 with the placeholder — the only path browser panes ever take.
+			w.style.transform = "";
+			w.style.transformOrigin = "";
+			w.style.top = `${rect.top}px`;
+			w.style.left = `${rect.left}px`;
+			w.style.width = `${rect.width}px`;
+			w.style.height = `${rect.height}px`;
+			return;
+		}
+
+		// Device-viewport emulation: lay out at contentWidth CSS px and CSS-scale
+		// to fit the placeholder width (never scaling up past 1:1), scrolling
+		// vertically. `center` puts the mobile viewport's gutters on both sides.
+		const scale = Math.min(1, rect.width / vp.contentWidth);
+		const scaledWidth = vp.contentWidth * scale;
+		const offsetX = vp.center ? Math.max(0, (rect.width - scaledWidth) / 2) : 0;
+		w.style.transformOrigin = "top left";
+		w.style.transform = `scale(${scale})`;
 		w.style.top = `${rect.top}px`;
-		w.style.left = `${rect.left}px`;
-		w.style.width = `${rect.width}px`;
-		w.style.height = `${rect.height}px`;
+		w.style.left = `${rect.left + offsetX}px`;
+		w.style.width = `${vp.contentWidth}px`;
+		w.style.height = `${rect.height / scale}px`;
 	}
 
 	private notify(paneId: string) {
@@ -289,6 +326,7 @@ class BrowserRuntimeRegistryImpl {
 			detachHandlers: () => {},
 			placeholder: null,
 			resizeObserver: null,
+			viewport: null,
 			visible: false,
 			suspended: false,
 			suspendedUrl: null,
@@ -520,6 +558,18 @@ class BrowserRuntimeRegistryImpl {
 		entry.webview.loadURL(sanitizeUrl(url)).catch((err) => {
 			console.error("[browserRuntimeRegistry] loadURL failed:", err);
 		});
+	}
+
+	/**
+	 * Set (or clear, with `null`) device-viewport emulation for a hosted webview
+	 * and re-lay it out immediately. Used by the sidebar Browser tab's
+	 * mobile/desktop switch; panes never call this, so they stay 1:1.
+	 */
+	setViewport(paneId: string, viewport: BrowserRuntimeViewport | null): void {
+		const entry = this.entries.get(paneId);
+		if (!entry) return;
+		entry.viewport = viewport;
+		this.updateLayout(entry);
 	}
 
 	goBack(paneId: string): void {

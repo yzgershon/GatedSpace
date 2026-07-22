@@ -225,6 +225,12 @@ function V2WorkspaceContent() {
 	// the live collection skips zod defaults, so an older row reads undefined
 	// here and would render the ResizablePanel without a width (full-bleed).
 	const sidebarWidth = v2UserPreferences.rightSidebarWidth ?? 340;
+	// Transient "wide mode" for the Browser tab: overrides the persisted width
+	// without clobbering the user's saved preference. A manual drag clears it.
+	const [wideSidebarOverride, setWideSidebarOverride] = useState<number | null>(
+		null,
+	);
+	const effectiveSidebarWidth = wideSidebarOverride ?? sidebarWidth;
 	const [isSidebarResizing, setIsSidebarResizing] = useState(false);
 	const { onSidebarResizeDragging, onWorkspaceInteractionStateChange } =
 		useBrowserShellInteractionPassthrough({ sidebarOpen });
@@ -340,14 +346,21 @@ function V2WorkspaceContent() {
 					sidebarSlotEl &&
 					createPortal(
 						<ResizablePanel
-							width={sidebarWidth}
-							onWidthChange={setRightSidebarWidth}
+							width={effectiveSidebarWidth}
+							onWidthChange={(w) => {
+								// A manual drag exits wide mode and updates the saved width.
+								setWideSidebarOverride(null);
+								setRightSidebarWidth(w);
+							}}
 							isResizing={isSidebarResizing}
 							onResizingChange={handleSidebarResizingChange}
 							minWidth={240}
 							maxWidth={640}
 							handleSide="left"
-							onDoubleClickHandle={() => setRightSidebarWidth(340)}
+							onDoubleClickHandle={() => {
+								setWideSidebarOverride(null);
+								setRightSidebarWidth(340);
+							}}
 						>
 							<WorkspaceSidebar
 								workspaceId={workspaceId}
@@ -356,6 +369,10 @@ function V2WorkspaceContent() {
 								onOpenComment={openCommentPane}
 								onSearch={handleQuickOpen}
 								onOpenBrowserUrl={openBrowserUrl}
+								isWide={wideSidebarOverride != null}
+								onToggleWide={() =>
+									setWideSidebarOverride((v) => (v == null ? 640 : null))
+								}
 								selectedFilePath={selectedFilePath}
 								pendingReveal={pendingReveal}
 							/>

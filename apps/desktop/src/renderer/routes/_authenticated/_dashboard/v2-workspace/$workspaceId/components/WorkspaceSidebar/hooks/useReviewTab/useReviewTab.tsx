@@ -30,7 +30,7 @@ export function useReviewTab({
 	workspaceId,
 	onOpenComment,
 	onOpenInDiff,
-}: UseReviewTabParams): SidebarTabDefinition {
+}: UseReviewTabParams): SidebarTabDefinition & { hasContent: boolean } {
 	const prQuery = workspaceTrpc.git.getPullRequest.useQuery(
 		{ workspaceId },
 		{
@@ -96,12 +96,18 @@ export function useReviewTab({
 		/>
 	);
 
+	// Whether there's anything worth showing — used by the Changes tab, which
+	// now hosts review inline (the standalone Review tab was removed) and only
+	// renders the review section when a PR or comments actually exist.
+	const hasContent = hasPR || comments.length > 0;
+
 	return {
 		id: "review",
 		label: "Review",
 		icon: LuMessageSquare,
 		badge: openReviewCount > 0 ? openReviewCount : undefined,
 		content,
+		hasContent,
 	};
 }
 

@@ -1,6 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import { getSidebarHeaderTabButtonClassName } from "renderer/screens/main/components/WorkspaceView/RightSidebar/headerTabStyles";
 import type { SidebarTabDefinition } from "../../types";
 
 interface SidebarHeaderProps {
@@ -10,6 +9,12 @@ interface SidebarHeaderProps {
 	compact?: boolean;
 }
 
+/**
+ * The sidebar's single top row: a segmented control of tabs (Files / Changes /
+ * Browser) plus the active tab's own actions on the right. This is the only
+ * header row — the old PR-status row above it was removed, so the tabs sit in
+ * the reclaimed space.
+ */
 export function SidebarHeader({
 	tabs,
 	activeTab,
@@ -19,8 +24,8 @@ export function SidebarHeader({
 	const actions = tabs.find((t) => t.id === activeTab)?.actions;
 
 	return (
-		<div className="flex h-10 shrink-0 items-stretch border-b border-border">
-			<div className="flex min-w-0 items-center h-full overflow-hidden">
+		<div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-2">
+			<div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-lg border border-border bg-[#1b1817] p-[3px]">
 				{tabs.map((tab) => {
 					const isActive = activeTab === tab.id;
 					const badge =
@@ -35,23 +40,22 @@ export function SidebarHeader({
 							onClick={() => onTabChange(tab.id)}
 							aria-label={label}
 							className={cn(
-								getSidebarHeaderTabButtonClassName({
-									isActive,
-									compact,
-								}),
-								"relative",
+								"flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 font-medium text-[11.5px] transition-colors",
+								isActive
+									? "bg-card text-foreground shadow-sm"
+									: "text-muted-foreground/80 hover:text-foreground",
 							)}
 						>
-							{tab.icon && <tab.icon className="size-3" />}
-							{!compact && tab.label}
+							{tab.icon && <tab.icon className="size-3 shrink-0" />}
+							{!compact && <span className="truncate">{tab.label}</span>}
 							{badge && (
 								<span
 									aria-hidden="true"
 									className={cn(
-										"shrink-0 rounded-full bg-muted px-1.5 text-[10px] font-medium leading-4 tabular-nums text-muted-foreground",
-										isActive && "bg-background/80 text-foreground",
-										compact &&
-											"absolute right-1 top-1 min-w-3 px-1 text-[9px] leading-3",
+										"shrink-0 rounded-full px-1.5 text-[10px] leading-4 tabular-nums",
+										isActive
+											? "bg-muted text-foreground"
+											: "bg-muted/60 text-muted-foreground",
 									)}
 								>
 									{badge}
@@ -74,11 +78,8 @@ export function SidebarHeader({
 					return btn;
 				})}
 			</div>
-			<div className="flex-1" />
 			{actions && (
-				<div className="flex shrink-0 items-center h-10 pr-2 gap-0.5">
-					{actions}
-				</div>
+				<div className="flex shrink-0 items-center gap-0.5">{actions}</div>
 			)}
 		</div>
 	);
