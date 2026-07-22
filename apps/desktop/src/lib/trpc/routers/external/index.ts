@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import nodePath from "node:path";
 import {
 	EXTERNAL_APPS,
@@ -41,6 +42,61 @@ async function withResolveGuard<T>(fn: () => Promise<T> | T): Promise<T> {
 }
 
 const ExternalAppSchema = z.enum(EXTERNAL_APPS);
+
+/**
+ * Clipboard image paste for the terminal.
+ *
+ * Terminal TUIs (Claude Code, Codex, opencode) attach a screenshot when they
+ * receive a bracketed paste containing an image *file path* — the same
+ * mechanism VS Code's terminal uses. So on an image-only paste the renderer
+ * writes the bitmap to a temp file here and pastes the path, instead of
+ * forwarding a bare Ctrl+V (which Claude Code's terminal ignores on Windows —
+ * its empty-paste clipboard read only fires on macOS/WSL).
+ *
+ * The extension must be one Claude Code recognizes as an image
+ * (`/\.(png|jpe?g|gif|webp)$/i`); anything else would paste as inert text.
+ */
+const TERMINAL_IMAGE_MIME_EXT: Record<string, string> = {
+	"image/png": "png",
+	"image/jpeg": "jpg",
+	"image/jpg": "jpg",
+	"image/gif": "gif",
+	"image/webp": "webp",
+};
+
+const TERMINAL_IMAGE_DIR = nodePath.join(
+	os.tmpdir(),
+	"superset-terminal-images",
+);
+const MAX_TERMINAL_IMAGE_BYTES = 25 * 1024 * 1024;
+const TERMINAL_IMAGE_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Best-effort sweep of temp images older than the TTL. The TUI copies the
+ * bytes into its own context on paste, so we don't need to keep them around —
+ * this just stops the temp dir from growing without bound.
+ */
+async function pruneOldTerminalImages(dir: string): Promise<void> {
+	try {
+		const now = Date.now();
+		const entries = await fs.promises.readdir(dir);
+		await Promise.all(
+			entries.map(async (name) => {
+				const full = nodePath.join(dir, name);
+				try {
+					const stat = await fs.promises.stat(full);
+					if (now - stat.mtimeMs > TERMINAL_IMAGE_TTL_MS) {
+						await fs.promises.rm(full, { force: true });
+					}
+				} catch {
+					// Ignore individual file races (already removed, locked, etc.).
+				}
+			}),
+		);
+	} catch {
+		// Dir doesn't exist yet or can't be read — nothing to prune.
+	}
+}
 
 const nonEditorSet = new Set<ExternalApp>(NON_EDITOR_APPS);
 
@@ -276,6 +332,54 @@ export const createExternalRouter = () => {
 					await openPathInApp(filePath, app);
 				}),
 			),
+
+		/**
+		 * Persist a pasted clipboard image to a temp file and return its absolute
+		 * path, so the renderer can bracketed-paste that path into the terminal.
+		 * See TERMINAL_IMAGE_MIME_EXT above for the why.
+		 */
+		saveTerminalImage: publicProcedure
+			.input(
+				z.object({
+					/** Raw image bytes, base64-encoded (no data-URL prefix). */
+					base64: z.string().min(1),
+					/** Source MIME type, e.g. "image/png". */
+					mimeType: z.string(),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				const ext = TERMINAL_IMAGE_MIME_EXT[input.mimeType.toLowerCase()];
+				if (!ext) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: `Unsupported clipboard image type: ${input.mimeType}`,
+					});
+				}
+
+				const buffer = Buffer.from(input.base64, "base64");
+				if (buffer.byteLength === 0) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Clipboard image is empty",
+					});
+				}
+				if (buffer.byteLength > MAX_TERMINAL_IMAGE_BYTES) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: "Clipboard image is too large",
+					});
+				}
+
+				await fs.promises.mkdir(TERMINAL_IMAGE_DIR, { recursive: true });
+				await pruneOldTerminalImages(TERMINAL_IMAGE_DIR);
+
+				const suffix = Math.random().toString(36).slice(2, 10);
+				const fileName = `paste-${Date.now()}-${suffix}.${ext}`;
+				const filePath = nodePath.join(TERMINAL_IMAGE_DIR, fileName);
+				await fs.promises.writeFile(filePath, buffer);
+
+				return { path: filePath };
+			}),
 	});
 };
 

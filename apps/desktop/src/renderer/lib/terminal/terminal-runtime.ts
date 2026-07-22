@@ -17,7 +17,8 @@ import {
 	wrapWrite,
 } from "./parser-idle-gate";
 import { loadAddons } from "./terminal-addons";
-import { installImagePasteFallback } from "./terminal-image-paste-fallback";
+import { saveClipboardImageToTemp } from "./terminal-clipboard-image-io";
+import { installImagePasteHandler } from "./terminal-image-paste";
 import { installTerminalKeyEventHandler } from "./terminal-key-event-handler";
 import { getTerminalParkingContainer } from "./terminal-parking";
 
@@ -243,9 +244,10 @@ export function createRuntime(
 		restoreBuffer(terminalId, terminal);
 	}
 
-	const disposeImagePasteFallback = installImagePasteFallback(
-		terminal,
+	const disposeImagePasteFallback = installImagePasteHandler(
 		wrapper,
+		terminal,
+		saveClipboardImageToTemp,
 	);
 
 	return {

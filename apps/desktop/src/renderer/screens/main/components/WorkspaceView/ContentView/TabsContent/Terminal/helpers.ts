@@ -16,6 +16,8 @@ import {
 	type ParserIdleGate,
 	wrapWrite,
 } from "renderer/lib/terminal/parser-idle-gate";
+import { saveClipboardImageToTemp } from "renderer/lib/terminal/terminal-clipboard-image-io";
+import { installImagePasteHandler } from "renderer/lib/terminal/terminal-image-paste";
 import { TerminalLinkManager } from "renderer/lib/terminal/terminal-link-manager";
 import { electronTrpcClient as trpcClient } from "renderer/lib/trpc-client";
 import { toXtermTheme } from "renderer/stores/theme/utils";
@@ -286,14 +288,13 @@ export function setupCopyHandler(xterm: XTerm): () => void {
 }
 
 /**
- * Forward image-only pastes to the PTY as a Ctrl+V keystroke.
+ * Route image-only pastes into the terminal as a temp-file path.
  *
- * Ctrl+V bubbles to the browser paste pipeline (see
- * terminal-key-event-handler), which only delivers clipboard *text* to xterm.
- * A fresh screenshot has no text on the clipboard, so the paste silently
- * no-ops. TUIs like Claude Code attach the clipboard image themselves when
- * they receive Ctrl+V (0x16) on stdin — so when the clipboard holds an image
- * and no text, swallow the DOM paste and send the keystroke through instead.
+ * A fresh screenshot has no text on the clipboard, so xterm's built-in paste
+ * pastes nothing. We write the bitmap to a temp file and bracketed-paste its
+ * path, which every terminal TUI (Claude Code, Codex, opencode) recognizes and
+ * attaches — mirroring VS Code's terminal. See terminal-image-paste.ts for why
+ * the old bare-Ctrl+V forward failed on Windows.
  *
  * Returns a cleanup function to remove the handler.
  */
@@ -301,27 +302,9 @@ export function setupImagePasteHandler(xterm: XTerm): () => void {
 	const element = xterm.element;
 	if (!element) return () => {};
 
-	const handlePaste = (event: ClipboardEvent) => {
-		const data = event.clipboardData;
-		if (!data) return;
-		const hasText = data.getData("text/plain").length > 0;
-		const hasImage = Array.from(data.items).some(
-			(item) => item.kind === "file" && item.type.startsWith("image/"),
-		);
-		if (hasText || !hasImage) return;
-		event.preventDefault();
-		// Keep xterm's own textarea paste handler from also seeing the event.
-		event.stopImmediatePropagation();
-		xterm.input("\x16", true);
-	};
-
 	// Capture phase on the container so this runs before xterm's handler on
 	// the textarea target.
-	element.addEventListener("paste", handlePaste, true);
-
-	return () => {
-		element.removeEventListener("paste", handlePaste, true);
-	};
+	return installImagePasteHandler(element, xterm, saveClipboardImageToTemp);
 }
 
 export function setupFocusListener(

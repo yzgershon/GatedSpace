@@ -62,15 +62,25 @@ bun run typecheck          # Type check all packages
 bun run clean              # Clean root node_modules
 bun run clean:workspaces   # Clean all workspace node_modules
 
-# Releases (desktop + host-service + cli share one version; see scripts/release/README.md)
-bun run release            # interactive: desktop release or CLI hotfix
-bun run release desktop    # desktop app release (draft by default)
-bun run release cli        # interim CLI hotfix (<desktop>-N prerelease)
+# Releases — GatedSpace (this Windows fork) ships PUBLIC with `bun run ship`:
+bun run ship <version> "headline"  # public GatedSpace release -> yzgershon/GatedSpace (THE way to ship this fork)
+# The `bun run release*` commands below are UPSTREAM Superset's flow — NOT how
+# GatedSpace ships publicly. Don't reach for them for a GatedSpace release.
+bun run release            # (upstream) interactive: desktop release or CLI hotfix
+bun run release desktop    # (upstream) desktop app release (draft by default)
+bun run release cli        # (upstream) interim CLI hotfix (<desktop>-N prerelease)
 bun run check:versions     # assert versions are unified
 ```
 
-Cut releases on a dedicated release branch (not `main`); `bun run release desktop
-<version> <commit>` provisions one from a commit. Full runbook: `scripts/release/README.md`.
+Cut *upstream* releases on a dedicated release branch (not `main`); `bun run release
+desktop <version> <commit>` provisions one from a commit. Full upstream runbook:
+`scripts/release/README.md`.
+
+> **Shipping a GatedSpace change? Read `RELEASING.md` in the repo root.** It is the
+> single source of truth for both targets: the public release (`bun run ship
+> <version> "headline"`) and the maintainer's personal build (`GATEDSPACE_PERSONAL=1
+> bun run build`). Most changes go to BOTH. Don't ask the user how to ship — it's all
+> in `RELEASING.md`.
 
 ## Code Quality
 
