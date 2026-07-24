@@ -37,8 +37,8 @@ export function InvitationActions({ invitation }: InvitationActionsProps) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" className="h-8 w-8">
-					<HiEllipsisVertical className="h-4 w-4" />
+				<Button variant="ghost" size="icon" className="size-8">
+					<HiEllipsisVertical className="size-4" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
@@ -47,7 +47,7 @@ export function InvitationActions({ invitation }: InvitationActionsProps) {
 					disabled={isCanceling}
 					className="text-destructive gap-2"
 				>
-					<HiOutlineXMark className="h-4 w-4" />
+					<HiOutlineXMark className="size-4" />
 					Cancel
 				</DropdownMenuItem>
 			</DropdownMenuContent>

@@ -261,7 +261,7 @@ export function ThemeSection() {
 			name: "My Custom Theme",
 			type: baseTheme.type,
 			author: "You",
-			description: "Custom Superset theme",
+			description: "Custom GatedSpace theme",
 			ui: baseTheme.ui,
 			terminal: getTerminalColors(baseTheme),
 		};
@@ -291,7 +291,7 @@ export function ThemeSection() {
 							className="inline-flex items-center gap-0.5 text-primary hover:underline"
 						>
 							marketplace
-							<HiOutlineArrowTopRightOnSquare className="h-3 w-3" />
+							<HiOutlineArrowTopRightOnSquare className="size-3" />
 						</a>{" "}
 						or{" "}
 						<a
@@ -301,7 +301,7 @@ export function ThemeSection() {
 							className="inline-flex items-center gap-0.5 text-primary hover:underline"
 						>
 							docs
-							<HiOutlineArrowTopRightOnSquare className="h-3 w-3" />
+							<HiOutlineArrowTopRightOnSquare className="size-3" />
 						</a>
 						.
 					</>
@@ -356,7 +356,7 @@ export function ThemeSection() {
 						size="sm"
 						onClick={handleDownloadBaseTheme}
 					>
-						<HiOutlineArrowDownTray className="mr-1.5 h-4 w-4" />
+						<HiOutlineArrowDownTray className="mr-1.5 size-4" />
 						Download starter
 					</Button>
 					<Button
@@ -366,7 +366,7 @@ export function ThemeSection() {
 						onClick={() => fileInputRef.current?.click()}
 						disabled={isImporting}
 					>
-						<HiOutlineArrowUpTray className="mr-1.5 h-4 w-4" />
+						<HiOutlineArrowUpTray className="mr-1.5 size-4" />
 						{isImporting ? "Importing..." : "Import"}
 					</Button>
 				</div>

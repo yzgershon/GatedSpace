@@ -458,7 +458,7 @@ export function FileDiffSection({
 						binaryFilePreview
 					) : isHiddenByDefault && !loadHiddenDiff ? (
 						<div className="flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground bg-muted/30">
-							<LuFileCode className="w-8 h-8" />
+							<LuFileCode className="size-8" />
 							<p className="text-sm">
 								{isGenerated
 									? "Generated file hidden"
@@ -477,7 +477,7 @@ export function FileDiffSection({
 							className="flex items-center justify-center text-muted-foreground bg-background"
 							style={{ minHeight: FILE_DIFF_SECTION_PLACEHOLDER_HEIGHT }}
 						>
-							<LuLoader className="w-4 h-4 animate-spin mr-2" />
+							<LuLoader className="size-4 animate-spin mr-2" />
 							<span>Loading diff...</span>
 						</div>
 					) : hasRenderedDiff ? (
@@ -545,7 +545,7 @@ export function FileDiffSection({
 						>
 							{diffData ? (
 								<>
-									<LuLoader className="w-4 h-4 animate-spin mr-2" />
+									<LuLoader className="size-4 animate-spin mr-2" />
 									<span>Loading editor...</span>
 								</>
 							) : (

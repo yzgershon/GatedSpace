@@ -48,7 +48,7 @@ function getStatusIcon(status: FileStatus, iconClass: string): ReactNode {
 export function StatusIndicator({
 	status,
 	className,
-	iconClassName = "w-3 h-3",
+	iconClassName = "size-3",
 }: {
 	status: string;
 	className?: string;

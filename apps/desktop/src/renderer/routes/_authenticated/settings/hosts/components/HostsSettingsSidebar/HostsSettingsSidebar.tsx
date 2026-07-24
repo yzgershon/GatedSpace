@@ -83,7 +83,7 @@ export function HostsSettingsSidebar({
 				>
 					<span
 						className={cn(
-							"h-1.5 w-1.5 rounded-full shrink-0",
+							"size-1.5 rounded-full shrink-0",
 							row.isOnline ? "bg-emerald-500" : "bg-muted-foreground/40",
 						)}
 					/>

@@ -90,9 +90,9 @@ export function EditableCodeBlockView({
 						className="flex items-center justify-center rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 					>
 						{mermaidMode === "preview" ? (
-							<HiOutlineCodeBracket className="h-3.5 w-3.5" />
+							<HiOutlineCodeBracket className="size-3.5" />
 						) : (
-							<HiOutlineEye className="h-3.5 w-3.5" />
+							<HiOutlineEye className="size-3.5" />
 						)}
 					</button>
 				)}
@@ -103,7 +103,7 @@ export function EditableCodeBlockView({
 							className="flex items-center gap-1 rounded px-2 py-1 text-muted-foreground text-xs transition-colors hover:bg-muted hover:text-foreground"
 						>
 							{currentLabel}
-							<HiChevronDown className="h-3 w-3" />
+							<HiChevronDown className="size-3" />
 						</button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -133,9 +133,9 @@ export function EditableCodeBlockView({
 					className="flex items-center justify-center rounded p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
 				>
 					{copied ? (
-						<HiCheck className="h-3.5 w-3.5 text-green-500" />
+						<HiCheck className="size-3.5 text-green-500" />
 					) : (
-						<HiOutlineClipboard className="h-3.5 w-3.5" />
+						<HiOutlineClipboard className="size-3.5" />
 					)}
 				</button>
 			</div>

@@ -1,7 +1,12 @@
-import { Message, MessageContent } from "@superset/ui/ai-elements/message";
+import {
+	Message,
+	MessageAction,
+	MessageActions,
+	MessageContent,
+} from "@superset/ui/ai-elements/message";
 import { ShimmerLabel } from "@superset/ui/ai-elements/shimmer-label";
-import { FileSearchIcon } from "lucide-react";
-import { type ReactNode, useCallback } from "react";
+import { CheckIcon, CopyIcon, FileSearchIcon } from "lucide-react";
+import { type ReactNode, useCallback, useState } from "react";
 import { StreamingMessageText } from "renderer/components/Chat/ChatInterface/components/MessagePartsRenderer/components/StreamingMessageText";
 import { ReasoningBlock } from "renderer/components/Chat/ChatInterface/components/ReasoningBlock";
 import { ToolCallBlock } from "renderer/components/Chat/ChatInterface/components/ToolCallBlock";
@@ -114,6 +119,23 @@ export function AssistantMessage({
 	onPlanRespond,
 }: AssistantMessageProps) {
 	const addFileViewerPane = useTabsStore((store) => store.addFileViewerPane);
+
+	// Assistant replies are the text people actually want to copy, but only user
+	// messages had a copy affordance. Mirrors the UserMessageActions recipe.
+	const [copied, setCopied] = useState(false);
+	const fullText = message.content
+		.map((part) => (part.type === "text" ? part.text : ""))
+		.filter(Boolean)
+		.join("\n\n")
+		.trim();
+	const handleCopy = useCallback(() => {
+		if (!fullText) return;
+		void navigator.clipboard.writeText(fullText).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		});
+	}, [fullText]);
+
 	const nodes: ReactNode[] = [];
 	const renderedToolCallIds = new Set<string>();
 	let didRenderPendingPlanApproval = false;
@@ -346,6 +368,27 @@ export function AssistantMessage({
 				)}
 				{footer}
 			</MessageContent>
+			{fullText && !isStreaming ? (
+				// -mb-9 reclaims the bar's height so an always-mounted (faded) action
+				// row doesn't wedge extra space between messages; it has its own
+				// background/shadow so on hover it reads as a floating overlay.
+				<div className="-mb-9 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+					<MessageActions className="rounded-lg bg-background/95 p-1 shadow-sm backdrop-blur-xs">
+						<MessageAction
+							className="size-7 text-muted-foreground hover:text-foreground"
+							label={copied ? "Copied" : "Copy response"}
+							onClick={handleCopy}
+							tooltip={copied ? "Copied" : "Copy"}
+						>
+							{copied ? (
+								<CheckIcon className="size-3.5" />
+							) : (
+								<CopyIcon className="size-3.5" />
+							)}
+						</MessageAction>
+					</MessageActions>
+				</div>
+			) : null}
 		</Message>
 	);
 }

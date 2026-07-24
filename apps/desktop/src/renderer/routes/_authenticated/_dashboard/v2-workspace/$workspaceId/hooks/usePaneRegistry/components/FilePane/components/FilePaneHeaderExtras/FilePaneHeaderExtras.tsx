@@ -63,7 +63,7 @@ export function FilePaneHeaderExtras({
 						type="button"
 						aria-label="Copy path"
 						onClick={() => void copyToClipboard(filePath)}
-						className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+						className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 					>
 						{copied ? (
 							<LuCheck className="size-3.5" />
@@ -82,7 +82,7 @@ export function FilePaneHeaderExtras({
 						type="button"
 						aria-label="Open in editor"
 						onClick={handleOpenExternal}
-						className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+						className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 					>
 						<TbExternalLink className="size-3.5" />
 					</button>

@@ -64,7 +64,7 @@ export const DashboardSidebarSectionHeader = forwardRef<
 				)}
 				{...props}
 			>
-				<div className="mr-2 grid h-5 w-5 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing [&>*]:col-start-1 [&>*]:row-start-1">
+				<div className="mr-2 grid size-5 shrink-0 cursor-grab items-center justify-center active:cursor-grabbing [&>*]:col-start-1 [&>*]:row-start-1">
 					<HiChevronRight
 						className={cn(
 							"size-3 text-muted-foreground transition-[opacity,transform] duration-150 group-hover:opacity-0",

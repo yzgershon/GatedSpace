@@ -37,7 +37,7 @@ export interface OpenInExternalAppOption {
 export const FINDER_OPTIONS: OpenInExternalAppOption[] = [
 	{
 		id: "finder",
-		label: "Finder",
+		label: "File Explorer",
 		lightIcon: finderIcon,
 		darkIcon: finderIcon,
 	},

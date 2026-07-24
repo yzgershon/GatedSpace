@@ -312,7 +312,7 @@ export function Pane<TData>({
 					isActive &&
 						paneCount > 1 &&
 						!isMaximized &&
-						"ring-2 ring-orange-500 ring-inset",
+						"ring-2 ring-highlight ring-inset",
 				)}
 				onMouseDown={context.actions.focus}
 			>

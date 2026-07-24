@@ -1,0 +1,10 @@
+# Codex project config for this fork.
+#
+# Intentionally defines NO MCP servers. Upstream superset.sh ships its internal
+# team's MCP servers here (superset cloud, maestro, neon, linear, sentry) which
+# this fork does not use — for us they only spam Codex with "not logged in" and
+# "program not found" startup warnings.
+#
+# Keep this file tracked and server-free so every git worktree inherits a clean
+# Codex config (untracked/ignored files do NOT propagate into worktrees). Add
+# your own server table below only if you actually use one.

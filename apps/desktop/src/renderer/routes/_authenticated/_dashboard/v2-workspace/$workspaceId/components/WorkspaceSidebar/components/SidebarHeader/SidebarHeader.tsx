@@ -25,7 +25,7 @@ export function SidebarHeader({
 
 	return (
 		<div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-2">
-			<div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-lg border border-border bg-[#1b1817] p-[3px]">
+			<div className="flex min-w-0 flex-1 items-center gap-0.5 rounded-lg border border-border bg-tertiary p-[3px]">
 				{tabs.map((tab) => {
 					const isActive = activeTab === tab.id;
 					const badge =

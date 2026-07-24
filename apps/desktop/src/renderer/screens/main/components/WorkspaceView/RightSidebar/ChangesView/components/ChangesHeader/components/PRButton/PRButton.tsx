@@ -64,9 +64,7 @@ export function PRButton({
 		mergePRMutation.mutate({ worktreePath, strategy });
 
 	if (isLoading) {
-		return (
-			<VscLoading className="w-4 h-4 animate-spin text-muted-foreground" />
-		);
+		return <VscLoading className="size-4 animate-spin text-muted-foreground" />;
 	}
 
 	if (!pr) {
@@ -75,7 +73,7 @@ export function PRButton({
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<span className="flex items-center ml-auto text-muted-foreground/40">
-							<VscGitPullRequest className="w-4 h-4" />
+							<VscGitPullRequest className="size-4" />
 						</span>
 					</TooltipTrigger>
 					<TooltipContent side="top">
@@ -95,9 +93,9 @@ export function PRButton({
 						disabled={isCreatePending}
 					>
 						{isCreatePending ? (
-							<VscLoading className="w-4 h-4 animate-spin text-muted-foreground" />
+							<VscLoading className="size-4 animate-spin text-muted-foreground" />
 						) : (
-							<VscGitPullRequest className="w-4 h-4 text-muted-foreground" />
+							<VscGitPullRequest className="size-4 text-muted-foreground" />
 						)}
 					</button>
 				</TooltipTrigger>
@@ -116,7 +114,7 @@ export function PRButton({
 				rel="noopener noreferrer"
 				className="flex items-center gap-1 ml-auto hover:opacity-80 transition-opacity"
 			>
-				<PRIcon state={pr.state} className="w-4 h-4" />
+				<PRIcon state={pr.state} className="size-4" />
 				<span className="text-xs text-muted-foreground font-mono">
 					#{pr.number}
 				</span>
@@ -135,7 +133,7 @@ export function PRButton({
 				rel="noopener noreferrer"
 				className="flex items-center gap-1 px-1.5 py-0.5 hover:bg-accent transition-colors"
 			>
-				<PRIcon state={pr.state} className="w-4 h-4" />
+				<PRIcon state={pr.state} className="size-4" />
 				<span className="text-xs text-muted-foreground font-mono">
 					#{pr.number}
 				</span>

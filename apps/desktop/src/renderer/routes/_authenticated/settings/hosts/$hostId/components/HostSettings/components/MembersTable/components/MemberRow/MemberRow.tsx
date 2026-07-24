@@ -62,7 +62,7 @@ export function MemberRow({
 						onClick={() => onRemove(member)}
 						aria-label={`Remove ${member.name}`}
 					>
-						<HiOutlineTrash className="h-4 w-4" />
+						<HiOutlineTrash className="size-4" />
 					</Button>
 				</TableCell>
 			)}

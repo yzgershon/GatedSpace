@@ -162,7 +162,7 @@ export function TasksTopBar({
 												title={tab.label}
 												className="h-8 rounded-md px-2 gap-1 data-[state=active]:bg-accent data-[state=active]:text-foreground data-[state=inactive]:text-muted-foreground"
 											>
-												<Icon className="h-3.5 w-3.5" />
+												<Icon className="size-3.5" />
 												<span className="text-sm hidden @5xl:inline">
 													{tab.label}
 												</span>
@@ -236,7 +236,7 @@ export function TasksTopBar({
 					)}
 
 					<div className="relative w-32 @2xl:w-40 @4xl:w-56 @6xl:w-64">
-						<HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+						<HiOutlineMagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
 						<Input
 							ref={searchInputRef}
 							type="text"

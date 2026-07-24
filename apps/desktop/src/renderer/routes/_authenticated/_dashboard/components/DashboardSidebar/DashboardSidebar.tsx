@@ -73,7 +73,12 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 	} = useSortable({ id: project.id });
 
 	return (
+		// The separator lives here, not on DashboardSidebarProjectSection: these
+		// wrappers are the real siblings, so `last:` resolves correctly. On the
+		// section itself it was always an only child, so last:border-b-0 always
+		// matched and the border never rendered.
 		<div
+			className="border-b border-border last:border-b-0"
 			ref={setNodeRef}
 			style={{
 				transform: CSS.Translate.toString(transform),

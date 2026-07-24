@@ -122,7 +122,7 @@ export function FileSearchResultItem({
 			onDoubleClick={handleDoubleClick}
 			onKeyDown={handleKeyDown}
 		>
-			<span className="flex items-center justify-center w-4 h-4 shrink-0" />
+			<span className="flex items-center justify-center size-4 shrink-0" />
 			<div className="flex flex-col min-w-0 flex-1 gap-0.5">
 				<span
 					className="text-[10px] text-muted-foreground truncate"
@@ -170,7 +170,7 @@ export function FileSearchResultItem({
 
 				<ContextMenuItem onClick={revealInFinder}>
 					<LuFolderOpen className="mr-2 size-4" />
-					Reveal in Finder
+					Reveal in File Explorer
 				</ContextMenuItem>
 				<ContextMenuItem onClick={openInEditor}>
 					<LuExternalLink className="mr-2 size-4" />

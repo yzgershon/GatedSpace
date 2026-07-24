@@ -71,7 +71,7 @@ export function ConfigFilePreview({
 					className="gap-2"
 				>
 					Learn how to use scripts
-					<HiArrowTopRightOnSquare className="h-4 w-4" />
+					<HiArrowTopRightOnSquare className="size-4" />
 				</Button>
 			</div>
 		</>

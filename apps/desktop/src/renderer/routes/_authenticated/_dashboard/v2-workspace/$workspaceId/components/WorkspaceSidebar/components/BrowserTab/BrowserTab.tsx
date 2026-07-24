@@ -156,7 +156,7 @@ export function BrowserTab({
 					<DropdownMenuTrigger asChild>
 						<button
 							type="button"
-							className="flex h-[26px] shrink-0 items-center gap-1 rounded-md border border-border bg-[#1b1817] px-1.5 text-[11px] text-foreground transition-colors hover:bg-accent/60"
+							className="flex h-[26px] shrink-0 items-center gap-1 rounded-md border border-border bg-tertiary px-1.5 text-[11px] text-foreground transition-colors hover:bg-accent/60"
 						>
 							<ActiveViewportIcon className="size-3" />
 							<span>{VIEWPORTS[viewport].label}</span>
@@ -198,7 +198,7 @@ export function BrowserTab({
 				</button>
 
 				{/* Address bar (+ detected dev servers) */}
-				<div className="flex h-[26px] min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-[#1b1817] pl-2 pr-1">
+				<div className="flex h-[26px] min-w-0 flex-1 items-center gap-1 rounded-md border border-border bg-tertiary pl-2 pr-1">
 					<form
 						className="flex min-w-0 flex-1 items-center"
 						onSubmit={(e) => {

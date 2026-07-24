@@ -49,7 +49,7 @@ export function useDashboardSidebarProjectSectionActions({
 	};
 
 	const handleOpenInFinder = () => {
-		toast.info("Open in Finder is coming soon");
+		toast.info("Open in File Explorer is coming soon");
 	};
 
 	const handleOpenSettings = () => {

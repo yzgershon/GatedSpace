@@ -40,10 +40,7 @@ export const DashboardSidebarCollapsedProjectContent = forwardRef<
 		return (
 			<div
 				ref={ref}
-				className={cn(
-					"flex flex-col items-center py-2 border-b border-border last:border-b-0",
-					className,
-				)}
+				className={cn("flex flex-col items-center py-2", className)}
 				{...props}
 			>
 				<Tooltip delayDuration={300}>

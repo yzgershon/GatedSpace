@@ -291,10 +291,10 @@ export function AddSecretSheet({
 									<Button
 										variant="ghost"
 										size="icon"
-										className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground mt-[1px]"
+										className="size-8 shrink-0 text-muted-foreground hover:text-foreground mt-[1px]"
 										onClick={() => removeEntry(index)}
 									>
-										<HiOutlineTrash className="h-4 w-4" />
+										<HiOutlineTrash className="size-4" />
 									</Button>
 								) : (
 									<div className="w-8 shrink-0" />
@@ -308,7 +308,7 @@ export function AddSecretSheet({
 							className="text-muted-foreground gap-1.5"
 							onClick={addEntry}
 						>
-							<HiPlus className="h-3.5 w-3.5" />
+							<HiPlus className="size-3.5" />
 							Add Another
 						</Button>
 
@@ -317,7 +317,7 @@ export function AddSecretSheet({
 							<span className="text-sm text-muted-foreground">Sensitive</span>
 							<Tooltip>
 								<TooltipTrigger asChild>
-									<HiOutlineQuestionMarkCircle className="h-3.5 w-3.5 text-muted-foreground cursor-help" />
+									<HiOutlineQuestionMarkCircle className="size-3.5 text-muted-foreground cursor-help" />
 								</TooltipTrigger>
 								<TooltipContent side="right">
 									<p className="max-w-[200px] text-xs">
@@ -339,7 +339,7 @@ export function AddSecretSheet({
 							className="gap-1.5"
 							onClick={() => fileInputRef.current?.click()}
 						>
-							<HiOutlineArrowDownTray className="h-3.5 w-3.5" />
+							<HiOutlineArrowDownTray className="size-3.5" />
 							Import .env
 						</Button>
 						<span className="text-xs text-muted-foreground">

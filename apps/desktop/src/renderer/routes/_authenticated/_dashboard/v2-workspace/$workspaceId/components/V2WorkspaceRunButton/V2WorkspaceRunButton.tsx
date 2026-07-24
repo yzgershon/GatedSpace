@@ -73,7 +73,7 @@ export function V2WorkspaceRunButton({
 					"hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 					isPending && "pointer-events-none opacity-50",
 					isRunning
-						? "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-400 hover:bg-emerald-500/[0.12]"
+						? "border-success/30 bg-success/10 text-success hover:bg-success/15"
 						: hasRunCommand
 							? "text-foreground"
 							: "text-muted-foreground/80 hover:text-foreground",
@@ -105,7 +105,7 @@ export function V2WorkspaceRunButton({
 							"hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 							isPending && "pointer-events-none opacity-50",
 							isRunning &&
-								"border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-400 hover:bg-emerald-500/[0.12]",
+								"border-success/30 bg-success/10 text-success hover:bg-success/15",
 						)}
 						aria-label="Workspace run options"
 					>

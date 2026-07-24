@@ -143,7 +143,7 @@ export const WorkspaceRunButton = memo(function WorkspaceRunButton({
 						type="button"
 						disabled={isPending}
 						className={cn(
-							"flex items-center justify-center h-6 w-6 rounded-r border border-border/60 bg-secondary/50 text-muted-foreground",
+							"flex items-center justify-center size-6 rounded-r border border-border/60 bg-secondary/50 text-muted-foreground",
 							"transition-all duration-150 ease-out",
 							"hover:bg-secondary hover:border-border hover:text-foreground",
 							"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",

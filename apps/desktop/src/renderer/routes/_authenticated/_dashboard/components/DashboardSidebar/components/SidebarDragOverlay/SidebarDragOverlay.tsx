@@ -39,7 +39,7 @@ export function SidebarDragOverlay({ activeItem }: SidebarDragOverlayProps) {
 			}}
 		>
 			<div className="flex min-h-8 w-full items-center gap-1.5 pl-0.5 pr-2 py-1.5 text-[11px] font-medium text-muted-foreground">
-				<div className="flex shrink-0 items-center justify-center w-5 h-5 opacity-60">
+				<div className="flex shrink-0 items-center justify-center size-5 opacity-60">
 					<LuGripVertical className="size-3" />
 				</div>
 				<span className="truncate">{section.name}</span>

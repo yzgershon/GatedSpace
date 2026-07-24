@@ -32,7 +32,7 @@ function PaymentMethodLabel({
 	if (paymentMethod.type === "link") {
 		return (
 			<span className="inline-flex items-center gap-1.5">
-				<img src={stripeLinkIcon} alt="Link" className="h-4 w-4 rounded-sm" />
+				<img src={stripeLinkIcon} alt="Link" className="size-4 rounded-sm" />
 				<span>Link by Stripe</span>
 			</span>
 		);

@@ -66,9 +66,9 @@ export function TasksDemo() {
 				<div className="flex items-center justify-between px-4 py-3 bg-muted/80 border-b border-border/50">
 					<div className="flex items-center gap-2">
 						<div className="flex gap-1.5">
-							<div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+							<div className="size-2.5 rounded-full bg-[#ff5f57]" />
+							<div className="size-2.5 rounded-full bg-[#febc2e]" />
+							<div className="size-2.5 rounded-full bg-[#28c840]" />
 						</div>
 						<span className="text-xs text-muted-foreground ml-1">My Tasks</span>
 					</div>
@@ -86,13 +86,13 @@ export function TasksDemo() {
 						>
 							{/* Status indicator */}
 							{task.status === "done" ? (
-								<div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
-									<HiCheck className="w-3 h-3 text-emerald-400" />
+								<div className="size-5 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+									<HiCheck className="size-3 text-emerald-400" />
 								</div>
 							) : task.status === "in-progress" ? (
-								<SpinnerIcon className="w-5 h-5 text-amber-400 animate-spin shrink-0" />
+								<SpinnerIcon className="size-5 text-amber-400 animate-spin shrink-0" />
 							) : (
-								<div className="w-5 h-5 rounded-full border-2 border-foreground/20 shrink-0 group-hover:border-foreground/40 transition-colors" />
+								<div className="size-5 rounded-full border-2 border-foreground/20 shrink-0 group-hover:border-foreground/40 transition-colors" />
 							)}
 
 							{/* Task content */}
@@ -109,7 +109,7 @@ export function TasksDemo() {
 							</div>
 
 							{/* Assignee */}
-							<div className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-medium text-foreground/90 shrink-0 bg-foreground/10">
+							<div className="size-5 rounded-full flex items-center justify-center text-[9px] font-medium text-foreground/90 shrink-0 bg-foreground/10">
 								{task.assignee}
 							</div>
 						</div>

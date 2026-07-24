@@ -70,6 +70,13 @@ function createTerminal(
 		macOptionIsMeta: false,
 		cursorStyle: "block",
 		cursorInactiveStyle: "outline",
+		// Wheel scrolling feel. These two work together: scrollSensitivity sets how
+		// far one notch travels, smoothScrollDuration animates between positions.
+		// A small instant hop still reads as a "step", so we take a few lines per
+		// notch and glide them. Terminals scroll in whole character rows, so this is
+		// as fluid as the medium allows — tune the pair, not either one alone.
+		scrollSensitivity: 3,
+		smoothScrollDuration: 180,
 		vtExtensions: { kittyKeyboard: true },
 		scrollbar: { showScrollbar: false },
 	});

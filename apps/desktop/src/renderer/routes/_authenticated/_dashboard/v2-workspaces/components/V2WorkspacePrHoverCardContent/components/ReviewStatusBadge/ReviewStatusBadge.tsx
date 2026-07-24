@@ -3,7 +3,7 @@ import type { V2WorkspacePrReviewDecision } from "renderer/routes/_authenticated
 
 const REVIEW_BADGE_STYLES: Record<V2WorkspacePrReviewDecision, string> = {
 	approved: "bg-emerald-500/15 text-emerald-500",
-	changes_requested: "bg-destructive/15 text-destructive-foreground",
+	changes_requested: "bg-destructive/15 text-destructive",
 	pending: "bg-amber-500/15 text-amber-500",
 };
 

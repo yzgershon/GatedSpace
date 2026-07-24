@@ -125,7 +125,7 @@ export function MembersSettings({ visibleItems }: MembersSettingsProps) {
 								<div className="space-y-2 border rounded-lg">
 									{[1, 2, 3].map((i) => (
 										<div key={i} className="flex items-center gap-4 p-4">
-											<Skeleton className="h-8 w-8 rounded-full" />
+											<Skeleton className="size-8 rounded-full" />
 											<div className="flex-1 space-y-2">
 												<Skeleton className="h-4 w-48" />
 												<Skeleton className="h-3 w-32" />

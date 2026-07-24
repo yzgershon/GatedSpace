@@ -124,13 +124,13 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 				onNavigate={handleNavigate}
 			/>
 			<div className="flex shrink-0 items-center pr-1">
-				<div className="mx-1.5 h-3.5 w-px bg-muted-foreground/60" />
+				<div className="mx-1.5 h-3.5 w-px bg-muted-foreground/30" />
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<button
 							type="button"
 							onClick={handleOpenDevTools}
-							className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+							className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-muted-foreground"
 						>
 							<TbDeviceDesktop className="size-3.5" />
 						</button>
@@ -144,7 +144,7 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 					currentUrl={state.currentUrl}
 					hasPage={!isBlankPage}
 				/>
-				<div className="mx-1 h-3.5 w-px bg-muted-foreground/60" />
+				<div className="mx-1 h-3.5 w-px bg-muted-foreground/30" />
 				<PaneHeaderActions />
 			</div>
 		</div>

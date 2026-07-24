@@ -341,7 +341,7 @@ export function OrganizationSettings({
 								{showId && (
 									<SettingsRow
 										label="ID"
-										hint="Use this when calling the Superset API."
+										hint="Use this when calling the GatedSpace API."
 										htmlFor="org-id"
 									>
 										<button
@@ -359,11 +359,11 @@ export function OrganizationSettings({
 											/>
 											<Tooltip>
 												<TooltipTrigger asChild>
-													<span className="absolute right-1 top-1 inline-flex h-7 w-7 items-center justify-center rounded-md bg-secondary text-secondary-foreground group-hover:bg-secondary/80">
+													<span className="absolute right-1 top-1 inline-flex size-7 items-center justify-center rounded-md bg-secondary text-secondary-foreground group-hover:bg-secondary/80">
 														{copied ? (
-															<HiOutlineClipboardDocumentCheck className="h-4 w-4" />
+															<HiOutlineClipboardDocumentCheck className="size-4" />
 														) : (
-															<HiOutlineClipboardDocument className="h-4 w-4" />
+															<HiOutlineClipboardDocument className="size-4" />
 														)}
 													</span>
 												</TooltipTrigger>
@@ -410,7 +410,7 @@ export function OrganizationSettings({
 										<div className="border rounded-lg divide-y divide-border">
 											{[0, 1, 2].map((i) => (
 												<div key={i} className="flex items-center gap-4 p-4">
-													<Skeleton className="h-8 w-8 rounded-full" />
+													<Skeleton className="size-8 rounded-full" />
 													<div className="flex-1 space-y-2">
 														<Skeleton className="h-4 w-48" />
 														<Skeleton className="h-3 w-32" />

@@ -53,10 +53,10 @@ export function AssigneeProperty({ task }: AssigneePropertyProps) {
 								<img
 									src={task.assignee.image}
 									alt=""
-									className="w-5 h-5 rounded-full"
+									className="size-5 rounded-full"
 								/>
 							) : (
-								<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs">
+								<div className="size-5 rounded-full bg-muted flex items-center justify-center text-xs">
 									{task.assignee.name?.charAt(0).toUpperCase() ?? "?"}
 								</div>
 							)}
@@ -68,10 +68,10 @@ export function AssigneeProperty({ task }: AssigneePropertyProps) {
 								<img
 									src={task.assigneeAvatarUrl}
 									alt=""
-									className="w-5 h-5 rounded-full"
+									className="size-5 rounded-full"
 								/>
 							) : (
-								<div className="w-5 h-5 rounded-full bg-muted flex items-center justify-center text-xs">
+								<div className="size-5 rounded-full bg-muted flex items-center justify-center text-xs">
 									{task.assigneeDisplayName?.charAt(0).toUpperCase() ?? "?"}
 								</div>
 							)}
@@ -82,7 +82,7 @@ export function AssigneeProperty({ task }: AssigneePropertyProps) {
 						</>
 					) : (
 						<>
-							<HiOutlineUserCircle className="w-5 h-5 text-muted-foreground" />
+							<HiOutlineUserCircle className="size-5 text-muted-foreground" />
 							<span className="text-sm text-muted-foreground">Unassigned</span>
 						</>
 					)}
@@ -94,7 +94,7 @@ export function AssigneeProperty({ task }: AssigneePropertyProps) {
 						onSelect={() => handleSelectUser(null)}
 						className="flex items-center gap-2"
 					>
-						<HiOutlineUserCircle className="w-5 h-5 text-muted-foreground shrink-0" />
+						<HiOutlineUserCircle className="size-5 text-muted-foreground shrink-0" />
 						<span className="text-sm">No assignee</span>
 						{!task.assigneeId && !task.assigneeExternalId && (
 							<span className="ml-auto text-xs text-muted-foreground">✓</span>

@@ -66,7 +66,7 @@ export function RecentInvoices() {
 								className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
 							>
 								View
-								<HiArrowTopRightOnSquare className="h-3 w-3" />
+								<HiArrowTopRightOnSquare className="size-3" />
 							</button>
 						) : null}
 					</div>

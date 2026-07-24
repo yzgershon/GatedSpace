@@ -7,7 +7,7 @@ const CHECK_ROW_CONFIG: Record<
 	{ Icon: typeof LuCheck; className: string }
 > = {
 	success: { Icon: LuCheck, className: "text-emerald-500" },
-	failure: { Icon: LuX, className: "text-destructive-foreground" },
+	failure: { Icon: LuX, className: "text-destructive" },
 	pending: { Icon: LuLoaderCircle, className: "text-amber-500" },
 	skipped: { Icon: LuMinus, className: "text-muted-foreground" },
 	cancelled: { Icon: LuMinus, className: "text-muted-foreground" },

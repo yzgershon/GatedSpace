@@ -37,7 +37,7 @@ export function PathActionsMenuItems({
 			await electronTrpcClient.external.openInFinder.mutate(absolutePath);
 		} catch (error) {
 			toast.error(
-				`Failed to reveal in Finder: ${error instanceof Error ? error.message : "Unknown error"}`,
+				`Failed to reveal in File Explorer: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
 		}
 	};
@@ -47,7 +47,7 @@ export function PathActionsMenuItems({
 			<>
 				<DropdownMenuItem onSelect={handleRevealInFinder}>
 					<FolderOpen />
-					Reveal in Finder
+					Reveal in File Explorer
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
@@ -72,7 +72,7 @@ export function PathActionsMenuItems({
 		<>
 			<ContextMenuItem onSelect={handleRevealInFinder}>
 				<FolderOpen />
-				Reveal in Finder
+				Reveal in File Explorer
 			</ContextMenuItem>
 			<ContextMenuSeparator />
 			<ContextMenuItem onSelect={() => handleCopy(absolutePath, "Path copied")}>

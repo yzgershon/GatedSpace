@@ -379,7 +379,7 @@ export function FileViewerContent({
 		if (isLoadingImage) {
 			return (
 				<div className="flex h-full items-center justify-center text-muted-foreground">
-					<LuLoader className="mr-2 h-4 w-4 animate-spin" />
+					<LuLoader className="mr-2 size-4 animate-spin" />
 					<span>Loading image...</span>
 				</div>
 			);

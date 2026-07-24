@@ -131,7 +131,7 @@ export function SecretsSettings({ projectId }: SecretsSettingsProps) {
 					/>
 				) : (
 					<SettingsSection
-						icon={<HiOutlineCloud className="h-4 w-4" />}
+						icon={<HiOutlineCloud className="size-4" />}
 						title="Cloud Project"
 						description="Link this project to a cloud project for sandboxes and environment variables."
 					>

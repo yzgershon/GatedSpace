@@ -136,7 +136,7 @@ function ScriptTextarea({
 				{isDragOver && (
 					<div className="absolute inset-0 flex items-center justify-center bg-primary/10 rounded-lg pointer-events-none">
 						<div className="flex items-center gap-2 text-primary text-sm font-medium">
-							<HiDocumentArrowUp className="h-5 w-5" />
+							<HiDocumentArrowUp className="size-5" />
 							Drop to import
 						</div>
 					</div>
@@ -149,7 +149,7 @@ function ScriptTextarea({
 				onClick={() => fileInputRef.current?.click()}
 				className="gap-1.5 text-muted-foreground"
 			>
-				<HiDocumentArrowUp className="h-3.5 w-3.5" />
+				<HiDocumentArrowUp className="size-3.5" />
 				Import file
 			</Button>
 			<input
@@ -351,13 +351,13 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 					<h3 className="text-base font-semibold text-foreground">Scripts</h3>
 					{saveStatus === "saving" && (
 						<span className="text-xs text-muted-foreground flex items-center gap-1">
-							<span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500 animate-pulse" />
+							<span className="inline-block size-1.5 rounded-full bg-amber-500 animate-pulse" />
 							Saving…
 						</span>
 					)}
 					{saveStatus === "saved" && (
 						<span className="text-xs text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-							<HiCheckCircle className="h-3.5 w-3.5" />
+							<HiCheckCircle className="size-3.5" />
 							Saved
 						</span>
 					)}
@@ -369,7 +369,7 @@ export function ScriptsEditor({ projectId, className }: ScriptsEditorProps) {
 						rel="noopener noreferrer"
 					>
 						Docs
-						<HiArrowTopRightOnSquare className="h-3.5 w-3.5" />
+						<HiArrowTopRightOnSquare className="size-3.5" />
 					</a>
 				</Button>
 			</div>

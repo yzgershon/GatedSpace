@@ -25,7 +25,7 @@ export function AddMemberDropdown({
 	if (candidates.length === 0) {
 		return (
 			<Button size="sm" variant="outline" disabled>
-				<HiOutlinePlus className="h-4 w-4 mr-1" />
+				<HiOutlinePlus className="size-4 mr-1" />
 				Add member
 			</Button>
 		);
@@ -35,7 +35,7 @@ export function AddMemberDropdown({
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<Button size="sm" variant="outline">
-					<HiOutlinePlus className="h-4 w-4 mr-1" />
+					<HiOutlinePlus className="size-4 mr-1" />
 					Add member
 				</Button>
 			</DropdownMenuTrigger>

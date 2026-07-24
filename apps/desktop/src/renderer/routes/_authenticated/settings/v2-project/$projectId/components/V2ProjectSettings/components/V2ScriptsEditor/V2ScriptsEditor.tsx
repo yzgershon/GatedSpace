@@ -317,7 +317,7 @@ export function V2ScriptsEditor({
 						{saveStatus === "saving" && <span>Saving…</span>}
 						{saveStatus === "saved" && (
 							<span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-								<HiCheckCircle className="h-3.5 w-3.5" />
+								<HiCheckCircle className="size-3.5" />
 								Saved
 							</span>
 						)}

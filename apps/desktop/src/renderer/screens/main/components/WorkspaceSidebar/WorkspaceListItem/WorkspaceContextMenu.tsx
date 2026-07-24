@@ -153,7 +153,7 @@ export function WorkspaceContextMenu({
 		<>
 			<ContextMenuItem onSelect={onOpenInFinder}>
 				<LuFolderOpen className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
-				Open in Finder
+				Open in File Explorer
 			</ContextMenuItem>
 			<ContextMenuItem onSelect={onOpenInEditor}>
 				<LuExternalLink className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />

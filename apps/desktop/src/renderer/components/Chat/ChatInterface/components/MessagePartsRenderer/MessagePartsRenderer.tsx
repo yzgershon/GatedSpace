@@ -139,7 +139,7 @@ export function MessagePartsRenderer({
 						key={i}
 						className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/10 px-4 py-2 text-sm text-destructive"
 					>
-						<AlertCircleIcon className="mt-0.5 h-4 w-4 shrink-0" />
+						<AlertCircleIcon className="mt-0.5 size-4 shrink-0" />
 						<span className="select-text">{errorPart.text}</span>
 					</div>,
 				);

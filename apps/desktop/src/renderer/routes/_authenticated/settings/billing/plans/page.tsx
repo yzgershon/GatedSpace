@@ -341,12 +341,12 @@ function PlansPage() {
 		}
 
 		if (value === true) {
-			return <HiCheck className="h-3.5 w-3.5 text-muted-foreground" />;
+			return <HiCheck className="size-3.5 text-muted-foreground" />;
 		}
 
 		return (
 			<>
-				<HiCheck className="h-3.5 w-3.5 text-muted-foreground" />
+				<HiCheck className="size-3.5 text-muted-foreground" />
 				<span className="text-sm">{value}</span>
 			</>
 		);
@@ -361,7 +361,7 @@ function PlansPage() {
 			<div className="mb-6 space-y-4">
 				<Button variant="ghost" size="sm" asChild>
 					<Link to="/settings/billing">
-						<HiArrowLeft className="h-4 w-4" />
+						<HiArrowLeft className="size-4" />
 						Billing
 					</Link>
 				</Button>
@@ -385,7 +385,7 @@ function PlansPage() {
 							className="inline-flex items-center gap-1 text-primary hover:underline"
 						>
 							contact us
-							<HiArrowUpRight className="h-3 w-3" />
+							<HiArrowUpRight className="size-3" />
 						</button>
 						.
 					</p>

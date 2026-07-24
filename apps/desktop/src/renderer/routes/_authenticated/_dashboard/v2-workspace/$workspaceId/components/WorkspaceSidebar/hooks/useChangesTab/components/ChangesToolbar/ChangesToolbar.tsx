@@ -61,11 +61,11 @@ export function ChangesToolbar({
 				{(totalAdditions > 0 || totalDeletions > 0) && (
 					<span className="whitespace-nowrap">
 						{totalAdditions > 0 && (
-							<span className="text-green-400">+{totalAdditions}</span>
+							<span className="text-success">+{totalAdditions}</span>
 						)}
 						{totalAdditions > 0 && totalDeletions > 0 && " "}
 						{totalDeletions > 0 && (
-							<span className="text-red-400">-{totalDeletions}</span>
+							<span className="text-destructive">-{totalDeletions}</span>
 						)}
 					</span>
 				)}

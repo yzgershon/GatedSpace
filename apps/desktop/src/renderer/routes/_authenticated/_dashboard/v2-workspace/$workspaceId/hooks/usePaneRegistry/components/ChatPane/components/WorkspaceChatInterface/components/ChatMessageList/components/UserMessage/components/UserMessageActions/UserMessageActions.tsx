@@ -27,7 +27,12 @@ export function UserMessageActions({
 	onResend,
 }: UserMessageActionsProps) {
 	return (
-		<div className="opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
+		// -mb-9 reclaims this bar's own height from the flow. It is always mounted
+		// (only faded) to avoid layout shift on hover, which otherwise wedged ~72px
+		// between a prompt and its answer while every other message pair sits at 24px.
+		// The bar has its own background/shadow, so on hover it reads as a floating
+		// overlay rather than pushing the conversation apart.
+		<div className="-mb-9 opacity-0 transition-opacity group-hover/msg:opacity-100 group-focus-within/msg:opacity-100">
 			<MessageActions className="rounded-lg bg-background/95 p-1 shadow-sm backdrop-blur-xs">
 				<MessageAction
 					className="size-7 text-muted-foreground hover:text-foreground"

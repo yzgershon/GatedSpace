@@ -56,7 +56,7 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 			<div className="mb-8">
 				<h2 className="text-xl font-semibold">Appearance</h2>
 				<p className="text-sm text-muted-foreground mt-1">
-					Customize how Superset looks on your device
+					Customize how GatedSpace looks on your device
 				</p>
 			</div>
 

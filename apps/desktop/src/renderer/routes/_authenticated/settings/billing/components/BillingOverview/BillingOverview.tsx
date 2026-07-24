@@ -149,7 +149,7 @@ export function BillingOverview({ visibleItems }: BillingOverviewProps) {
 				<Button variant="ghost" size="sm" asChild>
 					<Link to="/settings/billing/plans">
 						All plans
-						<HiArrowRight className="h-3 w-3" />
+						<HiArrowRight className="size-3" />
 					</Link>
 				</Button>
 			</div>

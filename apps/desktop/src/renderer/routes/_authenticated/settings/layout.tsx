@@ -177,7 +177,7 @@ function SettingsLayout() {
 
 			<div className="flex flex-1 overflow-hidden">
 				<SettingsSidebar />
-				<div className="flex-1 m-3 bg-background rounded overflow-auto">
+				<div className="flex-1 m-3 bg-background rounded-lg overflow-auto">
 					{isSearchActive && (
 						<SearchResultsBanner
 							query={normalizedSearchQuery}

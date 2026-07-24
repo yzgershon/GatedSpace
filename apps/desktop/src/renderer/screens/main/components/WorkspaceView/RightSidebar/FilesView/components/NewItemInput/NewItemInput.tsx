@@ -50,7 +50,7 @@ export function NewItemInput({
 			className={cn("flex items-center gap-1 px-1 h-7", "bg-accent rounded-sm")}
 			style={{ paddingLeft: `${level * TREE_INDENT + 4}px` }}
 		>
-			<span className="w-4 h-4 shrink-0" />
+			<span className="size-4 shrink-0" />
 			<Icon className="size-4 shrink-0 text-amber-500" />
 			<input
 				type="text"

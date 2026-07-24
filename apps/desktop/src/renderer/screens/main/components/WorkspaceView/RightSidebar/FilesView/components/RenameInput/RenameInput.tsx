@@ -61,7 +61,7 @@ export function RenameInput({
 			className={cn("flex items-center gap-1 px-1 h-7", "bg-accent rounded-sm")}
 			style={{ paddingLeft: `${level * 16 + 4}px` }}
 		>
-			<span className="w-4 h-4 shrink-0" />
+			<span className="size-4 shrink-0" />
 			<FileIcon
 				fileName={entry.name}
 				isDirectory={entry.isDirectory}

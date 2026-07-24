@@ -41,7 +41,7 @@ export function DashboardSidebarProjectContextMenu({
 				<ContextMenuSeparator />
 				<ContextMenuItem onSelect={onOpenInFinder}>
 					<LuFolderOpen className="size-4 mr-2" />
-					Open in Finder
+					Open in File Explorer
 				</ContextMenuItem>
 				<ContextMenuItem onSelect={onOpenSettings}>
 					<LuSettings className="size-4 mr-2" />

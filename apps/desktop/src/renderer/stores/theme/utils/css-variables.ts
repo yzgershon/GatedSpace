@@ -42,6 +42,10 @@ const UI_COLOR_TO_CSS_VAR: Record<keyof UIColors, string> = {
 	highlightActive: "--highlight-active",
 	highlight: "--highlight",
 	highlightForeground: "--highlight-foreground",
+	success: "--success",
+	successForeground: "--success-foreground",
+	warning: "--warning",
+	info: "--info",
 };
 
 /**

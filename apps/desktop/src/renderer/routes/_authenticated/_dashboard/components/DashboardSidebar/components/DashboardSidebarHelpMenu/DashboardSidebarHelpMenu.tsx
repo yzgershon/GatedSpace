@@ -65,17 +65,17 @@ export function DashboardSidebarHelpMenu({
 					className="w-56"
 				>
 					<DropdownMenuItem onSelect={() => setSubmitPromptOpen(true)}>
-						<LuMegaphone className="h-4 w-4" />
+						<LuMegaphone className="size-4" />
 						Submit a prompt
 					</DropdownMenuItem>
 					<DropdownMenuItem onClick={() => openExternal(COMPANY.DOCS_URL)}>
-						<HiOutlineBookOpen className="h-4 w-4" />
+						<HiOutlineBookOpen className="size-4" />
 						Documentation
 					</DropdownMenuItem>
 					<DropdownMenuItem
 						onClick={() => navigate({ to: "/settings/keyboard" })}
 					>
-						<LuKeyboard className="h-4 w-4" />
+						<LuKeyboard className="size-4" />
 						Keyboard Shortcuts
 						{shortcutsHotkey !== "Unassigned" && (
 							<DropdownMenuShortcut>{shortcutsHotkey}</DropdownMenuShortcut>
@@ -84,11 +84,11 @@ export function DashboardSidebarHelpMenu({
 					<DropdownMenuItem
 						onClick={() => openExternal(COMPANY.REPORT_ISSUE_URL)}
 					>
-						<IoBugOutline className="h-4 w-4" />
+						<IoBugOutline className="size-4" />
 						Report Issue
 					</DropdownMenuItem>
 					<DropdownMenuItem onClick={() => openExternal(COMPANY.GITHUB_URL)}>
-						<FaGithub className="h-4 w-4" />
+						<FaGithub className="size-4" />
 						GitHub
 					</DropdownMenuItem>
 				</DropdownMenuContent>

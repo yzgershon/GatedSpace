@@ -9,7 +9,7 @@ export function OrganizationLogo({
 	name,
 	size = "md",
 }: OrganizationLogoProps) {
-	const sizeClasses = size === "sm" ? "w-6 h-6" : "w-8 h-8";
+	const sizeClasses = size === "sm" ? "size-6" : "size-8";
 	const textSize = size === "sm" ? "text-xs" : "text-sm";
 
 	if (logo) {

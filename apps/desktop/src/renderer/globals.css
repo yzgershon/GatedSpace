@@ -17,6 +17,14 @@
 		.group\/details:has([data-state="open"]) *
 	));
 
+/*
+ * Make `dark:` variants follow the APP theme (the .dark/.light class the theme
+ * store toggles on <html>), not the OS `prefers-color-scheme`. Without this,
+ * Tailwind v4 compiles `dark:` to a media query, so `dark:` utilities silently
+ * track the operating system instead of the selected app theme.
+ */
+@custom-variant dark (&:is(.dark *));
+
 /**
  * Theme CSS Variables
  *
@@ -66,6 +74,10 @@
 	--highlight-active: rgba(224, 120, 80, 0.5);
 	--highlight: #e07850;
 	--highlight-foreground: #151110;
+	--success: #4bb377;
+	--success-foreground: #0c1a12;
+	--warning: #d4a84b;
+	--info: #6b8fd4;
 }
 
 /* Light theme fallback values - applied before hydration if user has light theme saved */
@@ -108,6 +120,10 @@
 	--highlight-active: rgba(255, 150, 50, 0.55);
 	--highlight: oklch(0.646 0.222 41.116);
 	--highlight-foreground: oklch(0.985 0 0);
+	--success: oklch(0.58 0.13 160);
+	--success-foreground: oklch(0.985 0 0);
+	--warning: oklch(0.68 0.15 75);
+	--info: oklch(0.55 0.16 250);
 }
 
 @theme inline {
@@ -151,6 +167,10 @@
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-highlight: var(--highlight);
 	--color-highlight-foreground: var(--highlight-foreground);
+	--color-success: var(--success);
+	--color-success-foreground: var(--success-foreground);
+	--color-warning: var(--warning);
+	--color-info: var(--info);
 }
 
 @layer base {

@@ -50,7 +50,7 @@ export function TableContent({
 		return (
 			<div className="flex-1 flex items-center justify-center">
 				<div className="flex flex-col items-center gap-2 text-muted-foreground">
-					<HiCheckCircle className="h-8 w-8" />
+					<HiCheckCircle className="size-8" />
 					<span className="text-sm">No tasks found</span>
 				</div>
 			</div>

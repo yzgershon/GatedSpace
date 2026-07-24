@@ -21,13 +21,13 @@ const STEPS = [
 	{
 		path: "/onboarding",
 		match: (p: string) => p === "/onboarding",
-		title: "Setup Superset",
+		title: "Setup GatedSpace",
 		subtitle: "Connect your agents and tools to get started.",
 	},
 	{
 		path: "/onboarding/project",
 		match: (p: string) => p === "/onboarding/project",
-		title: "Point Superset at some code",
+		title: "Point GatedSpace at some code",
 		subtitle: "Open a folder or clone a repo to finish setup.",
 	},
 ] as const;

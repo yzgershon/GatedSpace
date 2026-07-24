@@ -184,7 +184,7 @@ export function OpenInWorkspace({ task }: OpenInWorkspaceProps) {
 									<span className="text-muted-foreground">Select project</span>
 								)}
 							</span>
-							<HiChevronDown className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+							<HiChevronDown className="size-3.5 text-muted-foreground shrink-0" />
 						</Button>
 					</DropdownMenuTrigger>
 					<DropdownMenuContent
@@ -221,11 +221,11 @@ export function OpenInWorkspace({ task }: OpenInWorkspaceProps) {
 				</DropdownMenu>
 				<Button
 					size="icon"
-					className="h-8 w-8 shrink-0"
+					className="size-8 shrink-0"
 					disabled={!effectiveProjectId || createWorkspace.isPending}
 					onClick={handleOpen}
 				>
-					<HiArrowRight className="w-3.5 h-3.5" />
+					<HiArrowRight className="size-3.5" />
 				</Button>
 			</div>
 			<AgentSelect<TaskLaunchAgent>

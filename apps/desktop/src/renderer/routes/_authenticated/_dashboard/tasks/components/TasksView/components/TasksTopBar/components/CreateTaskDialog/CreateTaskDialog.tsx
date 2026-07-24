@@ -244,7 +244,7 @@ export function CreateTaskDialog({
 					<Button
 						variant="ghost"
 						size="icon"
-						className="h-10 w-10 rounded-full text-muted-foreground"
+						className="size-10 rounded-full text-muted-foreground"
 						onClick={handleAttachmentClick}
 						disabled={isCreating}
 					>

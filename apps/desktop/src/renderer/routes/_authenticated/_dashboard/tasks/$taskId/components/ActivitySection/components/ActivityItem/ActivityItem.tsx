@@ -21,10 +21,10 @@ export function ActivityItem({
 				<img
 					src={avatarUrl}
 					alt=""
-					className="w-6 h-6 rounded-full shrink-0 mt-0.5"
+					className="size-6 rounded-full shrink-0 mt-0.5"
 				/>
 			) : (
-				<div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs shrink-0 mt-0.5">
+				<div className="size-6 rounded-full bg-muted flex items-center justify-center text-xs shrink-0 mt-0.5">
 					{avatarFallback}
 				</div>
 			)}

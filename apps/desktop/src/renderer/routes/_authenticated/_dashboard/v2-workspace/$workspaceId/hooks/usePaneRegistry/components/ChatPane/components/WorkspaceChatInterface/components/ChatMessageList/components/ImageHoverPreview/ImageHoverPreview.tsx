@@ -32,7 +32,7 @@ export function ImageHoverPreview({
 			</HoverCardTrigger>
 			<HoverCardContent align="start" className="w-auto p-2">
 				<div className="w-auto space-y-3">
-					<div className="relative flex max-h-96 w-96 items-center justify-center overflow-hidden rounded-md border">
+					<div className="relative flex max-size-96 items-center justify-center overflow-hidden rounded-md border">
 						<img
 							alt={alt ?? filename ?? "image preview"}
 							className="max-h-full max-w-full object-contain"

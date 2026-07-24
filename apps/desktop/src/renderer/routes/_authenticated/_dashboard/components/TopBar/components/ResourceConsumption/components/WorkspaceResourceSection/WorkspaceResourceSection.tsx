@@ -178,11 +178,11 @@ export function WorkspaceResourceSection({
 					}
 				>
 					<div className="flex items-center gap-1 min-w-0 mr-2">
-						<span className="flex items-center justify-center h-4 w-4 shrink-0 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
+						<span className="flex items-center justify-center size-4 shrink-0 text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">
 							{isProjectCollapsed ? (
-								<HiOutlineChevronRight className="h-3 w-3" />
+								<HiOutlineChevronRight className="size-3" />
 							) : (
-								<HiOutlineChevronDown className="h-3 w-3" />
+								<HiOutlineChevronDown className="size-3" />
 							)}
 						</span>
 						<span className="text-[11px] font-semibold uppercase tracking-[0.04em] truncate min-w-0 text-muted-foreground">
@@ -215,9 +215,9 @@ export function WorkspaceResourceSection({
 											}
 										>
 											{isCollapsed ? (
-												<HiOutlineChevronRight className="h-3 w-3" />
+												<HiOutlineChevronRight className="size-3" />
 											) : (
-												<HiOutlineChevronDown className="h-3 w-3" />
+												<HiOutlineChevronDown className="size-3" />
 											)}
 										</button>
 									) : (
@@ -267,7 +267,7 @@ export function WorkspaceResourceSection({
 												className="w-full flex items-center justify-between pl-12 pr-3.5 py-1 hover:bg-foreground/[0.04] transition-colors text-left"
 											>
 												<div className="flex items-center gap-1.5 min-w-0 mr-2">
-													<span className="h-1 w-1 shrink-0 rounded-full bg-muted-foreground/40" />
+													<span className="size-1 shrink-0 rounded-full bg-muted-foreground/40" />
 													<span className="text-[11px] text-muted-foreground truncate min-w-0">
 														{getPaneName(session)}
 													</span>

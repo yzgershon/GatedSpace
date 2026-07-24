@@ -123,7 +123,7 @@ export function OrganizationDropdown({
 				/>
 				<span className="truncate">{displayName}</span>
 				{planBadge}
-				<HiChevronUpDown className="ml-auto h-3.5 w-3.5 text-muted-foreground shrink-0" />
+				<HiChevronUpDown className="ml-auto size-3.5 text-muted-foreground shrink-0" />
 			</button>
 		) : (
 			<button
@@ -141,7 +141,7 @@ export function OrganizationDropdown({
 					{displayName}
 				</span>
 				{planBadge}
-				<HiChevronUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+				<HiChevronUpDown className="size-3.5 text-muted-foreground shrink-0" />
 			</button>
 		);
 
@@ -167,7 +167,7 @@ export function OrganizationDropdown({
 				<DropdownMenuItem
 					onSelect={() => navigate({ to: "/settings/account" })}
 				>
-					<HiOutlineCog6Tooth className="h-4 w-4" />
+					<HiOutlineCog6Tooth className="size-4" />
 					<span>Settings</span>
 					<HotkeyMenuShortcut hotkeyId="OPEN_SETTINGS" />
 				</DropdownMenuItem>
@@ -175,7 +175,7 @@ export function OrganizationDropdown({
 					<DropdownMenuItem
 						onSelect={() => navigate({ to: "/settings/organization" })}
 					>
-						<FiUsers className="h-4 w-4" />
+						<FiUsers className="size-4" />
 						<span>Manage members</span>
 					</DropdownMenuItem>
 				)}
@@ -206,7 +206,7 @@ export function OrganizationDropdown({
 									/>
 									<span className="flex-1 truncate">{organization.name}</span>
 									{organization.id === activeOrganization?.id && (
-										<HiCheck className="h-4 w-4 text-primary" />
+										<HiCheck className="size-4 text-primary" />
 									)}
 								</DropdownMenuItem>
 							))}
@@ -214,7 +214,7 @@ export function OrganizationDropdown({
 							<DropdownMenuItem
 								onSelect={() => navigate({ to: "/create-organization" })}
 							>
-								<HiOutlinePlus className="h-4 w-4" />
+								<HiOutlinePlus className="size-4" />
 								<span>Create organization</span>
 							</DropdownMenuItem>
 						</DropdownMenuSubContent>
@@ -234,12 +234,12 @@ export function OrganizationDropdown({
 						onSelect={() => setConfirmCloudOpen(true)}
 						className="gap-2"
 					>
-						<HiOutlineArrowRightOnRectangle className="h-4 w-4" />
+						<HiOutlineArrowRightOnRectangle className="size-4" />
 						<span>Sign in with an account</span>
 					</DropdownMenuItem>
 				) : (
 					<DropdownMenuItem onSelect={handleSignOut} className="gap-2">
-						<HiOutlineArrowRightOnRectangle className="h-4 w-4" />
+						<HiOutlineArrowRightOnRectangle className="size-4" />
 						<span>Log out</span>
 					</DropdownMenuItem>
 				)}

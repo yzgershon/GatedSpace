@@ -142,7 +142,7 @@ export function PullRequestsContent({
 		return (
 			<div className="flex h-full items-center justify-center p-8">
 				<div className="flex flex-col items-center gap-2 text-muted-foreground text-center">
-					<GoGitPullRequest className="h-8 w-8" />
+					<GoGitPullRequest className="size-8" />
 					<span className="text-sm">
 						Select a project to see pull requests.
 					</span>

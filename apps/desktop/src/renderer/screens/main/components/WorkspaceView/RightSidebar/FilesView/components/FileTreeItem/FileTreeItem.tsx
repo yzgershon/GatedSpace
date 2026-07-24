@@ -128,7 +128,7 @@ export function FileTreeItem({
 			onDoubleClick={handleDoubleClick}
 			onKeyDown={handleKeyDown}
 		>
-			<span className="flex items-center justify-center w-4 h-4 shrink-0">
+			<span className="flex items-center justify-center size-4 shrink-0">
 				{isFolder ? (
 					isExpanded ? (
 						<LuChevronDown className="size-3.5 text-muted-foreground" />
@@ -177,7 +177,7 @@ export function FileTreeItem({
 
 				<ContextMenuItem onClick={revealInFinder}>
 					<LuFolderOpen className="mr-2 size-4" />
-					Reveal in Finder
+					Reveal in File Explorer
 				</ContextMenuItem>
 				<ContextMenuItem onClick={openInEditor}>
 					<LuExternalLink className="mr-2 size-4" />

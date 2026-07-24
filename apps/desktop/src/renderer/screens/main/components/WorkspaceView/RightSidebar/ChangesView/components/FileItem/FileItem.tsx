@@ -286,7 +286,7 @@ export function FileItem({
 					<ContextMenuSeparator />
 					<ContextMenuItem onClick={revealInFinder}>
 						<VscFolderOpened className="mr-2 size-4" />
-						Reveal in Finder
+						Reveal in File Explorer
 					</ContextMenuItem>
 					<ContextMenuItem onClick={openInEditor}>
 						<VscLinkExternal className="mr-2 size-4" />

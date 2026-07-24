@@ -62,7 +62,7 @@ export function UnsavedChangesDialog({
 					<Button onClick={handleSaveAndSwitch} disabled={isSaving}>
 						{isSaving ? (
 							<>
-								<LuLoader className="mr-2 h-4 w-4 animate-spin" />
+								<LuLoader className="mr-2 size-4 animate-spin" />
 								Saving...
 							</>
 						) : (

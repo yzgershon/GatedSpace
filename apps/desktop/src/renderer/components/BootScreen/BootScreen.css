@@ -2,8 +2,9 @@
    then the GATED SPACE wordmark decodes in, terminal style. Plays once. */
 .boot-screen {
 	/* Single tunable accent for the eye/cursor glow — the app theme is otherwise
-	   monochrome, so this is the one spot of color on the boot screen. */
-	--boot-glow: #6ea8fe;
+	   monochrome, so this is the one spot of color on the boot screen. Follows the
+	   theme highlight (warm ember by default) instead of a cool blue that clashed. */
+	--boot-glow: var(--highlight, #e07850);
 	position: fixed;
 	inset: 0;
 	z-index: 50;

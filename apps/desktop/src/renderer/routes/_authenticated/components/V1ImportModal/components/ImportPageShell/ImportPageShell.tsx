@@ -49,7 +49,7 @@ export function ImportPageShell({
 							onClick={onRefresh}
 							disabled={isRefreshing}
 							aria-label="Refresh"
-							className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+							className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
 						>
 							<LuRefreshCw
 								className={`size-3.5${isRefreshing ? " animate-spin" : ""}`}

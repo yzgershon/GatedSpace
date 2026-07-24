@@ -57,10 +57,10 @@ export function MobileAppDemo() {
 						<span className="text-xs text-foreground/50 font-medium">9:41</span>
 						<div className="flex items-center gap-1.5">
 							<div className="flex gap-0.5">
-								<div className="w-1 h-1 bg-foreground/50 rounded-full" />
-								<div className="w-1 h-1 bg-foreground/50 rounded-full" />
-								<div className="w-1 h-1 bg-foreground/50 rounded-full" />
-								<div className="w-1 h-1 bg-foreground/30 rounded-full" />
+								<div className="size-1 bg-foreground/50 rounded-full" />
+								<div className="size-1 bg-foreground/50 rounded-full" />
+								<div className="size-1 bg-foreground/50 rounded-full" />
+								<div className="size-1 bg-foreground/30 rounded-full" />
 							</div>
 							<div className="w-6 h-3 border border-foreground/50 rounded-sm ml-1">
 								<div className="w-4 h-full bg-emerald-400 rounded-sm" />
@@ -71,8 +71,8 @@ export function MobileAppDemo() {
 					{/* App header */}
 					<div className="flex items-center justify-between px-5 py-3 border-b border-border">
 						<div className="flex items-center gap-3">
-							<div className="w-8 h-8 rounded-lg bg-foreground/10 flex items-center justify-center">
-								<SupersetIcon className="w-4 h-4 text-white" />
+							<div className="size-8 rounded-lg bg-foreground/10 flex items-center justify-center">
+								<SupersetIcon className="size-4 text-white" />
 							</div>
 							<div>
 								<div className="text-sm font-semibold text-foreground">
@@ -111,9 +111,9 @@ export function MobileAppDemo() {
 							<span className="text-sm text-muted-foreground/70 flex-1">
 								Message...
 							</span>
-							<div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+							<div className="size-8 rounded-full bg-blue-500 flex items-center justify-center">
 								<svg
-									className="w-4 h-4 text-white"
+									className="size-4 text-white"
 									fill="none"
 									viewBox="0 0 24 24"
 									stroke="currentColor"

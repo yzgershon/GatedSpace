@@ -127,7 +127,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 							className="inline-flex items-center gap-1 text-primary hover:underline"
 						>
 							Learn more
-							<HiArrowTopRightOnSquare className="h-3 w-3" />
+							<HiArrowTopRightOnSquare className="size-3" />
 						</a>
 					</p>
 				</div>
@@ -137,7 +137,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 						size="sm"
 						className="gap-2 shrink-0"
 					>
-						<HiOutlinePlus className="h-4 w-4" />
+						<HiOutlinePlus className="size-4" />
 						Generate key
 					</Button>
 				)}
@@ -148,7 +148,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 					<div className="divide-y divide-border">
 						{[1, 2, 3].map((i) => (
 							<div key={i} className="flex items-center gap-4 py-3">
-								<Skeleton className="h-4 w-4 rounded" />
+								<Skeleton className="size-4 rounded" />
 								<div className="flex-1 space-y-2">
 									<Skeleton className="h-4 w-48" />
 									<Skeleton className="h-3 w-32" />
@@ -158,7 +158,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 					</div>
 				) : apiKeys.length === 0 ? (
 					<div className="text-center py-12 text-sm text-muted-foreground">
-						<HiOutlineKey className="h-8 w-8 mx-auto mb-3 opacity-50" />
+						<HiOutlineKey className="size-8 mx-auto mb-3 opacity-50" />
 						<p>No API keys yet.</p>
 						<p className="text-xs mt-1">
 							Generate a key to use with MCP servers.
@@ -172,7 +172,7 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 								className="group flex items-center justify-between gap-4 py-3"
 							>
 								<div className="flex items-center gap-3 min-w-0">
-									<HiOutlineKey className="h-4 w-4 shrink-0 text-muted-foreground" />
+									<HiOutlineKey className="size-4 shrink-0 text-muted-foreground" />
 									<div className="min-w-0">
 										<div className="text-sm font-medium truncate">
 											{key.name ?? "Unnamed key"}
@@ -190,11 +190,11 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 									<Button
 										variant="ghost"
 										size="icon"
-										className="h-8 w-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+										className="size-8 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
 										onClick={() => handleRevokeKey(key.id, key.name)}
 										aria-label="Revoke key"
 									>
-										<HiOutlineTrash className="h-4 w-4" />
+										<HiOutlineTrash className="size-4" />
 									</Button>
 								</div>
 							</div>
@@ -257,11 +257,11 @@ export function ApiKeysSettings({ visibleItems }: ApiKeysSettingsProps) {
 							<Button
 								variant="ghost"
 								size="icon"
-								className="absolute right-1 top-1 h-7 w-7"
+								className="absolute right-1 top-1 size-7"
 								onClick={handleCopyKey}
 								aria-label="Copy key"
 							>
-								<HiOutlineClipboardDocument className="h-4 w-4" />
+								<HiOutlineClipboardDocument className="size-4" />
 							</Button>
 						</div>
 						{copied && (

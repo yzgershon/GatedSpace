@@ -84,7 +84,7 @@ export function KanbanCard({ task, onClick, overlay }: KanbanCardProps) {
 				<PriorityIcon
 					priority={task.priority}
 					statusType={task.status.type}
-					className="h-3.5 w-3.5"
+					className="size-3.5"
 				/>
 
 				{labels.length > 0 && (

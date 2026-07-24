@@ -53,7 +53,7 @@ export function ClaudeAccountSubmenu({
 	return (
 		<DropdownMenuSub>
 			<DropdownMenuSubTrigger className="gap-2">
-				<HiOutlineSparkles className="h-4 w-4" />
+				<HiOutlineSparkles className="size-4" />
 				<span>Claude account</span>
 				<span className="ml-auto text-xs text-muted-foreground">
 					{multiple ? activeLabel : "Add"}
@@ -76,7 +76,7 @@ export function ClaudeAccountSubmenu({
 							</span>
 						</span>
 						{profile.mode === "auto" && (
-							<HiCheck className="h-4 w-4 text-primary" />
+							<HiCheck className="size-4 text-primary" />
 						)}
 					</DropdownMenuItem>
 				)}
@@ -96,7 +96,7 @@ export function ClaudeAccountSubmenu({
 							</span>
 						</span>
 						{profile.mode === entry.id && (
-							<HiCheck className="h-4 w-4 text-primary" />
+							<HiCheck className="size-4 text-primary" />
 						)}
 					</DropdownMenuItem>
 				))}
@@ -109,7 +109,7 @@ export function ClaudeAccountSubmenu({
 					onSelect={() => setTimeout(onAddAccount, 0)}
 					className="gap-2"
 				>
-					<HiOutlinePlus className="h-4 w-4" />
+					<HiOutlinePlus className="size-4" />
 					<span>Add Claude account…</span>
 				</DropdownMenuItem>
 			</DropdownMenuSubContent>

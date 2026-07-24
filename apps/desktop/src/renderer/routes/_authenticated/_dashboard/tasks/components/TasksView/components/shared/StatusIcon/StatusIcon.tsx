@@ -22,7 +22,7 @@ export function StatusIcon({
 	className,
 	progress,
 }: StatusIconProps) {
-	const sizeClass = "w-3.5 h-3.5";
+	const sizeClass = "size-3.5";
 
 	const containerClasses = cn(
 		"flex items-center justify-center rounded-full flex-shrink-0",

@@ -53,7 +53,7 @@ export function CommentPaneHeaderExtras({
 							target="_blank"
 							rel="noopener noreferrer"
 							aria-label="Open on GitHub"
-							className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+							className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 						>
 							<FaGithub className="size-3.5" />
 						</a>
@@ -69,7 +69,7 @@ export function CommentPaneHeaderExtras({
 						type="button"
 						aria-label="Copy comment"
 						onClick={handleCopyAll}
-						className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+						className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 					>
 						{copied ? (
 							<LuCheck className="size-3.5" />

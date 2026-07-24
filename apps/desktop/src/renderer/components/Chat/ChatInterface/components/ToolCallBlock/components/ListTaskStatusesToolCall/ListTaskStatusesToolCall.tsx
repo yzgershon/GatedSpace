@@ -82,7 +82,7 @@ export function ListTaskStatusesToolCall({
 													<StatusIcon type={statusType} color={statusColor} />
 												) : (
 													<div
-														className="h-3.5 w-3.5 rounded-full"
+														className="size-3.5 rounded-full"
 														style={{ backgroundColor: statusColor }}
 													/>
 												)}

@@ -27,7 +27,7 @@ export function ToolStatusBadge({
 				VARIANT_CLASSES[variant],
 			)}
 		>
-			<Icon className="h-3 w-3 shrink-0" />
+			<Icon className="size-3 shrink-0" />
 			{label}
 		</span>
 	);

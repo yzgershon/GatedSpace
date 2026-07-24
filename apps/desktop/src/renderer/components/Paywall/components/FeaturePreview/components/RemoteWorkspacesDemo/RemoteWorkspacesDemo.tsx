@@ -7,9 +7,9 @@ export function RemoteWorkspacesDemo() {
 				<div className="flex items-center justify-between px-4 py-3 bg-muted/80 border-b border-border/50">
 					<div className="flex items-center gap-2">
 						<div className="flex gap-1.5">
-							<div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+							<div className="size-2.5 rounded-full bg-[#ff5f57]" />
+							<div className="size-2.5 rounded-full bg-[#febc2e]" />
+							<div className="size-2.5 rounded-full bg-[#28c840]" />
 						</div>
 						<span className="text-xs text-muted-foreground ml-1">
 							Remote Workspaces
@@ -20,7 +20,7 @@ export function RemoteWorkspacesDemo() {
 				<div className="p-4">
 					<div className="flex items-center justify-center gap-3 py-3">
 						<div className="flex flex-col items-center gap-1.5">
-							<div className="w-10 h-10 rounded-lg bg-foreground/10 flex items-center justify-center">
+							<div className="size-10 rounded-lg bg-foreground/10 flex items-center justify-center">
 								<HiOutlineComputerDesktop className="size-5 text-foreground/80" />
 							</div>
 							<span className="text-[10px] text-muted-foreground">
@@ -33,7 +33,7 @@ export function RemoteWorkspacesDemo() {
 							<div className="w-6 h-px bg-foreground/20" />
 						</div>
 						<div className="flex flex-col items-center gap-1.5">
-							<div className="w-10 h-10 rounded-lg bg-foreground/10 flex items-center justify-center">
+							<div className="size-10 rounded-lg bg-foreground/10 flex items-center justify-center">
 								<HiOutlineComputerDesktop className="size-5 text-foreground/80" />
 							</div>
 							<span className="text-[10px] text-muted-foreground">Remote</span>

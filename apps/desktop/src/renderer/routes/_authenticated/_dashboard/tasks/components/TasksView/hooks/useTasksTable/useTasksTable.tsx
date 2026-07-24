@@ -198,7 +198,7 @@ export function useTasksTable({
 									onClick={row.getToggleExpandedHandler()}
 								>
 									<HiChevronRight
-										className={`h-3 w-3 text-muted-foreground transition-transform duration-100 group-hover:text-foreground ${
+										className={`size-3 text-muted-foreground transition-transform duration-100 group-hover:text-foreground ${
 											row.getIsExpanded() ? "rotate-90" : ""
 										}`}
 									/>

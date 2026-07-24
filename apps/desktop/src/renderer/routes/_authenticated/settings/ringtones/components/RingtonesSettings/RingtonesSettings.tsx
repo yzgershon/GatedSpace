@@ -74,7 +74,7 @@ function RingtoneRow({
 				</div>
 			</div>
 			<div className="w-5 flex justify-center shrink-0">
-				{isSelected && <HiCheck className="h-4 w-4 text-primary" />}
+				{isSelected && <HiCheck className="size-4 text-primary" />}
 			</div>
 			<button
 				type="button"
@@ -86,16 +86,16 @@ function RingtoneRow({
 					isPlaying ? `Stop ${ringtone.name}` : `Play ${ringtone.name}`
 				}
 				className={cn(
-					"h-7 w-7 rounded-full flex items-center justify-center transition-colors border shrink-0",
+					"size-7 rounded-full flex items-center justify-center transition-colors border shrink-0",
 					isPlaying
 						? "bg-destructive text-destructive-foreground border-destructive hover:bg-destructive/90"
 						: "text-foreground border-border hover:bg-accent",
 				)}
 			>
 				{isPlaying ? (
-					<HiStop className="h-3.5 w-3.5" />
+					<HiStop className="size-3.5" />
 				) : (
-					<HiPlay className="h-3.5 w-3.5 ml-0.5" />
+					<HiPlay className="size-3.5 ml-0.5" />
 				)}
 			</button>
 		</div>
@@ -300,9 +300,9 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 								disabled={importCustomRingtone.isPending}
 							>
 								{customRingtone ? (
-									<HiArrowPath className="mr-1.5 h-3.5 w-3.5" />
+									<HiArrowPath className="mr-1.5 size-3.5" />
 								) : (
-									<HiPlus className="mr-1.5 h-3.5 w-3.5" />
+									<HiPlus className="mr-1.5 size-3.5" />
 								)}
 								{customRingtone ? "Replace custom audio" : "Add custom audio"}
 							</Button>

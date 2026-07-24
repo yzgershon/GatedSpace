@@ -44,7 +44,7 @@ function PermissionRow({
 			<div className="flex items-center gap-3 shrink-0">
 				<StatusBadge granted={granted} />
 				<Button variant="outline" size="sm" onClick={onRequest}>
-					<LuExternalLink className="h-3.5 w-3.5 mr-1.5" />
+					<LuExternalLink className="size-3.5 mr-1.5" />
 					Open settings
 				</Button>
 			</div>
@@ -91,7 +91,7 @@ export function PermissionsSettings({
 			<div className="mb-8">
 				<h2 className="text-xl font-semibold">Permissions</h2>
 				<p className="text-sm text-muted-foreground mt-1">
-					Grant the OS permissions Superset needs.
+					Grant the OS permissions GatedSpace needs.
 				</p>
 			</div>
 

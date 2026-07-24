@@ -106,7 +106,7 @@ export function DashboardSidebarWorkspaceContextMenu({
 						{onRename && <ContextMenuSeparator />}
 						<ContextMenuItem onSelect={onOpenInFinder}>
 							<LuFolderOpen className="size-4 mr-2" />
-							Open in Finder
+							Open in File Explorer
 						</ContextMenuItem>
 						<ContextMenuItem onSelect={onCopyPath}>
 							<LuCopy className="size-4 mr-2" />

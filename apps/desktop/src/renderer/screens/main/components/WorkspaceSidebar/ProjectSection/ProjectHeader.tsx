@@ -219,7 +219,7 @@ export function ProjectHeader({
 								className="size-4 mr-2"
 								strokeWidth={STROKE_WIDTH}
 							/>
-							Open in Finder
+							Open in File Explorer
 						</ContextMenuItem>
 						<ContextMenuItem onSelect={handleOpenSettings}>
 							<LuSettings className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
@@ -349,7 +349,7 @@ export function ProjectHeader({
 					<ContextMenuSeparator />
 					<ContextMenuItem onSelect={handleOpenInFinder}>
 						<LuFolderOpen className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />
-						Open in Finder
+						Open in File Explorer
 					</ContextMenuItem>
 					<ContextMenuItem onSelect={handleOpenSettings}>
 						<LuSettings className="size-4 mr-2" strokeWidth={STROKE_WIDTH} />

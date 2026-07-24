@@ -51,10 +51,10 @@ export function TaskActionMenu({ task, onDelete }: TaskActionMenuProps) {
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-8 w-8"
+					className="size-8"
 					aria-label="Open task actions"
 				>
-					<HiEllipsisHorizontal className="h-4 w-4" />
+					<HiEllipsisHorizontal className="size-4" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end" className="w-64">

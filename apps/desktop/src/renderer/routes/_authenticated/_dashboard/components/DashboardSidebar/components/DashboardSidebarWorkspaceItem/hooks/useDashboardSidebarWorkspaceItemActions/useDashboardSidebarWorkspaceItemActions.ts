@@ -129,7 +129,7 @@ export function useDashboardSidebarWorkspaceItemActions({
 			await electronTrpcClient.external.openInFinder.mutate(path);
 		} catch (error) {
 			toast.error(
-				`Failed to open in Finder: ${error instanceof Error ? error.message : "Unknown error"}`,
+				`Failed to open in File Explorer: ${error instanceof Error ? error.message : "Unknown error"}`,
 			);
 		}
 	};

@@ -73,7 +73,7 @@ export function BrowserOverflowMenu({
 			<DropdownMenuTrigger asChild>
 				<button
 					type="button"
-					className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+					className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-muted-foreground"
 				>
 					<TbDots className="size-3.5" />
 				</button>

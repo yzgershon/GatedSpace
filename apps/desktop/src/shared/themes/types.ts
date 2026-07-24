@@ -157,6 +157,14 @@ export interface UIColors {
 	// fallback value.
 	highlight?: string;
 	highlightForeground?: string;
+
+	// Semantic status colors (success / warning / info). Optional so existing
+	// stored themes without them still typecheck — globals.css supplies fallback
+	// values for both dark (:root) and light (:root.light).
+	success?: string;
+	successForeground?: string;
+	warning?: string;
+	info?: string;
 }
 
 /**

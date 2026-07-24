@@ -154,11 +154,11 @@ export function useOrderedSections({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+								className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
 								onClick={onShowDiscardStagedDialog}
 								disabled={isDiscardAllStagedPending}
 							>
-								<VscDiscard className="w-3.5 h-3.5" />
+								<VscDiscard className="size-3.5" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="bottom">Discard all staged</TooltipContent>
@@ -168,11 +168,11 @@ export function useOrderedSections({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-6 w-6"
+								className="size-6"
 								onClick={onUnstageAll}
 								disabled={isUnstageAllPending}
 							>
-								<VscRemove className="w-4 h-4" />
+								<VscRemove className="size-4" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="bottom">Unstage all</TooltipContent>
@@ -209,11 +209,11 @@ export function useOrderedSections({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+								className="size-6 opacity-0 group-hover:opacity-100 transition-opacity"
 								onClick={onShowDiscardUnstagedDialog}
 								disabled={isDiscardAllUnstagedPending}
 							>
-								<VscDiscard className="w-3.5 h-3.5" />
+								<VscDiscard className="size-3.5" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="bottom">Discard all unstaged</TooltipContent>
@@ -223,11 +223,11 @@ export function useOrderedSections({
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-6 w-6"
+								className="size-6"
 								onClick={onStageAll}
 								disabled={isStageAllPending}
 							>
-								<VscAdd className="w-4 h-4" />
+								<VscAdd className="size-4" />
 							</Button>
 						</TooltipTrigger>
 						<TooltipContent side="bottom">Stage all</TooltipContent>

@@ -87,7 +87,7 @@ export function DeleteHostSection({
 						id={localHostDescriptionId}
 						className="mt-0.5 text-xs text-muted-foreground"
 					>
-						Stop Superset here to delete from another device.
+						Stop GatedSpace here to delete from another device.
 					</p>
 				) : null}
 			</div>

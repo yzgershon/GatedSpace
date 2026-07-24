@@ -269,7 +269,7 @@ export function AskUserQuestionToolCall({
 									{q.question}
 								</div>
 								<div className="flex items-center gap-1 text-sm text-destructive">
-									<CircleXIcon className="h-3 w-3 shrink-0" />
+									<CircleXIcon className="size-3 shrink-0" />
 									Aborted by the user
 								</div>
 							</div>

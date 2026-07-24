@@ -211,7 +211,7 @@ export function TeamDetailSettings({ teamId }: TeamDetailSettingsProps) {
 						to="/settings/teams"
 						className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground mb-4"
 					>
-						<HiArrowLeft className="h-4 w-4" />
+						<HiArrowLeft className="size-4" />
 						All teams
 					</Link>
 					<h2 className="text-2xl font-semibold">Team settings</h2>
@@ -271,7 +271,7 @@ export function TeamDetailSettings({ teamId }: TeamDetailSettingsProps) {
 							<div className="space-y-2 border rounded-lg">
 								{[1, 2, 3].map((i) => (
 									<div key={i} className="flex items-center gap-4 p-4">
-										<Skeleton className="h-8 w-8 rounded-full" />
+										<Skeleton className="size-8 rounded-full" />
 										<div className="flex-1 space-y-2">
 											<Skeleton className="h-4 w-48" />
 											<Skeleton className="h-3 w-32" />

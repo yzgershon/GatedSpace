@@ -78,9 +78,9 @@ export function SecretRow({
 		>
 			<div className="flex items-center justify-center size-9 rounded-full border bg-background shrink-0">
 				{secret.sensitive ? (
-					<HiLockClosed className="h-4 w-4 text-muted-foreground" />
+					<HiLockClosed className="size-4 text-muted-foreground" />
 				) : (
-					<HiOutlineCodeBracket className="h-4 w-4 text-muted-foreground" />
+					<HiOutlineCodeBracket className="size-4 text-muted-foreground" />
 				)}
 			</div>
 
@@ -107,9 +107,9 @@ export function SecretRow({
 								className="text-muted-foreground hover:text-foreground transition-colors p-1"
 							>
 								{isRevealed ? (
-									<HiEyeSlash className="h-4 w-4" />
+									<HiEyeSlash className="size-4" />
 								) : (
-									<HiEye className="h-4 w-4" />
+									<HiEye className="size-4" />
 								)}
 							</button>
 							{isRevealed ? (
@@ -153,8 +153,8 @@ export function SecretRow({
 
 			<DropdownMenu>
 				<DropdownMenuTrigger asChild>
-					<Button variant="ghost" size="icon" className="h-7 w-7 shrink-0">
-						<HiEllipsisHorizontal className="h-4 w-4" />
+					<Button variant="ghost" size="icon" className="size-7 shrink-0">
+						<HiEllipsisHorizontal className="size-4" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end">

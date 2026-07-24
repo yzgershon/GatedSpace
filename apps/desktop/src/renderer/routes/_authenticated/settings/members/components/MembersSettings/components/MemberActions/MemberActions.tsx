@@ -149,8 +149,8 @@ export function MemberActions({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<Button variant="ghost" size="icon" className="h-8 w-8">
-					<HiEllipsisVertical className="h-4 w-4" />
+				<Button variant="ghost" size="icon" className="size-8">
+					<HiEllipsisVertical className="size-4" />
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="end">
@@ -178,7 +178,7 @@ export function MemberActions({
 						className="text-destructive gap-2"
 						onSelect={handleRemoveClick}
 					>
-						<HiOutlineTrash className="h-4 w-4 text-destructive" />
+						<HiOutlineTrash className="size-4 text-destructive" />
 						<span>Leave organization...</span>
 					</DropdownMenuItem>
 				) : canRemove ? (
@@ -186,7 +186,7 @@ export function MemberActions({
 						className="text-destructive gap-2"
 						onSelect={handleRemoveClick}
 					>
-						<HiOutlineTrash className="h-4 w-4 text-destructive" />
+						<HiOutlineTrash className="size-4 text-destructive" />
 						<span>Remove member</span>
 					</DropdownMenuItem>
 				) : null}

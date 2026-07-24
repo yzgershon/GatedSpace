@@ -187,11 +187,11 @@ function Header({
 			<Button
 				variant="ghost"
 				size="icon"
-				className="h-8 w-8"
+				className="size-8"
 				onClick={onBack}
 				aria-label="Back to tasks"
 			>
-				<HiArrowLeft className="w-4 h-4" />
+				<HiArrowLeft className="size-4" />
 			</Button>
 			<PRIcon state={state} className="size-4" />
 			<span className="text-sm text-muted-foreground font-mono tabular-nums">
@@ -206,7 +206,7 @@ function Header({
 						className="text-muted-foreground hover:text-foreground transition-colors p-2"
 						title="Open in GitHub"
 					>
-						<LuExternalLink className="w-4 h-4" />
+						<LuExternalLink className="size-4" />
 					</a>
 				)}
 				{onAddToWorkspace && (

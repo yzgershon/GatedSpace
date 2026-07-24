@@ -47,7 +47,7 @@ export function UserMessageText({
 					</div>
 				)}
 				{hasNonTaskContent && (
-					<div className="max-w-full overflow-x-auto rounded-lg bg-muted px-4 py-2.5 text-sm text-foreground whitespace-pre-wrap">
+					<div className="max-w-full overflow-x-auto rounded-lg bg-secondary px-4 py-3 text-sm text-foreground whitespace-pre-wrap">
 						{otherSegments.map((segment, segmentIndex) => {
 							if (segment.type === "text") {
 								return (

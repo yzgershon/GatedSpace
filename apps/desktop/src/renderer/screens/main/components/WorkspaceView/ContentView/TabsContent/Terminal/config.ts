@@ -33,6 +33,13 @@ export const TERMINAL_OPTIONS: ITerminalOptions = {
 	macOptionIsMeta: false,
 	cursorStyle: "block",
 	cursorInactiveStyle: "outline",
+	// Wheel scrolling feel. These two work together: scrollSensitivity sets how
+	// far one notch travels, smoothScrollDuration animates between positions.
+	// A small instant hop still reads as a "step", so we take a few lines per
+	// notch and glide them. Terminals scroll in whole character rows, so this is
+	// as fluid as the medium allows — tune the pair, not either one alone.
+	scrollSensitivity: 3,
+	smoothScrollDuration: 180,
 	// Ambiguous-width glyphs (e.g. ◆ U+25C6, ⏵ U+23F5 in Claude Code's status
 	// UI) occupy one cell but many fonts draw them wider, so they bleed into
 	// neighboring cells and smear across redraws. Rescale them to fit.

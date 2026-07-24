@@ -100,7 +100,7 @@ export function AddMemberButton({
 		<Popover open={isOpen} onOpenChange={handleOpenChange}>
 			<PopoverTrigger asChild>
 				<Button size="sm">
-					<HiOutlinePlus className="h-4 w-4 mr-1" />
+					<HiOutlinePlus className="size-4 mr-1" />
 					Add member
 				</Button>
 			</PopoverTrigger>
@@ -151,7 +151,7 @@ export function AddMemberButton({
 						onClick={() => setIsOpen(false)}
 						className="flex items-center gap-2 px-2 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
 					>
-						<HiOutlinePaperAirplane className="h-4 w-4" />
+						<HiOutlinePaperAirplane className="size-4" />
 						Invite people...
 					</Link>
 				</div>

@@ -82,7 +82,7 @@ export function QuestionInputOverlay({
 							onClick={onCancel}
 							aria-label="Cancel"
 						>
-							<XIcon className="h-3.5 w-3.5" />
+							<XIcon className="size-3.5" />
 						</button>
 					</TooltipTrigger>
 					<TooltipContent>Cancel</TooltipContent>

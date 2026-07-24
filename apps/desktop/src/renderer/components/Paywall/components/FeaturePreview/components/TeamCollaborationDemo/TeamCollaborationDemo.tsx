@@ -21,9 +21,9 @@ export function TeamCollaborationDemo() {
 				<div className="flex items-center justify-between px-4 py-3 bg-muted/80 border-b border-border/50">
 					<div className="flex items-center gap-2">
 						<div className="flex gap-1.5">
-							<div className="w-2.5 h-2.5 rounded-full bg-[#ff5f57]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#febc2e]" />
-							<div className="w-2.5 h-2.5 rounded-full bg-[#28c840]" />
+							<div className="size-2.5 rounded-full bg-[#ff5f57]" />
+							<div className="size-2.5 rounded-full bg-[#febc2e]" />
+							<div className="size-2.5 rounded-full bg-[#28c840]" />
 						</div>
 						<span className="text-xs text-muted-foreground ml-1">Team</span>
 					</div>
@@ -38,13 +38,13 @@ export function TeamCollaborationDemo() {
 						{TEAM_MEMBERS.map((member, index) => (
 							<div
 								key={member.name}
-								className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium text-foreground/90 border-2 border-card bg-foreground/10"
+								className="size-9 rounded-full flex items-center justify-center text-xs font-medium text-foreground/90 border-2 border-card bg-foreground/10"
 								style={{ zIndex: TEAM_MEMBERS.length - index }}
 							>
 								{member.initials}
 							</div>
 						))}
-						<div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground bg-foreground/10 border-2 border-card">
+						<div className="size-9 rounded-full flex items-center justify-center text-xs font-medium text-muted-foreground bg-foreground/10 border-2 border-card">
 							+3
 						</div>
 					</div>
@@ -56,7 +56,7 @@ export function TeamCollaborationDemo() {
 					<div className="space-y-2">
 						{ACTIVITY.map((item) => (
 							<div key={item.id} className="flex items-center gap-2 text-xs">
-								<HiCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+								<HiCheck className="size-3 text-emerald-400 shrink-0" />
 								<span className="text-foreground/80">
 									<span className="text-foreground font-medium">
 										{item.user}

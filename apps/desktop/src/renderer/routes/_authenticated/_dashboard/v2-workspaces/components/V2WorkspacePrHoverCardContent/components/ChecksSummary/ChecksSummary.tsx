@@ -20,7 +20,7 @@ export function ChecksSummary({ checks, status }: ChecksSummaryProps) {
 
 	const config = {
 		success: { Icon: LuCheck, className: "text-emerald-500" },
-		failure: { Icon: LuX, className: "text-destructive-foreground" },
+		failure: { Icon: LuX, className: "text-destructive" },
 		pending: { Icon: LuLoaderCircle, className: "text-amber-500" },
 	} as const;
 

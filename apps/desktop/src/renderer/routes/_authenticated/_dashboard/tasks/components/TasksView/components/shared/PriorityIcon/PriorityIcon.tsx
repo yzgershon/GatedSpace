@@ -16,7 +16,7 @@ export function PriorityIcon({
 	showHover = false,
 	color,
 }: PriorityIconProps) {
-	const sizeClass = className || "h-4 w-4";
+	const sizeClass = className || "size-4";
 	const hoverClass = showHover ? "group-hover:brightness-150" : "";
 	const defaultColor = color || colors.neutral[500];
 

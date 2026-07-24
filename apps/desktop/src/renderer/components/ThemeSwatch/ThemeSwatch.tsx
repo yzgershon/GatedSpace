@@ -12,7 +12,7 @@ export function ThemeSwatch({ theme }: { theme: Theme }) {
 			}}
 		>
 			<span
-				className="h-1 w-1 rounded-full"
+				className="size-1 rounded-full"
 				style={{ backgroundColor: terminal.green }}
 			/>
 			<span

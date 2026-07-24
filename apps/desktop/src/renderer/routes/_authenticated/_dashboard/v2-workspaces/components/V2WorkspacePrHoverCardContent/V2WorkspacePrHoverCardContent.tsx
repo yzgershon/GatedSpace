@@ -47,7 +47,7 @@ export function V2WorkspacePrHoverCardContent({
 					</div>
 					<div className="flex shrink-0 items-center gap-1.5 font-mono text-xs">
 						<span className="text-emerald-500">+{pr.additions}</span>
-						<span className="text-destructive-foreground">-{pr.deletions}</span>
+						<span className="text-destructive">-{pr.deletions}</span>
 					</div>
 				</div>
 

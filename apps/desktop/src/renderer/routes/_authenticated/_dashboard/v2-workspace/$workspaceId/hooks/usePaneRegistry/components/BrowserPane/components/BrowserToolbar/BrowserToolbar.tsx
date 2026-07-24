@@ -144,7 +144,7 @@ export function BrowserToolbar({
 						<button
 							type="button"
 							onClick={onReload}
-							className="rounded p-1 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+							className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-muted-foreground"
 						>
 							{isLoading ? (
 								<TbLoader2 className="size-3.5 animate-spin" />
@@ -158,7 +158,7 @@ export function BrowserToolbar({
 					</TooltipContent>
 				</Tooltip>
 			</div>
-			<div className="mx-1.5 h-3.5 w-px shrink-0 bg-muted-foreground/60" />
+			<div className="mx-1.5 h-3.5 w-px shrink-0 bg-muted-foreground/30" />
 			<div className="relative flex min-w-0 flex-1 items-center">
 				{isEditing ? (
 					<form

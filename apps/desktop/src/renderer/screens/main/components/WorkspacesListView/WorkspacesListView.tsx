@@ -213,7 +213,7 @@ export function WorkspacesListView() {
 
 				{/* Search */}
 				<div className="relative flex-1">
-					<LuSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/50" />
+					<LuSearch className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-foreground/50" />
 					<Input
 						type="text"
 						placeholder="Search..."

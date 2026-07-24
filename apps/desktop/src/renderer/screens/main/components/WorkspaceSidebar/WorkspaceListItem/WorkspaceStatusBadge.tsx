@@ -19,7 +19,7 @@ export function WorkspaceStatusBadge({
 	className,
 }: WorkspaceStatusBadgeProps) {
 	const openUrl = electronTrpc.external.openUrl.useMutation();
-	const iconClass = "w-3 h-3";
+	const iconClass = "size-3";
 
 	const config = {
 		open: {
