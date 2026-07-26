@@ -13,9 +13,9 @@ import { useRightSidebarToggleIntent } from "renderer/stores/right-sidebar-toggl
 import type { StoreApi } from "zustand";
 import type {
 	BrowserPaneData,
-	ChatPaneData,
 	DiffPaneData,
 	PaneViewerData,
+	SessionPaneData,
 	TerminalPaneData,
 } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
@@ -59,9 +59,11 @@ export function useWorkspaceHotkeys({
 		await addTerminalTab();
 	});
 
+	// The chat pane is gone; the shortcut now opens what replaced it rather than
+	// creating a pane kind nothing renders.
 	useHotkey("NEW_CHAT", () => {
 		store.getState().addTab({
-			panes: [{ kind: "chat", data: { sessionId: null } as ChatPaneData }],
+			panes: [{ kind: "session", data: {} as SessionPaneData }],
 		});
 	});
 
@@ -266,8 +268,8 @@ export function useWorkspaceHotkeys({
 			paneId: active.pane.id,
 			position: "right",
 			newPane: {
-				kind: "chat",
-				data: { sessionId: null } as ChatPaneData,
+				kind: "session",
+				data: {} as SessionPaneData,
 			},
 		});
 	});

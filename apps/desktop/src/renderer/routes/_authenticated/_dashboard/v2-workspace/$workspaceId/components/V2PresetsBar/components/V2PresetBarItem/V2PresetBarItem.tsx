@@ -8,12 +8,14 @@ import {
 	ContextMenuTrigger,
 } from "@superset/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
+import { cn } from "@superset/ui/utils";
 import { useEffect, useRef } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { HiMiniCommandLine } from "react-icons/hi2";
 import type { HotkeyId } from "renderer/hotkeys";
 import { HotkeyLabel } from "renderer/hotkeys";
 import { resolveV2PresetIcon } from "renderer/lib/preset-icon";
+import { resolveV2PresetIconKey } from "renderer/lib/preset-icon-key";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
 
 const V2_PRESET_BAR_ITEM_TYPE = "V2_PRESET_BAR_ITEM";
@@ -43,6 +45,11 @@ export function V2PresetBarItem({
 }: V2PresetBarItemProps) {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const icon = resolveV2PresetIcon(preset, agents, isDark);
+	// Codex's mark carries more internal padding than the others, so at a shared
+	// size it reads noticeably smaller. Size it up to match optically rather than
+	// numerically — matching the box is not the same as matching the logo.
+	const iconSize =
+		resolveV2PresetIconKey(preset, agents) === "codex" ? "size-4" : "size-3.5";
 	const label = preset.description || preset.name || "default";
 
 	const [{ isDragging }, drag] = useDrag(
@@ -99,7 +106,10 @@ export function V2PresetBarItem({
 									<img
 										src={icon}
 										alt=""
-										className="size-3.5 shrink-0 object-contain opacity-90"
+										className={cn(
+											iconSize,
+											"shrink-0 object-contain opacity-90",
+										)}
 									/>
 								) : (
 									<HiMiniCommandLine className="size-3.5 shrink-0" />

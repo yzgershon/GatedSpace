@@ -14,6 +14,27 @@ export interface TerminalPaneData {
 // state (the list is fetched live via the claudeSessions tRPC endpoint).
 export type ClaudeSessionsPaneData = Record<string, never>;
 
+// A live VS Code-style Claude Code session (pane kind "session"). Distinct from
+// the read-only ClaudeSessionsPaneData list above. Minimal per-instance state —
+// the timeline streams from the main-process transport keyed by pane id.
+export interface SessionPaneData {
+	/** Optional model override; omit for the CLI default. */
+	model?: string;
+	/** Resume an existing claude session id instead of starting fresh. */
+	resumeSessionId?: string;
+	/**
+	 * Resume into a copy under a fresh session id, leaving the original session
+	 * untouched. Set when opening a session that's already live somewhere else.
+	 */
+	forkSession?: boolean;
+	/**
+	 * Working directory override. Set when a session is resumed from the recent
+	 * list, where the conversation can belong to a different project than the
+	 * workspace the pane opens in. Omit to use the workspace's worktree path.
+	 */
+	cwd?: string;
+}
+
 export interface ChatPaneData {
 	sessionId: string | null;
 	/**
@@ -75,4 +96,5 @@ export type PaneViewerData =
 	| DevtoolsPaneData
 	| DiffPaneData
 	| CommentPaneData
-	| ClaudeSessionsPaneData;
+	| ClaudeSessionsPaneData
+	| SessionPaneData;

@@ -29,7 +29,15 @@ export interface UsageDay {
 export interface QuotaWindow {
 	usedPercent: number;
 	windowMinutes: number;
-	resetsAt: number; // unix seconds
+	/**
+	 * Unix seconds, or null when the snapshot carries no reset moment.
+	 *
+	 * Null rather than 0: zero is a real instant, and it counts down to "resets
+	 * now" — so an unknown reset used to render as an imminent one.
+	 */
+	resetsAt: number | null;
+	/** The CLI's localised phrase, for when there's no timestamp to count. */
+	resetsLabel: string | null;
 }
 export interface ProviderQuota {
 	provider: "Claude" | "Codex";
@@ -79,12 +87,20 @@ function readClaudeQuota(
 		const o = JSON.parse(raw);
 		const win = (raw: unknown, minutes: number): QuotaWindow | null => {
 			if (!raw || typeof raw !== "object") return null;
-			const w = raw as { used_percentage?: number | null; resets_at?: number };
+			const w = raw as {
+				used_percentage?: number | null;
+				resets_at?: number | null;
+				resets_label?: string | null;
+			};
 			return w.used_percentage != null
 				? {
 						usedPercent: Math.round(w.used_percentage),
 						windowMinutes: minutes,
-						resetsAt: w.resets_at ?? 0,
+						resetsAt: typeof w.resets_at === "number" ? w.resets_at : null,
+						resetsLabel:
+							typeof w.resets_label === "string" && w.resets_label.trim()
+								? w.resets_label
+								: null,
 					}
 				: null;
 		};
@@ -271,7 +287,10 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 								q[windowSlot(minutes)] = {
 									usedPercent: Math.round(w.used_percent),
 									windowMinutes: minutes,
-									resetsAt: w.resets_at ?? 0,
+									// Codex records a real epoch; absent stays absent rather
+									// than becoming an imminent countdown.
+									resetsAt: w.resets_at ?? null,
+									resetsLabel: null,
 								};
 							}
 							// replace any prior codex quota

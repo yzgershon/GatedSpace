@@ -69,6 +69,14 @@ function snapshotStringEnv(
 export async function resolveTerminalBaseEnv(): Promise<
 	Record<string, string>
 > {
+	// Windows has no login shell to probe. The probe runs a POSIX
+	// `-i -l -c 'command env'` line, which cmd.exe answers with its version
+	// banner — so it could only ever fail, and did, loudly, into the log on
+	// every cache miss. The process env IS the user env there.
+	if (process.platform === "win32") {
+		return snapshotStringEnv(process.env);
+	}
+
 	try {
 		return await getStrictShellEnvironment();
 	} catch (error) {

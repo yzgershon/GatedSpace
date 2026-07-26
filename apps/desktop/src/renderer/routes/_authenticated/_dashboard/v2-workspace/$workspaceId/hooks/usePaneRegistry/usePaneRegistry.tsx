@@ -14,6 +14,7 @@ import {
 	Globe,
 	History,
 	MessageSquare,
+	Sparkles,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import {
@@ -39,17 +40,21 @@ import {
 } from "../../state/fileDocumentStore";
 import type {
 	BrowserPaneData,
-	ChatPaneData,
 	CommentPaneData,
 	DevtoolsPaneData,
 	FilePaneData,
 	PaneViewerData,
+	SessionPaneData,
 	TerminalPaneData,
 } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
 import { BrowserPane, BrowserPaneToolbar } from "./components/BrowserPane";
-import { ChatPane } from "./components/ChatPane";
-import { ChatPaneTitle } from "./components/ChatPane/components/ChatPaneTitle";
+import {
+	ClaudeSessionPane,
+	disposeSession,
+	getSessionTitle,
+	subscribeSession,
+} from "./components/ClaudeSessionPane";
 import {
 	type ClaudeSessionResumeRequest,
 	ClaudeSessionsPane,
@@ -219,6 +224,28 @@ export function usePaneRegistry({
 	// invocations, so resume can't drift from the normal launch path.
 	const resumeAgentSession = useCallback(
 		async (request: ClaudeSessionResumeRequest) => {
+			// Claude sessions open in the session pane, which renders the stored
+			// transcript and reattaches to the conversation. A fork opens the same
+			// pane with --fork-session, so the original keeps its own transcript.
+			// Codex has no stream-json equivalent and stays a terminal.
+			if (request.provider === "claude") {
+				const state = store.getState();
+				const pane = {
+					kind: "session" as const,
+					titleOverride: request.title,
+					data: {
+						resumeSessionId: request.sessionId,
+						...(request.mode === "fork" ? { forkSession: true } : {}),
+						...(request.cwd ? { cwd: request.cwd } : {}),
+					} as SessionPaneData,
+				};
+				if (state.activeTabId) {
+					state.addPane({ tabId: state.activeTabId, pane });
+				} else {
+					state.addTab({ panes: [pane] });
+				}
+				return;
+			}
 			try {
 				const result = await resumeAgent.mutateAsync({
 					workspaceId,
@@ -254,6 +281,48 @@ export function usePaneRegistry({
 				getIcon: () => <History className="size-3.5" />,
 				getTitle: () => "Sessions",
 				renderPane: () => <ClaudeSessionsPane onResume={resumeAgentSession} />,
+			},
+			// Live VS Code-style Claude Code session (pane kind "session").
+			session: {
+				getIcon: () => <Sparkles className="size-3.5" />,
+				getTitle: () => "Claude",
+				// Label the tab with what the session is about — several open
+				// sessions all reading "Claude" tells you nothing.
+				titleSource: (pane) => ({
+					subscribe: (callback) => subscribeSession(pane.id, callback),
+					getSnapshot: () => getSessionTitle(pane.id),
+				}),
+				renderPane: (ctx: RendererContext<PaneViewerData>) => {
+					const data = ctx.pane.data as SessionPaneData;
+					return (
+						<ClaudeSessionPane
+							paneId={ctx.pane.id}
+							workspaceId={workspaceId}
+							model={data.model}
+							resumeSessionId={data.resumeSessionId}
+							forkSession={data.forkSession}
+							cwdOverride={data.cwd}
+							// Persisted on the pane so a restored layout resumes the real
+							// conversation instead of opening a blank session.
+							onSessionId={(sessionId) =>
+								// A fork has its own id now, so drop the flag — reopening
+								// this pane later must resume it, not fork it again.
+								ctx.actions.updateData({
+									...data,
+									resumeSessionId: sessionId,
+									forkSession: undefined,
+								})
+							}
+						/>
+					);
+				},
+				contextMenuActions: (_ctx, defaults) =>
+					defaults.map((d) =>
+						d.key === "close-pane" ? { ...d, label: "Close Session" } : d,
+					),
+				// A session deliberately outlives an unmount (tab switches keep the
+				// process alive); closing the pane is the one thing that kills it.
+				onAfterClose: (pane) => disposeSession(pane.id),
 			},
 			file: {
 				getIcon: (ctx: RendererContext<PaneViewerData>) => {
@@ -525,33 +594,6 @@ export function usePaneRegistry({
 				contextMenuActions: (_ctx, defaults) =>
 					defaults.map((d) =>
 						d.key === "close-pane" ? { ...d, label: "Close Browser" } : d,
-					),
-			},
-			chat: {
-				getIcon: () => <MessageSquare className="size-3.5" />,
-				getTitle: () => "Chat",
-				renderTitle: (ctx: RendererContext<PaneViewerData>) => (
-					<ChatPaneTitle context={ctx} workspaceId={workspaceId} />
-				),
-				renderPane: (ctx: RendererContext<PaneViewerData>) => {
-					const data = ctx.pane.data as ChatPaneData;
-					return (
-						<ChatPane
-							workspaceId={workspaceId}
-							sessionId={data.sessionId}
-							onSessionIdChange={(id) =>
-								ctx.actions.updateData({ ...data, sessionId: id })
-							}
-							initialLaunchConfig={data.launchConfig ?? null}
-							onConsumeLaunchConfig={() =>
-								ctx.actions.updateData({ ...data, launchConfig: null })
-							}
-						/>
-					);
-				},
-				contextMenuActions: (_ctx, defaults) =>
-					defaults.map((d) =>
-						d.key === "close-pane" ? { ...d, label: "Close Chat" } : d,
 					),
 			},
 			comment: {

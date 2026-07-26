@@ -4,8 +4,12 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuickOpenStore } from "renderer/commandPalette/ui/QuickOpen/quickOpenStore";
+import { useV2AgentConfigs } from "renderer/hooks/useV2AgentConfigs";
 import { useV2UserPreferences } from "renderer/hooks/useV2UserPreferences";
 import { useHotkey } from "renderer/hotkeys";
+import { resolveV2PresetIconKey } from "renderer/lib/preset-icon-key";
+import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
+import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
 import { CommandPalette } from "renderer/screens/main/components/CommandPalette";
 import { ResizablePanel } from "renderer/screens/main/components/ResizablePanel";
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
@@ -126,6 +130,8 @@ function V2WorkspaceContent() {
 	const { store } = useV2WorkspacePaneLayout();
 	useClearActivePaneAttention({ store });
 	const launcher = useV2TerminalLauncher();
+	const { activeHostUrl } = useLocalHostService();
+	const { data: agentConfigs } = useV2AgentConfigs(activeHostUrl);
 	const {
 		matchedPresets,
 		newTabPresets,
@@ -181,8 +187,8 @@ function V2WorkspaceContent() {
 	const {
 		openDiffPane,
 		addTerminalTab,
-		addChatTab,
 		addBrowserTab,
+		addSessionTab,
 		openBrowserUrl,
 		openClaudeSessions,
 		openCommentPane,
@@ -198,6 +204,34 @@ function V2WorkspaceContent() {
 	);
 	const closeQuickOpen = useQuickOpenStore((s) => s.close);
 	const openQuickOpenFor = useQuickOpenStore((s) => s.openFor);
+	/**
+	 * The agents bar runs presets, except for Claude, which opens the session
+	 * pane instead of a terminal.
+	 *
+	 * Only the AGENTS TOOLBAR routes through this. The + menu's Terminal submenu
+	 * passes executePreset directly, because a submenu under "Terminal" that
+	 * opened a session pane would be lying about what it does.
+	 *
+	 * Worth being precise about what this gives up. A preset is a multi-command
+	 * recipe with an execution mode and a cwd override; the session pane runs one
+	 * `claude`. For the shipped Claude preset those are the same thing, which is
+	 * why this is safe — but a Claude preset edited into several commands would
+	 * quietly lose the rest. If that ever happens, this is the line that did it.
+	 */
+	const runPresetOrSession = useCallback(
+		(
+			preset: V2TerminalPresetRow,
+			options?: { target?: "new-tab" | "active-tab" },
+		) => {
+			if (resolveV2PresetIconKey(preset, agentConfigs ?? []) === "claude") {
+				addSessionTab();
+				return;
+			}
+			return executePreset(preset, options);
+		},
+		[addSessionTab, agentConfigs, executePreset],
+	);
+
 	const handleQuickOpen = useCallback(
 		() => openQuickOpenFor({ workspaceId }),
 		[openQuickOpenFor, workspaceId],
@@ -302,7 +336,7 @@ function V2WorkspaceContent() {
 								showPresetsBar ? (
 									<V2PresetsBar
 										matchedPresets={matchedPresets}
-										executePreset={executePreset}
+										executePreset={runPresetOrSession}
 										showPresetsBar={showPresetsBar}
 										onToggleShowPresetsBar={setShowPresetsBar}
 										trailing={workspaceRunButton}
@@ -312,9 +346,10 @@ function V2WorkspaceContent() {
 							renderAddTabMenu={() => (
 								<AddTabMenu
 									onAddTerminal={addTerminalTab}
-									onAddChat={addChatTab}
 									onAddBrowser={addBrowserTab}
 									onOpenSessions={openClaudeSessions}
+									agentPresets={matchedPresets}
+									onRunPreset={executePreset}
 									showPresetsBar={showPresetsBar}
 									onToggleShowPresetsBar={setShowPresetsBar}
 								/>
@@ -328,7 +363,6 @@ function V2WorkspaceContent() {
 							renderEmptyState={() => (
 								<WorkspaceEmptyState
 									onOpenBrowser={addBrowserTab}
-									onOpenChat={addChatTab}
 									onOpenQuickOpen={handleQuickOpen}
 									onOpenTerminal={addTerminalTab}
 								/>

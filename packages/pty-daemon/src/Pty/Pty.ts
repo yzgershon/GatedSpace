@@ -1,5 +1,6 @@
 import * as childProcess from "node:child_process";
 import * as fs from "node:fs";
+import * as path from "node:path";
 import * as tty from "node:tty";
 import * as nodePty from "node-pty";
 import {
@@ -151,6 +152,40 @@ function validateDims(cols: number, rows: number): void {
 	}
 }
 
+/**
+ * Windows only: hand node-pty an ABSOLUTE executable, never a bare name.
+ *
+ * node-pty resolves relative names itself, and its resolver has a trap
+ * (path_util.cc `get_shell_path`): the first thing it does is test the name
+ * against THIS process's working directory, and on a hit it returns an empty
+ * string rather than the path it found. A daemon whose cwd is
+ * C:\Windows\System32 therefore can't spawn "cmd.exe" at all — every attempt
+ * dies with `File not found: ` and nothing after the colon.
+ *
+ * Callers are supposed to pass an absolute shell, and now do. This is the
+ * backstop for the ones that don't, since the failure it prevents is total and
+ * the message it prevents is unreadable.
+ *
+ * `meta` is deliberately left untouched — this only affects what we hand the
+ * native layer, not what the session reports or hands to a successor daemon.
+ */
+function resolveExecutable(file: string): string {
+	if (process.platform !== "win32") return file;
+	if (path.isAbsolute(file)) return file;
+
+	const search = process.env.Path ?? process.env.PATH ?? "";
+	for (const dir of search.split(";")) {
+		if (!dir) continue;
+		const candidate = path.join(dir, file);
+		try {
+			if (fs.statSync(candidate).isFile()) return candidate;
+		} catch {
+			// Not here; keep walking.
+		}
+	}
+	return file;
+}
+
 function reprobeErrno(meta: SessionMeta): string {
 	try {
 		const probe = childProcess.spawnSync(meta.shell, ["-c", ":"], {
@@ -191,8 +226,9 @@ export function spawn({ meta }: SpawnOptions): Pty {
 		}
 	}
 	let term: nodePty.IPty;
+	const shell = resolveExecutable(meta.shell);
 	try {
-		term = nodePty.spawn(meta.shell, meta.argv, {
+		term = nodePty.spawn(shell, meta.argv, {
 			name: "xterm-256color",
 			cols: meta.cols,
 			rows: meta.rows,
@@ -205,8 +241,12 @@ export function spawn({ meta }: SpawnOptions): Pty {
 		// node-pty's native "posix_spawnp failed." drops the errno, so re-probe
 		// the same shell+cwd with spawnSync to surface the real code (e.g.
 		// EMFILE/EAGAIN/ENOENT).
+		// daemonCwd is in here because node-pty's Windows resolver consults it
+		// and then hides it: "File not found: " with an empty path means the
+		// name collided with something in THIS directory. Without it the
+		// message names no file and blames no directory.
 		throw new Error(
-			`spawn failed (shell=${meta.shell} cwd=${meta.cwd ?? "(none)"} errno=${reprobeErrno(meta)}): ${(err as Error).message}`,
+			`spawn failed (shell=${shell} cwd=${meta.cwd ?? "(none)"} daemonCwd=${process.cwd()} errno=${reprobeErrno(meta)}): ${(err as Error).message}`,
 		);
 	}
 	const adapter = new NodePtyAdapter(term, meta);

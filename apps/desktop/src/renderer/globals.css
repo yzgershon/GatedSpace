@@ -173,6 +173,32 @@
 	--color-info: var(--info);
 }
 
+/* Effort slider flourishes (session composer): a rainbow fill at "max" and an
+ * animated purple glow at "ultracode" (= xhigh + workflows). See the session UI
+ * spec, plans/20260724-claude-code-session-ui.md. */
+@keyframes ultracode-glow {
+	0%,
+	100% {
+		box-shadow: 0 0 5px 0 rgba(168, 85, 247, 0.45);
+	}
+	50% {
+		box-shadow: 0 0 13px 2px rgba(168, 85, 247, 0.85);
+	}
+}
+.animate-ultracode-glow {
+	animation: ultracode-glow 2s ease-in-out infinite;
+}
+.effort-dot-rainbow {
+	background-image: linear-gradient(
+		90deg,
+		#f87171,
+		#fbbf24,
+		#34d399,
+		#60a5fa,
+		#a855f7
+	);
+}
+
 @layer base {
 	* {
 		@apply border-border antialiased;

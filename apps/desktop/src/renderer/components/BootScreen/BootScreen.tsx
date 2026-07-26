@@ -52,7 +52,8 @@ export function BootScreen({ className }: { className?: string }) {
 			let out = "";
 			for (let i = 0; i < WORDMARK.length; i++) {
 				const char = WORDMARK[i];
-				out += char === " " ? " " : i < revealed || progress >= 1 ? char : rnd();
+				out +=
+					char === " " ? " " : i < revealed || progress >= 1 ? char : rnd();
 			}
 			el.textContent = out;
 			if (progress < 1) raf = requestAnimationFrame(tick);

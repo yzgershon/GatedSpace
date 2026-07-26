@@ -1,6 +1,7 @@
 import { exec } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 import {
 	TERMINAL_TERM_PROGRAM,
 	TERMINAL_TERM_PROGRAM_VERSION,
@@ -46,7 +47,18 @@ function startLocaleProbe(): void {
  */
 export const HOOK_PROTOCOL_VERSION = "2";
 
-export const FALLBACK_SHELL = os.platform() === "win32" ? "cmd.exe" : "/bin/sh";
+/**
+ * Absolute on Windows, not the bare name: node-pty resolves a relative shell
+ * against its own working directory first and returns an EMPTY path on a hit,
+ * which surfaces as `File not found: ` with nothing after the colon. The
+ * fallback shell is what we reach for when the real one already crashed, so it
+ * is the last place that can afford its own failure mode.
+ */
+export const FALLBACK_SHELL =
+	os.platform() === "win32"
+		? process.env.COMSPEC ||
+			path.join(process.env.SystemRoot || "C:\\Windows", "System32", "cmd.exe")
+		: "/bin/sh";
 export const SHELL_CRASH_THRESHOLD_MS = 1000;
 
 type DefaultShellModuleShape =

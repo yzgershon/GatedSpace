@@ -10,6 +10,7 @@ import type {
 	DiffFocusSide,
 	DiffPaneData,
 	PaneViewerData,
+	SessionPaneData,
 	TerminalPaneData,
 } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
@@ -38,6 +39,7 @@ export function useWorkspacePaneOpeners({
 	addTerminalTab: () => Promise<void>;
 	addChatTab: () => void;
 	addBrowserTab: () => void;
+	addSessionTab: () => void;
 	openBrowserUrl: (url: string) => void;
 	openClaudeSessions: () => void;
 	openCommentPane: (comment: CommentPaneData) => void;
@@ -165,6 +167,18 @@ export function useWorkspacePaneOpeners({
 		});
 	}, [store]);
 
+	// Open a new VS Code-style Claude Code session pane (kind "session").
+	const addSessionTab = useCallback(() => {
+		store.getState().addTab({
+			panes: [
+				{
+					kind: "session",
+					data: {} as SessionPaneData,
+				},
+			],
+		});
+	}, [store]);
+
 	// Open a specific URL in a browser tab. Reuses an existing browser pane
 	// already showing this URL (focus it) rather than stacking duplicates —
 	// repeated Preview clicks land on the same pane.
@@ -245,6 +259,7 @@ export function useWorkspacePaneOpeners({
 		addTerminalTab,
 		addChatTab,
 		addBrowserTab,
+		addSessionTab,
 		openBrowserUrl,
 		openClaudeSessions,
 		openCommentPane,

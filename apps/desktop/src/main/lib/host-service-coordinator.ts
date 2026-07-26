@@ -139,7 +139,12 @@ export function planHostServiceRestart({
 		// into ever-longer counts — each backoff earns a fresh CRASH_BUDGET.
 		return { delayMs: backoffMs, crashesInWindow, looping: true, retained: [] };
 	}
-	return { delayMs: 0, crashesInWindow, looping: false, retained: withinWindow };
+	return {
+		delayMs: 0,
+		crashesInWindow,
+		looping: false,
+		retained: withinWindow,
+	};
 }
 
 /**
@@ -649,10 +654,7 @@ export class HostServiceCoordinator extends EventEmitter {
 				config,
 				this.getPreferredPorts(organizationId),
 			).catch((err) => {
-				log.error(
-					`[host-service:${organizationId}] auto-restart failed:`,
-					err,
-				);
+				log.error(`[host-service:${organizationId}] auto-restart failed:`, err);
 			});
 		}, plan.delayMs);
 		// Don't let a queued restart keep the event loop (and the app) alive.

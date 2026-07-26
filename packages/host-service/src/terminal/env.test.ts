@@ -43,6 +43,62 @@ describe("resolveLaunchShell", () => {
 			resolveLaunchShell({}, { accountShell: null, platform: "darwin" }),
 		).not.toBe("/bin/zsh");
 	});
+
+	// ── Windows ────────────────────────────────────────────────────────
+	//
+	// The base env is a plain-object snapshot of process.env, and Windows
+	// spells the key `ComSpec`. process.env is case-insensitive; a plain object
+	// is not — so the old `env.COMSPEC` lookup missed on every real machine and
+	// silently produced a bare "cmd.exe". That then failed for real inside
+	// node-pty, which resolves a relative shell against the pty-daemon's own
+	// cwd and returns nothing when it hits.
+
+	test("finds ComSpec however Windows happened to spell it", () => {
+		for (const key of ["ComSpec", "COMSPEC", "comspec"]) {
+			expect(
+				resolveLaunchShell(
+					{ [key]: "C:\\WINDOWS\\system32\\cmd.exe" },
+					{ platform: "win32" },
+				),
+			).toBe("C:\\WINDOWS\\system32\\cmd.exe");
+		}
+	});
+
+	test("builds an absolute path from SystemRoot when ComSpec is missing", () => {
+		expect(
+			resolveLaunchShell({ SystemRoot: "C:\\WINDOWS" }, { platform: "win32" }),
+		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+	});
+
+	test("accepts windir as the anchor too", () => {
+		expect(
+			resolveLaunchShell({ windir: "D:\\Windows" }, { platform: "win32" }),
+		).toBe("D:\\Windows\\System32\\cmd.exe");
+	});
+
+	test("a relative ComSpec is upgraded, not trusted", () => {
+		// "cmd.exe" as ComSpec is the exact value that kills node-pty. Prefer
+		// anything absolute over it.
+		expect(
+			resolveLaunchShell(
+				{ ComSpec: "cmd.exe", SystemRoot: "C:\\WINDOWS" },
+				{ platform: "win32" },
+			),
+		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+	});
+
+	test("only falls back to a bare name with nothing left to anchor to", () => {
+		expect(resolveLaunchShell({}, { platform: "win32" })).toBe("cmd.exe");
+	});
+
+	test("blank values don't count as an anchor", () => {
+		expect(
+			resolveLaunchShell(
+				{ ComSpec: "   ", SystemRoot: "C:\\WINDOWS" },
+				{ platform: "win32" },
+			),
+		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+	});
 });
 
 // ── normalizeUtf8Locale ──────────────────────────────────────────────
@@ -357,6 +413,18 @@ describe("getShellBootstrapEnv", () => {
 
 // ── Terminal base env preservation ───────────────────────────────────
 
+/**
+ * Windows normalises env-var case: assigning `process.env.PATH` writes through
+ * to the existing `Path`, so a plain-object snapshot comes back spelled the
+ * Windows way. Read it back the way the platform stores it rather than the way
+ * the test wrote it — the snapshot is still correct, only the key differs.
+ */
+function readEnv(env: Record<string, string>, key: string): string | undefined {
+	if (env[key] !== undefined) return env[key];
+	const wanted = key.toLowerCase();
+	return Object.entries(env).find(([k]) => k.toLowerCase() === wanted)?.[1];
+}
+
 describe("terminal base env preservation", () => {
 	test("getTerminalBaseEnv throws when not initialized", () => {
 		resetTerminalBaseEnvForTests();
@@ -384,15 +452,15 @@ describe("terminal base env preservation", () => {
 			const baseEnv = getTerminalBaseEnv();
 
 			// Shell vars preserved
-			expect(baseEnv.HOME).toBe("/Users/test");
-			expect(baseEnv.PATH).toBe("/usr/bin");
-			expect(baseEnv.SHELL).toBe("/bin/zsh");
-			expect(baseEnv.NVM_DIR).toBe("/Users/test/.nvm");
+			expect(readEnv(baseEnv, "HOME")).toBe("/Users/test");
+			expect(readEnv(baseEnv, "PATH")).toBe("/usr/bin");
+			expect(readEnv(baseEnv, "SHELL")).toBe("/bin/zsh");
+			expect(readEnv(baseEnv, "NVM_DIR")).toBe("/Users/test/.nvm");
 
 			// Runtime keys stripped
-			expect(baseEnv.HOST_SERVICE_SECRET).toBeUndefined();
-			expect(baseEnv.ORGANIZATION_ID).toBeUndefined();
-			expect(baseEnv.ELECTRON_RUN_AS_NODE).toBeUndefined();
+			expect(readEnv(baseEnv, "HOST_SERVICE_SECRET")).toBeUndefined();
+			expect(readEnv(baseEnv, "ORGANIZATION_ID")).toBeUndefined();
+			expect(readEnv(baseEnv, "ELECTRON_RUN_AS_NODE")).toBeUndefined();
 
 			// Modify process.env after init — preserved snapshot unaffected
 			process.env.INJECTED_LATER = "should-not-appear";

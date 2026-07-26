@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>GatedSpace — session UI polish</title>
+		<style>
+			/* Tokens copied verbatim from apps/desktop/src/renderer/globals.css (dark). */
+			:root {
+				--background: #151110;
+				--foreground: #eae8e6;
+				--card: #201e1c;
+				--popover: #201e1c;
+				--muted-foreground: #a8a5a3;
+				--accent: #2a2827;
+				--tertiary: #1a1716;
+				--border: #2a2827;
+				--ring: #3a3837;
+				--destructive: #cc4444;
+				--success: #4bb377;
+				--warning: #d4a84b;
+			}
+			* { box-sizing: border-box; }
+			body {
+				margin: 0;
+				background: var(--background);
+				color: var(--foreground);
+				font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+				padding: 28px;
+			}
+			.head { max-width: 1500px; margin: 0 auto 22px; }
+			.head h1 { font-size: 15px; font-weight: 600; margin: 0 0 4px; }
+			.head p { margin: 0; font-size: 12px; color: var(--muted-foreground); }
+			.cols { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; max-width: 1500px; margin: 0 auto; align-items: start; }
+			.col > h2 {
+				font-size: 10px; letter-spacing: .08em; text-transform: uppercase;
+				color: var(--muted-foreground); margin: 0 0 8px; font-weight: 600;
+			}
+			.pane {
+				border: 1px solid var(--border); border-radius: 10px;
+				background: var(--background); overflow: hidden;
+			}
+			.pane-head {
+				display: flex; align-items: center; gap: 8px;
+				height: 44px; padding: 0 16px; font-size: 12px;
+				border-bottom: 1px solid var(--border);
+			}
+			.dot-ok { width: 6px; height: 6px; border-radius: 999px; background: var(--success); }
+			.pane-head .spacer { flex: 1; }
+			.dim { color: var(--muted-foreground); }
+			.dimmer { color: color-mix(in srgb, var(--muted-foreground) 70%, transparent); }
+			.body { padding: 16px; }
+			code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+
+			/* ---------------- CURRENT ---------------- */
+			.cur-stack { display: flex; flex-direction: column; gap: 8px; }
+			.cur-row { display: flex; gap: 10px; }
+			.cur-gutter { width: 6px; flex: none; display: flex; justify-content: center; }
+			.cur-gutter span { width: 6px; height: 6px; border-radius: 999px; margin-top: 9px; }
+			.g-prose { background: color-mix(in srgb, var(--muted-foreground) 30%, transparent); }
+			.g-ok { background: var(--success); }
+			.cur-toolname { font-weight: 600; font-size: 13px; }
+			.cur-sum { font-size: 12px; color: var(--muted-foreground); }
+			.cur-out {
+				margin-top: 4px; background: var(--tertiary); border-radius: 6px;
+				padding: 6px 10px; font-size: 11px; line-height: 1.6;
+				color: var(--muted-foreground); max-height: 180px; overflow: hidden;
+				position: relative; white-space: pre-wrap;
+			}
+			.cur-more {
+				position: absolute; inset-inline: 0; bottom: 0; padding: 24px 0 4px;
+				text-align: center; font-size: 11px; font-weight: 500;
+				color: color-mix(in srgb, var(--muted-foreground) 70%, transparent);
+				background: linear-gradient(to top, var(--tertiary), color-mix(in srgb, var(--tertiary) 80%, transparent), transparent);
+			}
+			.cur-user {
+				border: 1px solid var(--border); background: var(--card);
+				border-radius: 8px; padding: 8px 12px; font-size: 13px; margin-top: 4px;
+			}
+
+			/* ---------------- PROPOSED ---------------- */
+			.new-turn { position: relative; padding-left: 18px; }
+			/* one continuous rail, so the eye follows a single thread down the turn */
+			.new-turn::before {
+				content: ""; position: absolute; left: 3px; top: 12px; bottom: 6px;
+				width: 1px; background: color-mix(in srgb, var(--border) 90%, transparent);
+			}
+			.new-stack { display: flex; flex-direction: column; gap: 6px; }
+			.new-row { position: relative; }
+			.new-row::before {
+				content: ""; position: absolute; left: -18px; top: 8px;
+				width: 7px; height: 7px; border-radius: 999px;
+				background: var(--background);
+				box-shadow: 0 0 0 1px color-mix(in srgb, var(--muted-foreground) 45%, transparent) inset;
+			}
+			.new-row.ok::before { background: var(--success); box-shadow: none; }
+			.new-row.run::before { background: var(--warning); box-shadow: none; }
+			.new-text { font-size: 13px; line-height: 1.65; }
+
+			.tool {
+				border: 1px solid var(--border); border-radius: 8px;
+				background: var(--card); overflow: hidden;
+			}
+			.tool-head {
+				display: flex; align-items: center; gap: 8px;
+				padding: 6px 10px; font-size: 12px;
+			}
+			.tool-name { font-weight: 600; }
+			.tool-arg {
+				font-family: ui-monospace, Consolas, monospace; font-size: 11px;
+				color: var(--muted-foreground); overflow: hidden;
+				text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+			}
+			.tool-out {
+				border-top: 1px solid var(--border);
+				background: var(--tertiary);
+				padding: 6px 10px; font-size: 11px; line-height: 1.6;
+				color: var(--muted-foreground); white-space: pre-wrap;
+				max-height: 132px; overflow: hidden; position: relative;
+			}
+			.tool-fade {
+				position: absolute; inset-inline: 0; bottom: 0; height: 40px;
+				background: linear-gradient(to top, var(--tertiary), transparent);
+				pointer-events: none;
+			}
+			.tool-more {
+				display: flex; align-items: center; justify-content: space-between;
+				padding: 4px 10px; font-size: 11px;
+				border-top: 1px solid var(--border);
+				color: color-mix(in srgb, var(--muted-foreground) 85%, transparent);
+			}
+			.tool-more b { font-weight: 500; color: var(--foreground); }
+
+			.think {
+				display: inline-flex; align-items: center; gap: 5px;
+				font-size: 11.5px; color: color-mix(in srgb, var(--muted-foreground) 75%, transparent);
+			}
+			.new-user {
+				border-left: 2px solid color-mix(in srgb, var(--foreground) 45%, transparent);
+				background: color-mix(in srgb, var(--card) 60%, transparent);
+				border-radius: 0 6px 6px 0;
+				padding: 7px 12px; font-size: 13px; line-height: 1.55;
+			}
+			.turn-gap { height: 22px; }
+			.chev { font-size: 9px; opacity: .8; }
+			.note {
+				margin-top: 10px; font-size: 11px; line-height: 1.6;
+				color: var(--muted-foreground);
+			}
+			.note b { color: var(--foreground); font-weight: 600; }
+		</style>
+	</head>
+	<body>
+		<div class="head">
+			<h1>Session pane — timeline density pass</h1>
+			<p>Same content, same theme tokens. Left is what ships today; right is the proposal.</p>
+		</div>
+
+		<div class="cols">
+			<!-- ============ CURRENT ============ -->
+			<div class="col">
+				<h2>Current</h2>
+				<div class="pane">
+					<div class="pane-head">
+						<span class="dot-ok"></span>
+						<span style="font-weight:500">superset</span>
+						<span class="dim">· opus-5</span>
+						<span class="spacer"></span>
+						<span class="dimmer">BypassPermissions</span>
+						<span class="dimmer">· 1 MCP</span>
+					</div>
+					<div class="body">
+						<div class="cur-stack">
+							<div class="cur-row">
+								<div class="cur-gutter"><span class="g-ok"></span></div>
+								<div style="min-width:0;flex:1">
+									<div style="display:flex;gap:8px;align-items:center">
+										<span class="cur-toolname">Grep</span>
+										<span class="cur-sum">sessionIds</span>
+									</div>
+									<div class="cur-out">apps/desktop/src/main/lib/claude-session/transcript.ts:6: * `&lt;configDir&gt;/projects/&lt;encoded-cwd&gt;/&lt;sessionId&gt;.jsonl`.
+   Its `assistant` and
+apps/desktop/src/main/lib/claude-session/transcript.ts:29:/** Locate `&lt;sessionId&gt;.jsonl` across every account
+   profile's projects tree. */
+apps/desktop/src/main/lib/claude-session/transcript.ts:30:function findTranscript(sessionId: string): string | null {
+apps/desktop/src/main/lib/claude-session/transcript.ts:31:  const file = `${sessionId}.jsonl`;
+apps/desktop/src/main/lib/claude-session/transcript.ts:91: * when the transcript can't be found or read — a resumed
+   session still works,<div class="cur-more">Show more</div></div>
+								</div>
+							</div>
+
+							<div class="cur-row">
+								<div class="cur-gutter"><span class="g-prose"></span></div>
+								<div style="min-width:0;flex:1">
+									<span class="dimmer" style="font-size:12px">› Thinking</span>
+								</div>
+							</div>
+
+							<div class="cur-row">
+								<div class="cur-gutter"><span class="g-prose"></span></div>
+								<div style="min-width:0;flex:1;font-size:13px;line-height:1.65">
+									I picked the newest commit on <code style="font-size:11.5px">windows-port</code>
+									because its message makes a strong safety claim. That guard has a hole.
+									Two of them, actually, and either one alone is enough.
+								</div>
+							</div>
+
+							<div class="cur-row">
+								<div class="cur-gutter"></div>
+								<div style="min-width:0;flex:1">
+									<div class="cur-user">check the sessions list after opening one</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+				<p class="note">
+					The output block floats free of the tool that produced it, the dots don't
+					connect to anything, and every row sits at the same distance from its
+					neighbour — so a turn boundary reads the same as a line break.
+				</p>
+			</div>
+
+			<!-- ============ PROPOSED ============ -->
+			<div class="col">
+				<h2>Proposed</h2>
+				<div class="pane">
+					<div class="pane-head">
+						<span class="dot-ok"></span>
+						<span style="font-weight:500">superset</span>
+						<span class="dim">· opus-5</span>
+						<span class="spacer"></span>
+						<span class="dimmer">BypassPermissions</span>
+						<span class="dimmer">· 1 MCP</span>
+					</div>
+					<div class="body">
+						<div class="new-turn">
+							<div class="new-stack">
+								<div class="new-row ok">
+									<div class="tool">
+										<div class="tool-head">
+											<span class="tool-name">Grep</span>
+											<span class="tool-arg">sessionIds</span>
+										</div>
+										<div class="tool-out">apps/desktop/src/main/lib/claude-session/transcript.ts:6: * `&lt;configDir&gt;/projects/&lt;encoded-cwd&gt;/&lt;sessionId&gt;.jsonl`.
+apps/desktop/src/main/lib/claude-session/transcript.ts:29:/** Locate `&lt;sessionId&gt;.jsonl` across every account profile's tree. */
+apps/desktop/src/main/lib/claude-session/transcript.ts:30:function findTranscript(sessionId: string): string | null {
+apps/desktop/src/main/lib/claude-session/transcript.ts:31:  const file = `${sessionId}.jsonl`;<div class="tool-fade"></div></div>
+										<div class="tool-more"><span>Show more</span><span>42 lines</span></div>
+									</div>
+								</div>
+
+								<div class="new-row">
+									<span class="think"><span class="chev">▶</span> Thought for 4s</span>
+								</div>
+
+								<div class="new-row">
+									<div class="new-text">
+										I picked the newest commit on <code style="font-size:11.5px">windows-port</code>
+										because its message makes a strong safety claim. That guard has a hole.
+										Two of them, actually, and either one alone is enough.
+									</div>
+								</div>
+							</div>
+						</div>
+
+						<div class="turn-gap"></div>
+
+						<div class="new-user">check the sessions list after opening one</div>
+					</div>
+				</div>
+				<p class="note">
+					<b>Tool output belongs to its tool</b> — one bordered card, header and
+					result inside the same box. <b>The rail connects the turn</b> instead of
+					leaving dots floating. <b>Show more says how much more</b> (42 lines), so
+					you know what you're opening. <b>Turns separate</b>: tight inside a turn,
+					a real gap before the next prompt, and the user message anchors on a bar
+					rather than a full card competing with the tool cards.
+				</p>
+			</div>
+		</div>
+	</body>
+</html>

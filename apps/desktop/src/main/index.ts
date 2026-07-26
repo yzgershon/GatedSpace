@@ -28,6 +28,7 @@ import { initAppState } from "./lib/app-state";
 import { requestAppleEventsAccess } from "./lib/apple-events-permission";
 import { isUpdateReadyToInstall, setupAutoUpdater } from "./lib/auto-updater";
 import { installBundledCliShim } from "./lib/bundled-cli";
+import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
 import { resolveDevWorkspaceName } from "./lib/dev-workspace-name";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
@@ -415,6 +416,14 @@ if (!gotTheLock) {
 			installBundledCliShim();
 		} catch (error) {
 			console.error("[main] Failed to install bundled CLI shim:", error);
+		}
+		try {
+			// Keeps every Claude account's usage numbers current while the app is
+			// open. Without it a snapshot only changes when that account happens to
+			// take a turn, so an idle account's bar outlives the window it measured.
+			startUsageRefreshTicker();
+		} catch (error) {
+			console.error("[main] Failed to start the usage refresh ticker:", error);
 		}
 
 		if (IS_DEV) {

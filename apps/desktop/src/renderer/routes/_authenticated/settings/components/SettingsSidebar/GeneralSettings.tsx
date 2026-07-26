@@ -65,15 +65,28 @@ interface SectionGroup {
 	items: SectionItem[];
 }
 
+/**
+ * Grouped by the thing being configured, not by who owns it.
+ *
+ * The previous split put Account under "Personal" while Billing and API Keys
+ * sat under "Organization" — three views of the same account, in two places.
+ * "Editor & Workflow" had become the group everything landed in when it didn't
+ * obviously belong elsewhere, which is how Keyboard (an app preference) ended
+ * up next to Git & Worktrees (a coding one).
+ *
+ * Empty groups render nothing, so a local-only install collapses to App,
+ * Coding and System without any of these entries needing a mode flag.
+ */
 const SECTION_GROUPS: SectionGroup[] = [
 	{
-		label: "Personal",
+		// How GatedSpace itself looks and behaves.
+		label: "App",
 		items: [
 			{
-				id: "/settings/account",
-				section: "account",
-				label: "Account",
-				icon: <HiOutlineUser className="size-4" />,
+				id: "/settings/behavior",
+				section: "behavior",
+				label: "General",
+				icon: <HiOutlineSparkles className="size-4" />,
 			},
 			{
 				id: "/settings/appearance",
@@ -87,34 +100,29 @@ const SECTION_GROUPS: SectionGroup[] = [
 				label: "Notifications",
 				icon: <HiOutlineBell className="size-4" />,
 			},
-		],
-	},
-	{
-		label: "Editor & Workflow",
-		items: [
-			{
-				id: "/settings/behavior",
-				section: "behavior",
-				label: "General",
-				icon: <HiOutlineSparkles className="size-4" />,
-			},
 			{
 				id: "/settings/keyboard",
 				section: "keyboard",
 				label: "Keyboard",
 				icon: <LuKeyboard className="size-4" />,
 			},
-			{
-				id: "/settings/git",
-				section: "git",
-				label: "Git & Worktrees",
-				icon: <LuGitBranch className="size-4" />,
-			},
+		],
+	},
+	{
+		// The surfaces you configure to actually do work.
+		label: "Coding",
+		items: [
 			{
 				id: "/settings/agents",
 				section: "agents",
 				label: "Agents",
 				icon: <HiOutlineCpuChip className="size-4" />,
+			},
+			{
+				id: "/settings/models",
+				section: "models",
+				label: "Models",
+				icon: <LuBrain className="size-4" />,
 			},
 			{
 				id: "/settings/terminal",
@@ -123,16 +131,40 @@ const SECTION_GROUPS: SectionGroup[] = [
 				icon: <HiOutlineCommandLine className="size-4" />,
 			},
 			{
+				id: "/settings/git",
+				section: "git",
+				label: "Git & Worktrees",
+				icon: <LuGitBranch className="size-4" />,
+			},
+			{
 				id: "/settings/links",
 				section: "links",
 				label: "Links",
 				icon: <HiOutlineLink className="size-4" />,
 			},
+		],
+	},
+	{
+		// One account, one place.
+		label: "Account",
+		items: [
 			{
-				id: "/settings/models",
-				section: "models",
-				label: "Models",
-				icon: <LuBrain className="size-4" />,
+				id: "/settings/account",
+				section: "account",
+				label: "Account",
+				icon: <HiOutlineUser className="size-4" />,
+			},
+			{
+				id: "/settings/billing",
+				section: "billing",
+				label: "Billing",
+				icon: <HiOutlineCreditCard className="size-4" />,
+			},
+			{
+				id: "/settings/api-keys",
+				section: "apikeys",
+				label: "API Keys",
+				icon: <HiOutlineKey className="size-4" />,
 			},
 		],
 	},
@@ -168,18 +200,6 @@ const SECTION_GROUPS: SectionGroup[] = [
 				section: "integrations",
 				label: "Integrations",
 				icon: <HiOutlinePuzzlePiece className="size-4" />,
-			},
-			{
-				id: "/settings/billing",
-				section: "billing",
-				label: "Billing",
-				icon: <HiOutlineCreditCard className="size-4" />,
-			},
-			{
-				id: "/settings/api-keys",
-				section: "apikeys",
-				label: "API Keys",
-				icon: <HiOutlineKey className="size-4" />,
 			},
 		],
 	},

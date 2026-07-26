@@ -9,6 +9,7 @@ import { createCacheRouter } from "./cache";
 import { createChangesRouter } from "./changes";
 import { createChatRuntimeServiceRouter } from "./chat-runtime-service";
 import { createChatServiceRouter } from "./chat-service";
+import { createClaudeSessionRouter } from "./claude-session";
 import { createClaudeSessionsRouter } from "./claude-sessions";
 import { createConfigRouter } from "./config";
 import { createDeviceRouter } from "./device";
@@ -37,6 +38,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		chatRuntimeService: createChatRuntimeServiceRouter(),
 		chatService: createChatServiceRouter(),
 		claudeSessions: createClaudeSessionsRouter(),
+		claudeSession: createClaudeSessionRouter(),
 		analytics: createAnalyticsRouter(),
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),

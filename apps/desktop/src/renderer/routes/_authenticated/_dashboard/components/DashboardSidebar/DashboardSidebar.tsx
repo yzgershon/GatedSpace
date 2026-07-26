@@ -18,22 +18,24 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
-import { cn } from "@superset/ui/utils";
-import { useMatchRoute, useNavigate } from "@tanstack/react-router";
+import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { HiOutlineCog6Tooth } from "react-icons/hi2";
-import { UpdatesPill } from "renderer/components/UpdatesPill";
-import { useHotkeyDisplay } from "renderer/hotkeys";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
+import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
 import { useInlineWorkspacePortsEnabled } from "renderer/stores/inline-workspace-ports";
+import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
+import { openSessionInWorkspace } from "renderer/stores/workspace-creates/openSessionInWorkspace";
 import { DashboardSidebarHeader } from "./components/DashboardSidebarHeader";
-import { DashboardSidebarHelpMenu } from "./components/DashboardSidebarHelpMenu";
 import { DashboardSidebarHoverCardOverlay } from "./components/DashboardSidebarHoverCardOverlay";
+import {
+	SidebarSessionsPanel,
+	SidebarTestingPanel,
+} from "./components/DashboardSidebarPanels";
 import { DashboardSidebarPortsList } from "./components/DashboardSidebarPortsList";
 import { DashboardSidebarProjectSection } from "./components/DashboardSidebarProjectSection";
+import { DashboardSidebarRail } from "./components/DashboardSidebarRail";
 import { DashboardSidebarSectionRenameProvider } from "./components/DashboardSidebarSectionRenameContext";
 import { V2SetupScriptCard } from "./components/V2SetupScriptCard";
 import { useDashboardSidebarData } from "./hooks/useDashboardSidebarData";
@@ -108,10 +110,44 @@ export function DashboardSidebar({
 	const { reorderProjects } = useDashboardSidebarState();
 	const navigate = useNavigate();
 	const matchRoute = useMatchRoute();
-	const settingsHotkey = useHotkeyDisplay("OPEN_SETTINGS").text;
-	const isSettingsOpen = !!matchRoute({ to: "/settings", fuzzy: true });
 	const { activeHostUrl } = useLocalHostService();
 	const inlineWorkspacePortsEnabled = useInlineWorkspacePortsEnabled();
+	const collections = useCollections();
+	const { workspaceId: activeWorkspaceId } = useParams({ strict: false }) as {
+		workspaceId?: string;
+	};
+
+	/**
+	 * Open a session from the rail into the workspace you're in.
+	 *
+	 * With no workspace focused there's nowhere to put the pane, so this sends
+	 * you to the workspace list rather than guessing which one you meant.
+	 */
+	const openSessionFromSidebar = useCallback(
+		(request: {
+			sessionId: string;
+			cwd: string | null;
+			title: string;
+			mode: "resume" | "fork";
+		}) => {
+			if (
+				activeWorkspaceId &&
+				openSessionInWorkspace(collections, activeWorkspaceId, {
+					sessionId: request.sessionId,
+					cwd: request.cwd,
+					title: request.title,
+					fork: request.mode === "fork",
+				})
+			) {
+				return;
+			}
+			navigate({ to: "/v2-workspaces" });
+		},
+		[activeWorkspaceId, collections, navigate],
+	);
+
+	const activePanel = useSidebarPanelStore((state) => state.activePanel);
+	const panelOpen = useSidebarPanelStore((state) => state.panelOpen);
 	const v2RouteMatch = matchRoute({ to: "/v2-workspace/$workspaceId" });
 	const activeV2WorkspaceId = v2RouteMatch ? v2RouteMatch.workspaceId : null;
 
@@ -186,125 +222,96 @@ export function DashboardSidebar({
 			<DashboardSidebarHoverProvider>
 				<DashboardSidebarPortsProvider enabled={!isCollapsed}>
 					<DashboardSidebarHoverCardOverlay>
-						<div className="flex h-full flex-col border-r border-border bg-muted/45 dark:bg-muted/35">
-							<DashboardSidebarHeader isCollapsed={isCollapsed} />
+						<div className="flex h-full">
+							<DashboardSidebarRail />
+							{panelOpen ? (
+								<div className="flex h-full min-w-0 flex-1 flex-col border-r border-border bg-muted/45 dark:bg-muted/35">
+									<DashboardSidebarHeader
+										isCollapsed={isCollapsed}
+										panel={
+											activePanel === "workspaces" ? "workspaces" : "other"
+										}
+									/>
 
-							<div className="flex-1 overflow-y-auto hide-scrollbar">
-								<DndContext
-									sensors={sensors}
-									collisionDetection={closestCenter}
-									measuring={{
-										droppable: { strategy: MeasuringStrategy.Always },
-									}}
-									onDragStart={({ active }) => {
-										const project = groups.find((p) => p.id === active.id);
-										setActiveProject(project ?? null);
-									}}
-									onDragEnd={handleDragEnd}
-									onDragCancel={() => setActiveProject(null)}
-								>
-									<SortableContext
-										items={projectOrder}
-										strategy={verticalListSortingStrategy}
-									>
-										{orderedGroups.map((project) => (
-											<SortableProjectWrapper
-												key={project.id}
-												project={project}
-												isCollapsed={isCollapsed}
-												isDraggingProject={activeProject != null}
-												workspaceShortcutLabels={workspaceShortcutLabels}
-												onWorkspaceHover={refreshWorkspacePullRequest}
-												onToggleCollapse={toggleProjectCollapsed}
-											/>
-										))}
-									</SortableContext>
+									{activePanel === "testing" ? (
+										<SidebarTestingPanel />
+									) : activePanel === "sessions" ? (
+										<SidebarSessionsPanel
+											onOpenSession={openSessionFromSidebar}
+											onNewSession={() => navigate({ to: "/v2-workspaces" })}
+										/>
+									) : (
+										<>
+											<div className="flex-1 overflow-y-auto hide-scrollbar">
+												<DndContext
+													sensors={sensors}
+													collisionDetection={closestCenter}
+													measuring={{
+														droppable: { strategy: MeasuringStrategy.Always },
+													}}
+													onDragStart={({ active }) => {
+														const project = groups.find(
+															(p) => p.id === active.id,
+														);
+														setActiveProject(project ?? null);
+													}}
+													onDragEnd={handleDragEnd}
+													onDragCancel={() => setActiveProject(null)}
+												>
+													<SortableContext
+														items={projectOrder}
+														strategy={verticalListSortingStrategy}
+													>
+														{orderedGroups.map((project) => (
+															<SortableProjectWrapper
+																key={project.id}
+																project={project}
+																isCollapsed={isCollapsed}
+																isDraggingProject={activeProject != null}
+																workspaceShortcutLabels={
+																	workspaceShortcutLabels
+																}
+																onWorkspaceHover={refreshWorkspacePullRequest}
+																onToggleCollapse={toggleProjectCollapsed}
+															/>
+														))}
+													</SortableContext>
 
-									{createPortal(
-										<DragOverlay dropAnimation={null}>
-											{activeProject && (
-												<div className="bg-background shadow-lg border-b border-border">
-													<DashboardSidebarProjectSection
-														project={activeProject}
-														isSidebarCollapsed={isCollapsed}
-														isDraggingProject
-														workspaceShortcutLabels={workspaceShortcutLabels}
-														onWorkspaceHover={() => {}}
-														onToggleCollapse={() => {}}
-													/>
-												</div>
+													{createPortal(
+														<DragOverlay dropAnimation={null}>
+															{activeProject && (
+																<div className="bg-background shadow-lg border-b border-border">
+																	<DashboardSidebarProjectSection
+																		project={activeProject}
+																		isSidebarCollapsed={isCollapsed}
+																		isDraggingProject
+																		workspaceShortcutLabels={
+																			workspaceShortcutLabels
+																		}
+																		onWorkspaceHover={() => {}}
+																		onToggleCollapse={() => {}}
+																	/>
+																</div>
+															)}
+														</DragOverlay>,
+														document.body,
+													)}
+												</DndContext>
+											</div>
+											{!isCollapsed && !inlineWorkspacePortsEnabled && (
+												<DashboardSidebarPortsList />
 											)}
-										</DragOverlay>,
-										document.body,
+											{!isCollapsed && activeV2Project && activeHostUrl && (
+												<V2SetupScriptCard
+													hostUrl={activeHostUrl}
+													projectId={activeV2Project.id}
+													projectName={activeV2Project.name}
+												/>
+											)}
+										</>
 									)}
-								</DndContext>
-							</div>
-							{!isCollapsed && !inlineWorkspacePortsEnabled && (
-								<DashboardSidebarPortsList />
-							)}
-							{!isCollapsed && activeV2Project && activeHostUrl && (
-								<V2SetupScriptCard
-									hostUrl={activeHostUrl}
-									projectId={activeV2Project.id}
-									projectName={activeV2Project.name}
-								/>
-							)}
-							<div
-								className={cn(
-									"border-t border-border",
-									isCollapsed
-										? "flex flex-col items-center gap-1 py-1"
-										: "flex items-center gap-1 px-2 py-1",
-								)}
-							>
-								{isCollapsed ? (
-									<Tooltip delayDuration={300}>
-										<TooltipTrigger asChild>
-											<button
-												type="button"
-												aria-label="Settings"
-												onClick={() => navigate({ to: "/settings/account" })}
-												className={cn(
-													"flex size-8 items-center justify-center rounded-md transition-colors",
-													isSettingsOpen
-														? "bg-accent text-foreground"
-														: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-												)}
-											>
-												<HiOutlineCog6Tooth className="size-4" />
-											</button>
-										</TooltipTrigger>
-										<TooltipContent side="right">Settings</TooltipContent>
-									</Tooltip>
-								) : (
-									<button
-										type="button"
-										onClick={() => navigate({ to: "/settings/account" })}
-										className={cn(
-											"group flex flex-1 min-w-0 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-											isSettingsOpen
-												? "bg-accent text-foreground"
-												: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-										)}
-									>
-										<HiOutlineCog6Tooth className="size-4 shrink-0" />
-										<span className="flex-1 text-left">Settings</span>
-										{settingsHotkey !== "Unassigned" && (
-											<span
-												className={cn(
-													"shrink-0 text-[10px] font-mono tabular-nums text-muted-foreground/60",
-													"opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
-												)}
-											>
-												{settingsHotkey}
-											</span>
-										)}
-									</button>
-								)}
-
-								<UpdatesPill isCollapsed={isCollapsed} />
-								<DashboardSidebarHelpMenu isCollapsed={isCollapsed} />
-							</div>
+								</div>
+							) : null}
 						</div>
 					</DashboardSidebarHoverCardOverlay>
 				</DashboardSidebarPortsProvider>

@@ -79,14 +79,27 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 		refetchInterval: 10_000,
 		refetchOnWindowFocus: true,
 	});
+	// Sessions running in a session pane never appear in the host's terminal
+	// bindings — they're spawned in the desktop process — so they're tracked
+	// separately and unioned in below. Without this, a session already open in
+	// a pane would look plain-resumable and a second writer would destroy it.
+	const livePaneSessions = useQuery({
+		queryKey: ["claude-live-pane-sessions"],
+		queryFn: () => electronTrpcClient.claudeSession.liveSessionIds.query(),
+		refetchInterval: 10_000,
+		refetchOnWindowFocus: true,
+	});
 	const liveSessionKeys = useMemo(() => {
 		const keys = new Set<string>();
 		for (const binding of liveBindings.data ?? []) {
 			if (!binding.agentSessionId) continue;
 			keys.add(`${binding.agentId}:${binding.agentSessionId}`);
 		}
+		for (const sessionId of livePaneSessions.data ?? []) {
+			keys.add(`claude:${sessionId}`);
+		}
 		return keys;
-	}, [liveBindings.data]);
+	}, [liveBindings.data, livePaneSessions.data]);
 
 	const filtered = useMemo(() => {
 		const sessions = data ?? [];

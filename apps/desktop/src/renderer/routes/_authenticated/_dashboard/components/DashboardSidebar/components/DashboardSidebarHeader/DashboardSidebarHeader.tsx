@@ -7,47 +7,50 @@ import {
 import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import { useMatchRoute, useNavigate } from "@tanstack/react-router";
+import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useState } from "react";
-import { HiMiniPlus, HiOutlineClipboardDocumentList } from "react-icons/hi2";
+import { HiMiniPlus } from "react-icons/hi2";
 import {
-	LuClock,
 	LuFolderInput,
 	LuFolderPlus,
 	LuGauge,
+	LuHistory,
 	LuLayers,
 	LuLayoutTemplate,
 	LuPlus,
 } from "react-icons/lu";
-import { GATED_FEATURES, usePaywall } from "renderer/components/Paywall";
 import { ZoomStable } from "renderer/components/ZoomStable";
 import { useZoomFactor } from "renderer/hooks/useZoomFactor";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import { isLocalMode } from "renderer/lib/local-mode";
 import { useFolderFirstImport } from "renderer/routes/_authenticated/_dashboard/components/AddRepositoryModals/hooks/useFolderFirstImport";
 import { NavigationControls } from "renderer/routes/_authenticated/_dashboard/components/NavigationControls";
 import { SidebarToggle } from "renderer/routes/_authenticated/_dashboard/components/SidebarToggle";
 import { OrganizationDropdown } from "renderer/routes/_authenticated/_dashboard/components/TopBar/components/OrganizationDropdown";
 import { ResourceConsumption } from "renderer/routes/_authenticated/_dashboard/components/TopBar/components/ResourceConsumption";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
-import {
-	tasksSearchFromFilters,
-	useTasksFilterStore,
-} from "renderer/routes/_authenticated/_dashboard/tasks/stores/tasks-filter-state";
+import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { STROKE_WIDTH_THICK } from "renderer/screens/main/components/WorkspaceSidebar/constants";
 import {
 	useOpenNewProjectModal,
 	useOpenTemplateGalleryModal,
 } from "renderer/stores/add-repository-modal";
 import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
+import { openSessionsPaneInWorkspace } from "renderer/stores/workspace-creates/openSessionsPaneInWorkspace";
 
 interface DashboardSidebarHeaderProps {
+	/**
+	 * The nav rows moved to the icon rail, so the header is normally just the
+	 * account row. "workspaces" additionally shows New Workspace, which belongs
+	 * to that panel rather than to the chrome.
+	 */
+	panel?: "workspaces" | "other";
 	isCollapsed?: boolean;
 }
 
 export function DashboardSidebarHeader({
 	isCollapsed = false,
+	panel = "workspaces",
 }: DashboardSidebarHeaderProps) {
 	const openModal = useOpenNewWorkspaceModal();
 	const openNewProject = useOpenNewProjectModal();
@@ -81,47 +84,35 @@ export function DashboardSidebarHeader({
 	const isMac = platform === undefined || platform === "darwin";
 	const zoomFactor = useZoomFactor();
 	const matchRoute = useMatchRoute();
-	const { gateFeature } = usePaywall();
 	const isWorkspacesListOpen = !!matchRoute({ to: "/v2-workspaces" });
-	const isTasksOpen = !!matchRoute({ to: "/tasks", fuzzy: true });
-	const isAutomationsOpen = !!matchRoute({ to: "/automations", fuzzy: true });
 	const [isUsageOpen, setIsUsageOpen] = useState(false);
-
-	const {
-		tab: lastTab,
-		assignee: lastAssignee,
-		search: lastSearch,
-		typeTab: lastTypeTab,
-		projectFilter: lastProjectFilter,
-		linearProjectFilter: lastLinearProjectFilter,
-	} = useTasksFilterStore();
+	const collections = useCollections();
+	// Only set while a workspace route is mounted; the rail also renders above
+	// the workspace list, where there's nothing to open a pane in.
+	const { workspaceId: activeWorkspaceId } = useParams({ strict: false }) as {
+		workspaceId?: string;
+	};
 
 	const handleWorkspacesClick = () => {
 		navigate({ to: "/v2-workspaces" });
-	};
-
-	const handleAutomationsClick = () => {
-		navigate({ to: "/automations" });
 	};
 
 	const handleUsageClick = () => {
 		setIsUsageOpen(true);
 	};
 
-	const handleTasksClick = () => {
-		gateFeature(GATED_FEATURES.TASKS, () => {
-			navigate({
-				to: "/tasks",
-				search: tasksSearchFromFilters({
-					tab: lastTab,
-					assignee: lastAssignee,
-					search: lastSearch,
-					typeTab: lastTypeTab,
-					projectFilter: lastProjectFilter,
-					linearProjectFilter: lastLinearProjectFilter,
-				}),
-			});
-		});
+	// Recent sessions opens INSIDE the workspace rather than as a rail dialog:
+	// the list decides whether a session can be plain-resumed by checking the
+	// host's terminal bindings, which only exist in workspace context. A
+	// standalone panel here would lose that and could offer a resume for a
+	// session a terminal is holding — two writers, destroyed transcript.
+	const handleSessionsClick = () => {
+		if (!activeWorkspaceId) {
+			navigate({ to: "/v2-workspaces" });
+			return;
+		}
+		if (openSessionsPaneInWorkspace(collections, activeWorkspaceId)) return;
+		navigate({ to: "/v2-workspaces" });
 	};
 
 	if (isCollapsed) {
@@ -148,45 +139,18 @@ export function DashboardSidebarHeader({
 					<TooltipContent side="right">Workspaces</TooltipContent>
 				</Tooltip>
 
-				{!isLocalMode() && (
-					<Tooltip delayDuration={300}>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								onClick={handleAutomationsClick}
-								className={cn(
-									"flex size-8 items-center justify-center rounded-md transition-colors",
-									isAutomationsOpen
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-								)}
-							>
-								<LuClock className="size-4" />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="right">Automations</TooltipContent>
-					</Tooltip>
-				)}
-
-				{!isLocalMode() && (
-					<Tooltip delayDuration={300}>
-						<TooltipTrigger asChild>
-							<button
-								type="button"
-								onClick={handleTasksClick}
-								className={cn(
-									"flex size-8 items-center justify-center rounded-md transition-colors",
-									isTasksOpen
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-								)}
-							>
-								<HiOutlineClipboardDocumentList className="size-4" />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent side="right">Tasks & PRs</TooltipContent>
-					</Tooltip>
-				)}
+				<Tooltip delayDuration={300}>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							onClick={handleSessionsClick}
+							className="flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+						>
+							<LuHistory className="size-4" />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="right">Recent sessions</TooltipContent>
+				</Tooltip>
 
 				<Tooltip delayDuration={300}>
 					<TooltipTrigger asChild>
@@ -295,122 +259,64 @@ export function DashboardSidebarHeader({
 			</div>
 			<OrganizationDropdown variant="expanded" />
 
-			<button
-				type="button"
-				onClick={handleWorkspacesClick}
-				className={cn(
-					"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-					isWorkspacesListOpen
-						? "bg-accent text-foreground"
-						: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-				)}
-			>
-				<LuLayers className="size-4 shrink-0" />
-				<span className="flex-1 text-left">Workspaces</span>
-			</button>
-
-			{!isLocalMode() && (
-				<button
-					type="button"
-					onClick={handleAutomationsClick}
-					className={cn(
-						"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-						isAutomationsOpen
-							? "bg-accent text-foreground"
-							: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-					)}
-				>
-					<LuClock className="size-4 shrink-0" />
-					<span className="flex-1 text-left">Automations</span>
-				</button>
-			)}
-
-			{!isLocalMode() && (
-				<button
-					type="button"
-					onClick={handleTasksClick}
-					className={cn(
-						"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-						isTasksOpen
-							? "bg-accent text-foreground"
-							: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-					)}
-				>
-					<HiOutlineClipboardDocumentList className="size-4 shrink-0" />
-					<span className="flex-1 text-left">Tasks & PRs</span>
-				</button>
-			)}
-
-			<button
-				type="button"
-				onClick={handleUsageClick}
-				className={cn(
-					"flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium transition-colors",
-					isUsageOpen
-						? "bg-accent text-foreground"
-						: "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-				)}
-			>
-				<LuGauge className="size-4 shrink-0" />
-				<span className="flex-1 text-left">Usage</span>
-			</button>
-
-			<div className="flex items-center gap-0">
-				<button
-					type="button"
-					onClick={() => openModal()}
-					className="group flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-				>
-					<LuPlus
-						className="size-4 shrink-0"
-						strokeWidth={STROKE_WIDTH_THICK}
-					/>
-					<span className="flex-1 truncate text-left whitespace-nowrap">
-						New Workspace
-					</span>
-					<span
-						className={cn(
-							"shrink-0 text-[10px] font-mono tabular-nums text-muted-foreground/60",
-							"opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
-						)}
+			{panel === "workspaces" ? (
+				<div className="flex items-center gap-0">
+					<button
+						type="button"
+						onClick={() => openModal()}
+						className="group flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
 					>
-						{shortcutText}
-					</span>
-				</button>
-				<DropdownMenu>
-					<Tooltip delayDuration={300}>
-						<TooltipTrigger asChild>
-							<DropdownMenuTrigger asChild>
-								<button
-									type="button"
-									aria-label="Add repository"
-									className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-								>
-									<LuFolderPlus className="size-4" />
-								</button>
-							</DropdownMenuTrigger>
-						</TooltipTrigger>
-						<TooltipContent side="right">Add repository</TooltipContent>
-					</Tooltip>
-					<DropdownMenuContent
-						align="end"
-						onCloseAutoFocus={(event) => event.preventDefault()}
-					>
-						<DropdownMenuItem onSelect={() => openNewProject()}>
-							<HiMiniPlus className="size-4" />
-							Clone from URL
-						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={handleImportFolder}>
-							<LuFolderInput className="size-4" />
-							Open from folder
-						</DropdownMenuItem>
-						<DropdownMenuItem onSelect={() => openTemplateGallery()}>
-							<LuLayoutTemplate className="size-4" />
-							Start from a template
-						</DropdownMenuItem>
-					</DropdownMenuContent>
-				</DropdownMenu>
-			</div>
+						<LuPlus
+							className="size-4 shrink-0"
+							strokeWidth={STROKE_WIDTH_THICK}
+						/>
+						<span className="flex-1 truncate text-left whitespace-nowrap">
+							New Workspace
+						</span>
+						<span
+							className={cn(
+								"shrink-0 text-[10px] font-mono tabular-nums text-muted-foreground/60",
+								"opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
+							)}
+						>
+							{shortcutText}
+						</span>
+					</button>
+					<DropdownMenu>
+						<Tooltip delayDuration={300}>
+							<TooltipTrigger asChild>
+								<DropdownMenuTrigger asChild>
+									<button
+										type="button"
+										aria-label="Add repository"
+										className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+									>
+										<LuFolderPlus className="size-4" />
+									</button>
+								</DropdownMenuTrigger>
+							</TooltipTrigger>
+							<TooltipContent side="right">Add repository</TooltipContent>
+						</Tooltip>
+						<DropdownMenuContent
+							align="end"
+							onCloseAutoFocus={(event) => event.preventDefault()}
+						>
+							<DropdownMenuItem onSelect={() => openNewProject()}>
+								<HiMiniPlus className="size-4" />
+								Clone from URL
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={handleImportFolder}>
+								<LuFolderInput className="size-4" />
+								Open from folder
+							</DropdownMenuItem>
+							<DropdownMenuItem onSelect={() => openTemplateGallery()}>
+								<LuLayoutTemplate className="size-4" />
+								Start from a template
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				</div>
+			) : null}
 		</div>
 	);
 }

@@ -29,14 +29,21 @@ import {
 	HiCheck,
 	HiChevronUpDown,
 	HiOutlineArrowRightOnRectangle,
+	HiOutlineClipboardDocumentList,
 	HiOutlineCog6Tooth,
 	HiOutlinePlus,
 } from "react-icons/hi2";
+import { LuClock } from "react-icons/lu";
 import { HotkeyMenuShortcut } from "renderer/components/HotkeyMenuShortcut";
+import { GATED_FEATURES, usePaywall } from "renderer/components/Paywall";
 import { useCurrentPlan } from "renderer/hooks/useCurrentPlan";
 import { useSignOut } from "renderer/hooks/useSignOut";
 import { authClient } from "renderer/lib/auth-client";
 import { isLocalMode, setAuthMode } from "renderer/lib/local-mode";
+import {
+	tasksSearchFromFilters,
+	useTasksFilterStore,
+} from "renderer/routes/_authenticated/_dashboard/tasks/stores/tasks-filter-state";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import {
 	AddClaudeAccountDialog,
@@ -82,6 +89,34 @@ export function OrganizationDropdown({
 	const displayName = localMode
 		? "Local"
 		: (activeOrganization?.name ?? userName ?? "Organization");
+
+	// Tasks reopens where you left it, and is paywalled — same behaviour the
+	// sidebar rail had before this moved here.
+	const { gateFeature } = usePaywall();
+	const {
+		tab: lastTab,
+		assignee: lastAssignee,
+		search: lastSearch,
+		typeTab: lastTypeTab,
+		projectFilter: lastProjectFilter,
+		linearProjectFilter: lastLinearProjectFilter,
+	} = useTasksFilterStore();
+
+	const handleTasksClick = () => {
+		gateFeature(GATED_FEATURES.TASKS, () => {
+			navigate({
+				to: "/tasks",
+				search: tasksSearchFromFilters({
+					tab: lastTab,
+					assignee: lastAssignee,
+					search: lastSearch,
+					typeTab: lastTypeTab,
+					projectFilter: lastProjectFilter,
+					linearProjectFilter: lastLinearProjectFilter,
+				}),
+			});
+		});
+	};
 
 	const { plan: currentPlan } = useCurrentPlan();
 	const isPaid = currentPlan !== "free";
@@ -162,6 +197,24 @@ export function OrganizationDropdown({
 						: "w-56"
 				}
 			>
+				{/* Automations and Tasks & PRs live here rather than in the sidebar
+				    rail: the rail is for surfaces you move between constantly
+				    (workspaces, sessions, usage), and these two were taking permanent
+				    space for occasional visits. */}
+				{!localMode && (
+					<>
+						<DropdownMenuItem onSelect={() => navigate({ to: "/automations" })}>
+							<LuClock className="size-4" />
+							<span>Automations</span>
+						</DropdownMenuItem>
+						<DropdownMenuItem onSelect={handleTasksClick}>
+							<HiOutlineClipboardDocumentList className="size-4" />
+							<span>Tasks &amp; PRs</span>
+						</DropdownMenuItem>
+						<DropdownMenuSeparator />
+					</>
+				)}
+
 				{/* Organization */}
 				{/* TODO(v1): Settings lives in the sidebar footer in v2; kept here for v1. Remove once v1 is gone. */}
 				<DropdownMenuItem

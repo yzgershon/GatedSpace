@@ -6,7 +6,7 @@ import {
 	DialogTitle,
 } from "@superset/ui/dialog";
 import { cn } from "@superset/ui/utils";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { LuRefreshCw } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 
@@ -18,7 +18,10 @@ interface UsageDialogProps {
 interface QuotaWindow {
 	usedPercent: number;
 	windowMinutes: number;
-	resetsAt: number;
+	/** Null when the reset moment isn't known — see fmtResetIn. */
+	resetsAt: number | null;
+	/** The CLI's own phrase, shown when there's no timestamp to count down. */
+	resetsLabel?: string | null;
 }
 interface ProviderQuota {
 	provider: string;
@@ -80,7 +83,15 @@ function fmtUsd(n: number): string {
 	return `$${n.toFixed(2)}`;
 }
 
-function fmtResetIn(resetsAt: number): string {
+/**
+ * A countdown, or the CLI's phrase, or nothing — never a fake.
+ *
+ * `0` used to mean "no timestamp", and 0 seconds since the epoch counts down to
+ * "resets now" — so an unknown reset rendered as an imminent one, next to a
+ * percentage that could be hours stale. Unknown is now null and says so.
+ */
+function fmtResetIn(resetsAt: number | null, label?: string | null): string {
+	if (!resetsAt) return label ? `resets ${label}` : "";
 	const s = resetsAt - Math.floor(Date.now() / 1000);
 	if (s <= 0) return "resets now";
 	const d = Math.floor(s / 86400);
@@ -138,7 +149,7 @@ function LimitMeter({
 				/>
 			</div>
 			<div className="text-right text-[10px] text-muted-foreground/70">
-				{fmtResetIn(win.resetsAt)}
+				{fmtResetIn(win.resetsAt, win.resetsLabel)}
 			</div>
 		</div>
 	);
@@ -399,10 +410,9 @@ function ContributionGraph({
 
 export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 	const utils = electronTrpc.useUtils();
-	// Always enabled with a 30-minute auto-refresh: the popup opens with data
-	// at most 30 minutes old and keeps itself current while it stays open.
-	// Still local-file reads only — quota snapshots update when a Claude
-	// statusline renders / a Codex session writes, never by polling any API.
+	// Local-file reads only — this query never asks anyone anything, it just
+	// re-reads what's on disk. Which was the problem: re-reading a file nothing
+	// rewrites shows the same stale number however often you do it.
 	const { data, isLoading, isFetching } = electronTrpc.usage.getStats.useQuery(
 		undefined,
 		{
@@ -411,6 +421,38 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 			refetchIntervalInBackground: true,
 		},
 	);
+
+	/**
+	 * Ask every account's CLI for its real numbers, then re-read.
+	 *
+	 * Main runs this on its own ten-minute ticker so the figures stay current
+	 * whether or not this dialog is open. Doing it again on open, and every ten
+	 * minutes while open, is what makes the panel you're actually looking at the
+	 * freshest thing rather than up to ten minutes behind.
+	 *
+	 * `force` skips the per-profile throttle: a user who opens this panel is
+	 * asking about now, not about a minute ago.
+	 */
+	const refreshLimits = electronTrpc.usage.refreshLimits.useMutation({
+		onSettled: () => {
+			// force: the stats themselves cache for a minute, and a refresh that
+			// then shows the pre-refresh numbers is indistinguishable from a
+			// refresh that did nothing.
+			utils.usage.getStats.invalidate();
+			void utils.usage.getStats.refetch();
+		},
+	});
+
+	const askEveryAccount = refreshLimits.mutate;
+	useEffect(() => {
+		if (!open) return;
+		askEveryAccount({ all: true, force: true });
+		const timer = setInterval(
+			() => askEveryAccount({ all: true, force: true }),
+			10 * 60 * 1000,
+		);
+		return () => clearInterval(timer);
+	}, [open, askEveryAccount]);
 
 	const { data: profile } = electronTrpc.usage.getClaudeProfile.useQuery(
 		undefined,
@@ -446,11 +488,17 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 						<button
 							type="button"
 							aria-label="Refresh usage"
-							onClick={() => utils.usage.getStats.invalidate()}
+							// Re-ask the accounts, don't just re-read the file. Invalidating
+							// alone re-renders the same stale snapshot, which is why this
+							// button looked like it did nothing.
+							onClick={() => refreshLimits.mutate({ all: true, force: true })}
 							className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
 						>
 							<LuRefreshCw
-								className={cn("size-3.5", isFetching && "animate-spin")}
+								className={cn(
+									"size-3.5",
+									(isFetching || refreshLimits.isPending) && "animate-spin",
+								)}
 							/>
 						</button>
 					</div>

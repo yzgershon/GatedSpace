@@ -128,6 +128,29 @@ function readSlice(filePath: string, size: number, fromEnd: boolean): string[] {
 	return buffer.toString("utf8").split("\n").filter(Boolean);
 }
 
+/**
+ * CLI bookkeeping that lands in a transcript as a "user" message but isn't
+ * anything the user typed.
+ *
+ * A local slash command records its caveat and its stdout this way, so a
+ * transcript whose only user entries are these represents no conversation at
+ * all — which is exactly what a one-shot `/usage` probe leaves behind.
+ */
+const BOOKKEEPING_PREFIXES = [
+	"<local-command-caveat>",
+	"<local-command-stdout>",
+	"<command-name>",
+	"<command-message>",
+	"<command-args>",
+	"<system-reminder>",
+];
+
+export function isBookkeepingText(text: string): boolean {
+	const trimmed = text.trim();
+	if (!trimmed) return true;
+	return BOOKKEEPING_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
 function firstUserText(head: string[]): string | null {
 	for (const line of head) {
 		let obj: Record<string, unknown>;
@@ -137,9 +160,15 @@ function firstUserText(head: string[]): string | null {
 			continue;
 		}
 		if (obj.type !== "user") continue;
+		// The CLI's own bookkeeping entries are marked; skip them before reading
+		// any text, or a session gets titled with its first slash command.
+		if (obj.isMeta || obj.isVisibleInTranscriptOnly || obj.isCompactSummary) {
+			continue;
+		}
 		const message = obj.message as { content?: unknown } | undefined;
 		const content = message?.content;
 		if (typeof content === "string" && content.trim()) {
+			if (isBookkeepingText(content)) continue;
 			return content.trim();
 		}
 		if (Array.isArray(content)) {
@@ -151,7 +180,7 @@ function firstUserText(head: string[]): string | null {
 					typeof (part as { text?: string }).text === "string"
 				) {
 					const text = (part as { text: string }).text.trim();
-					if (text) return text;
+					if (text && !isBookkeepingText(text)) return text;
 				}
 			}
 		}
@@ -251,14 +280,30 @@ function fallbackSummary(file: RawFile): ClaudeSessionSummary {
  * never throw: a rejected query renders as a bare error with no history at all.
  * Any per-file or top-level failure degrades to a partial (or empty) list.
  */
+/**
+ * A transcript with no conversation in it.
+ *
+ * Local slash commands run through a one-shot process each leave a transcript
+ * behind — GatedSpace's own `/usage` refresh does this once a minute per
+ * account — and they'd otherwise flood the list with entries titled after the
+ * command's caveat text. Nothing in them can be resumed, so they don't belong
+ * in a list whose only purpose is resuming.
+ */
+function isEmptySession(summary: ClaudeSessionSummary): boolean {
+	return summary.title === "Untitled session";
+}
+
 export function listClaudeSessions(limit = 30): ClaudeSessionSummary[] {
 	let files: RawFile[];
 	try {
-		files = enumerateSessionFiles().slice(0, Math.max(1, limit));
+		// Over-fetch: the empties below are dropped after summarising, and slicing
+		// to the limit first would let a burst of probe transcripts squeeze out
+		// every real session.
+		files = enumerateSessionFiles().slice(0, Math.max(1, limit) * 4);
 	} catch {
 		return [];
 	}
-	return files.map((file) => {
+	const summaries = files.map((file) => {
 		try {
 			const cached = summaryCache.get(file.filePath);
 			if (cached && cached.mtime === file.mtime) return cached.summary;
@@ -269,4 +314,5 @@ export function listClaudeSessions(limit = 30): ClaudeSessionSummary[] {
 			return fallbackSummary(file);
 		}
 	});
+	return summaries.filter((s) => !isEmptySession(s)).slice(0, limit);
 }
