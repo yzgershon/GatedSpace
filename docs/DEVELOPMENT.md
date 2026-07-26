@@ -75,5 +75,5 @@ See [`AGENTS.md`](./AGENTS.md) for monorepo conventions.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the PR process and
-[`SECURITY.md`](./SECURITY.md) for reporting vulnerabilities.
+See [`CONTRIBUTING.md`](../.github/CONTRIBUTING.md) for the PR process and
+[`SECURITY.md`](../.github/SECURITY.md) for reporting vulnerabilities.

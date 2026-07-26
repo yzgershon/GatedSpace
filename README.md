@@ -147,8 +147,9 @@ the Visual Studio 2022 C++ build tools for native modules. Public builds set
 ## Contributing
 
 Bug reports and pull requests are welcome. Start with
-[CONTRIBUTING.md](./CONTRIBUTING.md) for the dev setup and PR process, and
-[SECURITY.md](./SECURITY.md) for reporting vulnerabilities.
+[CONTRIBUTING.md](./.github/CONTRIBUTING.md) for the PR process,
+[DEVELOPMENT.md](./docs/DEVELOPMENT.md) for the dev setup, and
+[SECURITY.md](./.github/SECURITY.md) for reporting vulnerabilities.
 
 ## Credits & license
 

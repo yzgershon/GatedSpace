@@ -76,11 +76,11 @@ Cut *upstream* releases on a dedicated release branch (not `main`); `bun run rel
 desktop <version> <commit>` provisions one from a commit. Full upstream runbook:
 `scripts/release/README.md`.
 
-> **Shipping a GatedSpace change? Read `RELEASING.md` in the repo root.** It is the
+> **Shipping a GatedSpace change? Read `docs/RELEASING.md`.** It is the
 > single source of truth for both targets: the public release (`bun run ship
 > <version> "headline"`) and the maintainer's personal build (`GATEDSPACE_PERSONAL=1
 > bun run build`). Most changes go to BOTH. Don't ask the user how to ship — it's all
-> in `RELEASING.md`.
+> in `docs/RELEASING.md`.
 
 ## Code Quality
 

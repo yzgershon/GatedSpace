@@ -9,7 +9,7 @@ your interactions with the project.
 
 ## Local development setup
 
-See [**DEVELOPMENT.md**](./DEVELOPMENT.md) for the full guide. Short version:
+See [**DEVELOPMENT.md**](../docs/DEVELOPMENT.md) for the full guide. Short version:
 
 ```bash
 bun install

@@ -100,3 +100,8 @@ superset-dev-data/
 
 # Local-only plans (not tracked)
 plans/local/
+
+# The between-agents scratchpad. Claude and Codex share this checkout, so an
+# untracked file still does its job — and it's in-flight working notes, not
+# something to publish on the public repo or carry in history.
+HANDOFF.md
