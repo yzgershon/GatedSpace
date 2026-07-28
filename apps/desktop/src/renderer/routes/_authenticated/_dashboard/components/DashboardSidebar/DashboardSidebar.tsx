@@ -80,7 +80,7 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 		// section itself it was always an only child, so last:border-b-0 always
 		// matched and the border never rendered.
 		<div
-			className="border-b border-border last:border-b-0"
+			className="border-b border-border/45 last:border-b-0"
 			ref={setNodeRef}
 			style={{
 				transform: CSS.Translate.toString(transform),

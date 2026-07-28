@@ -105,6 +105,71 @@ export function typedPhrase(elapsedMs: number, offset: number): string {
 }
 
 /**
+ * How long a single character takes to arrive once its turn comes.
+ *
+ * Longer than TYPE_MS on purpose, so several characters are always mid-fade at
+ * once. That overlap is what separates a smooth type-in from a row of letters
+ * blinking on one at a time.
+ */
+export const CHAR_FADE_MS = 260;
+
+/** How far a character rises as it lands, in px. Small enough to feel, not see. */
+export const CHAR_RISE_PX = 3;
+
+/**
+ * Decelerating: a character moves most of its distance immediately and settles
+ * gently, which reads as landing rather than sliding.
+ */
+export function easeOutCubic(t: number): number {
+	const clamped = Math.min(1, Math.max(0, t));
+	return 1 - (1 - clamped) ** 3;
+}
+
+export interface RevealedChar {
+	char: string;
+	/** 0 = not yet arrived, 1 = fully settled. */
+	progress: number;
+}
+
+/**
+ * The current phrase as characters with their individual arrival progress.
+ *
+ * Returns EVERY character, including ones that haven't started, rather than a
+ * growing prefix. The caller renders them all and varies only opacity, which
+ * keeps the line's width fixed — a prefix that grows shoves whatever sits to
+ * its right (here, the elapsed counter) a few pixels on every character, and
+ * that jitter is more noticeable than the typing itself.
+ */
+export function revealedChars(
+	elapsedMs: number,
+	offset: number,
+): RevealedChar[] {
+	const phrase = phraseAt(elapsedMs, offset);
+	const intoPhrase = elapsedMs % PHRASE_MS;
+	return Array.from(phrase, (char, index) => ({
+		char,
+		progress: easeOutCubic((intoPhrase - index * TYPE_MS) / CHAR_FADE_MS),
+	}));
+}
+
+/**
+ * Whether the caret should be lit right now.
+ *
+ * A caret is what makes a type-in read as typing rather than as text fading up.
+ * It blinks only AFTER the word finishes — while characters are still arriving
+ * there is already motion, and a blink on top of it competes.
+ */
+export const CARET_BLINK_MS = 1_100;
+
+export function caretVisible(elapsedMs: number, offset: number): boolean {
+	const phrase = phraseAt(elapsedMs, offset);
+	const intoPhrase = elapsedMs % PHRASE_MS;
+	const typingDone = intoPhrase >= phrase.length * TYPE_MS;
+	if (!typingDone) return true;
+	return intoPhrase % CARET_BLINK_MS < CARET_BLINK_MS / 2;
+}
+
+/**
  * Elapsed time, in the units someone actually asks in.
  *
  * Rounds DOWN throughout: a counter that says 2s when 1.6 seconds have passed

@@ -1,10 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import {
+	CARET_BLINK_MS,
+	caretVisible,
+	easeOutCubic,
 	FRAME_MS,
 	formatElapsed,
 	formatThought,
 	PHRASE_MS,
 	phraseAt,
+	revealedChars,
 	SPINNER_FRAMES,
 	spinnerFrame,
 	TYPE_MS,
@@ -111,5 +115,70 @@ describe("formatThought", () => {
 
 	test("long thoughts still read in minutes", () => {
 		expect(formatThought(90_000)).toBe("1m 30s");
+	});
+});
+
+describe("easeOutCubic", () => {
+	test("pins both ends", () => {
+		expect(easeOutCubic(0)).toBe(0);
+		expect(easeOutCubic(1)).toBe(1);
+	});
+
+	test("clamps rather than overshooting", () => {
+		// Progress is computed from raw elapsed time, so out-of-range input is
+		// the normal case, not a bug to guard against elsewhere.
+		expect(easeOutCubic(-5)).toBe(0);
+		expect(easeOutCubic(9)).toBe(1);
+	});
+
+	test("decelerates, so a character lands rather than slides", () => {
+		expect(easeOutCubic(0.5)).toBeGreaterThan(0.5);
+	});
+});
+
+describe("revealedChars", () => {
+	test("returns the whole phrase from the very first frame", () => {
+		// Every character, always — a growing prefix would shove the elapsed
+		// counter sideways once per character.
+		const chars = revealedChars(0, 0);
+		expect(chars.map((c) => c.char).join("")).toBe(phraseAt(0, 0));
+	});
+
+	test("has nothing arrived at the instant a phrase starts", () => {
+		expect(revealedChars(0, 0).every((c) => c.progress === 0)).toBe(true);
+	});
+
+	test("arrives left to right", () => {
+		const chars = revealedChars(TYPE_MS * 3, 0);
+		expect(chars[0]?.progress).toBeGreaterThan(chars[2]?.progress ?? 1);
+		expect(chars.at(-1)?.progress).toBe(0);
+	});
+
+	test("overlaps several characters mid-fade", () => {
+		// The overlap is what separates a type-in from letters blinking on one
+		// at a time, and it only happens because CHAR_FADE_MS > TYPE_MS.
+		const partial = revealedChars(TYPE_MS * 4, 0).filter(
+			(c) => c.progress > 0 && c.progress < 1,
+		);
+		expect(partial.length).toBeGreaterThan(1);
+	});
+
+	test("settles every character well before the phrase changes", () => {
+		const chars = revealedChars(PHRASE_MS - 1, 0);
+		expect(chars.every((c) => c.progress === 1)).toBe(true);
+	});
+});
+
+describe("caretVisible", () => {
+	test("stays solid while characters are still arriving", () => {
+		// There is already motion; a blink on top of it competes.
+		expect(caretVisible(TYPE_MS * 2, 0)).toBe(true);
+	});
+
+	test("blinks once the word is finished", () => {
+		const done = phraseAt(0, 0).length * TYPE_MS;
+		const on = caretVisible(done + 10, 0);
+		const off = caretVisible(done + 10 + CARET_BLINK_MS / 2, 0);
+		expect(on).not.toBe(off);
 	});
 });

@@ -167,6 +167,8 @@ export function Pane<TData>({
 	const dropPositionRef = useRef<SplitPosition | null>(null);
 	const [dropPosition, setDropPosition] = useState<SplitPosition | null>(null);
 	const dropRef = useRef<HTMLDivElement>(null);
+	/** The pane's box, measured once per hover. See the hover handler. */
+	const hoverRectRef = useRef<DOMRect | null>(null);
 
 	const [{ isOver, canDrop }, connectDrop] = useDrop(
 		() => ({
@@ -182,7 +184,22 @@ export function Pane<TData>({
 				const offset = monitor.getClientOffset();
 				const el = dropRef.current;
 				if (!offset || !el) return;
-				const rect = el.getBoundingClientRect();
+
+				// Measure ONCE per hover, not once per mousemove.
+				//
+				// getBoundingClientRect forces a synchronous layout, and this fires on
+				// every pointer move over the pane. With a terminal or a session view
+				// inside, that layout is not cheap, and paying it sixty-plus times a
+				// second is what made dragging feel heavy. A pane cannot move or
+				// resize while a drag is in progress, so the first measurement stays
+				// correct for the whole hover; it is cleared when the pointer leaves
+				// (see the isOver reset below).
+				let rect = hoverRectRef.current;
+				if (!rect) {
+					rect = el.getBoundingClientRect();
+					hoverRectRef.current = rect;
+				}
+
 				const pos = getDropPosition(offset.x, offset.y, rect);
 				if (pos !== dropPositionRef.current) {
 					dropPositionRef.current = pos;
@@ -225,11 +242,42 @@ export function Pane<TData>({
 		[connectDrop],
 	);
 
-	// Clear drop position when not hovering
-	if (!isOver && dropPositionRef.current !== null) {
-		dropPositionRef.current = null;
-		if (dropPosition !== null) setDropPosition(null);
+	// Clear drop position when not hovering. The cached rect goes with it, so a
+	// pane that is resized between two drags is measured afresh on the next one.
+	if (!isOver) {
+		hoverRectRef.current = null;
+		if (dropPositionRef.current !== null) {
+			dropPositionRef.current = null;
+			if (dropPosition !== null) setDropPosition(null);
+		}
 	}
+
+	/**
+	 * The pane's own contents, kept off the drag path.
+	 *
+	 * `renderPane` used to be called inline in the JSX, so every re-render of
+	 * this component re-invoked it — and dragging re-renders constantly, because
+	 * `isOver`, `canDrop` and `dropPosition` all change as the pointer moves
+	 * between panes. That meant a terminal or a whole session view was rebuilt
+	 * and reconciled while the user was only moving the mouse, which is the bulk
+	 * of what made dragging feel heavy.
+	 *
+	 * Memoised on `context`, which is itself memoised on the pane's real inputs.
+	 * Drag state is deliberately NOT among them, so a hover changes the drop
+	 * indicator and nothing else: React sees the identical element and skips the
+	 * subtree entirely.
+	 */
+	const content = useMemo(
+		() =>
+			definition ? (
+				definition.renderPane(context)
+			) : (
+				<div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+					Unknown pane kind: {pane.kind}
+				</div>
+			),
+		[definition, context, pane.kind],
+	);
 
 	const title = definition
 		? (pane.titleOverride ?? definition.getTitle?.(pane) ?? pane.id)
@@ -335,15 +383,7 @@ export function Pane<TData>({
 					onRename={context.actions.setTitle}
 					accent={definition?.getAccent?.(context)}
 				/>
-				<PaneContent>
-					{definition ? (
-						definition.renderPane(context)
-					) : (
-						<div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
-							Unknown pane kind: {pane.kind}
-						</div>
-					)}
-				</PaneContent>
+				<PaneContent>{content}</PaneContent>
 				{isDropTarget && <DropZoneOverlay position={dropPosition} />}
 			</div>
 		</PaneContextMenu>

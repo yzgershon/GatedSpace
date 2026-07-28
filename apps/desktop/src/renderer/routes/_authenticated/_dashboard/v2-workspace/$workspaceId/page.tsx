@@ -31,6 +31,7 @@ import { useDefaultPaneActions } from "./hooks/useDefaultPaneActions";
 import { useDirtyTabCloseGuard } from "./hooks/useDirtyTabCloseGuard";
 import { usePaneRegistry } from "./hooks/usePaneRegistry";
 import { renderBrowserTabIcon } from "./hooks/usePaneRegistry/components/BrowserPane";
+import { usePickElementConsumer } from "./hooks/usePickElementConsumer";
 import { useRunCommandIntentConsumer } from "./hooks/useRunCommandIntentConsumer";
 import { useSendPageToSessionConsumer } from "./hooks/useSendPageToSessionConsumer";
 import { useSlotElement } from "./hooks/useSlotElement";
@@ -133,6 +134,7 @@ function V2WorkspaceContent() {
 	useClearActivePaneAttention({ store });
 	useRunCommandIntentConsumer({ store, workspaceId });
 	useSendPageToSessionConsumer({ store });
+	usePickElementConsumer({ store });
 	const launcher = useV2TerminalLauncher();
 	const { activeHostUrl } = useLocalHostService();
 	const { data: agentConfigs } = useV2AgentConfigs(activeHostUrl);

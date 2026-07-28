@@ -11,12 +11,14 @@ import {
 	TbCopy,
 	TbDots,
 	TbExternalLink,
+	TbPointer,
 	TbReload,
 	TbSparkles,
 	TbTrash,
 } from "react-icons/tb";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { usePickElementIntent } from "renderer/stores/pick-element-intent";
 import { useSendPageToSessionIntent } from "renderer/stores/send-page-to-session-intent";
 
 interface BrowserOverflowMenuProps {
@@ -40,6 +42,12 @@ export function BrowserOverflowMenu({
 	// that can see which session pane should receive it.
 	const handleSendToSession = () => {
 		useSendPageToSessionIntent.getState().request(paneId);
+	};
+
+	// Same crossing as above: the pick runs in the workspace tree, which is the
+	// only place that can see which session pane should receive the element.
+	const handlePickElement = () => {
+		usePickElementIntent.getState().request(paneId);
 	};
 
 	const handleHardReload = () => {
@@ -102,6 +110,14 @@ export function BrowserOverflowMenu({
 				>
 					<TbSparkles className="size-4" />
 					Send to Claude session
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onClick={handlePickElement}
+					disabled={!hasPage}
+					className="gap-2"
+				>
+					<TbPointer className="size-4" />
+					Pick element for Claude
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onClick={handleHardReload}

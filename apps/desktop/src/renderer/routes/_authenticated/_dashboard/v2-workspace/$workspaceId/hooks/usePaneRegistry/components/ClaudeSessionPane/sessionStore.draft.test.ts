@@ -5,7 +5,11 @@
  * state goes with it.
  */
 import { describe, expect, test } from "bun:test";
-import { getSessionDraft, setSessionDraft } from "./sessionStore";
+import {
+	appendSessionDraftText,
+	getSessionDraft,
+	setSessionDraft,
+} from "./sessionStore";
 
 const image = (name: string) => ({
 	name,
@@ -50,5 +54,39 @@ describe("composer draft", () => {
 		setSessionDraft("pane-g", { text: "sent", images: [image("a.png")] });
 		setSessionDraft("pane-g", { text: "", images: [] });
 		expect(getSessionDraft("pane-g")).toEqual({ text: "", images: [] });
+	});
+});
+
+describe("appendSessionDraftText", () => {
+	test("appends rather than replacing what was typed", () => {
+		// Whatever is already in the box was typed on purpose. The element
+		// picker adds to it, same as dictation does.
+		setSessionDraft("pane-append", { text: "why is this", images: [] });
+		appendSessionDraftText("pane-append", "Selector: `#app > button`");
+		expect(getSessionDraft("pane-append").text).toBe(
+			"why is this\n\nSelector: `#app > button`",
+		);
+	});
+
+	test("adds no leading blank line to an empty box", () => {
+		appendSessionDraftText("pane-empty", "Selector: `#app`");
+		expect(getSessionDraft("pane-empty").text).toBe("Selector: `#app`");
+	});
+
+	test("treats a whitespace-only draft as empty", () => {
+		setSessionDraft("pane-ws", { text: "   ", images: [] });
+		appendSessionDraftText("pane-ws", "picked");
+		expect(getSessionDraft("pane-ws").text.startsWith("\n")).toBe(false);
+	});
+
+	test("keeps attached images", () => {
+		setSessionDraft("pane-img", { text: "", images: [image("shot.png")] });
+		appendSessionDraftText("pane-img", "picked");
+		expect(getSessionDraft("pane-img").images).toHaveLength(1);
+	});
+
+	test("ignores an empty append instead of dirtying the draft", () => {
+		appendSessionDraftText("pane-noop", "");
+		expect(getSessionDraft("pane-noop")).toEqual({ text: "", images: [] });
 	});
 });

@@ -14,11 +14,12 @@
 import { cn } from "@superset/ui/utils";
 import { useEffect, useRef, useState } from "react";
 import {
-	FRAME_MS,
+	CHAR_RISE_PX,
+	caretVisible,
 	formatElapsed,
 	phraseAt,
+	revealedChars,
 	spinnerFrame,
-	typedPhrase,
 	WORKING_PHRASES,
 } from "./working-indicator";
 
@@ -36,21 +37,45 @@ export function WorkingIndicator({
 	phrase?: boolean;
 	className?: string;
 }) {
-	const startRef = useRef(startedAt ?? Date.now());
+	// Derived from the prop, NOT captured in a ref.
+	//
+	// It used to be `useRef(startedAt ?? Date.now())`, which reads the prop once
+	// and ignores it forever after. Whenever this stayed mounted across the start
+	// of a new turn, the counter kept running from the previous turn's start —
+	// which is why it looked like it had no idea when to reset. The prop is the
+	// source of truth when it is given; the ref is only the fallback for callers
+	// that don't pass one.
+	const fallbackStart = useRef(Date.now());
+	const start = startedAt ?? fallbackStart.current;
+
 	// A per-instance offset so two panes working at once don't chant in unison.
 	const offsetRef = useRef(Math.floor(Math.random() * WORKING_PHRASES.length));
-	const [elapsed, setElapsed] = useState(() => Date.now() - startRef.current);
+	const [now, setNow] = useState(() => Date.now());
 
+	// requestAnimationFrame, not setInterval(FRAME_MS).
+	//
+	// The old 120ms tick was COARSER than the 45ms-per-character type-in, so the
+	// phrase appeared in lurches of two or three letters at a time — which is
+	// exactly why it didn't read as typing. Sampling every frame lets each
+	// character land on its own, and the spinner's 120ms cadence still falls out
+	// of the same elapsed-time maths. rAF also stops on its own when the window
+	// is hidden, which an interval would not.
 	useEffect(() => {
-		const id = setInterval(() => {
-			setElapsed(Date.now() - startRef.current);
-		}, FRAME_MS);
-		return () => clearInterval(id);
+		let frame = 0;
+		const tick = () => {
+			setNow(Date.now());
+			frame = requestAnimationFrame(tick);
+		};
+		frame = requestAnimationFrame(tick);
+		return () => cancelAnimationFrame(frame);
 	}, []);
 
+	// Clamped: a startedAt slightly in the future (clock skew between the stamp
+	// and this render) would otherwise show a negative counter.
+	const elapsed = Math.max(0, now - start);
 	const offset = offsetRef.current;
 	const full = phraseAt(elapsed, offset);
-	const typed = typedPhrase(elapsed, offset);
+	const chars = revealedChars(elapsed, offset);
 
 	return (
 		// <output> is the semantic element for a live result, and carries
@@ -70,11 +95,37 @@ export function WorkingIndicator({
 				{spinnerFrame(elapsed)}
 			</span>
 			{phrase ? (
-				<span aria-hidden className="text-foreground">
-					{typed}
-					{/* The ellipsis waits for the word to finish typing, otherwise it
-					    reads as a word that trailed off rather than one arriving. */}
-					{typed.length === full.length ? "…" : ""}
+				/*
+				 * Every character is rendered from the first frame and only its
+				 * opacity changes, so the line's width never moves. Revealing a
+				 * growing prefix instead shoves the elapsed counter a few pixels
+				 * per character, and that jitter is more noticeable than the typing.
+				 */
+				<span aria-hidden className="whitespace-pre text-foreground">
+					{chars.map((entry, index) => (
+						<span
+							// Index is a stable key here: the span count is the phrase
+							// length, and a phrase change replaces the whole run anyway.
+							// biome-ignore lint/suspicious/noArrayIndexKey: positional by nature
+							key={index}
+							className="inline-block"
+							style={{
+								opacity: entry.progress,
+								transform: `translateY(${(1 - entry.progress) * CHAR_RISE_PX}px)`,
+							}}
+						>
+							{entry.char}
+						</span>
+					))}
+					{/* A caret is what makes this read as typing rather than as text
+					    fading up. Solid while characters arrive, blinking after. */}
+					<span
+						className="ml-px inline-block w-[1px] self-stretch bg-foreground/70 align-middle"
+						style={{
+							height: "0.9em",
+							opacity: caretVisible(elapsed, offset) ? 1 : 0,
+						}}
+					/>
 				</span>
 			) : null}
 			<span className="text-muted-foreground/70 tabular-nums">

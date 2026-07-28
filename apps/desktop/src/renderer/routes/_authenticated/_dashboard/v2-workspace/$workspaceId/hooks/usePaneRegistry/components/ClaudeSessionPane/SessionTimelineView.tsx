@@ -25,7 +25,7 @@
  *     file dump per read buries the conversation.
  */
 import { cn } from "@superset/ui/utils";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MarkdownRenderer } from "renderer/components/MarkdownRenderer";
 import {
@@ -554,10 +554,14 @@ function ToolCall({
 
 	return (
 		<Row state={item.status === "running" ? "running" : item.status}>
+			{/*
+			 * No per-tool spinner. `Row` already pulses its dot while a tool runs
+			 * and turns it green when it finishes, and the working line above is
+			 * animating for the whole turn — a third moving thing on the same row
+			 * just made the pane look busy rather than informative. The dot carries
+			 * the state; the name and its output carry the content.
+			 */}
 			<div className="flex min-w-0 items-baseline gap-2">
-				{item.status === "running" ? (
-					<Loader2 className="size-3.5 shrink-0 translate-y-0.5 animate-spin text-muted-foreground" />
-				) : null}
 				<span className="shrink-0 font-semibold text-[13.5px] text-foreground">
 					{item.name}
 				</span>
@@ -868,13 +872,19 @@ export function SessionTimelineView({
 				</div>
 			))}
 			{/*
-			 * The working line trails the conversation whenever a turn is running
-			 * and nothing is actively arriving — a tool is out, or the model hasn't
-			 * started speaking yet. While text or thinking IS streaming, those
-			 * already show their own motion, and two indicators at once read as two
-			 * things happening.
+			 * The working line trails the conversation for the WHOLE time a turn is
+			 * running, including while text is streaming.
+			 *
+			 * It used to hide itself whenever a draft was arriving, on the theory
+			 * that streaming text is its own motion and two indicators read as two
+			 * things. In use that was worse: the line vanished and reappeared
+			 * several times per turn, and because the elapsed counter only shows
+			 * while the line does, the number appeared to jump around at random.
+			 * One indicator that stays put for the whole turn answers "is it still
+			 * going, and for how long" continuously, which is the only question
+			 * being asked.
 			 */}
-			{timeline.status === "streaming" && timeline.drafts.length === 0 ? (
+			{timeline.status === "streaming" ? (
 				<div className={cn(turns.length > 0 && "mt-3")}>
 					<WorkingIndicator startedAt={turnStartedAt} className="pl-8" />
 				</div>

@@ -63,7 +63,7 @@ export const DashboardSidebarProjectRow = forwardRef<
 							}
 				}
 				className={cn(
-					"group flex min-h-10 w-full items-center pl-3 pr-2 py-1.5 text-sm font-medium",
+					"group flex min-h-9 w-full items-center pl-3 pr-2 py-1 text-sm font-medium",
 					"hover:bg-muted/50 transition-colors",
 					className,
 				)}

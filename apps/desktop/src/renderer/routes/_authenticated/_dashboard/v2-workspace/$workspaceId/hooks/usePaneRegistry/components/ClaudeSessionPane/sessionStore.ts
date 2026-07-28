@@ -416,6 +416,24 @@ export function attachSessionDraftImage(
 	for (const listener of draftListeners.get(key) ?? []) listener();
 }
 
+/**
+ * Append text to a session's composer from elsewhere in the app.
+ *
+ * The text sibling of `attachSessionDraftImage`, and appends rather than
+ * replaces for the same reason dictation does: whatever is already in the box
+ * was typed on purpose. Used by the browser pane's element picker.
+ *
+ * Separated by a blank line when there is something to separate from, so a
+ * picked element does not run into the end of a half-written sentence.
+ */
+export function appendSessionDraftText(key: string, text: string): void {
+	if (!text) return;
+	const current = getSessionDraft(key);
+	const separator = current.text.trim() ? "\n\n" : "";
+	setSessionDraft(key, { ...current, text: current.text + separator + text });
+	for (const listener of draftListeners.get(key) ?? []) listener();
+}
+
 /** Called when a pane is closed for good: kill the process, drop the state. */
 export function disposeSession(key: string): void {
 	drafts.delete(key);

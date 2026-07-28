@@ -119,7 +119,7 @@ export function DashboardSidebarRail({
 			<div
 				className={cn(
 					"flex h-full w-12 shrink-0 flex-col items-center bg-sidebar",
-					showDivider && "border-r border-border",
+					showDivider && "border-r border-border/45",
 				)}
 			>
 				{/*
