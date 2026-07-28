@@ -19,6 +19,7 @@ import { closeSync, openSync, readdirSync, readSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { ClaudeStreamEvent } from "shared/claude-session/events";
 import { parseStreamLine } from "shared/claude-session/events";
+import { isSyntheticUserTurn } from "shared/claude-session/synthetic-user-turn";
 import { getClaudeProjectRoots } from "../claude-profile";
 
 /** How much of the end of a transcript to read. Older turns are dropped. */
@@ -67,26 +68,6 @@ function readTailLines(filePath: string): string[] {
 }
 
 /**
- * The CLI logs its own scaffolding as user entries — session-continuation
- * caveats, slash-command wrappers, hook output. They were never typed into the
- * chat, so they don't belong in the rendered history.
- */
-function isBookkeeping(raw: Record<string, unknown>): boolean {
-	if (raw.isMeta === true) return true;
-	if (raw.isVisibleInTranscriptOnly === true) return true;
-	if (raw.isCompactSummary === true) return true;
-	const content = (raw.message as { content?: unknown } | undefined)?.content;
-	if (typeof content !== "string") return false;
-	const head = content.trimStart();
-	return (
-		head.startsWith("<local-command") ||
-		head.startsWith("<command-name>") ||
-		head.startsWith("<command-message>") ||
-		head.startsWith("<system-reminder>")
-	);
-}
-
-/**
  * Fold-ready events for a stored session, oldest first. Returns an empty array
  * when the transcript can't be found or read — a resumed session still works,
  * it just starts with a blank timeline.
@@ -108,7 +89,7 @@ export function loadSessionTranscript(sessionId: string): ClaudeStreamEvent[] {
 		if (!event) continue;
 		if (event.type !== "assistant" && event.type !== "user") continue;
 		const raw = event as unknown as Record<string, unknown>;
-		if (event.type === "user" && isBookkeeping(raw)) continue;
+		if (event.type === "user" && isSyntheticUserTurn(raw)) continue;
 		// Transcripts leave this undefined where the live stream sends null; the
 		// timeline treats it as "belongs to a subagent" if it's truthy either way,
 		// but normalising keeps loaded items identical in shape to live ones.

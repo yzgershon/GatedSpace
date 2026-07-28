@@ -1,3 +1,7 @@
+import {
+	AGENT_RESUME_SYNTAX,
+	isResumableAgentId,
+} from "@superset/shared/agent-resume";
 import { asc, eq } from "drizzle-orm";
 import type { HostDb } from "../db";
 import { hostAgentConfigs } from "../db/schema";
@@ -76,25 +80,19 @@ export function buildAgentResumeCommand(
 	const sessionId = binding.agentSessionId;
 	if (!sessionId || !SAFE_SESSION_ID.test(sessionId)) return null;
 
-	if (binding.agentId === "codex") {
-		if (options.fork) return null;
-		const config = findAgentLaunchConfig(db, "codex");
-		const command = config?.command ?? "codex";
-		return `${command} resume ${sessionId}`;
-	}
+	// Syntax lives in the shared agent catalog so it can't drift from the
+	// sidebar's copy of "how do you resume Codex". The launch CONFIG stays
+	// local: a user-configured command and args must still win over the default.
+	if (!isResumableAgentId(binding.agentId)) return null;
 
-	if (binding.agentId === "claude") {
-		const config = findAgentLaunchConfig(db, "claude");
-		const command = config?.command ?? "claude";
-		const args = config?.args ?? [];
-		return [
-			command,
-			...args,
-			"--resume",
-			sessionId,
-			...(options.fork ? ["--fork-session"] : []),
-		].join(" ");
-	}
+	const syntax = AGENT_RESUME_SYNTAX[binding.agentId];
+	const resumeArgs = syntax.args(sessionId, { fork: options.fork });
+	if (!resumeArgs) return null;
 
-	return null;
+	const config = findAgentLaunchConfig(db, binding.agentId);
+	const command = config?.command ?? syntax.command;
+	const configuredArgs = syntax.replayConfiguredArgs
+		? (config?.args ?? [])
+		: [];
+	return [command, ...configuredArgs, ...resumeArgs].join(" ");
 }

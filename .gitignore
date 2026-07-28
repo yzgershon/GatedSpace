@@ -105,3 +105,8 @@ plans/local/
 # untracked file still does its job — and it's in-flight working notes, not
 # something to publish on the public repo or carry in history.
 HANDOFF.md
+
+# Standalone HTML previews. `bun run dev` can't run while the installed app is
+# open (single-instance lock), so UI is previewed by hand from a scratch file.
+# Local by nature, and biome shouldn't be parsing hand-written preview markup.
+apps/desktop/preview/

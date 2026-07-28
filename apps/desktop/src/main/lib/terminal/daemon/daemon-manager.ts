@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { workspaces } from "@superset/local-db";
 import { track } from "main/lib/analytics";
 import { appState } from "main/lib/app-state";
+import { crashSentinel } from "main/lib/crash-sentinel";
 import { localDb } from "main/lib/local-db";
 import { HistoryReader, truncateUtf8ToLastBytes } from "../../terminal-history";
 import {
@@ -350,6 +351,11 @@ export class DaemonTerminalManager extends EventEmitter {
 			response.sessions.filter((s) => s.isAlive).map((s) => s.sessionId),
 		);
 		this.daemonSessionIdsHydrated = true;
+		// A crash report wants to know whether the app was busy or idle. This is
+		// the one place a live count is already computed; the sentinel buckets it
+		// (none / a few / many) rather than storing the number, so a stale count
+		// between enumerations cannot make the answer wrong by much.
+		crashSentinel.setTerminalCount(this.daemonAliveSessionIds.size);
 		return response;
 	}
 

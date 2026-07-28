@@ -7,18 +7,19 @@ import { createBrowserRouter } from "./browser/browser";
 import { createBrowserHistoryRouter } from "./browser-history";
 import { createCacheRouter } from "./cache";
 import { createChangesRouter } from "./changes";
-import { createChatRuntimeServiceRouter } from "./chat-runtime-service";
 import { createChatServiceRouter } from "./chat-service";
 import { createClaudeSessionRouter } from "./claude-session";
 import { createClaudeSessionsRouter } from "./claude-sessions";
 import { createConfigRouter } from "./config";
 import { createDeviceRouter } from "./device";
+import { createDiagnosticsRouter } from "./diagnostics";
 import { createExternalRouter } from "./external";
 import { createFilesystemRouter } from "./filesystem";
 import { createHostServiceCoordinatorRouter } from "./host-service-coordinator";
 import { createKeyboardLayoutRouter } from "./keyboardLayout";
 import { createMenuRouter } from "./menu";
 import { createMigrationRouter } from "./migration";
+import { createMobileBridgeRouter } from "./mobile-bridge";
 import { createNotificationsRouter } from "./notifications";
 import { createPermissionsRouter } from "./permissions";
 import { createPortsRouter } from "./ports";
@@ -35,7 +36,6 @@ import { createWorkspacesRouter } from "./workspaces";
 
 export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
-		chatRuntimeService: createChatRuntimeServiceRouter(),
 		chatService: createChatServiceRouter(),
 		claudeSessions: createClaudeSessionsRouter(),
 		claudeSession: createClaudeSessionRouter(),
@@ -61,6 +61,8 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		system: createSystemRouter(),
 		config: createConfigRouter(),
 		device: createDeviceRouter(),
+		diagnostics: createDiagnosticsRouter(),
+		mobileBridge: createMobileBridgeRouter(),
 		uiState: createUiStateRouter(),
 		usage: createUsageRouter(),
 		ringtone: createRingtoneRouter(getWindow),

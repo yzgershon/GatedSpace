@@ -2,15 +2,15 @@ import { Button } from "@superset/ui/button";
 import { Input } from "@superset/ui/input";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
-import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
 	DEFAULT_TERMINAL_FONT_FAMILY,
 	DEFAULT_TERMINAL_FONT_SIZE,
-} from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/Terminal/config";
+} from "renderer/components/WorkspaceView/ContentView/TabsContent/Terminal/config";
 import {
 	DEFAULT_CODE_EDITOR_FONT_FAMILY,
 	DEFAULT_CODE_EDITOR_FONT_SIZE,
-} from "renderer/screens/main/components/WorkspaceView/components/CodeEditor/constants";
+} from "renderer/components/WorkspaceView/components/CodeEditor/constants";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { FontFamilyCombobox } from "./components/FontFamilyCombobox";
 import { FontPreview } from "./components/FontPreview";
 import { useSystemFonts } from "./hooks/useSystemFonts";

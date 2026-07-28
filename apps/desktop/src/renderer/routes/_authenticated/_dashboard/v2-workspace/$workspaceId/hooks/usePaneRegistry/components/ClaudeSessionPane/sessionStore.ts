@@ -119,18 +119,37 @@ export function ensureSession(key: string, opts: SessionStartOptions): void {
 	// stored transcript first and only then attach. Awaiting before subscribing
 	// is safe — the session isn't running yet, there's nothing to miss.
 	if (opts.resumeSessionId) {
-		void electronTrpcClient.claudeSession.history
-			.query({ sessionId: opts.resumeSessionId })
-			.then((events: ClaudeStreamEvent[]) => {
-				if (events.length > 0) {
-					update(key, (snapshot) => ({
+		const sessionId = opts.resumeSessionId;
+		// Cost comes from a sidecar, not the transcript — the CLI writes no cost
+		// field there, and its per-result figure restarts at zero in every new
+		// process. Fetched alongside history so a restored pane opens showing what
+		// the conversation has actually cost rather than starting again at zero.
+		void Promise.allSettled([
+			electronTrpcClient.claudeSession.history.query({ sessionId }),
+			electronTrpcClient.claudeSession.cost.query({ sessionId }),
+		])
+			.then(([historyResult, costResult]) => {
+				const events: ClaudeStreamEvent[] =
+					historyResult.status === "fulfilled" ? historyResult.value : [];
+				const storedCost =
+					costResult.status === "fulfilled" ? costResult.value.costUsd : 0;
+				if (events.length === 0 && storedCost <= 0) return;
+				update(key, (snapshot) => {
+					const folded = events.reduce(applyEvent, snapshot.timeline);
+					return {
 						...snapshot,
-						timeline: settled(events.reduce(applyEvent, snapshot.timeline)),
-					}));
-				}
-			})
-			.catch(() => {
-				// No transcript on disk: resume still works, just without history.
+						timeline: settled({
+							...folded,
+							// The fold cannot know about spend from earlier processes, so
+							// the stored total wins over anything it derived. `max` rather
+							// than assignment: a pane that has already streamed a turn this
+							// run must not be walked backwards.
+							...(storedCost > 0
+								? { costUsd: Math.max(storedCost, folded.costUsd ?? 0) }
+								: {}),
+						}),
+					};
+				});
 			})
 			.finally(() => {
 				attach(key, opts);
@@ -347,6 +366,7 @@ export interface ComposerDraft {
 
 const EMPTY_DRAFT: ComposerDraft = { text: "", images: [] };
 const drafts = new Map<string, ComposerDraft>();
+const draftListeners = new Map<string, Set<() => void>>();
 
 export function getSessionDraft(key: string): ComposerDraft {
 	return drafts.get(key) ?? EMPTY_DRAFT;
@@ -357,6 +377,43 @@ export function setSessionDraft(key: string, draft: ComposerDraft): void {
 	// pane that was ever focused and then cleared.
 	if (!draft.text && draft.images.length === 0) drafts.delete(key);
 	else drafts.set(key, draft);
+}
+
+/**
+ * Watch a draft for changes made from OUTSIDE the composer.
+ *
+ * The composer owns its own state and mirrors it out here, so it does not need
+ * this for its own edits — only for something else writing into its box, which
+ * today means a browser-pane capture being attached to it.
+ */
+export function subscribeSessionDraft(
+	key: string,
+	listener: () => void,
+): () => void {
+	const listeners = draftListeners.get(key) ?? new Set();
+	listeners.add(listener);
+	draftListeners.set(key, listeners);
+	return () => {
+		listeners.delete(listener);
+		if (listeners.size === 0) draftListeners.delete(key);
+	};
+}
+
+/**
+ * Attach an image to a session's composer from elsewhere in the app.
+ *
+ * Goes through the draft store rather than a live component, so it works
+ * whether or not that pane is currently mounted: capture a page, switch to the
+ * session tab, and the screenshot is already waiting. A pane that has never
+ * been opened gets a draft it will pick up the first time it is.
+ */
+export function attachSessionDraftImage(
+	key: string,
+	image: UserImagePayload,
+): void {
+	const current = getSessionDraft(key);
+	setSessionDraft(key, { ...current, images: [...current.images, image] });
+	for (const listener of draftListeners.get(key) ?? []) listener();
 }
 
 /** Called when a pane is closed for good: kill the process, drop the state. */

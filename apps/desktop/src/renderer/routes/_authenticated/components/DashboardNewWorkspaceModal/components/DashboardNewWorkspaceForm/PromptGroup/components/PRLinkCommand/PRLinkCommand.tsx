@@ -13,13 +13,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
+import { PRIcon, type PRState } from "renderer/components/PRIcon/PRIcon";
 import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
 import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
-import {
-	PRIcon,
-	type PRState,
-} from "renderer/screens/main/components/PRIcon/PRIcon";
 export interface SelectedPR {
 	prNumber: number;
 	title: string;

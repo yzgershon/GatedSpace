@@ -1,21 +1,26 @@
-import { isV2OnlyUser } from "@superset/shared/v2-only-user";
-import { env } from "renderer/env.renderer";
-import { authClient } from "renderer/lib/auth-client";
-import { useV2LocalOverrideStore } from "renderer/stores/v2-local-override";
+/**
+ * v2 is the only workspace UI. This hook is now a constant.
+ *
+ * Upstream shipped two complete workspace UIs side by side during their v1→v2
+ * migration, with this hook choosing between them per user. GatedSpace has only
+ * ever used v2 — every pane, the Claude session view, the sidebar browser and
+ * the whole 1.16/1.17 line of work are v2 — while v1 stayed reachable through
+ * an Experimental toggle that could only ever drop someone into a different,
+ * worse app missing all of it.
+ *
+ * Kept as a hook rather than deleted outright so the ~15 call sites do not all
+ * have to change at once; they read as `true` and can be inlined as the v1 tree
+ * comes out. See `useIsV2OnlyUser` below, which is now only about cohort
+ * reporting and no longer decides anything.
+ */
 
 /**
- * True for accounts created on/after V2_ONLY_USER_CUTOFF — these users
- * default to v2.
+ * Whether v2 is active. Always true.
+ *
+ * Do NOT reintroduce a false branch. Rendering v1 means rendering a UI with no
+ * session pane, no browser pane and no accents, from code that is being
+ * removed.
  */
-export function useIsV2OnlyUser(): boolean {
-	const { data: session } = authClient.useSession();
-	return isV2OnlyUser(session?.user?.createdAt);
-}
-
-/** Returns whether v2 is currently active for this user. */
 export function useIsV2CloudEnabled(): boolean {
-	const v2Only = useIsV2OnlyUser();
-	const optInV2 = useV2LocalOverrideStore((s) => s.optInV2);
-	// Dev builds default to v2; an explicit opt-out (optInV2 === false) still wins.
-	return optInV2 ?? (v2Only || env.NODE_ENV === "development");
+	return true;
 }

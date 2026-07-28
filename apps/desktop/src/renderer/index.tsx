@@ -20,6 +20,8 @@ import { routeTree } from "./routeTree.gen";
 
 import "./globals.css";
 import "./styles/bundled-fonts.css";
+import { trackFocusSurface } from "renderer/lib/focus-surface";
+import { suppressMiddleClickAutoscroll } from "renderer/lib/suppress-middle-click-autoscroll";
 
 const rootElement = document.querySelector("app");
 initBootErrorHandling(rootElement);
@@ -68,6 +70,11 @@ declare module "@tanstack/react-router" {
 		router: typeof router;
 	}
 }
+
+// Before render: middle-click means "close this" here, never "start scrolling".
+suppressMiddleClickAutoscroll();
+// Tells GatedVoice whether to paste or type; see lib/focus-surface.ts.
+trackFocusSurface();
 
 if (!rootElement) {
 	reportBootError("Missing <app> root element");

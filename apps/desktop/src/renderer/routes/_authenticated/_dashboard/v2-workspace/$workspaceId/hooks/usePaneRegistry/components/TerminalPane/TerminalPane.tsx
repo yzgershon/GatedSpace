@@ -10,6 +10,8 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { ScrollToBottomButton } from "renderer/components/WorkspaceView/ContentView/TabsContent/Terminal/ScrollToBottomButton";
+import { TerminalSearch } from "renderer/components/WorkspaceView/ContentView/TabsContent/Terminal/TerminalSearch";
 import { useHotkey } from "renderer/hotkeys";
 import {
 	actionLabel,
@@ -31,8 +33,6 @@ import type {
 } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { openUrlInV2Workspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/utils/openUrlInV2Workspace";
 import { useWorkspaceWsUrl } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceTrpcProvider/WorkspaceTrpcProvider";
-import { ScrollToBottomButton } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/Terminal/ScrollToBottomButton";
-import { TerminalSearch } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/Terminal/TerminalSearch";
 import { useTheme } from "renderer/stores/theme";
 import { resolveTerminalThemeType } from "renderer/stores/theme/utils";
 import { TerminalRichInput } from "./components/TerminalRichInput";

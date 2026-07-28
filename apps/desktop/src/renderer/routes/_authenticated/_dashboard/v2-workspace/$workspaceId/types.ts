@@ -8,6 +8,18 @@ export interface FilePaneData {
 
 export interface TerminalPaneData {
 	terminalId: string;
+	/**
+	 * Which agent this terminal was launched to run, when it was launched from a
+	 * preset that names one. Absent for a plain shell, and absent for every pane
+	 * created before this field existed — both correctly render without an
+	 * accent, so no migration is needed.
+	 *
+	 * Recorded at launch rather than sniffed from the running process: the
+	 * process can exit, be replaced, or have something else typed over it, and a
+	 * colour that changes underneath you is worse than one that states what the
+	 * pane was opened for.
+	 */
+	agentId?: string;
 }
 
 // Read-only browser of recent Claude CLI sessions; carries no per-instance

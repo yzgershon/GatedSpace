@@ -8,6 +8,11 @@ import {
 	applyTerminalFontFamilyCssVariable,
 	type TerminalAppearance,
 } from "./appearance";
+import { attachCopyOnSelect } from "./copy-on-select";
+import {
+	isCopyOnSelectEnabled,
+	refreshCopyOnSelectSetting,
+} from "./copy-on-select-setting";
 import { scheduleFontSettleRefit } from "./font-settle";
 import {
 	cancelParserIdleWork,
@@ -45,6 +50,7 @@ export interface TerminalRuntime {
 	lastRows: number;
 	_disposeAddons: (() => void) | null;
 	_disposeImagePasteFallback: (() => void) | null;
+	_disposeCopyOnSelect: (() => void) | null;
 }
 
 function createTerminal(
@@ -257,6 +263,24 @@ export function createRuntime(
 		saveClipboardImageToTemp,
 	);
 
+	// Kick a refresh of the cached setting. There is a theoretical race — a
+	// selection made before this resolves reads the previous value — but the
+	// default is OFF, and selecting text within milliseconds of a terminal
+	// appearing is not a thing anyone does. Erring toward not-copying is the
+	// safe side of that race anyway.
+	void refreshCopyOnSelectSetting();
+
+	// Reads the setting on every selection rather than capturing it here, so
+	// toggling it applies to terminals that are already open.
+	const disposeCopyOnSelect = attachCopyOnSelect({
+		terminal,
+		element: wrapper,
+		writeText: (text) => {
+			void navigator.clipboard.writeText(text).catch(() => {});
+		},
+		isEnabled: isCopyOnSelectEnabled,
+	});
+
 	return {
 		terminalId,
 		terminal,
@@ -273,6 +297,7 @@ export function createRuntime(
 		lastRows: rows,
 		_disposeAddons: addonsResult.dispose,
 		_disposeImagePasteFallback: disposeImagePasteFallback,
+		_disposeCopyOnSelect: disposeCopyOnSelect,
 	};
 }
 
@@ -367,6 +392,8 @@ export function disposeRuntime(
 	}
 	runtime._disposeImagePasteFallback?.();
 	runtime._disposeImagePasteFallback = null;
+	runtime._disposeCopyOnSelect?.();
+	runtime._disposeCopyOnSelect = null;
 	runtime._disposeAddons?.();
 	runtime._disposeAddons = null;
 	runtime._disposeResizeObserver?.();

@@ -275,54 +275,61 @@ describe("runTeardown", () => {
 		expect(readFileSync(mainMarker, "utf-8").trim()).toBe("main");
 	});
 
-	test("uses managed wrapper path for teardown managed binaries even with PATH rewrites", async () => {
-		const markerFile = join(WORKTREE, "managed-wrapper-used.txt");
-		const shellHome = join(TEST_DIR, "shell-home");
-		const systemBinDir = join(TEST_DIR, "system-bin");
-		const wrapperBinDir = join(TEST_SUPERSET_HOME, "bin");
+	// POSIX-only by construction: it writes `#!/usr/bin/env bash` scripts, sets
+	// SHELL=/bin/bash and expects them to execute. Windows has no /bin/bash to
+	// run them with, so this describes real behaviour on the platforms it can
+	// run on and nothing at all here. Still covered by CI on macOS and Linux.
+	test.skipIf(process.platform === "win32")(
+		"uses managed wrapper path for teardown managed binaries even with PATH rewrites",
+		async () => {
+			const markerFile = join(WORKTREE, "managed-wrapper-used.txt");
+			const shellHome = join(TEST_DIR, "shell-home");
+			const systemBinDir = join(TEST_DIR, "system-bin");
+			const wrapperBinDir = join(TEST_SUPERSET_HOME, "bin");
 
-		mkdirSync(shellHome, { recursive: true });
-		mkdirSync(systemBinDir, { recursive: true });
-		mkdirSync(wrapperBinDir, { recursive: true });
+			mkdirSync(shellHome, { recursive: true });
+			mkdirSync(systemBinDir, { recursive: true });
+			mkdirSync(wrapperBinDir, { recursive: true });
 
-		writeFileSync(
-			join(shellHome, ".bash_profile"),
-			`export PATH="${systemBinDir}:/usr/bin:/bin"\n`,
-		);
+			writeFileSync(
+				join(shellHome, ".bash_profile"),
+				`export PATH="${systemBinDir}:/usr/bin:/bin"\n`,
+			);
 
-		writeFileSync(
-			join(systemBinDir, "claude"),
-			`#!/usr/bin/env bash
+			writeFileSync(
+				join(systemBinDir, "claude"),
+				`#!/usr/bin/env bash
 echo system
 `,
-		);
-		chmodSync(join(systemBinDir, "claude"), 0o755);
+			);
+			chmodSync(join(systemBinDir, "claude"), 0o755);
 
-		writeFileSync(
-			join(wrapperBinDir, "claude"),
-			`#!/usr/bin/env bash
+			writeFileSync(
+				join(wrapperBinDir, "claude"),
+				`#!/usr/bin/env bash
 echo wrapper
 `,
-		);
-		chmodSync(join(wrapperBinDir, "claude"), 0o755);
+			);
+			chmodSync(join(wrapperBinDir, "claude"), 0o755);
 
-		writeFileSync(
-			join(MAIN_REPO, ".superset", "config.json"),
-			JSON.stringify({ teardown: [`claude > "${markerFile}"`] }),
-		);
+			writeFileSync(
+				join(MAIN_REPO, ".superset", "config.json"),
+				JSON.stringify({ teardown: [`claude > "${markerFile}"`] }),
+			);
 
-		process.env.SHELL = "/bin/bash";
-		process.env.HOME = shellHome;
-		process.env.PATH = `${systemBinDir}:/usr/bin:/bin`;
+			process.env.SHELL = "/bin/bash";
+			process.env.HOME = shellHome;
+			process.env.PATH = `${systemBinDir}:/usr/bin:/bin`;
 
-		const result = await runTeardown({
-			mainRepoPath: MAIN_REPO,
-			worktreePath: WORKTREE,
-			workspaceName: "test-workspace",
-		});
+			const result = await runTeardown({
+				mainRepoPath: MAIN_REPO,
+				worktreePath: WORKTREE,
+				workspaceName: "test-workspace",
+			});
 
-		expect(result.success).toBe(true);
-		expect(existsSync(markerFile)).toBe(true);
-		expect(readFileSync(markerFile, "utf-8").trim()).toBe("wrapper");
-	});
+			expect(result.success).toBe(true);
+			expect(existsSync(markerFile)).toBe(true);
+			expect(readFileSync(markerFile, "utf-8").trim()).toBe("wrapper");
+		},
+	);
 });

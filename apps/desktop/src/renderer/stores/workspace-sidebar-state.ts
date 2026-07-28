@@ -2,7 +2,16 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
 export const DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 280;
-export const COLLAPSED_WORKSPACE_SIDEBAR_WIDTH = 52;
+/**
+ * Collapsed width — EXACTLY the icon rail's own width (`w-12` = 48px).
+ *
+ * It used to be 52, which left a 4px strip of panel background and its border
+ * showing beside the rail: a sliver that looked like a rendering fault rather
+ * than a state. Any change to the rail's width has to change this with it, so
+ * they are documented as one number in two places rather than two numbers that
+ * happen to be close.
+ */
+export const COLLAPSED_WORKSPACE_SIDEBAR_WIDTH = 48;
 const MIN_WORKSPACE_SIDEBAR_WIDTH = 220;
 export const MAX_WORKSPACE_SIDEBAR_WIDTH = 400;
 

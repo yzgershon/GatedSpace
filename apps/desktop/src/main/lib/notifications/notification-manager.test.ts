@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
+import {
+	parseNotificationMatrix,
+	SOUND_THROTTLE_MS,
+} from "shared/notification-matrix";
 import type {
 	AgentLifecycleEvent,
 	NotificationIds,
@@ -86,6 +90,103 @@ describe("NotificationManager", () => {
 	beforeEach(() => {
 		deps = createDeps();
 		manager = new NotificationManager(deps);
+	});
+
+	describe("the notification matrix", () => {
+		function matrixDeps(
+			matrix: Partial<Record<string, { sound: boolean; banner: boolean }>>,
+			extra: Partial<NotificationManagerDeps> = {},
+		) {
+			const built = parseNotificationMatrix(matrix);
+			return createDeps({ getNotificationMatrix: () => built, ...extra });
+		}
+
+		it("shows a banner without a sound when only the banner is on", () => {
+			const d = matrixDeps({ Stop: { sound: false, banner: true } });
+			new NotificationManager(d).handleAgentLifecycle(makeEvent());
+			expect(d.playSound).not.toHaveBeenCalled();
+			expect(lastNotification(d).show).toHaveBeenCalled();
+		});
+
+		it("plays a sound without a banner when only the sound is on", () => {
+			const d = matrixDeps({ Stop: { sound: true, banner: false } });
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent());
+			expect(d.playSound).toHaveBeenCalled();
+			expect(d.notifications).toHaveLength(0);
+			expect(m.activeCount).toBe(0);
+		});
+
+		it("does nothing at all when both channels are off", () => {
+			const d = matrixDeps({ Stop: { sound: false, banner: false } });
+			new NotificationManager(d).handleAgentLifecycle(makeEvent());
+			expect(d.playSound).not.toHaveBeenCalled();
+			expect(d.notifications).toHaveLength(0);
+		});
+
+		it("leaves other event types alone when one is turned off", () => {
+			const d = matrixDeps({ Stop: { sound: false, banner: false } });
+			new NotificationManager(d).handleAgentLifecycle(
+				makeEvent({ eventType: "PermissionRequest" }),
+			);
+			expect(d.playSound).toHaveBeenCalled();
+			expect(lastNotification(d).show).toHaveBeenCalled();
+		});
+
+		it("still plays a sound where the OS cannot show banners", () => {
+			// These are separate capabilities; tying the chime to banner support
+			// silenced machines that were perfectly able to make noise.
+			const d = matrixDeps({}, { isSupported: () => false });
+			new NotificationManager(d).handleAgentLifecycle(makeEvent());
+			expect(d.playSound).toHaveBeenCalled();
+			expect(d.notifications).toHaveLength(0);
+		});
+
+		it("notifies normally when no matrix dep is supplied", () => {
+			// The dep is optional, and its absence must not mean silence.
+			const d = createDeps();
+			new NotificationManager(d).handleAgentLifecycle(makeEvent());
+			expect(d.playSound).toHaveBeenCalled();
+			expect(lastNotification(d).show).toHaveBeenCalled();
+		});
+	});
+
+	describe("sound throttling", () => {
+		it("plays once for a burst of completions but still banners each one", () => {
+			// Four agents finishing together is one chime and four banners: the
+			// noise is what stacks badly, the notification list is not.
+			let clock = 1000;
+			const d = createDeps({ now: () => clock });
+			const m = new NotificationManager(d);
+			for (let i = 0; i < 4; i++) {
+				m.handleAgentLifecycle(makeEvent({ sessionId: `session-${i}` }));
+				clock += 50;
+			}
+			expect(d.playSound).toHaveBeenCalledTimes(1);
+			expect(d.notifications).toHaveLength(4);
+		});
+
+		it("lets a permission request through a completion's throttle window", () => {
+			let clock = 1000;
+			const d = createDeps({ now: () => clock });
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent({ eventType: "Stop" }));
+			clock += 10;
+			m.handleAgentLifecycle(
+				makeEvent({ eventType: "PermissionRequest", sessionId: "other" }),
+			);
+			expect(d.playSound).toHaveBeenCalledTimes(2);
+		});
+
+		it("chimes again once the window has passed", () => {
+			let clock = 1000;
+			const d = createDeps({ now: () => clock });
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent({ sessionId: "a" }));
+			clock += SOUND_THROTTLE_MS;
+			m.handleAgentLifecycle(makeEvent({ sessionId: "b" }));
+			expect(d.playSound).toHaveBeenCalledTimes(2);
+		});
 	});
 
 	describe("handleAgentLifecycle", () => {

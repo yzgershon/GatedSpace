@@ -7,6 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { Utf8Base64 } from "./clipboard-base64";
+import { attachRepaintWatchdog } from "./terminal-repaint-watchdog";
 
 export interface LoadAddonsResult {
 	searchAddon: SearchAddon;
@@ -71,12 +72,22 @@ export function loadAddons(terminal: XTerm): LoadAddonsResult {
 		}
 	});
 
+	// Wake, re-focus and DPR changes all leave the drawing surface stale without
+	// xterm hearing about it, so a healthy session can sit behind a blank or
+	// blurry pane indefinitely. The renderer is resolved lazily because the
+	// WebGL addon attaches a frame later and can be dropped by a context loss.
+	const detachRepaintWatchdog = attachRepaintWatchdog({
+		terminal,
+		getRenderer: () => webglAddon,
+	});
+
 	return {
 		searchAddon,
 		progressAddon,
 		dispose: () => {
 			disposed = true;
 			cancelAnimationFrame(rafId);
+			detachRepaintWatchdog();
 			try {
 				webglAddon?.dispose();
 			} catch {}

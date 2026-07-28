@@ -23,11 +23,11 @@ import { useMemo, useRef, useState } from "react";
 import { HiCheck, HiMiniPlay, HiXMark } from "react-icons/hi2";
 import { LuCircle } from "react-icons/lu";
 import { AgentSelect } from "renderer/components/AgentSelect";
+import { ProjectThumbnail } from "renderer/components/WorkspaceSidebar/ProjectSection/ProjectThumbnail";
 import { useAgentLaunchPreferences } from "renderer/hooks/useAgentLaunchPreferences";
 import { launchAgentSession } from "renderer/lib/agent-session-orchestrator";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useCreateWorkspace } from "renderer/react-query/workspaces";
-import { ProjectThumbnail } from "renderer/screens/main/components/WorkspaceSidebar/ProjectSection/ProjectThumbnail";
 import { deriveBranchName } from "../../../../../../$taskId/utils/deriveBranchName";
 import type { TaskWithStatus } from "../../../../hooks/useTasksTable";
 

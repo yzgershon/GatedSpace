@@ -23,6 +23,7 @@ export const SETTING_ITEM_ID = {
 	APPEARANCE_TERMINAL_FONT: "appearance-terminal-font",
 
 	RINGTONES_NOTIFICATION: "ringtones-notification",
+	RINGTONES_MATRIX: "ringtones-matrix",
 
 	KEYBOARD_SHORTCUTS: "keyboard-shortcuts",
 	BEHAVIOR_CONFIRM_QUIT: "behavior-confirm-quit",
@@ -42,6 +43,8 @@ export const SETTING_ITEM_ID = {
 	TERMINAL_QUICK_ADD: "terminal-quick-add",
 	TERMINAL_SESSIONS: "terminal-sessions",
 	TERMINAL_LINK_BEHAVIOR: "terminal-link-behavior",
+	TERMINAL_COPY_ON_SELECT: "terminal-copy-on-select",
+	TERMINAL_MOBILE_BRIDGE: "terminal-mobile-bridge",
 
 	LINKS_FILE: "links-file",
 	LINKS_URL: "links-url",
@@ -51,8 +54,6 @@ export const SETTING_ITEM_ID = {
 	MODELS_ANTHROPIC: "models-anthropic",
 	MODELS_OPENAI: "models-openai",
 
-	EXPERIMENTAL_SUPERSET_V2: "experimental-superset-v2",
-	EXPERIMENTAL_V1_MIGRATION: "experimental-v1-migration",
 	EXPERIMENTAL_INLINE_WORKSPACE_PORTS: "experimental-inline-workspace-ports",
 	EXPERIMENTAL_WORKSPACE_AGENTS: "experimental-workspace-agents",
 
@@ -134,6 +135,7 @@ export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.APPEARANCE_TERMINAL_FONT]: "shared",
 
 	[SETTING_ITEM_ID.RINGTONES_NOTIFICATION]: "shared",
+	[SETTING_ITEM_ID.RINGTONES_MATRIX]: "shared",
 
 	[SETTING_ITEM_ID.KEYBOARD_SHORTCUTS]: "shared",
 
@@ -155,6 +157,8 @@ export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.TERMINAL_QUICK_ADD]: "shared",
 	[SETTING_ITEM_ID.TERMINAL_SESSIONS]: "shared",
 	[SETTING_ITEM_ID.TERMINAL_LINK_BEHAVIOR]: "v1",
+	[SETTING_ITEM_ID.TERMINAL_COPY_ON_SELECT]: "shared",
+	[SETTING_ITEM_ID.TERMINAL_MOBILE_BRIDGE]: "shared",
 
 	[SETTING_ITEM_ID.LINKS_FILE]: "v2",
 	[SETTING_ITEM_ID.LINKS_URL]: "v2",
@@ -164,8 +168,6 @@ export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.MODELS_ANTHROPIC]: "shared",
 	[SETTING_ITEM_ID.MODELS_OPENAI]: "shared",
 
-	[SETTING_ITEM_ID.EXPERIMENTAL_SUPERSET_V2]: "shared",
-	[SETTING_ITEM_ID.EXPERIMENTAL_V1_MIGRATION]: "v2",
 	[SETTING_ITEM_ID.EXPERIMENTAL_INLINE_WORKSPACE_PORTS]: "v2",
 	[SETTING_ITEM_ID.EXPERIMENTAL_WORKSPACE_AGENTS]: "v2",
 
@@ -465,6 +467,31 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 		],
 	},
 	{
+		id: SETTING_ITEM_ID.RINGTONES_MATRIX,
+		section: "ringtones",
+		title: "What gets notified",
+		description:
+			"Choose a sound, a banner, or neither for each kind of agent event",
+		keywords: [
+			"notifications",
+			"notification",
+			"matrix",
+			"banner",
+			"popup",
+			"toast",
+			"permission",
+			"approval",
+			"question",
+			"waiting",
+			"finished",
+			"complete",
+			"sound",
+			"silent",
+			"per event",
+			"which",
+		],
+	},
+	{
 		id: SETTING_ITEM_ID.RINGTONES_NOTIFICATION,
 		section: "ringtones",
 		title: "Notification Sound",
@@ -752,6 +779,42 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 		],
 	},
 	{
+		id: SETTING_ITEM_ID.TERMINAL_MOBILE_BRIDGE,
+		section: "terminal",
+		title: "Phone Access",
+		description:
+			"Read sessions and send prompts from your phone over Tailscale",
+		keywords: [
+			"phone",
+			"mobile",
+			"remote",
+			"tailscale",
+			"bridge",
+			"ios",
+			"android",
+			"away",
+			"tablet",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.TERMINAL_COPY_ON_SELECT,
+		section: "terminal",
+		title: "Copy on Select",
+		description: "Selecting text in a terminal copies it to the clipboard",
+		keywords: [
+			"terminal",
+			"copy",
+			"select",
+			"selection",
+			"clipboard",
+			"paste",
+			"highlight",
+			"mouse",
+			"drag",
+			"automatic",
+		],
+	},
+	{
 		id: SETTING_ITEM_ID.TERMINAL_LINK_BEHAVIOR,
 		section: "terminal",
 		title: "Link Behavior",
@@ -903,44 +966,6 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"auth",
 			"workspace naming",
 			"auto name",
-		],
-	},
-	{
-		id: SETTING_ITEM_ID.EXPERIMENTAL_SUPERSET_V2,
-		section: "experimental",
-		title: "Try Superset Version 2 (Early Access)",
-		description: "Switch between Superset V1 and the new V2 experience",
-		keywords: [
-			"experimental",
-			"experiments",
-			"v2",
-			"v1",
-			"version",
-			"early access",
-			"beta",
-			"preview",
-			"workspace",
-			"workspaces",
-			"toggle",
-			"switch",
-		],
-	},
-	{
-		id: SETTING_ITEM_ID.EXPERIMENTAL_V1_MIGRATION,
-		section: "experimental",
-		title: "V1 to V2 Migration",
-		description: "Rerun the V1 to V2 data migration",
-		keywords: [
-			"experimental",
-			"migration",
-			"migrate",
-			"rerun",
-			"retry",
-			"recover",
-			"v1",
-			"v2",
-			"projects",
-			"workspaces",
 		],
 	},
 	{

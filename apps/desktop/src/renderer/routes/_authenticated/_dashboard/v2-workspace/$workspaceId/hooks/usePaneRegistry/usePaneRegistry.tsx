@@ -25,6 +25,7 @@ import {
 	LuPower,
 } from "react-icons/lu";
 import { useHotkeyDisplay } from "renderer/hotkeys";
+import { agentAccent } from "renderer/lib/agent-accent";
 import { FileIcon } from "renderer/lib/fileIcons";
 import { getBaseName } from "renderer/lib/pathBasename";
 import { consumeTerminalBackgroundIntent } from "renderer/lib/terminal/terminal-background-intents";
@@ -200,7 +201,12 @@ export function usePaneRegistry({
 				const pane = {
 					kind: "terminal" as const,
 					titleOverride: result.label,
-					data: { terminalId } as TerminalPaneData,
+					// `agents.run` reports a session and a label but not which agent
+					// produced them, so the config id is the best identifier available
+					// here. For a built-in it IS the agent id; for a user-defined agent
+					// it won't match and `agentAccent` returns undefined, which is the
+					// same neutral header this pane had before.
+					data: { terminalId, agentId: input.configId } as TerminalPaneData,
 				};
 				if (input.placement === "split-pane" && state.activeTabId) {
 					state.addPane({ tabId: state.activeTabId, pane });
@@ -259,7 +265,12 @@ export function usePaneRegistry({
 				const pane = {
 					kind: "terminal" as const,
 					titleOverride: request.title,
-					data: { terminalId } as TerminalPaneData,
+					// A resumed session is the same agent it was before, so the pane it
+					// reopens in should look the same as the one it left.
+					data: {
+						terminalId,
+						agentId: request.provider,
+					} as TerminalPaneData,
 				};
 				if (state.activeTabId) {
 					state.addPane({ tabId: state.activeTabId, pane });
@@ -286,6 +297,9 @@ export function usePaneRegistry({
 			session: {
 				getIcon: () => <Sparkles className="size-3.5" />,
 				getTitle: () => "Claude",
+				// A session pane runs the claude binary by definition, so unlike a
+				// terminal there is nothing to record at launch or look up.
+				getAccent: () => agentAccent("claude"),
 				// Label the tab with what the session is about — several open
 				// sessions all reading "Claude" tells you nothing.
 				titleSource: (pane) => ({
@@ -426,6 +440,8 @@ export function usePaneRegistry({
 					);
 				},
 				getTitle: () => "Terminal",
+				getAccent: (ctx) =>
+					agentAccent((ctx.pane.data as TerminalPaneData).agentId),
 				titleSource: (pane) => {
 					const { terminalId } = pane.data as TerminalPaneData;
 					const instanceId = pane.id;

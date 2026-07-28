@@ -5,7 +5,9 @@ import {
 	SETTING_ITEM_ID,
 	type SettingItemId,
 } from "../../../utils/settings-search";
+import { CopyOnSelectSetting } from "./components/CopyOnSelectSetting";
 import { LinkBehaviorSetting } from "./components/LinkBehaviorSetting";
+import { MobileBridgeSetting } from "./components/MobileBridgeSetting";
 import { PresetsSection } from "./components/PresetsSection";
 import { SessionsSection } from "./components/SessionsSection";
 import { V2PresetsSection } from "./components/V2PresetsSection";
@@ -60,6 +62,14 @@ export function TerminalSettings({
 		SETTING_ITEM_ID.TERMINAL_LINK_BEHAVIOR,
 		visibleItems,
 	);
+	const showCopyOnSelect = isItemVisible(
+		SETTING_ITEM_ID.TERMINAL_COPY_ON_SELECT,
+		visibleItems,
+	);
+	const showMobileBridge = isItemVisible(
+		SETTING_ITEM_ID.TERMINAL_MOBILE_BRIDGE,
+		visibleItems,
+	);
 	const showSessions = isItemVisible(
 		SETTING_ITEM_ID.TERMINAL_SESSIONS,
 		visibleItems,
@@ -98,6 +108,8 @@ export function TerminalSettings({
 						/>
 					))}
 				{showLinkBehavior && <LinkBehaviorSetting key="link-behavior" />}
+				{showCopyOnSelect && <CopyOnSelectSetting key="copy-on-select" />}
+				{showMobileBridge && <MobileBridgeSetting key="mobile-bridge" />}
 				{showSessions &&
 					(isV2CloudEnabled ? (
 						<V2SessionsSection key="sessions" />

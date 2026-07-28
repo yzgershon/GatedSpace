@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { getDiffsTheme } from "renderer/screens/main/components/WorkspaceView/utils/code-theme";
+import { getDiffsTheme } from "renderer/components/WorkspaceView/utils/code-theme";
 import { darkTheme, monokaiTheme } from "shared/themes";
 import { buildDiffPoolRenderOptions } from "./buildDiffPoolRenderOptions";
 

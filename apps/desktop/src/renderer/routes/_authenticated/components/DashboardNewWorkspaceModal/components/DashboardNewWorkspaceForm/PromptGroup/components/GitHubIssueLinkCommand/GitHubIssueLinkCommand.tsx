@@ -13,13 +13,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useEffect, useId, useRef, useState } from "react";
-import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
-import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
-import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
 import {
 	IssueIcon,
 	type IssueState,
-} from "renderer/screens/main/components/IssueIcon/IssueIcon";
+} from "renderer/components/IssueIcon/IssueIcon";
+import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
+import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
+import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
 
 const MAX_RESULTS = 30;
 

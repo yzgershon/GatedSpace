@@ -9,6 +9,7 @@
  * inside the workspace tree (avoids the "No procedure found" context hijack).
  */
 import { observable } from "@trpc/server/observable";
+import { getSessionCost } from "main/lib/claude-session/cost-store";
 import { claudeSessionManager } from "main/lib/claude-session/session-manager";
 import { loadSessionTranscript } from "main/lib/claude-session/transcript";
 import type { ClaudeStreamEvent } from "shared/claude-session/events";
@@ -152,6 +153,20 @@ export const createClaudeSessionRouter = () => {
 		history: publicProcedure
 			.input(z.object({ sessionId: z.string() }))
 			.query(({ input }) => loadSessionTranscript(input.sessionId)),
+
+		/**
+		 * What this conversation has cost in total, across every process that has
+		 * served it.
+		 *
+		 * Separate from `history` because it cannot come from the transcript: the
+		 * CLI writes no cost field there, and its per-result figure restarts at
+		 * zero in each new process. Without this a restored pane began counting
+		 * from nothing, which is what made the total appear to reset on every
+		 * resume, restart and profile switch.
+		 */
+		cost: publicProcedure
+			.input(z.object({ sessionId: z.string() }))
+			.query(({ input }) => ({ costUsd: getSessionCost(input.sessionId) })),
 
 		/**
 		 * Session ids live in a session pane right now. The recent-sessions list

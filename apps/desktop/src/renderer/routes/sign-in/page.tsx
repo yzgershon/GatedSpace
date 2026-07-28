@@ -64,12 +64,12 @@ function SignInPage() {
 
 	// Local-only mode has a static session — there's nothing to sign into
 	if (isLocalMode()) {
-		return <Navigate to="/workspace" replace />;
+		return <Navigate to="/v2-workspace" replace />;
 	}
 
 	// Dev bypass: skip sign-in entirely
 	if (env.SKIP_ENV_VALIDATION) {
-		return <Navigate to="/workspace" replace />;
+		return <Navigate to="/v2-workspace" replace />;
 	}
 
 	// Show loading while session is being fetched
@@ -83,7 +83,7 @@ function SignInPage() {
 
 	// If already signed in, redirect to workspace
 	if (session?.user) {
-		return <Navigate to="/workspace" replace />;
+		return <Navigate to="/v2-workspace" replace />;
 	}
 
 	const rememberLastUsedMethod = (method: AuthMethod) => {
@@ -187,7 +187,7 @@ function SignInPage() {
 			).toISOString();
 			await persistToken.mutateAsync({ token, expiresAt });
 			setAuthToken(token);
-			await navigate({ to: "/workspace", replace: true });
+			await navigate({ to: "/v2-workspace", replace: true });
 		} catch (error) {
 			setDevError(
 				error instanceof Error ? error.message : "Dev sign-in failed",

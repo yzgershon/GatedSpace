@@ -51,6 +51,10 @@ import {
 	DEFAULT_TERMINAL_LINK_BEHAVIOR,
 	DEFAULT_USE_COMPACT_TERMINAL_ADD_BUTTON,
 } from "shared/constants";
+import {
+	parseNotificationMatrix,
+	serializeNotificationMatrix,
+} from "shared/notification-matrix";
 import { normalizePresetProjectIds } from "shared/preset-project-targeting";
 import {
 	CUSTOM_RINGTONE_ID,
@@ -718,6 +722,31 @@ export const createSettingsRouter = () => {
 				return { success: true };
 			}),
 
+		/**
+		 * Copy-on-select. Off unless asked for: it replaces the clipboard every
+		 * time you drag across a terminal to read something, which is only a good
+		 * trade if you expect it.
+		 */
+		getTerminalCopyOnSelect: publicProcedure.query(() => {
+			const row = getSettings();
+			return row.terminalCopyOnSelect ?? false;
+		}),
+
+		setTerminalCopyOnSelect: publicProcedure
+			.input(z.object({ enabled: z.boolean() }))
+			.mutation(({ input }) => {
+				localDb
+					.insert(settings)
+					.values({ id: 1, terminalCopyOnSelect: input.enabled })
+					.onConflictDoUpdate({
+						target: settings.id,
+						set: { terminalCopyOnSelect: input.enabled },
+					})
+					.run();
+
+				return { success: true };
+			}),
+
 		getTerminalLinkBehavior: publicProcedure.query(() => {
 			const row = getSettings();
 			return row.terminalLinkBehavior ?? DEFAULT_TERMINAL_LINK_BEHAVIOR;
@@ -887,6 +916,31 @@ export const createSettingsRouter = () => {
 					.run();
 
 				return { success: true };
+			}),
+
+		getNotificationMatrix: publicProcedure.query(() => {
+			// Parsed on the way out, so a hand-edited or half-written row becomes
+			// the defaults here rather than an exception in the renderer.
+			return parseNotificationMatrix(getSettings().notificationMatrix);
+		}),
+
+		setNotificationMatrix: publicProcedure
+			.input(z.object({ matrix: z.unknown() }))
+			.mutation(({ input }) => {
+				// Parse before storing too: the row should never contain a shape the
+				// reader would have to repair.
+				const matrix = parseNotificationMatrix(input.matrix);
+				const notificationMatrix = serializeNotificationMatrix(matrix);
+				localDb
+					.insert(settings)
+					.values({ id: 1, notificationMatrix })
+					.onConflictDoUpdate({
+						target: settings.id,
+						set: { notificationMatrix },
+					})
+					.run();
+
+				return matrix;
 			}),
 
 		getFontSettings: publicProcedure.query(() => {

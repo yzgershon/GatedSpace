@@ -19,7 +19,10 @@ import { appState } from "../lib/app-state";
 import { browserManager } from "../lib/browser/browser-manager";
 import { attachEditContextMenu } from "../lib/edit-context-menu";
 import { createApplicationMenu } from "../lib/menu";
-import { playNotificationSound } from "../lib/notification-sound";
+import {
+	getNotificationMatrix,
+	playNotificationSound,
+} from "../lib/notification-sound";
 import { NotificationManager } from "../lib/notifications/notification-manager";
 import {
 	notificationsApp,
@@ -196,6 +199,7 @@ export async function MainWindow() {
 		isSupported: () => Notification.isSupported(),
 		createNotification: (opts) => new Notification(opts),
 		playSound: playNotificationSound,
+		getNotificationMatrix,
 		onNotificationClick: (ids) => {
 			window.show();
 			window.focus();

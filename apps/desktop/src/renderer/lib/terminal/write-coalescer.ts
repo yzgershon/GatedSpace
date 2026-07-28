@@ -16,6 +16,24 @@
  */
 export const MAX_PENDING_BYTES = 1024 * 1024;
 
+/**
+ * How often back-pressure forced an early write, and how much it moved.
+ *
+ * Overflow is not an error — the synchronous flush is the correct response and
+ * nothing is lost. But a pane that overflows continuously is a pane whose
+ * renderer is behind the PTY, and that is invisible from the outside: it looks
+ * like "the terminal feels laggy" with nothing to point at. These counters are
+ * what turn that into a number.
+ */
+export interface WriteCoalescerStats {
+	/** Early flushes caused by exceeding MAX_PENDING_BYTES. */
+	overflowFlushes: number;
+	/** Total bytes written by those flushes. */
+	overflowBytes: number;
+	/** Largest single batch handed to xterm, in bytes. */
+	peakBatchBytes: number;
+}
+
 export interface WriteCoalescer {
 	/** Queue PTY bytes for the next frame's write. */
 	push(chunk: Uint8Array): void;
@@ -26,15 +44,39 @@ export interface WriteCoalescer {
 	flushSync(): void;
 	/** Flush remaining bytes and stop accepting new ones. */
 	dispose(): void;
+	/** Back-pressure counters since creation. */
+	stats(): WriteCoalescerStats;
+}
+
+export interface WriteCoalescerOptions {
+	/**
+	 * Called on each overflow-triggered flush, with the running totals.
+	 *
+	 * Deliberately NOT a "bytes were dropped" hook: this coalescer never drops.
+	 * Bounding memory by flushing early keeps every byte and moves the cost to
+	 * one unbatched write, which is the right trade for a terminal — losing
+	 * agent output to save a frame would be a much worse bargain.
+	 */
+	onOverflow?: (stats: WriteCoalescerStats) => void;
 }
 
 export function createWriteCoalescer(
 	write: (data: Uint8Array) => void,
+	options: WriteCoalescerOptions = {},
 ): WriteCoalescer {
 	let pending: Uint8Array[] = [];
 	let pendingBytes = 0;
 	let frameId: number | null = null;
 	let disposed = false;
+	let overflowFlushes = 0;
+	let overflowBytes = 0;
+	let peakBatchBytes = 0;
+
+	const snapshot = (): WriteCoalescerStats => ({
+		overflowFlushes,
+		overflowBytes,
+		peakBatchBytes,
+	});
 
 	function flushSync() {
 		if (frameId !== null) {
@@ -55,6 +97,7 @@ export function createWriteCoalescer(
 		}
 		pending = [];
 		pendingBytes = 0;
+		if (batch.length > peakBatchBytes) peakBatchBytes = batch.length;
 		write(batch);
 	}
 
@@ -63,7 +106,10 @@ export function createWriteCoalescer(
 		pending.push(chunk);
 		pendingBytes += chunk.length;
 		if (pendingBytes > MAX_PENDING_BYTES) {
+			overflowFlushes++;
+			overflowBytes += pendingBytes;
 			flushSync();
+			options.onOverflow?.(snapshot());
 			return;
 		}
 		if (frameId === null) {
@@ -82,5 +128,6 @@ export function createWriteCoalescer(
 			flushSync();
 			disposed = true;
 		},
+		stats: snapshot,
 	};
 }

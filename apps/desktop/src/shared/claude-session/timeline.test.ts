@@ -446,3 +446,74 @@ describe("context measurement", () => {
 		expect(state.usage?.contextTokens).toBe(400_000);
 	});
 });
+
+describe("cost across CLI processes", () => {
+	function result(costUsd: number, uuid: string): ClaudeStreamEvent {
+		return {
+			type: "result",
+			subtype: "success",
+			uuid,
+			session_id: "s",
+			result: "ok",
+			is_error: false,
+			total_cost_usd: costUsd,
+			duration_ms: 10,
+			num_turns: 1,
+		} as unknown as ClaudeStreamEvent;
+	}
+
+	function init(uuid: string): ClaudeStreamEvent {
+		return {
+			type: "system",
+			subtype: "init",
+			uuid,
+			session_id: "s",
+			model: "claude",
+			cwd: "/repo",
+			permissionMode: "bypassPermissions",
+			slash_commands: [],
+			skills: [],
+			agents: [],
+			mcp_servers: [],
+		} as unknown as ClaudeStreamEvent;
+	}
+
+	it("takes the latest figure within one process, not the sum", () => {
+		// The CLI's number is already cumulative for the run, so adding each
+		// report would roughly double the bill.
+		let state = emptyTimeline();
+		state = applyEvent(state, init("i1"));
+		state = applyEvent(state, result(0.1, "r1"));
+		state = applyEvent(state, result(0.3, "r2"));
+		expect(state.costUsd).toBeCloseTo(0.3, 6);
+	});
+
+	it("keeps accruing when a new process restarts the count at zero", () => {
+		// This is the reported bug: resuming after a restart, a profile switch or
+		// a rate-limit wait started a new process, whose total began again at
+		// zero, and the displayed cost reset with it.
+		let state = emptyTimeline();
+		state = applyEvent(state, init("i1"));
+		state = applyEvent(state, result(0.5, "r1"));
+		state = applyEvent(state, init("i2"));
+		state = applyEvent(state, result(0.2, "r2"));
+		expect(state.costUsd).toBeCloseTo(0.7, 6);
+	});
+
+	it("survives a new process whose init was never seen", () => {
+		// A drop without an init still means a fresh process reporting, so the
+		// whole figure is new spend rather than a negative delta.
+		let state = emptyTimeline();
+		state = applyEvent(state, result(0.5, "r1"));
+		state = applyEvent(state, result(0.2, "r2"));
+		expect(state.costUsd).toBeCloseTo(0.7, 6);
+	});
+
+	it("ignores a missing or nonsensical figure rather than zeroing the total", () => {
+		let state = emptyTimeline();
+		state = applyEvent(state, result(0.4, "r1"));
+		state = applyEvent(state, result(Number.NaN, "r2"));
+		state = applyEvent(state, result(-1, "r3"));
+		expect(state.costUsd).toBeCloseTo(0.4, 6);
+	});
+});

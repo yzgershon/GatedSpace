@@ -30,6 +30,8 @@ export function HostNotificationSubscriber({
 		electronTrpc.settings.getNotificationVolume.useQuery();
 	const { data: muted = false } =
 		electronTrpc.settings.getNotificationSoundsMuted.useQuery();
+	const { data: matrix } =
+		electronTrpc.settings.getNotificationMatrix.useQuery();
 	const workspacesById = useMemo(
 		() =>
 			new Map(
@@ -49,6 +51,10 @@ export function HostNotificationSubscriber({
 				paneLayout: workspace.paneLayout,
 				volume,
 				muted,
+				// Undefined only until the query settles, in the first moments after
+				// launch. Falling through to the handler's defaults there means an
+				// event landing in that window notifies, rather than being dropped.
+				...(matrix ? { matrix } : {}),
 			});
 		},
 	);

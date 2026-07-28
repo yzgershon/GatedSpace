@@ -10,10 +10,17 @@ import { OverflowFadeText } from "@superset/ui/overflow-fade-text";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { PencilIcon, XIcon } from "lucide-react";
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import {
+	type ReactNode,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { useDrag, useDrop } from "react-dnd";
 import type { Tab } from "../../../../../../../types";
 import type { PaneRegistry } from "../../../../../../types";
+import { getEmptyDragImage } from "../../../../utils/emptyDragImage";
 import { useTabTitle } from "../../../../utils/useTabTitle";
 import { PANE_DRAG_TYPE } from "../../../Tab/components/Pane/components/PaneHeader";
 import { TabRenameInput } from "./components/TabRenameInput";
@@ -74,7 +81,7 @@ export function TabItem<TData>({
 
 	const nodeRef = useRef<HTMLDivElement>(null);
 
-	const [{ isDragging }, connectDrag] = useDrag(
+	const [{ isDragging }, connectDrag, connectDragPreview] = useDrag(
 		() => ({
 			type: TAB_DRAG_TYPE,
 			item: { tabId: tab.id, index },
@@ -84,6 +91,15 @@ export function TabItem<TData>({
 		}),
 		[tab.id, index],
 	);
+
+	// Suppress the browser's default drag image. Chromium snapshots the dragged
+	// element, and a tab is a small dark box on a dark surface, so the snapshot
+	// reads as a black rectangle stuck to the cursor. The tab already dims and
+	// the drop indicator already shows where it will land, so the snapshot adds
+	// nothing but the artefact.
+	useEffect(() => {
+		connectDragPreview(getEmptyDragImage(), { captureDraggingState: true });
+	}, [connectDragPreview]);
 
 	// Existing pane-to-tab drop (hovering a pane over a tab switches to it)
 	const [{ isOver: isPaneOver }, connectPaneDrop] = useDrop(

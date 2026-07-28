@@ -18,6 +18,7 @@ import {
 	LoaderCircle,
 	PencilLine,
 	Plus,
+	ShieldAlert,
 	Trash2,
 } from "lucide-react";
 import {
@@ -28,6 +29,8 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { getRelativeTime } from "renderer/components/WorkspacesListView/utils";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useRenderStressInstrumentation } from "renderer/lib/performance/stress-instrumentation";
 import { markTerminalForBackground } from "renderer/lib/terminal/terminal-background-intents";
 import { terminalRuntimeRegistry } from "renderer/lib/terminal/terminal-runtime-registry";
@@ -37,7 +40,6 @@ import type {
 	TerminalPaneData,
 } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
-import { getRelativeTime } from "renderer/screens/main/components/WorkspacesListView/utils";
 import { TerminalPaneIcon } from "../TerminalPaneIcon";
 import {
 	getTerminalDisplayTitle,
@@ -306,6 +308,31 @@ export function TerminalSessionDropdown({
 		}
 	};
 
+	// Elevation is Windows-only, and the entry is hidden rather than disabled
+	// elsewhere: on macOS and Linux `sudo` in this very pane is the answer, so a
+	// greyed-out menu item would be advertising a missing feature that isn't.
+	const { data: supportsElevation } =
+		electronTrpc.system.supportsElevatedTerminal.useQuery();
+	const workspaceQuery = workspaceTrpc.workspace.get.useQuery({
+		id: workspaceId,
+	});
+	const openElevatedTerminal =
+		electronTrpc.system.openElevatedTerminal.useMutation({
+			onSuccess: (result) => {
+				if (result.ok) return;
+				// Declining the Windows prompt lands here too. It is information, not
+				// a failure, so it must not read like the app broke.
+				toast.message("No admin terminal opened", {
+					description: result.error,
+				});
+			},
+			onError: (error) => {
+				toast.error("Could not open an admin terminal", {
+					description: error.message,
+				});
+			},
+		});
+
 	const hostTitle =
 		runtimeTitle !== undefined ? runtimeTitle : currentSession?.title;
 	const titleOverride = context.pane.titleOverride;
@@ -512,6 +539,36 @@ export function TerminalSessionDropdown({
 						</div>
 					)}
 				</div>
+				{supportsElevation ? (
+					<>
+						<DropdownMenuSeparator />
+						<DropdownMenuItem
+							className="flex items-center gap-2"
+							disabled={openElevatedTerminal.isPending}
+							onSelect={() => {
+								openElevatedTerminal.mutate({
+									cwd: workspaceQuery.data?.worktreePath ?? "",
+								});
+								setIsOpen(false);
+							}}
+						>
+							<ShieldAlert className="size-3.5 shrink-0 text-warning" />
+							<span className="min-w-0 flex-1 text-xs">
+								Open admin terminal
+							</span>
+							{/*
+							 * Says "separate window" up front. An admin shell cannot be a
+							 * pane — mixing elevation levels in one process is a UAC bypass,
+							 * see main/lib/elevated-terminal.ts — and finding that out by
+							 * clicking and getting a window you didn't expect is worse than
+							 * reading four words.
+							 */}
+							<span className="shrink-0 text-xs text-muted-foreground/70">
+								separate window
+							</span>
+						</DropdownMenuItem>
+					</>
+				) : null}
 			</DropdownMenuContent>
 		</DropdownMenu>
 	);

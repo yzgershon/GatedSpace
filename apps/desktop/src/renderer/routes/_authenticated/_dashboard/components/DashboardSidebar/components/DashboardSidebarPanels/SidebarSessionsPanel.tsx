@@ -20,13 +20,25 @@
 import { Input } from "@superset/ui/input";
 import { cn } from "@superset/ui/utils";
 import { useQuery } from "@tanstack/react-query";
-import { Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Check, Copy, Search } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { getHostTrpcClient } from "renderer/lib/host-trpc-client";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
+import {
+	type AgentSessionProvider,
+	formatRelativeTime,
+	liveSessionKeys,
+	resumeCommandFor,
+} from "./session-list-helpers";
 
-export type AgentSessionProvider = "claude" | "codex";
+export type { AgentSessionProvider } from "./session-list-helpers";
+export {
+	formatRelativeTime,
+	liveSessionKeys,
+	resumeCommandFor,
+} from "./session-list-helpers";
 
 export interface SidebarSessionOpenRequest {
 	provider: AgentSessionProvider;
@@ -42,42 +54,6 @@ const PROVIDERS: { id: AgentSessionProvider; label: string }[] = [
 	{ id: "codex", label: "Codex" },
 ];
 
-export function formatRelativeTime(ms: number, now = Date.now()): string {
-	const seconds = Math.max(0, (now - ms) / 1000);
-	if (seconds < 60) return "now";
-	if (seconds < 3600) return `${Math.round(seconds / 60)}m`;
-	if (seconds < 86400) return `${Math.round(seconds / 3600)}h`;
-	const days = Math.round(seconds / 86400);
-	if (days < 30) return `${days}d`;
-	return `${Math.round(days / 30)}mo`;
-}
-
-/**
- * Which session ids must not be plain-resumed.
- *
- * `hostReachable` is the whole safety argument: when the host can't be asked,
- * this returns null meaning "unknown", and the caller forks everything rather
- * than assuming nothing is live.
- */
-export function liveSessionKeys(
-	hostBindings: Array<{
-		agentId: string;
-		agentSessionId?: string | null;
-	}> | null,
-	paneSessionIds: string[] | null,
-): Set<string> | null {
-	if (hostBindings === null) return null;
-	const keys = new Set<string>();
-	for (const binding of hostBindings) {
-		if (!binding.agentSessionId) continue;
-		keys.add(`${binding.agentId}:${binding.agentSessionId}`);
-	}
-	for (const sessionId of paneSessionIds ?? []) {
-		keys.add(`claude:${sessionId}`);
-	}
-	return keys;
-}
-
 export function SidebarSessionsPanel({
 	onOpenSession,
 	onNewSession,
@@ -88,6 +64,23 @@ export function SidebarSessionsPanel({
 	const [query, setQuery] = useState("");
 	const [provider, setProvider] = useState<AgentSessionProvider>("claude");
 	const { activeHostUrl } = useLocalHostService();
+	const { copyToClipboard } = useCopyToClipboard();
+	// Which command was copied, not merely whether one was: the tick has to land
+	// on the row that was clicked, and a shared boolean would flash all of them.
+	const [copiedCommand, setCopiedCommand] = useState<string | null>(null);
+
+	const copyResumeCommand = useCallback(
+		async (command: string) => {
+			await copyToClipboard(command);
+			setCopiedCommand(command);
+			setTimeout(
+				() =>
+					setCopiedCommand((current) => (current === command ? null : current)),
+				2000,
+			);
+		},
+		[copyToClipboard],
+	);
 
 	const sessions = useQuery({
 		queryKey: ["sidebar-agent-sessions", provider],
@@ -190,38 +183,67 @@ export function SidebarSessionsPanel({
 						const key = `${provider}:${session.sessionId}`;
 						// Unknown (null) is treated exactly like live: fork.
 						const live = liveKeys === null || liveKeys.has(key);
+						const resumeCommand = resumeCommandFor(
+							provider,
+							session.sessionId,
+							live,
+						);
 						return (
-							<button
+							// A row, not a button: the copy affordance is itself a button and
+							// nesting one inside another is invalid.
+							<div
 								key={session.sessionId}
-								type="button"
-								onClick={() =>
-									onOpenSession({
-										provider,
-										sessionId: session.sessionId,
-										cwd: session.cwd ?? null,
-										title: session.title,
-										mode: live ? "fork" : "resume",
-									})
-								}
-								title={
-									live
-										? "Already open, or its state can't be confirmed — this opens a forked copy under a new session id."
-										: (session.cwd ?? undefined)
-								}
-								className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:bg-accent"
+								className="group relative flex items-center transition-colors hover:bg-accent focus-within:bg-accent"
 							>
-								<span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
-									{session.title}
-								</span>
-								{live ? (
-									<span className="shrink-0 text-[10px] text-muted-foreground/60">
-										fork
+								<button
+									type="button"
+									onClick={() =>
+										onOpenSession({
+											provider,
+											sessionId: session.sessionId,
+											cwd: session.cwd ?? null,
+											title: session.title,
+											mode: live ? "fork" : "resume",
+										})
+									}
+									title={
+										live
+											? "Already open, or its state can't be confirmed — this opens a forked copy under a new session id."
+											: (session.cwd ?? undefined)
+									}
+									className="flex min-w-0 flex-1 items-baseline gap-2 px-3 py-1.5 text-left focus-visible:outline-none"
+								>
+									<span className="min-w-0 flex-1 truncate text-[13px] text-foreground">
+										{session.title}
 									</span>
+									{live ? (
+										<span className="shrink-0 text-[10px] text-muted-foreground/60">
+											fork
+										</span>
+									) : null}
+									<span className="shrink-0 tabular-nums text-[11px] text-muted-foreground/60">
+										{formatRelativeTime(session.lastModified)}
+									</span>
+								</button>
+								{resumeCommand ? (
+									<button
+										type="button"
+										aria-label={`Copy resume command for ${session.title}`}
+										title={resumeCommand}
+										onClick={() => void copyResumeCommand(resumeCommand)}
+										// Hover/focus-only so the list stays a list. Always in the
+										// DOM rather than conditionally rendered, so keyboard
+										// users can reach it without a pointer.
+										className="mr-1.5 shrink-0 rounded p-1 text-muted-foreground/50 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring group-hover:opacity-100"
+									>
+										{copiedCommand === resumeCommand ? (
+											<Check className="size-3.5 text-success" />
+										) : (
+											<Copy className="size-3.5" />
+										)}
+									</button>
 								) : null}
-								<span className="shrink-0 tabular-nums text-[11px] text-muted-foreground/60">
-									{formatRelativeTime(session.lastModified)}
-								</span>
-							</button>
+							</div>
 						);
 					})
 				)}

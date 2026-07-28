@@ -206,7 +206,7 @@ export function PresetRow({
 				ref={dragHandleRef}
 				onClick={(e) => e.stopPropagation()}
 				className={cn(
-					"shrink-0 flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-accent rounded p-1 -m-1 cursor-grab active:cursor-grabbing bg-transparent border-0 transition-opacity",
+					"shrink-0 flex items-center justify-center text-muted-foreground/60 hover:text-foreground hover:bg-accent rounded p-1 -m-1 bg-transparent border-0 transition-opacity",
 					"opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
 					isDragging && "opacity-100",
 				)}

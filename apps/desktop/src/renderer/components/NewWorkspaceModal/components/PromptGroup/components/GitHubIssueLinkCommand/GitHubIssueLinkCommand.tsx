@@ -12,11 +12,11 @@ import Fuse from "fuse.js";
 import type React from "react";
 import type { RefObject } from "react";
 import { useId, useMemo, useState } from "react";
-import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
 	IssueIcon,
 	type IssueState,
-} from "renderer/screens/main/components/IssueIcon/IssueIcon";
+} from "renderer/components/IssueIcon/IssueIcon";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 
 const MAX_RESULTS = 20;
 

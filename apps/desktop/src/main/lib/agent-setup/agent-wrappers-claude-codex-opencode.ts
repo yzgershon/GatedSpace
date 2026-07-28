@@ -358,6 +358,31 @@ export function getCodexGlobalHooksJsonPath(): string {
  * ~/.codex/hooks.json and treat the wrapper session-log watcher as best-effort
  * compatibility for older releases.
  */
+/**
+ * The hook command Codex is configured to run.
+ *
+ * Quote the path: codex executes via /bin/sh -lc, so a space in $HOME
+ * (e.g. "/Users/Some User/...") would otherwise word-split.
+ *
+ * Windows has no /bin/sh — Codex runs hook commands through PowerShell (not
+ * cmd), so the Git Bash invocation needs the `&` call operator; a bare quoted
+ * path is a parse error and every hook exits 1. Forward-slash script path so
+ * bash can exec it (the ".superset/…notify.sh" substring keeps managed-entry
+ * matching intact).
+ *
+ * Exported so tests assert against THIS rather than a copy of it. They used to
+ * hardcode the POSIX form, which meant they failed on Windows and the Windows
+ * branch — the one that exists only for Windows — had no passing test on the
+ * platform it was written for.
+ */
+export function buildCodexHookCommand(notifyScriptPath: string): string {
+	if (process.platform === "win32") {
+		const posixPath = notifyScriptPath.replaceAll("\\", "/");
+		return `& 'C:\\Program Files\\Git\\bin\\bash.exe' -c "SUPERSET_AGENT_ID=codex '${posixPath}'"`;
+	}
+	return `SUPERSET_AGENT_ID=codex "${notifyScriptPath}"`;
+}
+
 export function getCodexGlobalHooksJsonContent(
 	notifyScriptPath: string,
 ): string | null {
@@ -390,17 +415,7 @@ export function getCodexGlobalHooksJsonContent(
 
 	// Inline SUPERSET_AGENT_ID like getClaudeManagedHookCommand so the v2
 	// payload carries identity even when codex is launched outside the wrapper.
-	// Quote the path: codex executes via /bin/sh -lc, so a space in $HOME
-	// (e.g. "/Users/Some User/...") would otherwise word-split.
-	// Windows has no /bin/sh — Codex runs hook commands through PowerShell
-	// (not cmd), so the Git Bash invocation needs the `&` call operator; a
-	// bare quoted path is a parse error and every hook exits 1. Forward-slash
-	// script path so bash can exec it (the ".superset/…notify.sh" substring
-	// keeps managed-entry matching intact).
-	const codexCommand =
-		process.platform === "win32"
-			? `& 'C:\\Program Files\\Git\\bin\\bash.exe' -c "SUPERSET_AGENT_ID=codex '${notifyScriptPath.replaceAll("\\", "/")}'"`
-			: `SUPERSET_AGENT_ID=codex "${notifyScriptPath}"`;
+	const codexCommand = buildCodexHookCommand(notifyScriptPath);
 
 	const managedEvents: Array<{
 		eventName: "SessionStart" | "UserPromptSubmit" | "Stop";

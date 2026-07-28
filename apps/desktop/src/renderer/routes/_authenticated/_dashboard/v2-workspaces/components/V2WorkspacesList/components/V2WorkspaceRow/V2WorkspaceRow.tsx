@@ -30,6 +30,8 @@ import {
 } from "react-icons/lu";
 import { RiPushpinFill, RiPushpinLine } from "react-icons/ri";
 import { GATED_FEATURES, usePaywall } from "renderer/components/Paywall";
+import { PRIcon } from "renderer/components/PRIcon/PRIcon";
+import { getRelativeTime } from "renderer/components/WorkspacesListView/utils";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { DashboardSidebarDeleteDialog } from "renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarDeleteDialog";
 import { navigateToV2Workspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
@@ -41,8 +43,6 @@ import type {
 } from "renderer/routes/_authenticated/_dashboard/v2-workspaces/hooks/useAccessibleV2Workspaces";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useDeletingWorkspaces } from "renderer/routes/_authenticated/providers/DeletingWorkspacesProvider";
-import { PRIcon } from "renderer/screens/main/components/PRIcon/PRIcon";
-import { getRelativeTime } from "renderer/screens/main/components/WorkspacesListView/utils";
 
 interface V2WorkspaceRowProps {
 	workspace: AccessibleV2Workspace;

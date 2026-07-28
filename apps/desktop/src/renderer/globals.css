@@ -77,7 +77,13 @@
 	--success: #4bb377;
 	--success-foreground: #0c1a12;
 	--warning: #d4a84b;
+	/* Both of these are mid-to-light tones, so text on them has to be dark to
+	 * stay readable. Without a paired foreground the only options are a
+	 * hardcoded colour at each call site or muted-foreground, which fails
+	 * contrast on a filled warning chip. */
+	--warning-foreground: #1a1408;
 	--info: #6b8fd4;
+	--info-foreground: #0a1020;
 }
 
 /* Light theme fallback values - applied before hydration if user has light theme saved */
@@ -123,7 +129,69 @@
 	--success: oklch(0.58 0.13 160);
 	--success-foreground: oklch(0.985 0 0);
 	--warning: oklch(0.68 0.15 75);
+	/* Light on this yellow is unreadable; the other three take white. */
+	--warning-foreground: oklch(0.145 0 0);
 	--info: oklch(0.55 0.16 250);
+	--info-foreground: oklch(0.985 0 0);
+
+	/*
+	 * Light-theme corrections for Tailwind's stock palette.
+	 *
+	 * ~300 colours across the app are written as fixed palette utilities
+	 * (`text-emerald-500`, `bg-amber-500`). Those are tuned for a dark
+	 * background: on white, a 300/400 shade is close to invisible. Tailwind v4
+	 * compiles `text-emerald-500` to `color: var(--color-emerald-500)`, so
+	 * redefining the variable here retunes every one of them for the light
+	 * theme without touching a single component.
+	 *
+	 * The DARK theme is deliberately absent from this: it keeps Tailwind's
+	 * stock values, which is exactly what those utilities render today. So the
+	 * default appearance provably cannot change — there is nothing overriding
+	 * it.
+	 *
+	 * Light shades move down two steps (300/400/500 -> 600, 600 -> 700). Some
+	 * hierarchy collapses, which is the right trade against text that cannot
+	 * be read at all. 50-200 are used AS pale backgrounds and 700+ is already
+	 * dark, so both are left alone.
+	 */
+	--color-amber-300: oklch(66.6% 0.179 58.318);
+	--color-amber-400: oklch(66.6% 0.179 58.318);
+	--color-amber-500: oklch(66.6% 0.179 58.318);
+	--color-amber-600: oklch(55.5% 0.163 48.998);
+	--color-blue-400: oklch(54.6% 0.245 262.881);
+	--color-blue-500: oklch(54.6% 0.245 262.881);
+	--color-blue-600: oklch(48.8% 0.243 264.376);
+	--color-cyan-400: oklch(60.9% 0.126 221.723);
+	--color-cyan-500: oklch(60.9% 0.126 221.723);
+	--color-emerald-300: oklch(59.6% 0.145 163.225);
+	--color-emerald-400: oklch(59.6% 0.145 163.225);
+	--color-emerald-500: oklch(59.6% 0.145 163.225);
+	--color-emerald-600: oklch(50.8% 0.118 165.612);
+	--color-fuchsia-500: oklch(59.1% 0.293 322.896);
+	--color-green-400: oklch(62.7% 0.194 149.214);
+	--color-green-500: oklch(62.7% 0.194 149.214);
+	--color-green-600: oklch(52.7% 0.154 150.069);
+	--color-indigo-400: oklch(51.1% 0.262 276.966);
+	--color-orange-300: oklch(64.6% 0.222 41.116);
+	--color-orange-400: oklch(64.6% 0.222 41.116);
+	--color-orange-500: oklch(64.6% 0.222 41.116);
+	--color-orange-600: oklch(55.3% 0.195 38.402);
+	--color-pink-400: oklch(59.2% 0.249 0.584);
+	--color-pink-500: oklch(59.2% 0.249 0.584);
+	--color-purple-400: oklch(55.8% 0.288 302.321);
+	--color-purple-500: oklch(55.8% 0.288 302.321);
+	--color-purple-600: oklch(49.6% 0.265 301.924);
+	--color-red-300: oklch(57.7% 0.245 27.325);
+	--color-red-400: oklch(57.7% 0.245 27.325);
+	--color-red-500: oklch(57.7% 0.245 27.325);
+	--color-red-600: oklch(50.5% 0.213 27.518);
+	--color-rose-400: oklch(58.6% 0.253 17.585);
+	--color-teal-400: oklch(60% 0.118 184.704);
+	--color-violet-400: oklch(54.1% 0.281 293.009);
+	--color-violet-500: oklch(54.1% 0.281 293.009);
+	--color-yellow-400: oklch(68.1% 0.162 75.834);
+	--color-yellow-500: oklch(68.1% 0.162 75.834);
+	--color-yellow-600: oklch(55.4% 0.135 66.442);
 }
 
 @theme inline {
@@ -170,7 +238,9 @@
 	--color-success: var(--success);
 	--color-success-foreground: var(--success-foreground);
 	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
 	--color-info: var(--info);
+	--color-info-foreground: var(--info-foreground);
 }
 
 /* Effort slider flourishes (session composer): a rainbow fill at "max" and an

@@ -3,7 +3,7 @@ import { XIcon } from "lucide-react";
 import {
 	IssueIcon,
 	type IssueState,
-} from "renderer/screens/main/components/IssueIcon/IssueIcon";
+} from "renderer/components/IssueIcon/IssueIcon";
 
 interface LinkedGitHubIssuePillProps {
 	issueNumber: number;

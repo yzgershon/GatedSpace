@@ -6,6 +6,8 @@ import {
 } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { CommandPaletteHost } from "renderer/commandPalette";
+import { ResizablePanel } from "renderer/components/ResizablePanel";
+import { DeleteWorkspaceDialog } from "renderer/components/WorkspaceSidebar/WorkspaceListItem/components";
 import { useIsV2CloudEnabled } from "renderer/hooks/useIsV2CloudEnabled";
 import { useHotkey } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
@@ -14,9 +16,6 @@ import { DashboardSidebarDeleteDialog } from "renderer/routes/_authenticated/_da
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useDevSeedV2Sidebar } from "renderer/routes/_authenticated/hooks/useDevSeedV2Sidebar";
 import { useHostWorkspaces } from "renderer/routes/_authenticated/providers/HostWorkspacesProvider";
-import { ResizablePanel } from "renderer/screens/main/components/ResizablePanel";
-import { WorkspaceSidebar } from "renderer/screens/main/components/WorkspaceSidebar";
-import { DeleteWorkspaceDialog } from "renderer/screens/main/components/WorkspaceSidebar/WorkspaceListItem/components";
 import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
 import {
 	COLLAPSED_WORKSPACE_SIDEBAR_WIDTH,
@@ -164,15 +163,7 @@ function DashboardLayout() {
 				setWorkspaceSidebarWidth(DEFAULT_WORKSPACE_SIDEBAR_WIDTH)
 			}
 		>
-			{isV2CloudEnabled ? (
-				<DashboardSidebar isCollapsed={isWorkspaceSidebarCollapsed()} />
-			) : (
-				<WorkspaceSidebar
-					isCollapsed={isWorkspaceSidebarCollapsed()}
-					activeProjectId={currentWorkspace?.projectId ?? null}
-					activeProjectName={currentWorkspace?.project?.name ?? null}
-				/>
-			)}
+			<DashboardSidebar isCollapsed={isWorkspaceSidebarCollapsed()} />
 		</ResizablePanel>
 	);
 

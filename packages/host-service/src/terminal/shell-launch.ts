@@ -27,16 +27,27 @@ export function getSupersetShellPaths(supersetHomeDir: string): {
 	BIN_DIR: string;
 	ZSH_DIR: string;
 	BASH_DIR: string;
+	PWSH_DIR: string;
 } {
 	return {
+		PWSH_DIR: path.join(supersetHomeDir, "pwsh"),
 		BIN_DIR: path.join(supersetHomeDir, "bin"),
 		ZSH_DIR: path.join(supersetHomeDir, "zsh"),
 		BASH_DIR: path.join(supersetHomeDir, "bash"),
 	};
 }
 
+/**
+ * The shell's bare name, comparable across platforms.
+ *
+ * Windows shells arrive as an absolute path WITH an extension
+ * (`C:\WINDOWS\System32\WindowsPowerShell\v1.0\powershell.exe`), and
+ * `path.basename` on a POSIX host does not treat `\` as a separator at all — so
+ * both are handled here rather than trusting the platform's own basename.
+ */
 function getShellName(shell: string): string {
-	return path.basename(shell);
+	const base = shell.split(/[/\\]/).pop() ?? shell;
+	return base.replace(/\.(exe|cmd|bat)$/i, "").toLowerCase();
 }
 
 /**
@@ -118,6 +129,27 @@ export function getShellLaunchArgs(params: ShellLaunchParams): string[] {
 
 	if (shellName === "sh" || shellName === "ksh") {
 		return ["-l"];
+	}
+
+	// PowerShell has no rcfile equivalent, so the integration profile is dot-
+	// sourced by an explicit -Command. -NoExit keeps the session interactive
+	// afterwards; without it PowerShell runs the command and leaves.
+	//
+	// The dot-source is wrapped in try/catch on purpose: a broken or missing
+	// profile must degrade to a plain shell, never to a terminal that won't open.
+	if (shellName === "powershell" || shellName === "pwsh") {
+		const profile = path.join(paths.PWSH_DIR, "profile.ps1");
+		if (existsSync(profile)) {
+			// Single-quoted PS literal; the only escape inside one is '' for a quote.
+			const quoted = profile.replaceAll("'", "''");
+			return [
+				"-NoLogo",
+				"-NoExit",
+				"-Command",
+				`try { . '${quoted}' } catch { }`,
+			];
+		}
+		return ["-NoLogo", "-NoExit"];
 	}
 
 	return [];

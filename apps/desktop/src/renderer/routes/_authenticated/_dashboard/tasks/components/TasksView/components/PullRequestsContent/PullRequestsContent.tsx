@@ -6,13 +6,10 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { GoGitPullRequest } from "react-icons/go";
 import { HiOutlineArrowTopRightOnSquare } from "react-icons/hi2";
 import { LuMinus, LuPlus, LuRefreshCw } from "react-icons/lu";
+import { normalizePRState, PRIcon } from "renderer/components/PRIcon";
 import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
 import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
-import {
-	normalizePRState,
-	PRIcon,
-} from "renderer/screens/main/components/PRIcon";
 import {
 	type LinkedPR,
 	useNewWorkspaceDraftStore,

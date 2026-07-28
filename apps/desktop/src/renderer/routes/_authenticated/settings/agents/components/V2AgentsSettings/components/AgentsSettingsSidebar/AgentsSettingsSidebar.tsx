@@ -196,7 +196,7 @@ function AgentSidebarRow({ row, isActive, onSelect }: AgentSidebarRowProps) {
 				{...attributes}
 				{...listeners}
 				className={cn(
-					"absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent cursor-grab active:cursor-grabbing",
+					"absolute right-1 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/60 hover:text-foreground hover:bg-accent",
 					"opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 transition-opacity",
 					isDragging && "opacity-100",
 				)}

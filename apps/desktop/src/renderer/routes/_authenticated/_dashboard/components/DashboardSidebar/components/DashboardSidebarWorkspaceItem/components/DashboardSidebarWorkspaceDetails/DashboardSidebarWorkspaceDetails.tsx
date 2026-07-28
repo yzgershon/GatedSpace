@@ -1,11 +1,13 @@
 import { OverflowFadeContainer } from "@superset/ui/overflow-fade-container";
 import { cn } from "@superset/ui/utils";
 import type { CSSProperties } from "react";
-import { LuRadioTower, LuX } from "react-icons/lu";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
+import { LuColumns2, LuRadioTower, LuX } from "react-icons/lu";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
 import { useInlineWorkspacePortsEnabled } from "renderer/stores/inline-workspace-ports";
 import { useWorkspaceAgentsRowEnabled } from "renderer/stores/workspace-agents-row";
+import { useWorkspacePaneCount } from "../../../../hooks/useWorkspacePaneCount";
 import { useDashboardSidebarWorkspacePorts } from "../../../../providers/DashboardSidebarPortsProvider";
+import { shouldShowPaneCount } from "../../../../utils/countWorkspacePanes";
 import { DashboardSidebarPortBadge } from "../../../DashboardSidebarPortsList/components/DashboardSidebarPortBadge";
 import { useDashboardSidebarPortKill } from "../../../DashboardSidebarPortsList/hooks/useDashboardSidebarPortKill";
 import { DashboardSidebarWorkspaceAgentBadge } from "./components/DashboardSidebarWorkspaceAgentBadge";
@@ -67,8 +69,10 @@ export function DashboardSidebarWorkspaceDetails({
 	const hasMultipleAgents = runningAgents.length > 1;
 	const showAgentChips = workspaceAgentsRowEnabled && hasMultipleAgents;
 	const agents = showAgentChips ? runningAgents : [];
+	const paneCount = useWorkspacePaneCount(workspaceId);
+	const showPaneCount = shouldShowPaneCount(paneCount);
 
-	if (ports.length === 0 && agents.length === 0) {
+	if (ports.length === 0 && agents.length === 0 && !showPaneCount) {
 		return null;
 	}
 
@@ -106,6 +110,26 @@ export function DashboardSidebarWorkspaceDetails({
 					agent={agent}
 				/>
 			))}
+
+			{showPaneCount && (
+				<span
+					title={`${paneCount} panes open`}
+					className={cn(
+						"flex h-[18px] shrink-0 items-center gap-1 overflow-hidden rounded-full bg-muted/60",
+						"text-[9px] font-medium tabular-nums text-muted-foreground",
+						"max-w-14 px-1.5 opacity-100",
+						agents.length > 0 && "ml-2",
+						"transition-[max-width,margin,padding,opacity] duration-500 ease-out motion-reduce:transition-none",
+						"details-expanded:ml-0 details-expanded:max-w-0 details-expanded:px-0 details-expanded:opacity-0 details-expanded:duration-200",
+					)}
+				>
+					<LuColumns2
+						className="size-2.5 shrink-0"
+						strokeWidth={STROKE_WIDTH}
+					/>
+					{paneCount}
+				</span>
+			)}
 
 			{ports.length > 0 && (
 				<span

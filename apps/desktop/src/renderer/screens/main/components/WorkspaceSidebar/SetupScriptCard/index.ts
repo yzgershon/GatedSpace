@@ -1,1 +1,0 @@
-export { SetupScriptCard } from "./SetupScriptCard";

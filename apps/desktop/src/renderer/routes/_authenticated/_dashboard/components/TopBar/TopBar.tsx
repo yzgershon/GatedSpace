@@ -31,6 +31,7 @@ export function TopBar() {
 		{ enabled: !!workspaceId && !isV2WorkspaceRoute },
 	);
 	const isOnline = useOnlineStatus();
+	const { data: appVersion } = electronTrpc.diagnostics.appVersion.useQuery();
 	const zoomFactor = useZoomFactor();
 	const isV2CloudEnabled = useIsV2CloudEnabled();
 	const isSidebarOpen = useWorkspaceSidebarStore((s) => s.isOpen);
@@ -83,6 +84,25 @@ export function TopBar() {
 						<HiOutlineWifi className="size-3.5" />
 						<span>Offline</span>
 					</div>
+				)}
+				{/*
+				 * Which build is this? Several personal builds share a version
+				 * number and the installed one isn't always the newest on disk, so
+				 * without this the only reliable answer is hashing an installer.
+				 * Monospace because it's an identifier, not prose.
+				 */}
+				{appVersion && (
+					<span
+						className="no-drag select-text font-mono text-[10px] leading-none text-muted-foreground/70"
+						title={
+							appVersion.isDev
+								? "Development build"
+								: `GatedSpace ${appVersion.version}`
+						}
+					>
+						v{appVersion.version}
+						{appVersion.isDev ? " dev" : ""}
+					</span>
 				)}
 				{/* Portal target for the v2 run button when the presets bar is
 				    hidden (see v2-workspace page). empty:hidden keeps the flex

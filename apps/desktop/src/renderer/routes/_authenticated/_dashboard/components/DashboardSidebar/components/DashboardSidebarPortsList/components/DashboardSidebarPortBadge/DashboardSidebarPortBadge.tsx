@@ -16,10 +16,10 @@ import {
 	LuSquareTerminal,
 	LuX,
 } from "react-icons/lu";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
 import { useV2UserPreferences } from "renderer/hooks/useV2UserPreferences";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { navigateToV2Workspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
 import { useDashboardSidebarPortKill } from "../../hooks/useDashboardSidebarPortKill";
 import type { DashboardSidebarPort } from "../../hooks/useDashboardSidebarPortsData";
 

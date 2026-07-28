@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+/*
+ * Make `dark:` follow the APP theme (the .dark class the theme store toggles),
+ * not the OS `prefers-color-scheme`. Tailwind v4 compiles `dark:` to a media
+ * query by default, so without this every `dark:` utility silently tracks the
+ * operating system instead of the selected theme.
+ */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -39,6 +45,29 @@
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
+	/*
+	 * Semantic status colours. These existed only in the desktop app's own
+	 * globals.css, which made this file a strict subset of it — so a component
+	 * written HERE using `bg-warning` worked when the desktop compiled it and
+	 * silently rendered unstyled anywhere else that consumes this stylesheet.
+	 * A shared component library cannot have a smaller vocabulary than its
+	 * consumers; the trap is invisible until someone falls in it.
+	 *
+	 * Values are theme-appropriate rather than copied: the desktop's dark theme
+	 * is warm ("ember") and this one is neutral, so the ember hexes would read
+	 * as wrong here.
+	 */
+	--color-tertiary: var(--tertiary);
+	--color-tertiary-active: var(--tertiary-active);
+	--color-destructive-foreground: var(--destructive-foreground);
+	--color-highlight: var(--highlight);
+	--color-highlight-foreground: var(--highlight-foreground);
+	--color-success: var(--success);
+	--color-success-foreground: var(--success-foreground);
+	--color-warning: var(--warning);
+	--color-warning-foreground: var(--warning-foreground);
+	--color-info: var(--info);
+	--color-info-foreground: var(--info-foreground);
 }
 
 :root {
@@ -74,6 +103,18 @@
 	--sidebar-accent-foreground: oklch(0.205 0 0);
 	--sidebar-border: oklch(0.922 0 0);
 	--sidebar-ring: oklch(0.708 0 0);
+	--tertiary: oklch(0.95 0.003 40);
+	--tertiary-active: oklch(0.9 0.003 40);
+	--destructive-foreground: oklch(0.985 0 0);
+	--highlight: oklch(0.646 0.222 41.116);
+	--highlight-foreground: oklch(0.985 0 0);
+	--success: oklch(0.58 0.13 160);
+	--success-foreground: oklch(0.985 0 0);
+	--warning: oklch(0.68 0.15 75);
+	/* Alone among these, warning is light enough that white text on it fails. */
+	--warning-foreground: oklch(0.145 0 0);
+	--info: oklch(0.55 0.16 250);
+	--info-foreground: oklch(0.985 0 0);
 }
 
 .dark {
@@ -108,6 +149,19 @@
 	--sidebar-accent-foreground: oklch(0.985 0 0);
 	--sidebar-border: oklch(1 0 0 / 10%);
 	--sidebar-ring: oklch(0.556 0 0);
+	--tertiary: oklch(0.23 0 0);
+	--tertiary-active: oklch(0.3 0 0);
+	--destructive-foreground: oklch(0.985 0 0);
+	--highlight: oklch(0.7 0.19 45);
+	--highlight-foreground: oklch(0.145 0 0);
+	/* Lifted and desaturated relative to the light theme: the same colour that
+	 * reads as solid on white turns muddy on a dark background. */
+	--success: oklch(0.7 0.15 160);
+	--success-foreground: oklch(0.145 0 0);
+	--warning: oklch(0.78 0.14 75);
+	--warning-foreground: oklch(0.145 0 0);
+	--info: oklch(0.7 0.14 250);
+	--info-foreground: oklch(0.145 0 0);
 }
 
 @layer base {

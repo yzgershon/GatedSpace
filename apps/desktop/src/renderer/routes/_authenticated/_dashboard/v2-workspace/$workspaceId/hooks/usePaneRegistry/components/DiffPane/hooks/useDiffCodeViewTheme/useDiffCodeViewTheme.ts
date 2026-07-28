@@ -1,12 +1,12 @@
 import type { CodeViewOptions } from "@pierre/diffs";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { electronTrpcClient } from "renderer/lib/trpc-client";
 import {
 	DIFF_POOL_RENDER_OPTIONS,
 	getDiffsTheme,
 	getDiffViewerStyle,
-} from "renderer/screens/main/components/WorkspaceView/utils/code-theme";
+} from "renderer/components/WorkspaceView/utils/code-theme";
+import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useSettings } from "renderer/stores/settings";
 import { useResolvedTheme, useTerminalTheme } from "renderer/stores/theme";
 import type { DiffAnnotationMetadata } from "../useDiffAnnotations";

@@ -6,13 +6,13 @@ import { useMemo } from "react";
 import { HiArrowLeft } from "react-icons/hi2";
 import { LuExternalLink, LuPlus } from "react-icons/lu";
 import { MarkdownRenderer } from "renderer/components/MarkdownRenderer";
-import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
-import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
 import {
 	normalizePRState,
 	PRIcon,
 	type PRState,
-} from "renderer/screens/main/components/PRIcon";
+} from "renderer/components/PRIcon";
+import { useHostUrl } from "renderer/hooks/host-service/useHostTargetUrl";
+import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
 import {
 	type LinkedPR,
 	useNewWorkspaceDraftStore,

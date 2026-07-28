@@ -4,7 +4,6 @@ import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/provide
 import type { StoreApi } from "zustand/vanilla";
 import type {
 	BrowserPaneData,
-	ChatPaneData,
 	ClaudeSessionsPaneData,
 	CommentPaneData,
 	DiffFocusSide,
@@ -37,7 +36,6 @@ export function useWorkspacePaneOpeners({
 		changeKey?: string,
 	) => void;
 	addTerminalTab: () => Promise<void>;
-	addChatTab: () => void;
 	addBrowserTab: () => void;
 	addSessionTab: () => void;
 	openBrowserUrl: (url: string) => void;
@@ -143,17 +141,6 @@ export function useWorkspacePaneOpeners({
 		}
 	}, [addBlankTerminalTab, executePreset, newTabPresets]);
 
-	const addChatTab = useCallback(() => {
-		store.getState().addTab({
-			panes: [
-				{
-					kind: "chat",
-					data: { sessionId: null } as ChatPaneData,
-				},
-			],
-		});
-	}, [store]);
-
 	const addBrowserTab = useCallback(() => {
 		store.getState().addTab({
 			panes: [
@@ -257,7 +244,6 @@ export function useWorkspacePaneOpeners({
 	return {
 		openDiffPane,
 		addTerminalTab,
-		addChatTab,
 		addBrowserTab,
 		addSessionTab,
 		openBrowserUrl,

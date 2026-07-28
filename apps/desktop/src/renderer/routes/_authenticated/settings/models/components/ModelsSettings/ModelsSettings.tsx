@@ -13,10 +13,10 @@ import { toast } from "@superset/ui/sonner";
 import { Textarea } from "@superset/ui/textarea";
 import { useEffect, useMemo, useState } from "react";
 import { HiChevronDown } from "react-icons/hi2";
-import { AnthropicOAuthDialog } from "renderer/components/Chat/ChatInterface/components/ModelPicker/components/AnthropicOAuthDialog";
-import { OpenAIOAuthDialog } from "renderer/components/Chat/ChatInterface/components/ModelPicker/components/OpenAIOAuthDialog";
-import { useAnthropicOAuth } from "renderer/components/Chat/ChatInterface/components/ModelPicker/hooks/useAnthropicOAuth";
-import { useOpenAIOAuth } from "renderer/components/Chat/ChatInterface/components/ModelPicker/hooks/useOpenAIOAuth";
+import { AnthropicOAuthDialog } from "renderer/components/ModelAuth/AnthropicOAuthDialog";
+import { OpenAIOAuthDialog } from "renderer/components/ModelAuth/OpenAIOAuthDialog";
+import { useAnthropicOAuth } from "renderer/components/ModelAuth/useAnthropicOAuth";
+import { useOpenAIOAuth } from "renderer/components/ModelAuth/useOpenAIOAuth";
 import {
 	isItemVisible,
 	SETTING_ITEM_ID,

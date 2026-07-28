@@ -40,7 +40,11 @@ import type { SessionStatus } from "shared/claude-session/timeline";
 import { imageFiles, prepareImage } from "./composer-images";
 import { ImageChip } from "./ImageChip";
 import { SlashPalette } from "./SlashPalette";
-import { getSessionDraft, setSessionDraft } from "./sessionStore";
+import {
+	getSessionDraft,
+	setSessionDraft,
+	subscribeSessionDraft,
+} from "./sessionStore";
 
 export const EFFORT_LEVELS = [
 	"low",
@@ -371,6 +375,17 @@ export function SessionComposer({
 		if (!draftKey) return;
 		setSessionDraft(draftKey, { text, images });
 	}, [draftKey, text, images]);
+
+	// Pick up attachments added from OUTSIDE this component — a captured browser
+	// pane being sent here. `setSessionDraft` above deliberately does not notify,
+	// so the mirror effect cannot feed this back and loop; only an external
+	// attach does.
+	useEffect(() => {
+		if (!draftKey) return;
+		return subscribeSessionDraft(draftKey, () => {
+			setImages(getSessionDraft(draftKey).images);
+		});
+	}, [draftKey]);
 
 	const showPalette = text.startsWith("/");
 

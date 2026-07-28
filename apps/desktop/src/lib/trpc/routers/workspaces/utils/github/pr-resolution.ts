@@ -1,8 +1,12 @@
-// v1-only. Dies with the v1 UI sunset. Don't evolve this module — v2 already
-// resolves PRs via host-service (`packages/host-service/src/runtime/pull-requests`
-// backing `git.getPullRequest` + `pullRequests.getByWorkspaces`). Everything
-// under `renderer/screens/main/` + `routes/_authenticated/_dashboard/workspace/`
-// gets deleted together; no port needed.
+// Legacy PR resolution. Don't evolve this module — v2 resolves PRs via
+// host-service (`packages/host-service/src/runtime/pull-requests` backing
+// `git.getPullRequest` + `pullRequests.getByWorkspaces`).
+//
+// This was marked "dies with the v1 UI sunset". The v1 UI is now gone
+// (2026-07-28) and this did NOT die with it: `github.ts` still calls
+// `getPRForBranch`, and that router is reachable from v2. Retiring it means
+// moving those callers onto the host-service path first, which is its own
+// piece of work rather than a deletion.
 import type { CheckItem, GitHubStatus } from "@superset/local-db";
 import { execGitWithShellPath } from "../git-client";
 import { execWithShellEnv } from "../shell-env";

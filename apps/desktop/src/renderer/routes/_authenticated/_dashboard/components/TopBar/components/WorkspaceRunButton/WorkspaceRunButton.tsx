@@ -15,9 +15,9 @@ import {
 	HiMiniStop,
 	HiMiniXMark,
 } from "react-icons/hi2";
+import { useWorkspaceRunCommand } from "renderer/hooks/workspace-run/useWorkspaceRunCommand";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import { useWorkspaceRunCommand } from "renderer/routes/_authenticated/_dashboard/workspace/$workspaceId/hooks/useWorkspaceRunCommand";
 import { useSetSettingsSearchQuery } from "renderer/stores/settings-state";
 
 interface WorkspaceRunButtonProps {

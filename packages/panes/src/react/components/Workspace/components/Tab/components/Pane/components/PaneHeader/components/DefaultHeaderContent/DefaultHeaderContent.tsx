@@ -1,5 +1,6 @@
 import { cn } from "@superset/ui/utils";
 import type { ReactNode } from "react";
+import { PaneTitleEditor } from "../PaneTitleEditor";
 
 interface DefaultHeaderContentProps {
 	title: ReactNode;
@@ -9,6 +10,11 @@ interface DefaultHeaderContentProps {
 	headerExtras?: ReactNode;
 	actionsContent: ReactNode;
 	maximizeControl?: ReactNode;
+	/**
+	 * Rename this pane. Absent for panes whose title isn't a plain string —
+	 * a pane that renders its own title widget owns what that title means.
+	 */
+	onRename?: (title: string | undefined) => void;
 }
 
 export function DefaultHeaderContent({
@@ -19,6 +25,7 @@ export function DefaultHeaderContent({
 	headerExtras,
 	actionsContent,
 	maximizeControl,
+	onRename,
 }: DefaultHeaderContentProps) {
 	return (
 		<div className="flex h-full w-full min-w-0 items-center gap-2 px-3">
@@ -26,15 +33,23 @@ export function DefaultHeaderContent({
 				{titleContent ?? (
 					<>
 						{icon && <span className="shrink-0">{icon}</span>}
-						<span
-							className={cn(
-								"truncate text-xs transition-colors duration-150",
-								isActive ? "text-foreground" : "text-muted-foreground",
-							)}
-							title={typeof title === "string" ? title : undefined}
-						>
-							{title}
-						</span>
+						{onRename && typeof title === "string" ? (
+							<PaneTitleEditor
+								title={title}
+								isActive={isActive}
+								onRename={onRename}
+							/>
+						) : (
+							<span
+								className={cn(
+									"truncate text-xs transition-colors duration-150",
+									isActive ? "text-foreground" : "text-muted-foreground",
+								)}
+								title={typeof title === "string" ? title : undefined}
+							>
+								{title}
+							</span>
+						)}
 					</>
 				)}
 			</div>

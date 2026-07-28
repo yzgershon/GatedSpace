@@ -13,6 +13,7 @@ import {
 	type AutoUpdateStatusEvent,
 } from "shared/auto-update";
 import { PLATFORM } from "shared/constants";
+import { crashSentinel } from "./crash-sentinel";
 
 // electron-updater's internal cache only self-invalidates when the remote
 // sha512 differs from cached metadata, so a corrupt cached download (e.g.
@@ -177,6 +178,10 @@ export function installUpdate(): void {
 	}
 	isInstalling = true;
 	setSkipQuitConfirmation();
+	// An update relaunch is the most common deliberate exit there is. Unstamped,
+	// it reads as a crash — and since it happens to every user on every release,
+	// it would dominate the crash numbers and hide the real ones.
+	crashSentinel.expectExit("updater-restart");
 	autoUpdater.quitAndInstall(false, true);
 }
 

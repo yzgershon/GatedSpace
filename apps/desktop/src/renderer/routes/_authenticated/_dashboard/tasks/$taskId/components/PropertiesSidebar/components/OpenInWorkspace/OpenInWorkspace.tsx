@@ -19,11 +19,11 @@ import { Switch } from "@superset/ui/switch";
 import { useMemo } from "react";
 import { HiArrowRight, HiChevronDown } from "react-icons/hi2";
 import { AgentSelect } from "renderer/components/AgentSelect";
+import { ProjectThumbnail } from "renderer/components/WorkspaceSidebar/ProjectSection/ProjectThumbnail";
 import { useAgentLaunchPreferences } from "renderer/hooks/useAgentLaunchPreferences";
 import { launchAgentSession } from "renderer/lib/agent-session-orchestrator";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useCreateWorkspace } from "renderer/react-query/workspaces";
-import { ProjectThumbnail } from "renderer/screens/main/components/WorkspaceSidebar/ProjectSection/ProjectThumbnail";
 import type { TaskWithStatus } from "../../../../../components/TasksView/hooks/useTasksTable";
 import { deriveBranchName } from "../../../../utils/deriveBranchName";
 

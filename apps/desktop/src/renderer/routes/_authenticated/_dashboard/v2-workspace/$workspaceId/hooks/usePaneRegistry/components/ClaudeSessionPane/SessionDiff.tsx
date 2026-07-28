@@ -16,7 +16,7 @@ import { MultiFileDiff } from "@pierre/diffs/react";
 import {
 	getDiffsTheme,
 	getDiffViewerStyle,
-} from "renderer/screens/main/components/WorkspaceView/utils/code-theme";
+} from "renderer/components/WorkspaceView/utils/code-theme";
 import { useResolvedTheme } from "renderer/stores/theme";
 
 /**

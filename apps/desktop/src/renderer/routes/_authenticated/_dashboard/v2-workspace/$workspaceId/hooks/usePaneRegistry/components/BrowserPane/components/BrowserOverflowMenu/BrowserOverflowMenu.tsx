@@ -12,10 +12,12 @@ import {
 	TbDots,
 	TbExternalLink,
 	TbReload,
+	TbSparkles,
 	TbTrash,
 } from "react-icons/tb";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { useSendPageToSessionIntent } from "renderer/stores/send-page-to-session-intent";
 
 interface BrowserOverflowMenuProps {
 	paneId: string;
@@ -32,6 +34,12 @@ export function BrowserOverflowMenu({
 
 	const handleScreenshot = () => {
 		electronTrpcClient.browser.screenshot.mutate({ paneId }).catch(() => {});
+	};
+
+	// The capture itself happens in the workspace tree, which is the only place
+	// that can see which session pane should receive it.
+	const handleSendToSession = () => {
+		useSendPageToSessionIntent.getState().request(paneId);
 	};
 
 	const handleHardReload = () => {
@@ -86,6 +94,14 @@ export function BrowserOverflowMenu({
 				>
 					<TbCamera className="size-4" />
 					Take Screenshot
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onClick={handleSendToSession}
+					disabled={!hasPage}
+					className="gap-2"
+				>
+					<TbSparkles className="size-4" />
+					Send to Claude session
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onClick={handleHardReload}

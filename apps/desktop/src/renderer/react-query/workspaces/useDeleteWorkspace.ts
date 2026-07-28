@@ -58,7 +58,7 @@ export function useDeleteWorkspace(
 				if (targetWorkspaceId) {
 					navigateToWorkspace(targetWorkspaceId, navigate);
 				} else {
-					navigate({ to: "/workspace" });
+					navigate({ to: "/v2-workspace" });
 				}
 			}
 

@@ -8,7 +8,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import type { ILinkHandler, Terminal as XTerm } from "@xterm/xterm";
-import { UrlLinkProvider } from "../../screens/main/components/WorkspaceView/ContentView/TabsContent/Terminal/link-providers";
+import { UrlLinkProvider } from "../../components/WorkspaceView/ContentView/TabsContent/Terminal/link-providers";
 import type { DetectedLink } from "./links";
 import {
 	LinkDetectorAdapter,

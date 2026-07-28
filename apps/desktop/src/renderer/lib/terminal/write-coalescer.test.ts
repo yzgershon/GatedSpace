@@ -128,4 +128,59 @@ describe("createWriteCoalescer", () => {
 		expect(writes).toHaveLength(1);
 		expect(new TextDecoder().decode(writes[0])).toBe(parts.join(""));
 	});
+	test("an overflow flush is counted and reported, not silent", () => {
+		// Back-pressure is not an error — the early flush is correct and nothing is
+		// lost. But a pane that overflows continuously is a renderer falling behind
+		// its PTY, and without a counter that is invisible: it presents as "the
+		// terminal feels laggy" with nothing to point at.
+		const writes: Uint8Array[] = [];
+		const seen: number[] = [];
+		const coalescer = createWriteCoalescer((data) => writes.push(data), {
+			onOverflow: (s) => seen.push(s.overflowFlushes),
+		});
+
+		coalescer.push(new Uint8Array(MAX_PENDING_BYTES + 1));
+		expect(writes).toHaveLength(1);
+		expect(seen).toEqual([1]);
+
+		const stats = coalescer.stats();
+		expect(stats.overflowFlushes).toBe(1);
+		expect(stats.overflowBytes).toBe(MAX_PENDING_BYTES + 1);
+	});
+
+	test("no overflow means no report and zeroed counters", () => {
+		const seen: number[] = [];
+		const coalescer = createWriteCoalescer(() => {}, {
+			onOverflow: () => seen.push(1),
+		});
+
+		coalescer.push(bytes("small"));
+		fireFrame();
+
+		expect(seen).toHaveLength(0);
+		expect(coalescer.stats().overflowFlushes).toBe(0);
+	});
+
+	test("overflow flushes still write every byte — this never drops", () => {
+		// The whole reason not to copy a drop-and-mark design: losing agent output
+		// to save a frame is a far worse bargain than one unbatched write.
+		const writes: Uint8Array[] = [];
+		const coalescer = createWriteCoalescer((data) => writes.push(data));
+
+		coalescer.push(new Uint8Array(MAX_PENDING_BYTES + 8));
+		coalescer.push(bytes("after"));
+		fireFrame();
+
+		const total = writes.reduce((n, w) => n + w.length, 0);
+		expect(total).toBe(MAX_PENDING_BYTES + 8 + 5);
+	});
+
+	test("peak batch size is tracked for diagnosing a slow renderer", () => {
+		const coalescer = createWriteCoalescer(() => {});
+		coalescer.push(bytes("abc"));
+		fireFrame();
+		coalescer.push(bytes("abcdefgh"));
+		fireFrame();
+		expect(coalescer.stats().peakBatchBytes).toBe(8);
+	});
 });

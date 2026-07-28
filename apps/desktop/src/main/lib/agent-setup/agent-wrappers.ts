@@ -7,6 +7,7 @@ export {
 	getAmpPluginContent,
 } from "./agent-wrappers-amp";
 export {
+	buildCodexHookCommand,
 	buildCodexWrapperExecLine,
 	cleanupGlobalOpenCodePlugin,
 	createClaudeSettingsJson,

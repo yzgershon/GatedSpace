@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { appState } from "main/lib/app-state";
 import { localDb } from "main/lib/local-db";
 import { restartDaemon as restartDaemonShared } from "main/lib/terminal";
+import { getRankedCommandHistory } from "main/lib/terminal/command-history";
 import {
 	isTerminalAttachCanceledError,
 	TERMINAL_ATTACH_CANCELED_MESSAGE,
@@ -418,6 +419,35 @@ export const createTerminalRouter = () => {
 		restartDaemon: publicProcedure.mutation(async () => {
 			return restartDaemonShared();
 		}),
+
+		/**
+		 * Ranked shell-command history, read from the daemon's JSONL.
+		 *
+		 * Read-only and synchronous: the file is cached against its own mtime, so
+		 * the common case is a map lookup rather than disk. Returns [] when the
+		 * file does not exist, which is every install until the first command
+		 * finishes in a shell with integration loaded.
+		 */
+		commandHistory: publicProcedure
+			.input(
+				z
+					.object({
+						cwd: z.string().nullish(),
+						query: z.string().optional(),
+						limit: z.number().int().positive().max(200).optional(),
+					})
+					.optional(),
+			)
+			// Fields passed explicitly rather than spreading `input`: the reader
+			// also accepts a `filePath` test seam, and a spread would make that
+			// reachable from the renderer the day someone loosens this schema.
+			.query(({ input }) =>
+				getRankedCommandHistory({
+					cwd: input?.cwd ?? null,
+					query: input?.query,
+					limit: input?.limit,
+				}),
+			),
 
 		getSession: publicProcedure
 			.input(z.string())

@@ -1,5 +1,10 @@
 import { settings } from "@superset/local-db";
 import {
+	DEFAULT_NOTIFICATION_MATRIX,
+	type NotificationMatrix,
+	parseNotificationMatrix,
+} from "../../shared/notification-matrix";
+import {
 	CUSTOM_RINGTONE_ID,
 	DEFAULT_RINGTONE_ID,
 	getRingtoneFilename,
@@ -8,6 +13,23 @@ import { getCustomRingtonePath } from "./custom-ringtones";
 import { localDb } from "./local-db";
 import { playSoundFile } from "./play-sound";
 import { getSoundPath } from "./sound-paths";
+
+/**
+ * The event × channel matrix, straight from the settings row.
+ *
+ * Read on every event rather than cached: it is a single indexed row, and a
+ * cache here would mean settings changes not taking effect until relaunch.
+ * Any failure resolves to the defaults, so a database problem cannot silently
+ * stop notifications.
+ */
+export function getNotificationMatrix(): NotificationMatrix {
+	try {
+		const settingsRow = localDb.select().from(settings).get();
+		return parseNotificationMatrix(settingsRow?.notificationMatrix);
+	} catch {
+		return DEFAULT_NOTIFICATION_MATRIX;
+	}
+}
 
 /**
  * Checks if notification sounds are muted.

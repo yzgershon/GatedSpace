@@ -20,6 +20,7 @@ import type {
 	ClaudeStreamEvent,
 	UserImagePayload,
 } from "shared/claude-session/events";
+import { getSessionCost, recordSessionCost } from "./cost-store";
 import { resolveResumeClaim } from "./resume-claim";
 import { type ClaudeSessionOptions, ClaudeSessionTransport } from "./transport";
 
@@ -96,6 +97,12 @@ class ClaudeSessionManager extends EventEmitter {
 	 * it were the command's. Both halves wrong, neither loud.
 	 */
 	private readonly busy = new Set<string>();
+	/**
+	 * Last `total_cost_usd` reported by the CURRENT process for each pane key.
+	 * The CLI's figure is cumulative within one process and restarts at zero in
+	 * the next, so it is only usable as a delta against this.
+	 */
+	private readonly costThisRun = new Map<string, number>();
 	private seq = 0;
 
 	/** Put a line of our own explanation into the session's transcript. */
@@ -148,6 +155,12 @@ class ClaudeSessionManager extends EventEmitter {
 			if (!isCurrent()) return;
 			if (event.type === "system" && event.subtype === "init") {
 				this.sessionIds.set(key, event.session_id);
+				// A fresh process starts its cost count at zero, so deltas must be
+				// measured from zero again.
+				this.costThisRun.set(key, 0);
+			}
+			if (event.type === "result") {
+				this.accrueCost(key, event.total_cost_usd);
 			}
 			// Track turn state BEFORE the capture branch, which returns early: a
 			// capture that ate the result must still leave the session idle.
@@ -238,6 +251,28 @@ class ClaudeSessionManager extends EventEmitter {
 			.filter(Boolean);
 		if (lines.length === 0) return "";
 		return `\n\n${lines.join("\n")}`;
+	}
+
+	/**
+	 * Fold a result's reported cost into the conversation's persisted total.
+	 *
+	 * Done in main rather than the renderer because the number has to survive
+	 * the pane, the window and the process. The CLI never writes cost to the
+	 * transcript, so nothing else would remember it.
+	 *
+	 * A value below the previous one means a new process is reporting, so all of
+	 * it is new spend. That is the backstop for an init we never saw.
+	 */
+	private accrueCost(key: string, reported: unknown): void {
+		if (typeof reported !== "number" || !Number.isFinite(reported)) return;
+		if (reported < 0) return;
+		const sessionId = this.sessionIds.get(key);
+		if (!sessionId) return;
+		const previous = this.costThisRun.get(key) ?? 0;
+		const delta = reported >= previous ? reported - previous : reported;
+		this.costThisRun.set(key, reported);
+		if (delta <= 0) return;
+		recordSessionCost(sessionId, getSessionCost(sessionId) + delta);
 	}
 
 	private record(key: string, event: ClaudeStreamEvent): void {
@@ -383,6 +418,35 @@ class ClaudeSessionManager extends EventEmitter {
 	/** True once a session has been started for this key (even if it exited). */
 	hasSession(key: string): boolean {
 		return this.buffers.has(key);
+	}
+
+	/**
+	 * Every session this process knows about, addressed by the KEY that
+	 * `send`, `getBufferedEvents` and `isRunning` all take.
+	 *
+	 * Distinct from `getLiveSessionIds`, which returns Claude's own session ids
+	 * — those are for the resume/liveness check and cannot be passed back into
+	 * the methods above. Any surface that wants to both list and act needs this
+	 * one; mixing them up produces a list where nothing can be opened.
+	 */
+	listSessions(): Array<{
+		key: string;
+		sessionId: string | null;
+		running: boolean;
+	}> {
+		const sessions: Array<{
+			key: string;
+			sessionId: string | null;
+			running: boolean;
+		}> = [];
+		for (const key of this.buffers.keys()) {
+			sessions.push({
+				key,
+				sessionId: this.sessionIds.get(key) ?? null,
+				running: this.isRunning(key),
+			});
+		}
+		return sessions;
 	}
 
 	/** Tear everything down (app shutdown). */

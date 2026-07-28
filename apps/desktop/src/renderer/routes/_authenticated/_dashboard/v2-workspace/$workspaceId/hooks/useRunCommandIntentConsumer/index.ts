@@ -1,0 +1,1 @@
+export { useRunCommandIntentConsumer } from "./useRunCommandIntentConsumer";

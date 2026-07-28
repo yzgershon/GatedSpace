@@ -7,10 +7,10 @@ import {
 	useRef,
 } from "react";
 import { HiMiniMinus, HiMiniXMark } from "react-icons/hi2";
+import { RenameInput } from "renderer/components/WorkspaceSidebar/RenameInput";
 import type { DiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { HotkeyLabel } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import { RenameInput } from "renderer/screens/main/components/WorkspaceSidebar/RenameInput";
 import type { ActivePaneStatus } from "shared/tabs-types";
 import type {
 	DashboardSidebarWorkspace,

@@ -19,6 +19,7 @@ import {
 	LuLayoutTemplate,
 	LuPlus,
 } from "react-icons/lu";
+import { STROKE_WIDTH_THICK } from "renderer/components/WorkspaceSidebar/constants";
 import { ZoomStable } from "renderer/components/ZoomStable";
 import { useZoomFactor } from "renderer/hooks/useZoomFactor";
 import { useHotkeyDisplay } from "renderer/hotkeys";
@@ -30,7 +31,6 @@ import { OrganizationDropdown } from "renderer/routes/_authenticated/_dashboard/
 import { ResourceConsumption } from "renderer/routes/_authenticated/_dashboard/components/TopBar/components/ResourceConsumption";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
-import { STROKE_WIDTH_THICK } from "renderer/screens/main/components/WorkspaceSidebar/constants";
 import {
 	useOpenNewProjectModal,
 	useOpenTemplateGalleryModal,

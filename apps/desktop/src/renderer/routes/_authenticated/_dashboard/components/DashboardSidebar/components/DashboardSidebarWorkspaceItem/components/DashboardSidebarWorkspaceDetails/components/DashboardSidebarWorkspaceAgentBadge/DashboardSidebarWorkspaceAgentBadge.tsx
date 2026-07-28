@@ -3,12 +3,12 @@ import { cn } from "@superset/ui/utils";
 import { useNavigate } from "@tanstack/react-router";
 import { LuBot } from "react-icons/lu";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
-import { navigateToV2Workspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import {
 	getStatusTooltip,
 	StatusIndicator,
-} from "renderer/screens/main/components/StatusIndicator";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
+} from "renderer/components/StatusIndicator";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
+import { navigateToV2Workspace } from "renderer/routes/_authenticated/_dashboard/utils/workspace-navigation";
 import type { DashboardSidebarRunningAgent } from "../../hooks/useDashboardSidebarWorkspaceRunningAgents";
 
 interface DashboardSidebarWorkspaceAgentBadgeProps {

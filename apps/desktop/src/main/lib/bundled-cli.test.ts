@@ -65,7 +65,12 @@ describe("bundled CLI", () => {
 		expect(status).toBe("installed");
 		expect(existsSync(shimPath)).toBe(true);
 		expect(readFileSync(shimPath, "utf-8")).toContain(BUNDLED_CLI_SHIM_MARKER);
-		expect(statSync(shimPath).mode & 0o111).not.toBe(0);
+		// The execute bit is a POSIX concept. NTFS has no such mode, so `chmod`
+		// is a no-op here and this asserts something Windows cannot express —
+		// the shim is still written correctly, which the checks above cover.
+		if (process.platform !== "win32") {
+			expect(statSync(shimPath).mode & 0o111).not.toBe(0);
+		}
 	});
 
 	it("updates an existing managed shim", () => {

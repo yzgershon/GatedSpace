@@ -1,4 +1,4 @@
-import type { ModelOption } from "renderer/components/Chat/ChatInterface/types";
+import type { ModelOption } from "renderer/components/PromptEditor/types";
 import { env } from "renderer/env.renderer";
 import { isLocalMode } from "renderer/lib/local-mode";
 import { MOCK_ORG_ID } from "shared/constants";

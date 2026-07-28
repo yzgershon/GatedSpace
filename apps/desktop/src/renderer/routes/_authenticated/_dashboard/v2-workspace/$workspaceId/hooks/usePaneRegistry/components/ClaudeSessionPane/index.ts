@@ -10,6 +10,7 @@ export {
 export { SessionTimelineView } from "./SessionTimelineView";
 export { SessionView } from "./SessionView";
 export {
+	attachSessionDraftImage,
 	disposeSession,
 	getSessionSnapshot,
 	getSessionTitle,

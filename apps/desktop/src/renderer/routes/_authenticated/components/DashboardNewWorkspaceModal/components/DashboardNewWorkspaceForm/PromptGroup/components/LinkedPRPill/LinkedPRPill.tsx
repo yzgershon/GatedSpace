@@ -1,9 +1,6 @@
 import { Button } from "@superset/ui/button";
 import { XIcon } from "lucide-react";
-import {
-	PRIcon,
-	type PRState,
-} from "renderer/screens/main/components/PRIcon/PRIcon";
+import { PRIcon, type PRState } from "renderer/components/PRIcon/PRIcon";
 
 interface LinkedPRPillProps {
 	prNumber: number;

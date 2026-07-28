@@ -114,6 +114,27 @@ export async function prepareImage(
 }
 
 /**
+ * Same treatment for an image that arrived as base64 rather than a file — a
+ * captured browser pane, today.
+ *
+ * Deliberately routed through `prepareImage` instead of shortcutting: a page
+ * capture is often larger than a pasted screenshot (retina, long pages), so it
+ * needs the downscale more than anything the user picks by hand. Skipping it
+ * would put megabytes on every subsequent turn of the conversation.
+ */
+export async function prepareImageFromBase64(
+	base64: string,
+	name: string,
+	mediaType = "image/png",
+): Promise<UserImagePayload> {
+	const binary = atob(base64);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	const file = new File([bytes], name, { type: mediaType });
+	return prepareImage(file);
+}
+
+/**
  * The longest edge of the preview kept for the conversation.
  *
  * Small on purpose. Unlike the full image, this one RIDES IN THE EVENT and

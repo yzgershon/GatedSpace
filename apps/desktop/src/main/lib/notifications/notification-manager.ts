@@ -1,3 +1,11 @@
+import {
+	createSoundThrottle,
+	DEFAULT_NOTIFICATION_MATRIX,
+	isChannelEnabled,
+	isNotifiableEventType,
+	type NotificationMatrix,
+	type SoundThrottle,
+} from "shared/notification-matrix";
 import type {
 	AgentLifecycleEvent,
 	NotificationIds,
@@ -35,6 +43,14 @@ export interface NotificationManagerDeps {
 	};
 	getWorkspaceName: (workspaceId: string | undefined) => string;
 	getNotificationTitle: (event: AgentLifecycleEvent) => string;
+	/**
+	 * Read per-call rather than injected once: the user can change it in
+	 * settings while the app runs, and a value captured at construction would
+	 * keep notifying the old way until the next launch.
+	 */
+	getNotificationMatrix?: () => NotificationMatrix;
+	/** Injectable so tests drive the throttle window instead of sleeping. */
+	now?: () => number;
 }
 
 interface TrackedEntry {
@@ -46,6 +62,7 @@ export class NotificationManager {
 	private active = new Map<string, TrackedEntry>();
 	private counter = 0;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
+	private soundThrottle: SoundThrottle = createSoundThrottle();
 
 	constructor(private deps: NotificationManagerDeps) {}
 
@@ -55,10 +72,30 @@ export class NotificationManager {
 	}
 
 	handleAgentLifecycle(event: AgentLifecycleEvent): void {
-		if (event.eventType === "Start") return;
-		if (!this.deps.isSupported()) return;
-
+		if (!isNotifiableEventType(event.eventType)) return;
 		if (this.shouldSuppressForVisiblePane(event)) return;
+
+		const matrix =
+			this.deps.getNotificationMatrix?.() ?? DEFAULT_NOTIFICATION_MATRIX;
+		const wantsSound = isChannelEnabled(matrix, event.eventType, "sound");
+		const wantsBanner = isChannelEnabled(matrix, event.eventType, "banner");
+
+		// Sound is no longer gated on `isSupported()`. That check is about whether
+		// the OS will show a notification BANNER; a machine that cannot show one
+		// can still play a chime, and tying them together silenced it for no
+		// reason.
+		if (
+			wantsSound &&
+			this.soundThrottle.shouldPlay(
+				event.eventType,
+				(this.deps.now ?? Date.now)(),
+			)
+		) {
+			this.deps.playSound();
+		}
+
+		if (!wantsBanner) return;
+		if (!this.deps.isSupported()) return;
 
 		const workspaceName = this.deps.getWorkspaceName(event.workspaceId);
 		const title = this.deps.getNotificationTitle(event);
@@ -79,8 +116,6 @@ export class NotificationManager {
 
 		const key = event.sessionId ?? event.paneId ?? `_anon_${this.counter++}`;
 		this.track(key, notification);
-
-		this.deps.playSound();
 
 		notification.on("click", () => {
 			this.deps.onNotificationClick({

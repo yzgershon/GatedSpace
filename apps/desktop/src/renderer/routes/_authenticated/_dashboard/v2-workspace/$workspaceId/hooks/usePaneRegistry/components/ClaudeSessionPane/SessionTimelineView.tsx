@@ -65,8 +65,14 @@ const DIFF_MAX_HEIGHT = MAX_BODY_LINES * DIFF_LINE_HEIGHT;
  * stuck to the top of the screen is a ten-line hole in the answer you're
  * reading, which is the opposite of what pinning it was for.
  */
-const PROMPT_MAX_LINES = 3;
+const PROMPT_MAX_LINES = 2;
 const PROMPT_LINE_HEIGHT = 20;
+/**
+ * The fade has to be shorter than the clamp, or it washes out text that is
+ * still meant to be readable. At two lines a 32px fade covered most of the
+ * second one, which made the pinned prompt look broken rather than truncated.
+ */
+const PROMPT_FADE_HEIGHT = 16;
 
 /** Shells get the IN/OUT treatment: their input is as interesting as their output. */
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "BashOutput", "KillShell"]);
@@ -772,7 +778,10 @@ function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
 							{prompt.text}
 						</div>
 						{clamped ? (
-							<div className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-card to-transparent" />
+							<div
+								className="pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-card to-transparent"
+								style={{ height: PROMPT_FADE_HEIGHT }}
+							/>
 						) : null}
 					</div>
 					{overflowing ? (

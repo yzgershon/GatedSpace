@@ -1,6 +1,6 @@
 import { cn } from "@superset/ui/utils";
 import { LuArrowUpRight } from "react-icons/lu";
-import { PRIcon } from "renderer/screens/main/components/PRIcon";
+import { PRIcon } from "renderer/components/PRIcon";
 import type { NormalizedPR } from "../../types";
 
 const reviewDecisionConfig = {

@@ -71,6 +71,16 @@ export interface PaneDefinition<TData> {
 	 */
 	titleSource?(pane: Pane<TData>): PaneTitleSource | undefined;
 	getIcon?(context: RendererContext<TData>): ReactNode;
+	/**
+	 * A CSS colour identifying what this pane is running, used to tint its
+	 * header. Return undefined for panes with nothing to identify — they fall
+	 * back to the neutral header, which is a deliberate look rather than a gap.
+	 *
+	 * A colour rather than a name on purpose: this package has no idea what an
+	 * "agent" is, and giving it one would put a product concept inside a generic
+	 * layout library. The app decides what deserves a colour and which.
+	 */
+	getAccent?(context: RendererContext<TData>): string | undefined;
 	renderTitle?(context: RendererContext<TData>): ReactNode;
 	renderHeaderExtras?(context: RendererContext<TData>): ReactNode;
 	renderToolbar?(context: RendererContext<TData>): ReactNode;

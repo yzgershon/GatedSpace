@@ -3,6 +3,10 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import {
+	CommandHistory,
+	CommandHistoryWriter,
+} from "../CommandHistory/index.ts";
 import type { Conn, HandlerCtx } from "../handlers/index.ts";
 import {
 	handleClose,
@@ -64,6 +68,15 @@ export class Server {
 	private readonly conns = new Set<ConnState>();
 	private readonly opts: ServerOptions;
 	private readonly sessionLogger: SessionLogger | null;
+	/**
+	 * Records what ran, from the shell-integration markers in the stream.
+	 *
+	 * Lives here for the same reason the scrollback logger does: wireSession is
+	 * the one place every PTY chunk passes through, whichever client happens to
+	 * be subscribed. Capturing in a client would miss every session belonging to
+	 * the other one.
+	 */
+	private readonly commandHistory: CommandHistory | null;
 
 	constructor(opts: ServerOptions) {
 		this.opts = opts;
@@ -71,6 +84,12 @@ export class Server {
 		this.sessionLogger = opts.scrollbackDir
 			? new SessionLogger(opts.scrollbackDir)
 			: null;
+		if (opts.scrollbackDir) {
+			const writer = new CommandHistoryWriter(opts.scrollbackDir);
+			this.commandHistory = new CommandHistory((row) => writer.append(row));
+		} else {
+			this.commandHistory = null;
+		}
 		this.server = net.createServer((socket) => this.onConnection(socket));
 	}
 
@@ -496,6 +515,9 @@ export class Server {
 		session.pty.onData((chunk) => {
 			this.store.appendOutput(session, chunk);
 			this.sessionLogger?.append(session.id, chunk);
+			// Observe-only: the scanner never alters the chunk, so this cannot
+			// affect what the terminal renders.
+			this.commandHistory?.observe(session.id, chunk);
 			const out: ServerMessage = { type: "output", id: session.id };
 			for (const c of this.conns) {
 				if (!c.subscriptions.has(session.id)) continue;
@@ -507,6 +529,9 @@ export class Server {
 			session.exitCode = info.code;
 			session.exitSignal = info.signal;
 			this.sessionLogger?.sessionExited(session.id);
+			// Drop any half-built row: a command still in flight when the shell
+			// dies has no exit code, and inventing one is worse than losing it.
+			this.commandHistory?.dispose(session.id);
 			const ev: ServerMessage = {
 				type: "exit",
 				id: session.id,

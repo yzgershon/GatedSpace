@@ -1,0 +1,1 @@
+export { PaneTitleEditor } from "./PaneTitleEditor";

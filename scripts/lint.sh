@@ -1,7 +1,10 @@
 #!/bin/bash
 # Wrapper for biome check that fails on ANY diagnostic (info, warn, or error)
 
-output=$(bunx @biomejs/biome@2.4.2 check "$@" 2>&1)
+# `bun x`, not `bunx`: the standalone bunx shim isn't on PATH in every install
+# (Windows/winget ships only `bun`), which made the repo's own lint gate
+# unrunnable on the primary development platform.
+output=$(bun x @biomejs/biome@2.4.2 check "$@" 2>&1)
 exit_code=$?
 
 echo "$output"

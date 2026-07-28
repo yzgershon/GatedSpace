@@ -1,7 +1,7 @@
 import {
 	DIFF_POOL_RENDER_OPTIONS,
 	getDiffsTheme,
-} from "renderer/screens/main/components/WorkspaceView/utils/code-theme";
+} from "renderer/components/WorkspaceView/utils/code-theme";
 import type { Theme } from "shared/themes";
 
 /**

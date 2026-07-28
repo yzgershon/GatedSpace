@@ -1,4 +1,4 @@
-import type { DragItem } from "renderer/screens/main/components/WorkspaceSidebar/types";
+import type { DragItem } from "renderer/components/WorkspaceSidebar/types";
 import { create } from "zustand";
 
 interface ActiveDragItemState {

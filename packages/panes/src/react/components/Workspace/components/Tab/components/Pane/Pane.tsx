@@ -332,6 +332,8 @@ export function Pane<TData>({
 							: context.actions.pin
 					}
 					onMiddleClick={context.actions.close}
+					onRename={context.actions.setTitle}
+					accent={definition?.getAccent?.(context)}
 				/>
 				<PaneContent>
 					{definition ? (

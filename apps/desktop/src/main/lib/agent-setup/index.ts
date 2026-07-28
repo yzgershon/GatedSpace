@@ -8,10 +8,12 @@ import {
 	BIN_DIR,
 	HOOKS_DIR,
 	OPENCODE_PLUGIN_DIR,
+	PWSH_DIR,
 	ZSH_DIR,
 } from "./paths";
 import {
 	createBashWrapper,
+	createPowerShellWrapper,
 	createZshWrapper,
 	getCommandShellArgs,
 	getShellArgs,
@@ -25,12 +27,15 @@ export function setupAgentHooks(): void {
 	fs.mkdirSync(HOOKS_DIR, { recursive: true });
 	fs.mkdirSync(ZSH_DIR, { recursive: true });
 	fs.mkdirSync(BASH_DIR, { recursive: true });
+	fs.mkdirSync(PWSH_DIR, { recursive: true });
 	fs.mkdirSync(OPENCODE_PLUGIN_DIR, { recursive: true });
 
 	setupDesktopAgentCapabilities();
 
 	createZshWrapper();
 	createBashWrapper();
+	// Windows is the primary platform and had no shell integration at all.
+	createPowerShellWrapper();
 
 	console.log("[agent-setup] Agent hooks initialized");
 }

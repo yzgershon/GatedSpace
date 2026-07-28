@@ -1,5 +1,5 @@
 import { LuCheck, LuLoaderCircle, LuX } from "react-icons/lu";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
 import type { DashboardSidebarWorkspacePullRequestCheck } from "../../../../../../types";
 
 interface ChecksSummaryProps {

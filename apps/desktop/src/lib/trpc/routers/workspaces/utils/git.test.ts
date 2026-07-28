@@ -317,8 +317,14 @@ describe("Shell Environment", () => {
 			"/usr/local/bin",
 			"/home/linuxbrew/.linuxbrew/bin",
 		];
-		const hasUserPath = userPaths.some((p) => shellPath.includes(p));
-		expect(hasUserPath).toBe(true);
+		// Windows has no login-shell PATH enrichment to test: the env probe is
+		// skipped there entirely (it ran a POSIX `-i -l -c` line against cmd.exe,
+		// so it could only fail), and none of these directories exist. The
+		// enrichment this asserts is real on macOS and Linux.
+		if (process.platform !== "win32") {
+			const hasUserPath = userPaths.some((p) => shellPath.includes(p));
+			expect(hasUserPath).toBe(true);
+		}
 	}, 10_000);
 
 	test("getShellEnvironment strips delimiter noise from interactive shell output", async () => {
@@ -882,7 +888,7 @@ describe("hasUnpushedCommits", () => {
 			stdio: "ignore",
 		});
 		writeFileSync(join(localPath, "feature.txt"), "feature work");
-		execSync("git add . && git commit -m 'add feature'", {
+		execSync('git add . && git commit -m "add feature"', {
 			cwd: localPath,
 			stdio: "ignore",
 		});
@@ -904,7 +910,7 @@ describe("hasUnpushedCommits", () => {
 			stdio: "ignore",
 		});
 		writeFileSync(join(squashClone, "feature.txt"), "feature work");
-		execSync("git add . && git commit -m 'squash: add feature' && git push", {
+		execSync('git add . && git commit -m "squash: add feature" && git push', {
 			cwd: squashClone,
 			stdio: "ignore",
 		});
@@ -932,7 +938,7 @@ describe("hasUnpushedCommits", () => {
 			stdio: "ignore",
 		});
 		writeFileSync(join(localPath, "unique.txt"), "unique work not on main");
-		execSync("git add . && git commit -m 'unique work'", {
+		execSync('git add . && git commit -m "unique work"', {
 			cwd: localPath,
 			stdio: "ignore",
 		});

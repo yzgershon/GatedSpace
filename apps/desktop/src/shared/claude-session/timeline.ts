@@ -22,6 +22,7 @@ import type {
 	ToolResultBlock,
 	UserAttachment,
 } from "./events";
+import { isSyntheticUserTurn } from "./synthetic-user-turn";
 
 export type { UserAttachment } from "./events";
 
@@ -123,8 +124,24 @@ export interface SessionTimeline {
 	items: TimelineItem[];
 	rateLimit?: RateLimitInfo;
 	usage?: SessionUsage;
-	/** Running API cost for this session, as the CLI reports it. */
+	/**
+	 * Running API cost for the whole conversation, across every CLI process
+	 * that has served it.
+	 *
+	 * NOT simply the CLI's number. `total_cost_usd` is cumulative within ONE
+	 * process and restarts at zero in the next, so a session that has been
+	 * resumed — after a restart, a profile switch, or waiting out a rate limit —
+	 * reports only what the current process has spent. Taking the latest value
+	 * therefore made the total appear to reset, repeatedly, which is exactly
+	 * what it looked like.
+	 */
 	costUsd?: number;
+	/**
+	 * The last `total_cost_usd` seen from the CURRENT process, so the next one
+	 * can be added as a delta rather than replacing the total. Internal
+	 * bookkeeping; nothing renders it.
+	 */
+	costUsdThisRun?: number;
 	status: SessionStatus;
 	/** Blocks still streaming, oldest first. Empty between turns. */
 	drafts: DraftBlock[];
@@ -132,6 +149,36 @@ export interface SessionTimeline {
 
 export function emptyTimeline(): SessionTimeline {
 	return { items: [], status: "idle", drafts: [] };
+}
+
+/**
+ * Fold one process's reported cost into the conversation total.
+ *
+ * `total_cost_usd` is cumulative within a single CLI process and starts again
+ * at zero in the next one, so it can only be added as a DELTA against the last
+ * value that process reported.
+ *
+ * A value lower than the previous one means a new process is reporting (a
+ * resume, a restart, a mode change), so the whole of it is new spend. That
+ * check is the backstop: `system`/`init` already resets the per-run figure, but
+ * a resumed session whose init was missed would otherwise silently subtract.
+ */
+function accrueCost(
+	state: SessionTimeline,
+	reported: unknown,
+): Pick<SessionTimeline, "costUsd" | "costUsdThisRun"> | Record<string, never> {
+	if (
+		typeof reported !== "number" ||
+		!Number.isFinite(reported) ||
+		reported < 0
+	)
+		return {};
+	const previous = state.costUsdThisRun ?? 0;
+	const delta = reported >= previous ? reported - previous : reported;
+	return {
+		costUsd: (state.costUsd ?? 0) + delta,
+		costUsdThisRun: reported,
+	};
 }
 
 function toolResultOutput(block: ToolResultBlock): string {
@@ -397,6 +444,10 @@ export function applyEvent(
 			return {
 				...state,
 				status: settledBefore ? "streaming" : state.status,
+				// A new process starts its cost count at zero, so the running total
+				// must stop measuring deltas against the old one. `costUsd` itself is
+				// deliberately untouched — that is the number this fixes.
+				costUsdThisRun: 0,
 				header: {
 					sessionId: event.session_id,
 					model: event.model,
@@ -473,6 +524,15 @@ export function applyEvent(
 			return applyStreamDelta(state, event);
 
 		case "user": {
+			// Harness-injected turns (background-task notifications and the like)
+			// arrive as user events because that is what they are to the model.
+			// Rendering one as a prompt pins `<task-notification>` XML to the top
+			// of the pane as "the last thing you said". Filtered on the live path
+			// as well as the restore path, so a pane looks the same before and
+			// after a restart.
+			if (isSyntheticUserTurn(event as unknown as Record<string, unknown>)) {
+				return state;
+			}
 			const content = (event.message as { content?: unknown }).content;
 			// A stored transcript records real prompts here (often as a bare
 			// string); the live stream only ever puts tool_result blocks in a user
@@ -544,11 +604,7 @@ export function applyEvent(
 				...state,
 				status: event.is_error ? "error" : "done",
 				...(usage ? { usage } : {}),
-				// Cumulative already — the CLI reports the session total on every
-				// result, so this takes the latest rather than summing.
-				...(typeof event.total_cost_usd === "number"
-					? { costUsd: event.total_cost_usd }
-					: {}),
+				...accrueCost(state, event.total_cost_usd),
 				items: [
 					...state.items,
 					{

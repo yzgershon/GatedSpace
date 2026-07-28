@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { TipTapMarkdownRenderer } from "renderer/components/MarkdownRenderer/components/TipTapMarkdownRenderer";
-import { MarkdownSearch } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/TabView/FileViewerPane/components/MarkdownSearch";
-import { useMarkdownSearch } from "renderer/screens/main/components/WorkspaceView/ContentView/TabsContent/TabView/FileViewerPane/hooks/useMarkdownSearch";
+import { MarkdownSearch } from "renderer/components/WorkspaceView/ContentView/TabsContent/TabView/FileViewerPane/components/MarkdownSearch";
+import { useMarkdownSearch } from "renderer/components/WorkspaceView/ContentView/TabsContent/TabView/FileViewerPane/hooks/useMarkdownSearch";
 import type { ViewProps } from "../../types";
 
 export function MarkdownPreviewView({

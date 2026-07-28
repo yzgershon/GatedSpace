@@ -8,6 +8,13 @@ import { electronTrpcClient } from "renderer/lib/trpc-client";
 import type { PaneViewerData } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { useRingtoneStore } from "renderer/stores/ringtone";
 import { useV2NotificationStore } from "renderer/stores/v2-notifications";
+import {
+	createSoundThrottle,
+	DEFAULT_NOTIFICATION_MATRIX,
+	isChannelEnabled,
+	isNotifiableEventType,
+	type NotificationMatrix,
+} from "shared/notification-matrix";
 import { getV2NativeNotificationContent } from "./notificationContent";
 import {
 	isV2NotificationTargetVisible,
@@ -16,11 +23,24 @@ import {
 } from "./resolveV2NotificationTarget";
 
 /**
+ * One throttle for the whole renderer, deliberately module-level.
+ *
+ * The point is "don't machine-gun my ears when four agents land together", and
+ * those four events arrive through four different calls. A throttle owned by a
+ * component or recreated per call would let every one of them through, which is
+ * the exact case worth suppressing.
+ */
+const soundThrottle = createSoundThrottle();
+
+/**
  * Marks visible targets as seen (terminal statuses are derived from host
  * agent bindings, so an event landing while the user watches must not turn
  * into `review`) and plays the completion chime client-side, so the playback
  * path works when host-service runs off-machine. The chime is suppressed
  * when the target pane is visible and the window is focused.
+ *
+ * Sound and banner are decided separately: the matrix lets an event be worth a
+ * banner but not a noise, which is the common preference for "finished a turn".
  */
 export function handleV2AgentLifecycleEvent({
 	workspaceId,
@@ -29,6 +49,8 @@ export function handleV2AgentLifecycleEvent({
 	paneLayout,
 	volume,
 	muted,
+	matrix = DEFAULT_NOTIFICATION_MATRIX,
+	now = Date.now(),
 }: {
 	workspaceId: string;
 	workspaceName: string;
@@ -36,6 +58,8 @@ export function handleV2AgentLifecycleEvent({
 	paneLayout: WorkspaceState<PaneViewerData> | null | undefined;
 	volume: number;
 	muted: boolean;
+	matrix?: NotificationMatrix;
+	now?: number;
 }): void {
 	const target = resolveV2NotificationTarget({
 		workspaceId,
@@ -44,28 +68,28 @@ export function handleV2AgentLifecycleEvent({
 	});
 	markSeenIfTargetVisible({ payload, paneLayout, target });
 
-	// Only Stop and PermissionRequest deserve sound. Start fires per-prompt
-	// (the working spinner is feedback enough); Attached/Detached fire on
-	// agent boot and clean exit, neither of which is a "your agent finished"
-	// moment.
-	if (
-		payload.eventType === "Start" ||
-		payload.eventType === "Attached" ||
-		payload.eventType === "Detached"
-	) {
-		return;
-	}
+	// Start fires per-prompt (the working spinner is feedback enough);
+	// Attached/Detached fire on agent boot and clean exit. None of the three is
+	// a "your agent needs you" moment, so none is configurable either.
+	if (!isNotifiableEventType(payload.eventType)) return;
 	if (shouldSuppress(target, paneLayout)) return;
 
-	const ringtoneId = useRingtoneStore.getState().selectedRingtoneId;
-	void playRingtone({ ringtoneId, volume, muted });
+	if (
+		isChannelEnabled(matrix, payload.eventType, "sound") &&
+		soundThrottle.shouldPlay(payload.eventType, now)
+	) {
+		const ringtoneId = useRingtoneStore.getState().selectedRingtoneId;
+		void playRingtone({ ringtoneId, volume, muted });
+	}
 
-	showNativeNotification({
-		payload,
-		workspaceId,
-		workspaceName,
-		target,
-	});
+	if (isChannelEnabled(matrix, payload.eventType, "banner")) {
+		showNativeNotification({
+			payload,
+			workspaceId,
+			workspaceName,
+			target,
+		});
+	}
 }
 
 /**

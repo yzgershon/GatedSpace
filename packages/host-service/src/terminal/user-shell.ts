@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -55,17 +56,35 @@ function lookupIgnoreCase(env: ShellEnvSource, name: string): string | null {
  * behave the same when a non-Windows machine asks about win32.
  */
 function resolveWindowsShell(env: ShellEnvSource): string {
-	const comspec = lookupIgnoreCase(env, "COMSPEC");
-	if (comspec && path.win32.isAbsolute(comspec)) return comspec;
-
 	const systemRoot =
 		lookupIgnoreCase(env, "SystemRoot") ?? lookupIgnoreCase(env, "windir");
+
+	// PowerShell, not cmd.exe.
+	//
+	// cmd.exe was the default purely because COMSPEC names it, and COMSPEC is a
+	// 1980s compatibility variable, not a statement about what the user wants to
+	// type in. PowerShell is the shell Windows users actually work in, it is the
+	// one our OSC 133 integration targets (see shell-launch.ts), and every agent
+	// CLI we launch behaves better under it. Windows PowerShell 5.1 ships in-box
+	// on every supported version, so this needs no install.
+	if (systemRoot && path.win32.isAbsolute(systemRoot)) {
+		const powershell = path.win32.join(
+			systemRoot,
+			"System32",
+			"WindowsPowerShell",
+			"v1.0",
+			"powershell.exe",
+		);
+		if (existsSync(powershell)) return powershell;
+	}
+
+	// Fall back to cmd.exe rather than to nothing: a shell that opens beats the
+	// right shell that doesn't.
+	const comspec = lookupIgnoreCase(env, "COMSPEC");
+	if (comspec && path.win32.isAbsolute(comspec)) return comspec;
 	if (systemRoot && path.win32.isAbsolute(systemRoot)) {
 		return path.win32.join(systemRoot, "System32", "cmd.exe");
 	}
-
-	// Nothing left to anchor to. Fall back to the bare name we used to return —
-	// it's the broken case, but inventing a drive letter would be worse.
 	return comspec ?? "cmd.exe";
 }
 

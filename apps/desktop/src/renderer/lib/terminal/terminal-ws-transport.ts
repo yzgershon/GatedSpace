@@ -366,8 +366,23 @@ export function connect(
 	// Recreate per connect so the coalescer always targets the current
 	// terminal; dispose flushes anything the previous socket left pending.
 	transport._writeCoalescer?.dispose();
-	transport._writeCoalescer = createWriteCoalescer((data) =>
-		terminal.write(data),
+	transport._writeCoalescer = createWriteCoalescer(
+		(data) => terminal.write(data),
+		{
+			// Back-pressure is not an error and nothing is dropped, so this must not
+			// be noisy — but a pane whose renderer is persistently behind its PTY is
+			// otherwise invisible, presenting only as "the terminal feels laggy".
+			// Log on powers of two so a sustained firehose reports a handful of
+			// times instead of thousands.
+			onOverflow: (stats) => {
+				if ((stats.overflowFlushes & (stats.overflowFlushes - 1)) !== 0) return;
+				console.warn(
+					`[terminal] write back-pressure: ${stats.overflowFlushes} early flushes, ` +
+						`${Math.round(stats.overflowBytes / 1024)}KB moved, ` +
+						`peak batch ${Math.round(stats.peakBatchBytes / 1024)}KB`,
+				);
+			},
+		},
 	);
 	transport._terminated = false;
 	setupLiveness(transport);

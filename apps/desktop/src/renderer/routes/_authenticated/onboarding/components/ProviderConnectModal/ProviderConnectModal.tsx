@@ -11,10 +11,10 @@ import { Input } from "@superset/ui/input";
 import { toast } from "@superset/ui/sonner";
 import { type FormEvent, useState } from "react";
 import { LuKeyRound } from "react-icons/lu";
-import { AnthropicOAuthDialog } from "renderer/components/Chat/ChatInterface/components/ModelPicker/components/AnthropicOAuthDialog";
-import { OpenAIOAuthDialog } from "renderer/components/Chat/ChatInterface/components/ModelPicker/components/OpenAIOAuthDialog";
-import { useAnthropicOAuth } from "renderer/components/Chat/ChatInterface/components/ModelPicker/hooks/useAnthropicOAuth";
-import { useOpenAIOAuth } from "renderer/components/Chat/ChatInterface/components/ModelPicker/hooks/useOpenAIOAuth";
+import { AnthropicOAuthDialog } from "renderer/components/ModelAuth/AnthropicOAuthDialog";
+import { OpenAIOAuthDialog } from "renderer/components/ModelAuth/OpenAIOAuthDialog";
+import { useAnthropicOAuth } from "renderer/components/ModelAuth/useAnthropicOAuth";
+import { useOpenAIOAuth } from "renderer/components/ModelAuth/useOpenAIOAuth";
 import { track } from "renderer/lib/analytics";
 
 export type Provider = "anthropic" | "openai";

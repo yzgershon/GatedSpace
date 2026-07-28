@@ -2,7 +2,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import type { ReactNode } from "react";
 import { LuLoaderCircle } from "react-icons/lu";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
 
 interface DashboardSidebarWorkspaceDetailsActionProps {
 	label: string;

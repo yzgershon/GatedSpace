@@ -217,6 +217,17 @@ export const settings = sqliteTable("settings", {
 		mode: "boolean",
 	}),
 	notificationVolume: integer("notification_volume"),
+	/**
+	 * Which agent events notify, and on which channel. JSON, because the shape is
+	 * a grid that grows a row every time a new notifiable event type is added —
+	 * as columns that would be a migration per event type, and the value is only
+	 * ever read and written whole.
+	 *
+	 * Null means "never configured" and resolves to the defaults; see
+	 * `shared/notification-matrix.ts`, which also repairs partial or corrupt
+	 * values rather than trusting what comes out of here.
+	 */
+	notificationMatrix: text("notification_matrix"),
 	deleteLocalBranch: integer("delete_local_branch", { mode: "boolean" }),
 	fileOpenMode: text("file_open_mode").$type<FileOpenMode>(),
 	showPresetsBar: integer("show_presets_bar", { mode: "boolean" }),
@@ -225,6 +236,14 @@ export const settings = sqliteTable("settings", {
 	}),
 	terminalFontFamily: text("terminal_font_family"),
 	terminalFontSize: integer("terminal_font_size"),
+	/**
+	 * Copy the terminal selection to the clipboard as soon as it is made.
+	 *
+	 * Opt-in, and off by default: it silently replaces whatever the user had
+	 * copied, every time they drag across a terminal to read something. That is
+	 * a good trade only for people who expect it.
+	 */
+	terminalCopyOnSelect: integer("terminal_copy_on_select", { mode: "boolean" }),
 	editorFontFamily: text("editor_font_family"),
 	editorFontSize: integer("editor_font_size"),
 	showResourceMonitor: integer("show_resource_monitor", { mode: "boolean" }),

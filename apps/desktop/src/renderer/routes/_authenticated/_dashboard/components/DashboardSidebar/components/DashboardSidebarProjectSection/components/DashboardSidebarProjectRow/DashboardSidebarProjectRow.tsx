@@ -2,8 +2,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import { type ComponentPropsWithoutRef, forwardRef } from "react";
 import { HiChevronRight, HiMiniPlus } from "react-icons/hi2";
+import { RenameInput } from "renderer/components/WorkspaceSidebar/RenameInput";
 import { ProjectThumbnail } from "renderer/routes/_authenticated/components/ProjectThumbnail";
-import { RenameInput } from "renderer/screens/main/components/WorkspaceSidebar/RenameInput";
 
 interface DashboardSidebarProjectRowProps
 	extends ComponentPropsWithoutRef<"div"> {

@@ -27,11 +27,12 @@ import type { TerminalLauncher } from "../useV2TerminalLauncher";
 function makeTerminalPane(
 	terminalId: string,
 	titleOverride?: string,
+	agentId?: string,
 ): CreatePaneInput<PaneViewerData> {
 	return {
 		kind: "terminal",
 		titleOverride,
-		data: { terminalId } as TerminalPaneData,
+		data: { terminalId, agentId } as TerminalPaneData,
 	};
 }
 
@@ -227,7 +228,9 @@ export function useV2PresetExecution({
 
 					case "new-tab-single": {
 						const terminalId = await createTerminal(launchCommands[0]);
-						state.addTab({ panes: [makeTerminalPane(terminalId, title)] });
+						state.addTab({
+							panes: [makeTerminalPane(terminalId, title, preset.agentId)],
+						});
 						break;
 					}
 
@@ -238,7 +241,9 @@ export function useV2PresetExecution({
 								: [createTerminal()],
 						);
 						state.addTab({
-							panes: ids.map((id) => makeTerminalPane(id, title)) as [
+							panes: ids.map((id) =>
+								makeTerminalPane(id, title, preset.agentId),
+							) as [
 								CreatePaneInput<PaneViewerData>,
 								...CreatePaneInput<PaneViewerData>[],
 							],
@@ -251,14 +256,16 @@ export function useV2PresetExecution({
 							launchCommands.map((command) => createTerminal(command)),
 						);
 						for (const terminalId of ids) {
-							state.addTab({ panes: [makeTerminalPane(terminalId, title)] });
+							state.addTab({
+								panes: [makeTerminalPane(terminalId, title, preset.agentId)],
+							});
 						}
 						break;
 					}
 
 					case "active-tab-single": {
 						const terminalId = await createTerminal(launchCommands[0]);
-						const pane = makeTerminalPane(terminalId, title);
+						const pane = makeTerminalPane(terminalId, title, preset.agentId);
 						if (!activeTabId) {
 							state.addTab({ panes: [pane] });
 							break;
@@ -273,7 +280,9 @@ export function useV2PresetExecution({
 								? launchCommands.map((command) => createTerminal(command))
 								: [createTerminal()],
 						);
-						const panes = ids.map((id) => makeTerminalPane(id, title));
+						const panes = ids.map((id) =>
+							makeTerminalPane(id, title, preset.agentId),
+						);
 						if (!activeTabId) {
 							state.addTab({
 								panes: panes as [

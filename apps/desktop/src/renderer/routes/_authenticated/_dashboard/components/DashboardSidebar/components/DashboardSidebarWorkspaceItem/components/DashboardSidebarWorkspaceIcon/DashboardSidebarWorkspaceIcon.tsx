@@ -9,8 +9,8 @@ import {
 } from "react-icons/lu";
 import { RxDot } from "react-icons/rx";
 import { TbCloud, TbCloudOff } from "react-icons/tb";
-import { AsciiSpinner } from "renderer/screens/main/components/AsciiSpinner";
-import { StatusIndicator } from "renderer/screens/main/components/StatusIndicator";
+import { AsciiSpinner } from "renderer/components/AsciiSpinner";
+import { StatusIndicator } from "renderer/components/StatusIndicator";
 import type { ActivePaneStatus } from "shared/tabs-types";
 import type {
 	DashboardSidebarWorkspaceHostType,

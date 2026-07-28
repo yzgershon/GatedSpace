@@ -18,8 +18,8 @@ import {
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import type {
 	BrowserPaneData,
-	ChatPaneData,
 	PaneViewerData,
+	SessionPaneData,
 	TerminalPaneData,
 } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
@@ -71,17 +71,22 @@ export function useDefaultContextMenuActions({
 				},
 			},
 			{
-				key: "split-with-chat",
-				label: "Split with New Chat",
+				key: "split-with-session",
+				label: "Split with New Session",
 				icon: <LuMessageSquare />,
 				shortcut:
 					splitWithChatShortcut !== "Unassigned"
 						? splitWithChatShortcut
 						: undefined,
 				onSelect: (ctx) => {
+					// Was `kind: "chat"`, which v2's pane registry does not register —
+					// so this rendered a pane reading "Unknown pane kind: chat". The
+					// SPLIT_WITH_CHAT hotkey shown beside this item already opened a
+					// session pane, so the menu and its own shortcut disagreed, and
+					// only the menu was broken.
 					ctx.actions.split("right", {
-						kind: "chat",
-						data: { sessionId: null } as ChatPaneData,
+						kind: "session",
+						data: {} as SessionPaneData,
 					});
 				},
 			},

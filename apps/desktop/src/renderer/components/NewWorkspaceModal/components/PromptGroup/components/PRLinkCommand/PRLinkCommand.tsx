@@ -11,12 +11,9 @@ import { Popover, PopoverAnchor, PopoverContent } from "@superset/ui/popover";
 import type React from "react";
 import type { RefObject } from "react";
 import { useId, useMemo, useState } from "react";
+import { PRIcon, type PRState } from "renderer/components/PRIcon/PRIcon";
 import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
 import { electronTrpc } from "renderer/lib/electron-trpc";
-import {
-	PRIcon,
-	type PRState,
-} from "renderer/screens/main/components/PRIcon/PRIcon";
 
 export interface SelectedPR {
 	prNumber: number;

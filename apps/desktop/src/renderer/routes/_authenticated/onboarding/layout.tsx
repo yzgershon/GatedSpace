@@ -7,8 +7,8 @@ import {
 	useNavigate,
 } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { createChatServiceIpcClient } from "renderer/components/Chat/utils/chat-service-client";
 import { authClient } from "renderer/lib/auth-client";
+import { createChatServiceIpcClient } from "renderer/lib/chat-service-client";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { electronQueryClient } from "renderer/providers/ElectronTRPCProvider";
 import { OnboardingNavigation } from "./components/OnboardingNavigation";

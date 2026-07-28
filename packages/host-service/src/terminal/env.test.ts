@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import {
 	buildV2TerminalEnv,
 	getShellBootstrapEnv,
@@ -53,11 +56,15 @@ describe("resolveLaunchShell", () => {
 	// node-pty, which resolves a relative shell against the pty-daemon's own
 	// cwd and returns nothing when it hits.
 
+	// A SystemRoot that cannot contain an in-box PowerShell, so these exercise
+	// the cmd.exe fallback chain deterministically on any machine.
+	const NO_PWSH = "Z:\\NoSuchWindowsRoot";
+
 	test("finds ComSpec however Windows happened to spell it", () => {
 		for (const key of ["ComSpec", "COMSPEC", "comspec"]) {
 			expect(
 				resolveLaunchShell(
-					{ [key]: "C:\\WINDOWS\\system32\\cmd.exe" },
+					{ [key]: "C:\\WINDOWS\\system32\\cmd.exe", SystemRoot: NO_PWSH },
 					{ platform: "win32" },
 				),
 			).toBe("C:\\WINDOWS\\system32\\cmd.exe");
@@ -66,14 +73,14 @@ describe("resolveLaunchShell", () => {
 
 	test("builds an absolute path from SystemRoot when ComSpec is missing", () => {
 		expect(
-			resolveLaunchShell({ SystemRoot: "C:\\WINDOWS" }, { platform: "win32" }),
-		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+			resolveLaunchShell({ SystemRoot: NO_PWSH }, { platform: "win32" }),
+		).toBe(`${NO_PWSH}\\System32\\cmd.exe`);
 	});
 
 	test("accepts windir as the anchor too", () => {
-		expect(
-			resolveLaunchShell({ windir: "D:\\Windows" }, { platform: "win32" }),
-		).toBe("D:\\Windows\\System32\\cmd.exe");
+		expect(resolveLaunchShell({ windir: NO_PWSH }, { platform: "win32" })).toBe(
+			`${NO_PWSH}\\System32\\cmd.exe`,
+		);
 	});
 
 	test("a relative ComSpec is upgraded, not trusted", () => {
@@ -81,10 +88,10 @@ describe("resolveLaunchShell", () => {
 		// anything absolute over it.
 		expect(
 			resolveLaunchShell(
-				{ ComSpec: "cmd.exe", SystemRoot: "C:\\WINDOWS" },
+				{ ComSpec: "cmd.exe", SystemRoot: NO_PWSH },
 				{ platform: "win32" },
 			),
-		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+		).toBe(`${NO_PWSH}\\System32\\cmd.exe`);
 	});
 
 	test("only falls back to a bare name with nothing left to anchor to", () => {
@@ -94,10 +101,22 @@ describe("resolveLaunchShell", () => {
 	test("blank values don't count as an anchor", () => {
 		expect(
 			resolveLaunchShell(
-				{ ComSpec: "   ", SystemRoot: "C:\\WINDOWS" },
+				{ ComSpec: "   ", SystemRoot: NO_PWSH },
 				{ platform: "win32" },
 			),
-		).toBe("C:\\WINDOWS\\System32\\cmd.exe");
+		).toBe(`${NO_PWSH}\\System32\\cmd.exe`);
+	});
+
+	test("prefers the in-box PowerShell over cmd.exe when it exists", () => {
+		// PowerShell is the shell Windows users work in, it's what our OSC 133
+		// integration targets, and 5.1 ships in-box. cmd.exe is only a fallback.
+		// Only meaningful on a real Windows host, so assert conditionally rather
+		// than skip: on other platforms the win32 branch still has to fall back.
+		const systemRoot = process.env.SystemRoot;
+		if (process.platform !== "win32" || !systemRoot) return;
+		expect(
+			resolveLaunchShell({ SystemRoot: systemRoot }, { platform: "win32" }),
+		).toBe(`${systemRoot}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`);
 	});
 });
 
@@ -366,9 +385,47 @@ describe("getShellLaunchArgs", () => {
 		).toEqual(["-l"]);
 	});
 
-	test("unsupported shells launch natively without bootstrap", () => {
+	test("powershell launches interactive even without an integration profile", () => {
+		// -NoExit is what keeps it interactive; without it PowerShell would run
+		// and leave. A missing profile degrades to a plain shell, never to a
+		// terminal that won't open.
 		expect(
 			getShellLaunchArgs({ shell: "/usr/bin/pwsh", supersetHomeDir }),
+		).toEqual(["-NoLogo", "-NoExit"]);
+	});
+
+	test("powershell dot-sources the integration profile when present", () => {
+		// A REAL temp dir: the shared supersetHomeDir above is deliberately a
+		// path that doesn't exist, which is what makes the negative cases honest.
+		const home = fs.mkdtempSync(path.join(os.tmpdir(), "gs-pwsh-"));
+		const pwshDir = path.join(home, "pwsh");
+		fs.mkdirSync(pwshDir, { recursive: true });
+		const profile = path.join(pwshDir, "profile.ps1");
+		fs.writeFileSync(profile, "# test\n");
+
+		const args = getShellLaunchArgs({
+			shell: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+			supersetHomeDir: home,
+		});
+		expect(args.slice(0, 3)).toEqual(["-NoLogo", "-NoExit", "-Command"]);
+		// try/catch so a broken profile can't stop a terminal from opening.
+		expect(args[3]).toBe(`try { . '${profile}' } catch { }`);
+	});
+
+	test("a .exe suffix and backslashes don't hide the shell's identity", () => {
+		// path.basename on a POSIX host does not split on backslashes, and the
+		// Windows shell arrives as an absolute path WITH an extension.
+		expect(
+			getShellLaunchArgs({
+				shell: "C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+				supersetHomeDir,
+			}),
+		).not.toEqual([]);
+	});
+
+	test("genuinely unsupported shells still launch natively", () => {
+		expect(
+			getShellLaunchArgs({ shell: "/usr/bin/nushell", supersetHomeDir }),
 		).toEqual([]);
 	});
 });

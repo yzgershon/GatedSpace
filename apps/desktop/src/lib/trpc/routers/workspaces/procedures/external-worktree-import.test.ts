@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { execSync } from "node:child_process";
+import { execFileSync, execSync } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -25,24 +25,43 @@ const TEST_DIR = join(
 	`superset-test-external-wt-${process.pid}`,
 );
 
+/**
+ * Run git without a shell.
+ *
+ * `execSync` goes through cmd.exe on Windows, where single quotes are ordinary
+ * characters rather than string delimiters — so `git commit -m 'a message'`
+ * arrives as two arguments and every one of these tests failed at setup, in a
+ * way that read as "git tests don't work on Windows" rather than "the quoting
+ * is wrong". Passing an argv array removes the shell, and with it the question
+ * of whose quoting rules apply.
+ */
+function git(repoPath: string, args: string[]): void {
+	execFileSync("git", args, { cwd: repoPath, stdio: "ignore" });
+}
+
+/**
+ * Compare paths, not their spellings. git reports POSIX separators on Windows
+ * while `node:path` builds backslashes; both name the same directory.
+ */
+function samePath(value: string): string {
+	return process.platform === "win32"
+		? value.replaceAll("\\", "/").toLowerCase()
+		: value;
+}
+
 function createTestRepo(name: string): string {
 	const repoPath = join(TEST_DIR, name);
 	mkdirSync(repoPath, { recursive: true });
-	execSync("git init", { cwd: repoPath, stdio: "ignore" });
-	execSync("git config user.email 'test@test.com'", {
-		cwd: repoPath,
-		stdio: "ignore",
-	});
-	execSync("git config user.name 'Test'", { cwd: repoPath, stdio: "ignore" });
+	git(repoPath, ["init"]);
+	git(repoPath, ["config", "user.email", "test@test.com"]);
+	git(repoPath, ["config", "user.name", "Test"]);
 	return repoPath;
 }
 
 function seedCommit(repoPath: string, message = "init"): void {
 	writeFileSync(join(repoPath, "README.md"), `# test\n${message}\n`);
-	execSync(`git add . && git commit -m '${message}'`, {
-		cwd: repoPath,
-		stdio: "ignore",
-	});
+	git(repoPath, ["add", "."]);
+	git(repoPath, ["commit", "-m", message]);
 }
 
 function createExternalWorktree(
@@ -51,19 +70,14 @@ function createExternalWorktree(
 	worktreePath: string,
 ): void {
 	mkdirSync(worktreePath, { recursive: true });
-	execSync(`git worktree add "${worktreePath}" -b ${branch}`, {
-		cwd: mainRepoPath,
-		stdio: "ignore",
-	});
+	git(mainRepoPath, ["worktree", "add", worktreePath, "-b", branch]);
 	// Add a commit to the worktree to simulate real work
 	writeFileSync(
 		join(worktreePath, "test.txt"),
 		"Important work in external worktree\n",
 	);
-	execSync("git add . && git commit -m 'external work'", {
-		cwd: worktreePath,
-		stdio: "ignore",
-	});
+	git(worktreePath, ["add", "."]);
+	git(worktreePath, ["commit", "-m", "external work"]);
 }
 
 describe("External worktree detection and import", () => {
@@ -109,7 +123,7 @@ describe("External worktree detection and import", () => {
 			cwd: mainRepoPath,
 			encoding: "utf-8",
 		});
-		expect(worktreeList).toContain(externalWorktreePath);
+		expect(samePath(worktreeList)).toContain(samePath(externalWorktreePath));
 		expect(worktreeList).toContain("feature-external");
 	});
 
@@ -123,7 +137,7 @@ describe("External worktree detection and import", () => {
 		const found = externalWorktrees.find((wt) => wt.branch === "feature-test");
 
 		expect(found).toBeDefined();
-		expect(found?.path).toBe(externalWorktreePath);
+		expect(samePath(found?.path ?? "")).toBe(samePath(externalWorktreePath));
 		expect(found?.isBare).toBe(false);
 		expect(found?.isDetached).toBe(false);
 	});
@@ -141,10 +155,8 @@ describe("External worktree detection and import", () => {
 			join(externalWorktreePath, "important-data.txt"),
 			"Critical user work that must not be lost\n",
 		);
-		execSync("git add . && git commit -m 'critical work'", {
-			cwd: externalWorktreePath,
-			stdio: "ignore",
-		});
+		git(externalWorktreePath, ["add", "."]);
+		git(externalWorktreePath, ["commit", "-m", "critical work"]);
 
 		// Verify data exists before
 		expect(existsSync(join(externalWorktreePath, "important-data.txt"))).toBe(

@@ -1,7 +1,7 @@
 import { COMPANY } from "@superset/shared/constants";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { LuChevronRight, LuCircleHelp, LuRadioTower } from "react-icons/lu";
-import { STROKE_WIDTH } from "renderer/screens/main/components/WorkspaceSidebar/constants";
+import { STROKE_WIDTH } from "renderer/components/WorkspaceSidebar/constants";
 import { usePortsStore } from "renderer/stores";
 import { useDashboardSidebarAllPorts } from "../../providers/DashboardSidebarPortsProvider";
 import { DashboardSidebarPortGroup } from "./components/DashboardSidebarPortGroup";

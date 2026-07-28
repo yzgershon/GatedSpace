@@ -94,7 +94,18 @@ function RailButton({
 	);
 }
 
-export function DashboardSidebarRail() {
+export function DashboardSidebarRail({
+	/**
+	 * Draw the divider between rail and panel.
+	 *
+	 * Off when the panel is hidden: the resizable container draws its own right
+	 * border, so an unconditional one here put two 1px lines side by side at the
+	 * collapsed edge — subtle, but it reads as a rendering artefact.
+	 */
+	showDivider = true,
+}: {
+	showDivider?: boolean;
+} = {}) {
 	const navigate = useNavigate();
 	const activePanel = useSidebarPanelStore((state) => state.activePanel);
 	const panelOpen = useSidebarPanelStore((state) => state.panelOpen);
@@ -104,7 +115,13 @@ export function DashboardSidebarRail() {
 	return (
 		<>
 			<UsageDialog open={usageOpen} onOpenChange={setUsageOpen} />
-			<div className="flex h-full w-12 shrink-0 flex-col items-center border-r border-border bg-sidebar">
+			{/* w-12 = 48px, which COLLAPSED_WORKSPACE_SIDEBAR_WIDTH must match. */}
+			<div
+				className={cn(
+					"flex h-full w-12 shrink-0 flex-col items-center bg-sidebar",
+					showDivider && "border-r border-border",
+				)}
+			>
 				{/*
 				 * Pushed clear of the top edge. The window's own chrome lives up there
 				 * and the first icon was colliding with it.

@@ -18,6 +18,7 @@ import {
 	SETTING_ITEM_ID,
 	type SettingItemId,
 } from "../../../utils/settings-search";
+import { NotificationMatrixSetting } from "./components/NotificationMatrix";
 import { VolumeDropdown } from "./components/VolumeDropdown";
 
 function formatDuration(seconds: number): string {
@@ -109,6 +110,10 @@ interface RingtonesSettingsProps {
 export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 	const showNotification = isItemVisible(
 		SETTING_ITEM_ID.RINGTONES_NOTIFICATION,
+		visibleItems,
+	);
+	const showMatrix = isItemVisible(
+		SETTING_ITEM_ID.RINGTONES_MATRIX,
 		visibleItems,
 	);
 
@@ -250,7 +255,7 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 			<div className="mb-8">
 				<h2 className="text-xl font-semibold">Notifications</h2>
 				<p className="text-sm text-muted-foreground mt-1">
-					Sounds and ringtone for completed tasks
+					Which agent events reach you, and whether they make a sound
 				</p>
 			</div>
 
@@ -280,6 +285,12 @@ export function RingtonesSettings({ visibleItems }: RingtonesSettingsProps) {
 
 				{/* Volume Dropdown */}
 				{showNotification && !isMuted && <VolumeDropdown />}
+
+				{/*
+				 * NOT gated on !isMuted: the mute switch only silences sound, and
+				 * hiding this when muted would hide the banner controls with it.
+				 */}
+				{showMatrix && <NotificationMatrixSetting muted={isMuted} />}
 
 				{/* Ringtone Section */}
 				{showNotification && !isMuted && (

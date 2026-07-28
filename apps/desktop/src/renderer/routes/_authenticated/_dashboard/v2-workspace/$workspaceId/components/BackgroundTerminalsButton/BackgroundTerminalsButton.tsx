@@ -20,6 +20,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { getRelativeTime } from "renderer/components/WorkspacesListView/utils";
 import { useDebouncedValue } from "renderer/hooks/useDebouncedValue";
 import {
 	logStressEvent,
@@ -30,7 +31,6 @@ import {
 	getTerminalBackgroundMarkerIdsKey,
 	subscribeTerminalBackgroundMarkers,
 } from "renderer/lib/terminal/terminal-background-intents";
-import { getRelativeTime } from "renderer/screens/main/components/WorkspacesListView/utils";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import type { PaneViewerData } from "../../types";

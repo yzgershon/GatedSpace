@@ -295,6 +295,20 @@
       "when": 1776928440569,
       "tag": "0041_v1_migration_state",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "6",
+      "when": 1785207146903,
+      "tag": "0042_skinny_mephisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "6",
+      "when": 1785248107968,
+      "tag": "0043_shocking_red_wolf",
+      "breakpoints": true
     }
   ]
 }

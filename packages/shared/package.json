@@ -48,6 +48,18 @@
 			"types": "./src/agent-catalog.ts",
 			"default": "./src/agent-catalog.ts"
 		},
+		"./command-history": {
+			"types": "./src/command-history.ts",
+			"default": "./src/command-history.ts"
+		},
+		"./osc-command-scanner": {
+			"types": "./src/osc-command-scanner.ts",
+			"default": "./src/osc-command-scanner.ts"
+		},
+		"./agent-resume": {
+			"types": "./src/agent-resume.ts",
+			"default": "./src/agent-resume.ts"
+		},
 		"./agent-identity": {
 			"types": "./src/agent-identity.ts",
 			"default": "./src/agent-identity.ts"

@@ -5,7 +5,6 @@ import type {
 import { normalizeAgentLaunchRequest } from "@superset/shared/agent-launch";
 import { posthog } from "renderer/lib/posthog";
 import { useWorkspaceInitStore } from "renderer/stores/workspace-init";
-import { launchChatAdapter } from "./adapters/chat-adapter";
 import { launchTerminalAdapter } from "./adapters/terminal-adapter";
 import type {
 	AgentLaunchTabsAdapter,
@@ -132,10 +131,21 @@ export async function launchAgentSession(
 				tabs,
 			};
 			phase = "launching";
-			const payload =
-				request.kind === "terminal"
-					? await launchTerminalAdapter(request, executionContext)
-					: await launchChatAdapter(request, executionContext);
+			// Terminal is the only adapter now. The chat adapter opened a v1 chat
+			// pane, and both v1 and that pane are gone.
+			//
+			// Thrown rather than quietly coerced to a terminal launch: a chat
+			// request carries a prompt and no command, so "launch it as a terminal"
+			// would open an empty shell and report success. The only producer is
+			// `buildTaskLaunchRequest` for agentType "superset", which is the
+			// built-in chat agent being retired with the rest of this.
+			if (request.kind !== "terminal") {
+				throw new Error(
+					`The "${request.agentType ?? "superset"}" chat agent has been removed. ` +
+						"Pick a terminal agent (Claude Code, Codex, Gemini) instead.",
+				);
+			}
+			const payload = await launchTerminalAdapter(request, executionContext);
 			phase = "running";
 			const result: AgentLaunchResult = {
 				workspaceId: request.workspaceId,

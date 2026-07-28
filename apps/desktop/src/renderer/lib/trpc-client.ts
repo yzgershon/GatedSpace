@@ -4,13 +4,14 @@ import superjson from "superjson";
 import { ipcLink } from "trpc-electron/renderer";
 import { electronTrpc } from "./electron-trpc";
 import { sessionIdLink } from "./session-id-link";
+import { slowIpcLink } from "./slow-ipc-link";
 
 /** Electron tRPC React client for React hooks (used by ElectronTRPCProvider). */
 export const electronReactClient = electronTrpc.createClient({
-	links: [sessionIdLink(), ipcLink({ transformer: superjson })],
+	links: [sessionIdLink(), slowIpcLink(), ipcLink({ transformer: superjson })],
 });
 
 /** Electron tRPC proxy client for imperative calls from stores/utilities. */
 export const electronTrpcClient = createTRPCProxyClient<AppRouter>({
-	links: [sessionIdLink(), ipcLink({ transformer: superjson })],
+	links: [sessionIdLink(), slowIpcLink(), ipcLink({ transformer: superjson })],
 });

@@ -200,6 +200,24 @@ function SessionHeader({
 	);
 }
 
+/**
+ * Openers for an empty session.
+ *
+ * A blank composer asks the user to invent a first move, which is the moment a
+ * session is most likely to be abandoned. These are deliberately COMPLETE
+ * prompts rather than fragments: clicking one starts the turn, because the
+ * composer seeds its text from the draft store only on mount and prefilling
+ * after that would need state plumbing this doesn't earn.
+ *
+ * Kept generic on purpose — nothing here reads the workspace, so a suggestion
+ * can't be wrong about what the repo contains.
+ */
+const STARTER_PROMPTS = [
+	"Explain this codebase",
+	"What changed on this branch?",
+	"Run /review on my current changes",
+] as const;
+
 /** Within this many px of the bottom still counts as "following along". */
 const STICK_THRESHOLD = 80;
 
@@ -275,6 +293,18 @@ export function SessionView({
 						<p className="text-xs text-muted-foreground/60">
 							Ask to make changes, @mention files, or run /commands.
 						</p>
+						<div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+							{STARTER_PROMPTS.map((prompt) => (
+								<button
+									key={prompt}
+									type="button"
+									onClick={() => onSend(prompt)}
+									className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								>
+									{prompt}
+								</button>
+							))}
+						</div>
 					</div>
 				) : (
 					<SessionTimelineView timeline={timeline} />

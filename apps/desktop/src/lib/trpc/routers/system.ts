@@ -1,3 +1,6 @@
+import { openElevatedTerminal } from "main/lib/elevated-terminal";
+import { FOCUS_SURFACES, writeFocusSurface } from "main/lib/focus-surface-file";
+import { z } from "zod";
 import { publicProcedure, router } from "..";
 import { execWithShellEnv } from "./workspaces/utils/shell-env";
 
@@ -46,6 +49,32 @@ async function detectGhCli(): Promise<GhDetectResult> {
 export const createSystemRouter = () => {
 	return router({
 		detectGhCli: publicProcedure.query(detectGhCli),
+		/**
+		 * Opens an admin shell in its OWN window — see `elevated-terminal.ts` for
+		 * why it cannot be a pane. Reports failure in the result rather than
+		 * throwing: declining the Windows prompt is a decision, not an error.
+		 */
+		openElevatedTerminal: publicProcedure
+			.input(z.object({ cwd: z.string().default("") }))
+			.mutation(({ input }) => openElevatedTerminal(input.cwd)),
+		supportsElevatedTerminal: publicProcedure.query(
+			() => process.platform === "win32",
+		),
+		/**
+		 * Publishes what kind of element has focus, for GatedVoice to read.
+		 * Fire-and-forget: a failed hint costs the old typing behaviour, so it
+		 * must never make the renderer's focus handling throw.
+		 */
+		setFocusSurface: publicProcedure
+			.input(
+				z.object({
+					surface: z.enum(FOCUS_SURFACES as [string, ...string[]]),
+				}),
+			)
+			.mutation(({ input }) => {
+				writeFocusSurface(input.surface as "terminal" | "text" | "other");
+				return { ok: true };
+			}),
 	});
 };
 

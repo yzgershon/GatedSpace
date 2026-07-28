@@ -223,8 +223,13 @@ export function DashboardSidebar({
 				<DashboardSidebarPortsProvider enabled={!isCollapsed}>
 					<DashboardSidebarHoverCardOverlay>
 						<div className="flex h-full">
-							<DashboardSidebarRail />
-							{panelOpen ? (
+							{/*
+							 * Collapsed means "the rail IS the sidebar". Previously only
+							 * the width changed, so the panel kept rendering into whatever
+							 * pixels were left and got squeezed into an unreadable strip.
+							 */}
+							<DashboardSidebarRail showDivider={panelOpen && !isCollapsed} />
+							{panelOpen && !isCollapsed ? (
 								<div className="flex h-full min-w-0 flex-1 flex-col border-r border-border bg-muted/45 dark:bg-muted/35">
 									<DashboardSidebarHeader
 										isCollapsed={isCollapsed}

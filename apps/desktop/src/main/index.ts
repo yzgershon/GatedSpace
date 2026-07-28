@@ -28,13 +28,16 @@ import { initAppState } from "./lib/app-state";
 import { requestAppleEventsAccess } from "./lib/apple-events-permission";
 import { isUpdateReadyToInstall, setupAutoUpdater } from "./lib/auto-updater";
 import { installBundledCliShim } from "./lib/bundled-cli";
+import { flushCostStore } from "./lib/claude-session/cost-store";
 import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
+import { crashSentinel } from "./lib/crash-sentinel";
 import { resolveDevWorkspaceName } from "./lib/dev-workspace-name";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
 import { getHostServiceCoordinator } from "./lib/host-service-coordinator";
 import { localDb } from "./lib/local-db";
 import { requestLocalNetworkAccess } from "./lib/local-network-permission";
+import { mobileBridge } from "./lib/mobile-bridge/server";
 import {
 	initTanstackDbPersistence,
 	shutdownTanstackDbPersistence,
@@ -186,6 +189,13 @@ export function quitAppCompletely(): void {
 
 /** Bypasses before-quit. Host-service children self-exit via the parent watchdog. */
 export function exitImmediately(): void {
+	// Bypassing before-quit also bypasses the stamp there, so it has to happen
+	// here: an unstamped deliberate exit is indistinguishable from a crash.
+	crashSentinel.expectExit("quit");
+	// Cost accrual is debounced, so the last turn or two is still in memory.
+	flushCostStore();
+	// A listening socket must not outlive the window that authorised it.
+	mobileBridge.stopSync();
 	app.exit(0);
 }
 
@@ -200,6 +210,14 @@ function getConfirmOnQuitSetting(): boolean {
 
 app.on("before-quit", async (event) => {
 	if (isQuitting) return;
+
+	// Stamp the exit as expected BEFORE anything can prevent it. If the user
+	// cancels the confirmation below the stamp is cleared again; leaving it set
+	// would only mean one crash goes unreported, whereas not stamping at all
+	// means every ordinary quit is counted as a crash.
+	crashSentinel.expectExit("quit");
+	flushCostStore();
+	mobileBridge.stopSync();
 
 	const isDev = process.env.NODE_ENV === "development";
 	if (!skipQuitConfirmation && !isDev && getConfirmOnQuitSetting()) {
@@ -216,6 +234,9 @@ app.on("before-quit", async (event) => {
 			});
 
 			if (response === 1) {
+				// Quit cancelled — this run is still going, so it must be able to
+				// report a crash later.
+				crashSentinel.clearExpectedExit();
 				return;
 			}
 		} catch (error) {
@@ -424,6 +445,23 @@ if (!gotTheLock) {
 			startUsageRefreshTicker();
 		} catch (error) {
 			console.error("[main] Failed to start the usage refresh ticker:", error);
+		}
+		try {
+			// Reads the previous run's verdict, then starts recording this one.
+			const previous = crashSentinel.start(app.getVersion());
+			if (previous?.crashed) {
+				console.warn(
+					`[crash-sentinel] previous run did NOT exit cleanly — release=${previous.release} ` +
+						`memory=${previous.diagnostics.memory} terminals=${previous.diagnostics.terminals} ` +
+						`runtime=${previous.diagnostics.runtime} activityWasNone=${previous.activityWasNone}`,
+				);
+			} else if (previous) {
+				console.log(
+					`[crash-sentinel] previous run exited as expected (${previous.expectedExit})`,
+				);
+			}
+		} catch (error) {
+			console.error("[main] Failed to start the crash sentinel:", error);
 		}
 
 		if (IS_DEV) {

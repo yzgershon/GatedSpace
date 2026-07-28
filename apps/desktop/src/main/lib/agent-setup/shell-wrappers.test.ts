@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import {
 	createBashWrapper,
+	createPowerShellWrapper,
 	createZshWrapper,
 	getCommandShellArgs,
 	getShellArgs,
@@ -24,10 +25,12 @@ const TEST_ROOT = path.join(
 const TEST_BIN_DIR = path.join(TEST_ROOT, "bin");
 const TEST_ZSH_DIR = path.join(TEST_ROOT, "zsh");
 const TEST_BASH_DIR = path.join(TEST_ROOT, "bash");
+const TEST_PWSH_DIR = path.join(TEST_ROOT, "pwsh");
 const TEST_PATHS: ShellWrapperPaths = {
 	BIN_DIR: TEST_BIN_DIR,
 	ZSH_DIR: TEST_ZSH_DIR,
 	BASH_DIR: TEST_BASH_DIR,
+	PWSH_DIR: TEST_PWSH_DIR,
 };
 const SPECIAL_SHELL_PATH_SEGMENT = `special $USER "quoted" 'single'`;
 
@@ -57,6 +60,7 @@ describe("shell-wrappers", () => {
 		mkdirSync(TEST_BIN_DIR, { recursive: true });
 		mkdirSync(TEST_ZSH_DIR, { recursive: true });
 		mkdirSync(TEST_BASH_DIR, { recursive: true });
+		mkdirSync(TEST_PWSH_DIR, { recursive: true });
 	});
 
 	afterEach(() => {
@@ -872,6 +876,91 @@ export SUPERSET_WORKSPACE_PATH="/wrong/path"
 				expect(wrapper).toContain("\\033]777;superset-shell-ready\\007");
 				expect(wrapper).toContain("\\033]133;A\\007");
 			}
+		});
+	});
+
+	describe("PowerShell command-line sanitizer", () => {
+		/**
+		 * Pull the sanitize chain out of the GENERATED profile and run it, rather
+		 * than testing a copy of what it ought to say. Every bug this file has had
+		 * — a backtick eating the rest of a template literal, an escape scheme
+		 * that escaped nothing — was invisible to anyone reading the TypeScript
+		 * and obvious the moment the emitted code was executed.
+		 */
+		function sanitizeChain(): string[] {
+			createPowerShellWrapper(TEST_PATHS);
+			const profile = readFileSync(
+				path.join(TEST_PWSH_DIR, "profile.ps1"),
+				"utf-8",
+			);
+			return profile
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => line.startsWith("$__bs_line = $__bs_line.Replace("));
+		}
+
+		function runChain(psLiteralExpression: string): string {
+			const script = [
+				`$__bs_line = ${psLiteralExpression}`,
+				...sanitizeChain(),
+				"[Console]::Out.Write($__bs_line)",
+			].join("\n");
+			return execFileSync(
+				"powershell.exe",
+				["-NoProfile", "-NonInteractive", "-Command", script],
+				{ encoding: "utf-8" },
+			);
+		}
+
+		function isPowerShellAvailable(): boolean {
+			if (process.platform !== "win32") return false;
+			try {
+				execFileSync("powershell.exe", ["-NoProfile", "-Command", "exit 0"], {
+					stdio: "ignore",
+				});
+				return true;
+			} catch {
+				return false;
+			}
+		}
+
+		it("does not escape backslashes", () => {
+			// It used to, and nothing ever unescaped them, so every Windows path in
+			// history came back doubled: `Get-ChildItem C:\\NoSuchFolder`. Escaping
+			// only earns its keep when a decoder exists. Asserted on the generated
+			// text as well as by execution below, because this is the one line whose
+			// absence is the fix.
+			for (const line of sanitizeChain()) {
+				expect(line).not.toContain("Replace('\\','\\\\')");
+			}
+		});
+
+		it("emits a Windows path unchanged", () => {
+			if (!isPowerShellAvailable()) return;
+			expect(runChain(String.raw`'Get-ChildItem C:\NoSuchFolder'`)).toBe(
+				String.raw`Get-ChildItem C:\NoSuchFolder`,
+			);
+		});
+
+		it("drops ESC and BEL, and flattens newlines to spaces", () => {
+			if (!isPowerShellAvailable()) return;
+			// Either control byte would terminate the OSC sequence early and corrupt
+			// every byte after it; a newline would split one row into two.
+			expect(
+				runChain(
+					"'a' + [char]27 + 'b' + [char]7 + 'c' + [char]10 + 'd' + [char]13 + 'e'",
+				),
+			).toBe("abc d e");
+		});
+
+		it("leaves quotes and semicolons alone", () => {
+			if (!isPowerShellAvailable()) return;
+			// The payload is delimited by ESC \\ or BEL, so a semicolon inside a
+			// command is not special here — which is precisely why this marker is
+			// ours and not VS Code's percent-encoded 633;E.
+			expect(runChain(`'git commit -m "fix; really" --amend'`)).toBe(
+				'git commit -m "fix; really" --amend',
+			);
 		});
 	});
 });
