@@ -61,7 +61,21 @@ describe("voice input", () => {
 	});
 
 	it("appends to the composer instead of replacing it", () => {
-		expect(script).toContain("baseText + finalText");
+		expect(script).toContain("baseText + committedText");
+	});
+
+	it("rebuilds the transcript from index 0 rather than accumulating", () => {
+		// The duplication bug: reading from event.resultIndex and doing
+		// `final += ...` re-appends already-finished words once per event,
+		// because browsers commonly report resultIndex as 0 every time.
+		expect(script).toContain("for (var i = 0; i < event.results.length; i++)");
+		// The loop INITIALISER specifically — `event.resultIndex` still appears
+		// in the comment above it explaining why this must not be used.
+		expect(script).not.toContain("i = event.resultIndex");
+	});
+
+	it("banks finished text before a restart clears the results", () => {
+		expect(script).toContain("committedText += sessionText");
 	});
 
 	it("restarts itself so a pause does not end dictation", () => {

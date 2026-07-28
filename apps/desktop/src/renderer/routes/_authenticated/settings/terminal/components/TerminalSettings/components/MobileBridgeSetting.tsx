@@ -67,6 +67,26 @@ export function MobileBridgeSetting() {
 	const running = status?.running ?? false;
 	const pending = start.isPending || stop.isPending;
 
+	/**
+	 * Switching mode while running restarts the bridge on the new one.
+	 *
+	 * The picker used to be DISABLED whenever the bridge was up, on the
+	 * reasoning that the mode only takes effect at bind time. In use that reads
+	 * as "this setting is locked", with nothing saying the switch above has to
+	 * go off first — and the one mode people most need to reach (Tailscale
+	 * HTTPS, the only one where the phone's microphone works) was exactly the
+	 * one they could not select. Restarting is what they meant anyway.
+	 */
+	const changeMode = async (next: BindingMode) => {
+		setMode(next);
+		if (!running) return;
+		// Sequential, not parallel: the new listener must not race the old one
+		// for a port, and in tailscale-serve mode the stop also has to tear down
+		// the serve mapping before a new one replaces it.
+		await stop.mutateAsync();
+		await start.mutateAsync({ mode: next });
+	};
+
 	return (
 		<div className="space-y-3">
 			<div className="flex items-center justify-between">
@@ -95,8 +115,8 @@ export function MobileBridgeSetting() {
 				</p>
 				<Select
 					value={activeMode}
-					disabled={running || pending}
-					onValueChange={(value) => setMode(value as BindingMode)}
+					disabled={pending}
+					onValueChange={(value) => void changeMode(value as BindingMode)}
 				>
 					<SelectTrigger className="w-[180px] shrink-0">
 						<SelectValue />

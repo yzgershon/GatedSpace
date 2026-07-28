@@ -263,8 +263,16 @@ var micBtn = document.getElementById("mic");
 var hint = document.getElementById("hint");
 var recog = null;
 var listening = false;
+// What was already in the box when dictation started.
 var baseText = "";
-var finalText = "";
+// Finished text from EARLIER recogniser sessions in this dictation. The
+// recogniser is restarted whenever the browser times it out (see onend), and a
+// restart resets event.results, so anything already finished has to be kept
+// here or it would be lost on the next restart.
+var committedText = "";
+// Finished text from the CURRENT session, recomputed from scratch on every
+// event rather than accumulated. See onresult for why that matters.
+var sessionText = "";
 
 function showHint(message, warn) {
   hint.textContent = message;
@@ -297,17 +305,30 @@ function startMic() {
   // thing to want, and clobbering what is already in the box to "start clean"
   // is only ever a surprise.
   baseText = input.value ? input.value.replace(/\\s+$/, "") + " " : "";
-  finalText = "";
+  committedText = "";
+  sessionText = "";
 
   recog.onresult = function (event) {
+    // REBUILD from index 0 every time; never accumulate.
+    //
+    // event.results is cumulative for the session, and event.resultIndex is
+    // only a hint about what changed — Safari and Chrome frequently report it
+    // as 0 on every event. Reading from resultIndex and appending with += then
+    // re-appends words that were already finished, once per event, which is
+    // why every word came out repeated ("hello hello hello"). Recomputing the
+    // whole string is idempotent, so it cannot double-count no matter what the
+    // browser reports.
+    var finals = "";
     var interim = "";
-    for (var i = event.resultIndex; i < event.results.length; i++) {
-      if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
-      else interim += event.results[i][0].transcript;
+    for (var i = 0; i < event.results.length; i++) {
+      var result = event.results[i];
+      if (result.isFinal) finals += result[0].transcript;
+      else interim += result[0].transcript;
     }
+    sessionText = finals;
     // Interim text lands in the box as you speak, so a misheard word is
     // visible immediately rather than at the end of a long sentence.
-    input.value = baseText + finalText + interim;
+    input.value = baseText + committedText + finals + interim;
     autosize();
   };
 
@@ -327,6 +348,11 @@ function startMic() {
     // Mobile browsers end a session after a short pause. Without this, thinking
     // mid-sentence ends the dictation and the button silently goes cold.
     if (!listening) return;
+    // Bank this session's finished text before restarting: the new session
+    // starts with an empty event.results, so anything not moved here would be
+    // rebuilt away by the first onresult of the next session.
+    committedText += sessionText;
+    sessionText = "";
     try { recog.start(); } catch (e) { stopMic(); }
   };
 
