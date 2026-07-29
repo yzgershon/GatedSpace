@@ -1,11 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useUpdateWorkspace } from "renderer/react-query/workspaces/useUpdateWorkspace";
 
-export function useWorkspaceRename(
-	workspaceId: string,
-	workspaceName: string,
-	branch: string,
-) {
+export function useWorkspaceRename(workspaceId: string, workspaceName: string) {
 	const [isRenaming, setIsRenaming] = useState(false);
 	const [renameValue, setRenameValue] = useState(workspaceName);
 	const inputRef = useRef<HTMLInputElement | null>(null);
@@ -30,11 +26,15 @@ export function useWorkspaceRename(
 		const isCleared = !trimmedValue;
 
 		if (isCleared) {
+			// Clearing the field means "I don't have a name for this yet", not
+			// "call it after the branch". The stored name — its number — stays
+			// put; only the flag that marks it as un-named is set, so an agent
+			// can still auto-name it later.
 			updateWorkspace.mutate({
 				id: workspaceId,
-				patch: { name: branch, isUnnamed: true },
+				patch: { isUnnamed: true },
 			});
-			setRenameValue(branch);
+			setRenameValue(workspaceName);
 		} else if (trimmedValue !== workspaceName) {
 			updateWorkspace.mutate({
 				id: workspaceId,

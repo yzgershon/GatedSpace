@@ -17,24 +17,25 @@ import {
 	CHAR_RISE_PX,
 	caretVisible,
 	formatElapsed,
+	formatTokens,
 	phraseAt,
 	revealedChars,
 	spinnerFrame,
 	WORKING_PHRASES,
 } from "./working-indicator";
 
-/** The mark is Claude's orange in every theme, like the send button. */
-const MARK_COLOR = "#d97757";
-
 export function WorkingIndicator({
 	/** When the current stretch of work began. Defaults to first mount. */
 	startedAt,
 	/** Show the gerund. Off where the label is already saying what's happening. */
 	phrase = true,
+	/** Output tokens written so far this turn. Omitted where none are known. */
+	tokens,
 	className,
 }: {
 	startedAt?: number;
 	phrase?: boolean;
+	tokens?: number;
 	className?: string;
 }) {
 	// Derived from the prop, NOT captured in a ref.
@@ -74,6 +75,10 @@ export function WorkingIndicator({
 	// and this render) would otherwise show a negative counter.
 	const elapsed = Math.max(0, now - start);
 	const offset = offsetRef.current;
+	// Hidden at zero rather than shown as "0 tokens": every turn would open with
+	// a number that says nothing, and the line would jump wider the moment the
+	// first count arrived.
+	const showTokens = typeof tokens === "number" && tokens > 0;
 	const full = phraseAt(elapsed, offset);
 	const chars = revealedChars(elapsed, offset);
 
@@ -85,12 +90,21 @@ export function WorkingIndicator({
 			className={cn("flex items-baseline gap-2 text-[13.5px]", className)}
 			// The full phrase, so a screen reader gets a word rather than a word
 			// being typed one letter at a time.
-			aria-label={`${full}, ${formatElapsed(elapsed)}`}
+			aria-label={
+				showTokens
+					? `${full}, ${formatElapsed(elapsed)}, ${formatTokens(tokens)} tokens`
+					: `${full}, ${formatElapsed(elapsed)}`
+			}
 		>
+			{/*
+			 * The mark takes the theme's primary colour rather than a hardcoded
+			 * orange. It used to be literally "#d97757" on the reasoning that
+			 * Claude's orange is Claude's orange — which meant it stayed orange in
+			 * Dracula and Koi, where nothing else is.
+			 */}
 			<span
 				aria-hidden
-				className="inline-block w-3 text-center font-mono"
-				style={{ color: MARK_COLOR }}
+				className="inline-block w-3 text-center font-mono text-primary"
 			>
 				{spinnerFrame(elapsed)}
 			</span>
@@ -131,6 +145,29 @@ export function WorkingIndicator({
 			<span className="text-muted-foreground/70 tabular-nums">
 				{formatElapsed(elapsed)}
 			</span>
+			{showTokens ? (
+				/*
+				 * Claude Code's own shape: a middot separator and a down-arrow for
+				 * "written", so the pair reads as one clause rather than two
+				 * competing numbers.
+				 *
+				 * Tabular figures and a fixed-width arrow keep the line still while
+				 * the count climbs — proportional digits shift every neighbouring
+				 * pixel on each update, which is far more distracting than the
+				 * number is useful.
+				 */
+				<span
+					aria-hidden
+					className="flex items-baseline gap-1 text-muted-foreground/70"
+				>
+					<span className="text-muted-foreground/40">·</span>
+					<span className="tabular-nums">
+						<span className="mr-0.5 font-mono text-[11px]">↓</span>
+						{formatTokens(tokens)}
+					</span>
+					<span className="text-muted-foreground/50">tokens</span>
+				</span>
+			) : null}
 		</output>
 	);
 }

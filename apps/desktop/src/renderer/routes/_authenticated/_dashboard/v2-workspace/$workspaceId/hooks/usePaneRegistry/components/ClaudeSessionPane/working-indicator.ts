@@ -187,6 +187,25 @@ export function formatThought(elapsedMs: number): string {
 	return elapsedMs < 1000 ? "a moment" : formatElapsed(elapsedMs);
 }
 
+/**
+ * The token count beside the timer, the way Claude Code writes it: exact up to
+ * a thousand, then one decimal place.
+ *
+ * Rounded rather than truncated, so 1_950 reads as 2.0k rather than 1.9k, and
+ * the trailing ".0" is kept — a figure that alternates between "2k" and "2.1k"
+ * changes width as it climbs, and the line twitches.
+ */
+export function formatTokens(tokens: number): string {
+	if (tokens < 1000) return String(Math.max(0, Math.round(tokens)));
+	// Rounded through an integer rather than with toFixed, which inherits binary
+	// float error at the boundary: (1950/1000).toFixed(1) is "1.9", because 1.95
+	// is not exactly representable and lands just below the tie.
+	const oneDecimal = (value: number) =>
+		(Math.round(value * 10) / 10).toFixed(1);
+	if (tokens < 1_000_000) return `${oneDecimal(tokens / 1000)}k`;
+	return `${oneDecimal(tokens / 1_000_000)}M`;
+}
+
 export function formatElapsed(elapsedMs: number): string {
 	const seconds = Math.floor(elapsedMs / 1000);
 	if (seconds < 60) return `${seconds}s`;

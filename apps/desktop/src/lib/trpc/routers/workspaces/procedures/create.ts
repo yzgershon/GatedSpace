@@ -21,6 +21,7 @@ import {
 	setLastActiveWorkspace,
 	touchWorkspace,
 } from "../utils/db-helpers";
+import { allocateDefaultWorkspaceName } from "../utils/default-workspace-name";
 import {
 	createWorktreeFromPr,
 	type ExternalWorktree,
@@ -153,7 +154,7 @@ function insertImportedWorktreeWorkspace({
 			worktreeId,
 			type: "worktree",
 			branch,
-			name: branch,
+			name: allocateDefaultWorkspaceName(projectId),
 			...(isUnnamed ? { isUnnamed } : {}),
 			tabOrder: maxTabOrder + 1,
 		})
@@ -582,7 +583,7 @@ export const createCreateProcedures = () => {
 							projectId: input.projectId,
 							worktreeId: orphanedWorktree.id,
 							branch,
-							name: input.name ?? branch,
+							name: input.name ?? allocateDefaultWorkspaceName(input.projectId),
 						});
 						let autoRenameWarning: string | undefined;
 						try {
@@ -621,7 +622,7 @@ export const createCreateProcedures = () => {
 						await createWorkspaceFromExternalWorktree({
 							projectId: input.projectId,
 							branch,
-							name: input.name ?? branch,
+							name: input.name ?? allocateDefaultWorkspaceName(input.projectId),
 						});
 
 					if (externalWorkspaceResult) {
@@ -661,7 +662,7 @@ export const createCreateProcedures = () => {
 						worktreeId: worktree.id,
 						type: "worktree",
 						branch,
-						name: input.name ?? branch,
+						name: input.name ?? allocateDefaultWorkspaceName(input.projectId),
 						isUnnamed: !input.name,
 						tabOrder: maxTabOrder + 1,
 					})
@@ -879,7 +880,8 @@ export const createCreateProcedures = () => {
 						worktreeId: worktree.id,
 						type: "worktree",
 						branch: worktree.branch,
-						name: input.name ?? worktree.branch,
+						name:
+							input.name ?? allocateDefaultWorkspaceName(worktree.projectId),
 						isUnnamed: !input.name,
 						tabOrder: maxTabOrder + 1,
 					})

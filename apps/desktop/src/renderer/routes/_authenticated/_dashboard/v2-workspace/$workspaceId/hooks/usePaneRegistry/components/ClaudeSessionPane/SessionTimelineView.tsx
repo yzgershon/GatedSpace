@@ -34,6 +34,7 @@ import {
 	type ThinkingItem,
 	type TimelineItem,
 	type ToolItem,
+	turnTokenTotal,
 	type UserTextItem,
 } from "shared/claude-session/timeline";
 import { ImageChip } from "./ImageChip";
@@ -886,7 +887,11 @@ export function SessionTimelineView({
 			 */}
 			{timeline.status === "streaming" ? (
 				<div className={cn(turns.length > 0 && "mt-3")}>
-					<WorkingIndicator startedAt={turnStartedAt} className="pl-8" />
+					<WorkingIndicator
+						startedAt={turnStartedAt}
+						tokens={turnTokenTotal(timeline.turnTokens)}
+						className="pl-8"
+					/>
 				</div>
 			) : null}
 		</div>

@@ -45,7 +45,9 @@ const UI_COLOR_TO_CSS_VAR: Record<keyof UIColors, string> = {
 	success: "--success",
 	successForeground: "--success-foreground",
 	warning: "--warning",
+	warningForeground: "--warning-foreground",
 	info: "--info",
+	infoForeground: "--info-foreground",
 };
 
 /**

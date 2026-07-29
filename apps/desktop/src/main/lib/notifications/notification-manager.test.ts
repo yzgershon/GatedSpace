@@ -429,4 +429,60 @@ describe("NotificationManager", () => {
 			);
 		});
 	});
+
+	describe("the phone", () => {
+		it("gets the same wording as the desktop banner", () => {
+			const pushToPhone = mock(() => {});
+			new NotificationManager(createDeps({ pushToPhone })).handleAgentLifecycle(
+				makeEvent({ eventType: "Stop" }),
+			);
+			expect(pushToPhone).toHaveBeenCalledWith({
+				title: "Agent Complete — Test Workspace",
+				body: '"Test Title" has finished its task',
+				sessionKey: "pane-1",
+			});
+		});
+
+		it("is told even when this desktop cannot show a banner", () => {
+			// `isSupported` is about THIS machine drawing a banner. A phone in
+			// another room is unaffected, and is the device that matters most
+			// when the desktop is not being looked at.
+			const pushToPhone = mock(() => {});
+			new NotificationManager(
+				createDeps({ pushToPhone, isSupported: () => false }),
+			).handleAgentLifecycle(makeEvent());
+			expect(pushToPhone).toHaveBeenCalled();
+		});
+
+		it("stays quiet when banners are switched off", () => {
+			// Turning banners off is a decision about being interrupted, not
+			// about which screen does the interrupting.
+			const pushToPhone = mock(() => {});
+			const built = parseNotificationMatrix({
+				Stop: { sound: true, banner: false },
+			});
+			new NotificationManager(
+				createDeps({ pushToPhone, getNotificationMatrix: () => built }),
+			).handleAgentLifecycle(makeEvent());
+			expect(pushToPhone).not.toHaveBeenCalled();
+		});
+
+		it("stays quiet when the pane is already on screen", () => {
+			const pushToPhone = mock(() => {});
+			new NotificationManager(
+				createDeps({
+					pushToPhone,
+					getVisibilityContext: () => ({
+						isFocused: true,
+						currentWorkspaceId: "ws-1",
+						tabsState: {
+							activeTabIds: { "ws-1": "tab-1" },
+							focusedPaneIds: { "tab-1": "pane-1" },
+						},
+					}),
+				}),
+			).handleAgentLifecycle(makeEvent());
+			expect(pushToPhone).not.toHaveBeenCalled();
+		});
+	});
 });

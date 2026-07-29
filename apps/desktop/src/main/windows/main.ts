@@ -19,6 +19,7 @@ import { appState } from "../lib/app-state";
 import { browserManager } from "../lib/browser/browser-manager";
 import { attachEditContextMenu } from "../lib/edit-context-menu";
 import { createApplicationMenu } from "../lib/menu";
+import { pushService } from "../lib/mobile-bridge/push";
 import {
 	getNotificationMatrix,
 	playNotificationSound,
@@ -200,6 +201,9 @@ export async function MainWindow() {
 		createNotification: (opts) => new Notification(opts),
 		playSound: playNotificationSound,
 		getNotificationMatrix,
+		pushToPhone: (notice) => {
+			void pushService.notify(notice);
+		},
 		onNotificationClick: (ids) => {
 			window.show();
 			window.focus();

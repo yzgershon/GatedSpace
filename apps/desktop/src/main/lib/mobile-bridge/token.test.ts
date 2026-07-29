@@ -1,5 +1,9 @@
 import { describe, expect, it } from "bun:test";
-import { generateBridgeToken, tokensMatch } from "./token";
+import {
+	generateBridgeToken,
+	loadOrCreateBridgeToken,
+	tokensMatch,
+} from "./token";
 
 describe("generateBridgeToken", () => {
 	it("is long, URL-safe, and different every time", () => {
@@ -9,6 +13,21 @@ describe("generateBridgeToken", () => {
 		expect(a.length).toBeGreaterThanOrEqual(43);
 		// base64url: no +, / or = to be mangled in a URL or QR code.
 		expect(a).toMatch(/^[A-Za-z0-9_-]+$/);
+	});
+});
+
+describe("loadOrCreateBridgeToken", () => {
+	it("returns the same token every time it is asked", () => {
+		// This is the whole fix for "this link has expired". The bridge starts on
+		// every app launch, and a token minted per start meant the phone's saved
+		// link was dead by the next morning.
+		expect(loadOrCreateBridgeToken()).toBe(loadOrCreateBridgeToken());
+	});
+
+	it("returns something that would pass its own check", () => {
+		expect(
+			tokensMatch(loadOrCreateBridgeToken(), loadOrCreateBridgeToken()),
+		).toBe(true);
 	});
 });
 

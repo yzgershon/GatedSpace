@@ -49,6 +49,24 @@ export function panelFor(text: string): PanelCommand | null {
 		: null;
 }
 
+/**
+ * The categorical palette for the context breakdown.
+ *
+ * These were literal hex, which meant the one chart in the app was the one
+ * thing that looked identical in every theme. Every theme already defines
+ * `chart-1..5` for exactly this, so the breakdown now recolours with the rest
+ * of the window — and `primary` leads, so the largest slice matches the accent.
+ */
+const CATEGORY_COLORS = [
+	"var(--color-primary)",
+	"var(--color-chart-2)",
+	"var(--color-chart-3)",
+	"var(--color-chart-4)",
+	"var(--color-chart-5)",
+	"var(--color-info)",
+	"var(--color-success)",
+];
+
 /** A bar showing where the context window has gone, in category order. */
 function ContextBar({ report }: { report: ContextReport }) {
 	// Free space is the remainder, not a consumer — drawing it would make the bar
@@ -56,15 +74,7 @@ function ContextBar({ report }: { report: ContextReport }) {
 	const used = report.categories.filter(
 		(c) => !/free space/i.test(c.name) && c.percent > 0,
 	);
-	const colors = [
-		"#d97757",
-		"#3b82f6",
-		"#22c55e",
-		"#eab308",
-		"#a855f7",
-		"#ef4444",
-		"#14b8a6",
-	];
+	const colors = CATEGORY_COLORS;
 	return (
 		<div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
 			{used.map((category, index) => (
@@ -82,15 +92,7 @@ function ContextBar({ report }: { report: ContextReport }) {
 }
 
 function ContextPanel({ report }: { report: ContextReport }) {
-	const colors = [
-		"#d97757",
-		"#3b82f6",
-		"#22c55e",
-		"#eab308",
-		"#a855f7",
-		"#ef4444",
-		"#14b8a6",
-	];
+	const colors = CATEGORY_COLORS;
 	let swatch = 0;
 	return (
 		<div className="flex flex-col gap-2.5 px-3 py-2.5">
@@ -237,8 +239,14 @@ function UsagePanel({ report }: { report: UsageReport }) {
 					className="block h-full rounded-full"
 					style={{
 						width: `${Math.min(percent, 100)}%`,
+						// Theme tokens, so the escalation still reads as red/amber in
+						// every theme instead of being the one fixed colour on screen.
 						backgroundColor:
-							percent >= 90 ? "#ef4444" : percent >= 70 ? "#eab308" : "#d97757",
+							percent >= 90
+								? "var(--color-destructive)"
+								: percent >= 70
+									? "var(--color-warning)"
+									: "var(--color-primary)",
 					}}
 				/>
 			</div>

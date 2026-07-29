@@ -49,6 +49,18 @@ export interface NotificationManagerDeps {
 	 * keep notifying the old way until the next launch.
 	 */
 	getNotificationMatrix?: () => NotificationMatrix;
+	/**
+	 * Wakes the phone, if one is subscribed. Optional so the manager stays
+	 * constructible in tests and anywhere the bridge is not running.
+	 *
+	 * Fire-and-forget: a push that fails to send must not stop the desktop
+	 * notification that shares this decision.
+	 */
+	pushToPhone?: (notice: {
+		title: string;
+		body: string;
+		sessionKey: string | null;
+	}) => void;
 	/** Injectable so tests drive the throttle window instead of sleeping. */
 	now?: () => number;
 }
@@ -95,22 +107,36 @@ export class NotificationManager {
 		}
 
 		if (!wantsBanner) return;
-		if (!this.deps.isSupported()) return;
 
 		const workspaceName = this.deps.getWorkspaceName(event.workspaceId);
 		const title = this.deps.getNotificationTitle(event);
 
 		const isPermissionRequest = event.eventType === "PermissionRequest";
 		const isPendingQuestion = event.eventType === "PendingQuestion";
+		const isAwaiting = isPermissionRequest || isPendingQuestion;
+		const bannerTitle = isAwaiting
+			? `Awaiting Response — ${workspaceName}`
+			: `Agent Complete — ${workspaceName}`;
+		const bannerBody = isAwaiting
+			? `"${title}" is waiting for your reply`
+			: `"${title}" has finished its task`;
+
+		// The phone is told BEFORE the `isSupported()` gate, and independently of
+		// it. That check is about whether this OS will draw a banner on this
+		// desktop, which has no bearing on a device in another room — and the
+		// phone is the one that matters precisely when the desktop is not being
+		// looked at.
+		this.deps.pushToPhone?.({
+			title: bannerTitle,
+			body: bannerBody,
+			sessionKey: event.paneId ?? null,
+		});
+
+		if (!this.deps.isSupported()) return;
+
 		const notification = this.deps.createNotification({
-			title:
-				isPermissionRequest || isPendingQuestion
-					? `Awaiting Response — ${workspaceName}`
-					: `Agent Complete — ${workspaceName}`,
-			body:
-				isPermissionRequest || isPendingQuestion
-					? `"${title}" is waiting for your reply`
-					: `"${title}" has finished its task`,
+			title: bannerTitle,
+			body: bannerBody,
 			silent: true,
 		});
 

@@ -106,6 +106,66 @@ export interface SessionUsage {
 	contextWindow?: number;
 }
 
+/**
+ * Output tokens produced during the turn running right now.
+ *
+ * Kept as two parts because the API reports `output_tokens` CUMULATIVELY per
+ * message, not as a delta — adding each report would count the same tokens
+ * again on every frame. A turn can span several assistant messages (each tool
+ * call ends one and starts another), so the finished ones are banked and only
+ * the message currently streaming is replaced in place.
+ */
+export interface TurnTokens {
+	/** Banked from assistant messages already finished this turn. */
+	committed: number;
+	/** Latest cumulative count for the message streaming right now. */
+	live: number;
+	/**
+	 * Whether a message is open — started and not yet banked.
+	 *
+	 * The CLI can forward a message's trailing SSE frames AFTER it has emitted
+	 * the assembled `assistant` event for that same message. Without this flag
+	 * those late frames revive a count that has already been banked, and the
+	 * total reads high by a whole message for the rest of the turn.
+	 */
+	open: boolean;
+}
+
+export function turnTokenTotal(tokens: TurnTokens | undefined): number {
+	if (!tokens) return 0;
+	return tokens.committed + tokens.live;
+}
+
+/**
+ * Bank a finished assistant message's output into the turn's total.
+ *
+ * Deliberately driven by the `assistant` event rather than by the SSE frames,
+ * because main's replay buffer DROPS stream events — a pane rebuilt from that
+ * buffer (a reload, a reattach) would otherwise show no count at all while one
+ * built from the live stream showed the real figure. Both paths carry the
+ * `assistant` event, so both arrive at the same number.
+ */
+function bankTurnTokens(
+	state: SessionTimeline,
+	usage: Record<string, unknown> | undefined,
+): TurnTokens | undefined {
+	const output = usage?.output_tokens;
+	const tokens = state.turnTokens ?? EMPTY_TURN_TOKENS;
+	const counted =
+		typeof output === "number" && Number.isFinite(output) ? output : 0;
+
+	// `live` is always cleared, never added — it was this same message's running
+	// count, and the final figure supersedes it. Clearing it even when the final
+	// figure is MISSING is what keeps the two paths in step: the replay buffer
+	// has no running count to strand, so banking one here would make a reloaded
+	// pane and a live one disagree.
+	if (counted === 0 && tokens.live === 0 && !tokens.open)
+		return state.turnTokens;
+	return { committed: tokens.committed + counted, live: 0, open: false };
+}
+
+const EMPTY_TURN_TOKENS: TurnTokens = { committed: 0, live: 0, open: false };
+
 export type SessionStatus = "idle" | "streaming" | "done" | "error";
 
 /**
@@ -124,6 +184,12 @@ export interface SessionTimeline {
 	items: TimelineItem[];
 	rateLimit?: RateLimitInfo;
 	usage?: SessionUsage;
+	/**
+	 * Live output-token count for the turn in progress. Reset at the start of
+	 * each turn, so it answers "how much has it written since I asked" rather
+	 * than accumulating over the conversation.
+	 */
+	turnTokens?: TurnTokens;
 	/**
 	 * Running API cost for the whole conversation, across every CLI process
 	 * that has served it.
@@ -196,6 +262,10 @@ export function withUserMessage(
 	return {
 		...state,
 		status: "streaming",
+		// A new prompt is a new turn, so the token counter starts again. Without
+		// this it would read as a running total for the conversation, which is
+		// both a different number and one that never stops growing.
+		turnTokens: EMPTY_TURN_TOKENS,
 		items: [
 			...state.items,
 			{
@@ -286,6 +356,33 @@ function applyStreamDelta(
 	const inner = event.event;
 	const parentToolUseId = event.parent_tool_use_id;
 	const scope = parentToolUseId ?? "main";
+
+	/*
+	 * The LIVE half of the token count: how much the message being written has
+	 * produced so far. Banking is done by the `assistant` event that closes the
+	 * message, not here — see `bankTurnTokens`.
+	 *
+	 * Main conversation only. A subagent's output is real work but it is not
+	 * what this turn is writing back, and counting it made the number jump by
+	 * thousands the moment a Task started, which reads as a glitch rather than
+	 * as progress.
+	 */
+	if (!parentToolUseId && inner.type === "message_start") {
+		const tokens = state.turnTokens ?? EMPTY_TURN_TOKENS;
+		return { ...state, turnTokens: { ...tokens, live: 0, open: true } };
+	}
+
+	if (!parentToolUseId && inner.type === "message_delta") {
+		const output = inner.usage?.output_tokens;
+		const tokens = state.turnTokens ?? EMPTY_TURN_TOKENS;
+		// A frame for a message already banked. See TurnTokens.open.
+		if (!tokens.open) return state;
+		if (typeof output === "number" && Number.isFinite(output)) {
+			// Replaced, never added: this figure is cumulative for the message.
+			if (tokens.live === output) return state;
+			return { ...state, turnTokens: { ...tokens, live: output } };
+		}
+	}
 
 	if (inner.type === "content_block_start") {
 		const key = `${scope}:${inner.index}`;
@@ -508,7 +605,21 @@ export function applyEvent(
 				? { ...state.usage, contextTokens }
 				: state.usage;
 
-			if (!changed && drafts === state.drafts && usage === state.usage) {
+			// Subagent messages are excluded for the same reason their context is:
+			// they are not what this turn is writing back.
+			const turnTokens = parentToolUseId
+				? state.turnTokens
+				: bankTurnTokens(
+						state,
+						(event.message as { usage?: Record<string, unknown> }).usage,
+					);
+
+			if (
+				!changed &&
+				drafts === state.drafts &&
+				usage === state.usage &&
+				turnTokens === state.turnTokens
+			) {
 				return state;
 			}
 			return {
@@ -517,6 +628,7 @@ export function applyEvent(
 				items,
 				drafts,
 				...(usage ? { usage } : {}),
+				...(turnTokens ? { turnTokens } : {}),
 			};
 		}
 

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { publicProcedure, router } from "../../..";
 import { getPresetsForTrigger } from "../../settings";
 import { getProject, getWorkspaceWithRelations } from "../utils/db-helpers";
+import { isDefaultWorkspaceName } from "../utils/default-workspace-name";
 import { listBranches } from "../utils/git";
 import { resolveWorktreePath } from "../utils/resolve-worktree-path";
 import { loadSetupConfig } from "../utils/setup";
@@ -63,7 +64,14 @@ function persistRetryBranchUpdate({
 		.update(workspaces)
 		.set({
 			branch,
-			...(workspace.isUnnamed ? { name: branch } : {}),
+			// Retrying initialisation can land the workspace on a different
+			// branch. An auto-named workspace used to be named after its branch,
+			// so the name had to follow — but a numbered name is not derived from
+			// the branch and must survive the move, or a retry would silently
+			// renumber a workspace out from under whoever was using it.
+			...(workspace.isUnnamed && !isDefaultWorkspaceName(workspace.name)
+				? { name: branch }
+				: {}),
 		})
 		.where(eq(workspaces.id, workspace.id))
 		.run();

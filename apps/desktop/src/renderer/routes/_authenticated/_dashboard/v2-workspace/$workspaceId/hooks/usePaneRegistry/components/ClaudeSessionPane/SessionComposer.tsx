@@ -89,16 +89,20 @@ export type SessionMode = (typeof SESSION_MODES)[number]["id"];
 const TEXTAREA_MAX_HEIGHT = 200;
 
 /**
- * Claude's orange, sampled out of the reference UI rather than guessed.
+ * The composer's accent follows the THEME.
  *
- * It belongs to the assistant, not to the editor around it, so it does NOT
- * follow the theme. On `bg-highlight` it did: under a green-accented theme the
- * send button came out green, and the one control that should read "this is
- * Claude" read as app chrome. The focused composer border uses it for the same
- * reason — the reference rings the box in orange, in every theme.
+ * These were literal hex — Claude's orange, sampled from the reference UI — on
+ * the argument that the send button belongs to the assistant rather than to the
+ * editor around it. Living with several themes settled it the other way: in
+ * Dracula and Koi the ring around the focused box and the send arrow stayed
+ * orange while every other accent in the window changed, so the one control you
+ * look at most was the one thing that never matched.
+ *
+ * `primary` is the token every theme defines as its accent, so this now shifts
+ * with the rest of the app and needs no per-theme handling.
  */
-const CLAUDE_ORANGE = "#d97757";
-const SEND_BUTTON = "bg-[#c58f79] text-white hover:bg-[#b87e67]";
+const SEND_BUTTON =
+	"bg-primary text-primary-foreground hover:bg-primary/90 transition-colors";
 
 export interface FileMention {
 	name: string;
@@ -508,17 +512,12 @@ export function SessionComposer({
 					setDragging(false);
 					attachFiles(files);
 				}}
-				style={
-					// Inline, because Tailwind can't build a class from a runtime value
-					// and the same orange has to serve both states.
-					focused && !dragging ? { borderColor: CLAUDE_ORANGE } : undefined
-				}
 				className={cn(
 					"pointer-events-auto relative w-full max-w-3xl rounded-2xl border bg-card shadow-lg transition-colors",
 					dragging
 						? "border-highlight ring-1 ring-highlight"
 						: focused
-							? ""
+							? "border-primary"
 							: "border-transparent",
 				)}
 			>

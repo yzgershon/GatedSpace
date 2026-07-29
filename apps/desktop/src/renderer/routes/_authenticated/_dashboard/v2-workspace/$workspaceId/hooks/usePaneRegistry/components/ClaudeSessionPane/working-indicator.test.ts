@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, it, test } from "bun:test";
 import {
 	CARET_BLINK_MS,
 	caretVisible,
@@ -6,6 +6,7 @@ import {
 	FRAME_MS,
 	formatElapsed,
 	formatThought,
+	formatTokens,
 	PHRASE_MS,
 	phraseAt,
 	revealedChars,
@@ -180,5 +181,38 @@ describe("caretVisible", () => {
 		const on = caretVisible(done + 10, 0);
 		const off = caretVisible(done + 10 + CARET_BLINK_MS / 2, 0);
 		expect(on).not.toBe(off);
+	});
+});
+
+describe("formatTokens", () => {
+	it("is exact below a thousand", () => {
+		expect(formatTokens(0)).toBe("0");
+		expect(formatTokens(847)).toBe("847");
+		expect(formatTokens(999)).toBe("999");
+	});
+
+	it("switches to thousands with one decimal", () => {
+		expect(formatTokens(1000)).toBe("1.0k");
+		expect(formatTokens(1234)).toBe("1.2k");
+		expect(formatTokens(45_600)).toBe("45.6k");
+	});
+
+	it("keeps the trailing zero so the line does not change width", () => {
+		// "2k" and "2.1k" alternating would make the whole row twitch as the
+		// count climbs, which is worse than the extra character.
+		expect(formatTokens(2000)).toBe("2.0k");
+	});
+
+	it("rounds rather than truncates", () => {
+		expect(formatTokens(1950)).toBe("2.0k");
+	});
+
+	it("switches again at a million", () => {
+		expect(formatTokens(1_500_000)).toBe("1.5M");
+	});
+
+	it("never shows a negative", () => {
+		// Guards against a subtraction going the wrong way upstream.
+		expect(formatTokens(-5)).toBe("0");
 	});
 });

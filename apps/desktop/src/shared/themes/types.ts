@@ -164,7 +164,11 @@ export interface UIColors {
 	success?: string;
 	successForeground?: string;
 	warning?: string;
+	/** Text ON a warning fill. Warning is the one status colour light
+	 * enough that white on it fails, so it needs its own pairing. */
+	warningForeground?: string;
 	info?: string;
+	infoForeground?: string;
 }
 
 /**

@@ -1,13 +1,13 @@
 import { cn } from "@superset/ui/utils";
-import { CgLaptop } from "react-icons/cg";
 import {
+	LuGitBranch,
 	LuGitMerge,
 	LuGitPullRequest,
 	LuGitPullRequestClosed,
 	LuGitPullRequestDraft,
 	LuListChecks,
+	LuSquareTerminal,
 } from "react-icons/lu";
-import { RxDot } from "react-icons/rx";
 import { TbCloud, TbCloudOff } from "react-icons/tb";
 import { AsciiSpinner } from "renderer/components/AsciiSpinner";
 import { StatusIndicator } from "renderer/components/StatusIndicator";
@@ -77,13 +77,26 @@ export function DashboardSidebarWorkspaceIcon({
 		}
 
 		if (hostType === "local-device") {
+			// A terminal square for the repo checkout and a branch glyph for a
+			// worktree. The laptop and the bare dot they replace said "this is a
+			// computer" and "this is a thing" — neither of which is in question in
+			// a list of workspaces. What you actually want to know at a glance is
+			// which of these is the checkout and which are branches off it.
 			if (workspaceType === "main") {
 				return (
-					<CgLaptop className={cn("size-4 transition-colors", iconColor)} />
+					<LuSquareTerminal
+						className={cn("size-4 transition-colors", iconColor)}
+						strokeWidth={1.75}
+					/>
 				);
 			}
 
-			return <RxDot className={cn("size-4 transition-colors", iconColor)} />;
+			return (
+				<LuGitBranch
+					className={cn("size-4 transition-colors", iconColor)}
+					strokeWidth={1.75}
+				/>
+			);
 		}
 
 		if (isRemoteDeviceOffline) {

@@ -14,7 +14,6 @@ import {
 	Globe,
 	History,
 	MessageSquare,
-	Sparkles,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import {
@@ -54,6 +53,7 @@ import {
 	ClaudeSessionPane,
 	disposeSession,
 	getSessionTitle,
+	SessionPaneIcon,
 	subscribeSession,
 } from "./components/ClaudeSessionPane";
 import {
@@ -295,7 +295,7 @@ export function usePaneRegistry({
 			},
 			// Live VS Code-style Claude Code session (pane kind "session").
 			session: {
-				getIcon: () => <Sparkles className="size-3.5" />,
+				getIcon: () => <SessionPaneIcon />,
 				getTitle: () => "Claude",
 				// A session pane runs the claude binary by definition, so unlike a
 				// terminal there is nothing to record at launch or look up.

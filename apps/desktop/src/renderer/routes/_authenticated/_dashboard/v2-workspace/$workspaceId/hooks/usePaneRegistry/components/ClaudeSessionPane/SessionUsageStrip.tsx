@@ -22,10 +22,18 @@ import type { UsageLimits } from "./UsageBanner";
  */
 function Meter({ percent }: { percent: number }) {
 	// Drawn as a real bar rather than block glyphs. Blocks inherited the theme's
-	// muted colour and rendered as a grey-blue smudge at 11px — unreadable at a
+	// MUTED colour and rendered as a grey-blue smudge at 11px — unreadable at a
 	// glance, which is the only way this is ever read.
+	//
+	// The fix for that was three literal hex values, which then stayed put in
+	// every theme. These are the semantic tokens instead: still deliberately
+	// loud, but a loud that belongs to the theme in use.
 	const color =
-		percent >= 90 ? "#dc322f" : percent >= 70 ? "#cb4b16" : "#b58900";
+		percent >= 90
+			? "var(--color-destructive)"
+			: percent >= 70
+				? "var(--color-warning)"
+				: "var(--color-success)";
 	return (
 		<span
 			aria-hidden

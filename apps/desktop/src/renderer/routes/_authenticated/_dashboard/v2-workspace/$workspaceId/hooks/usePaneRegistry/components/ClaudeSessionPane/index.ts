@@ -7,6 +7,7 @@ export {
 	SessionComposer,
 	type SessionMode,
 } from "./SessionComposer";
+export { SessionPaneIcon } from "./SessionPaneIcon";
 export { SessionTimelineView } from "./SessionTimelineView";
 export { SessionView } from "./SessionView";
 export {
