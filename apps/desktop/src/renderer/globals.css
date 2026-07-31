@@ -246,13 +246,29 @@
 /* Effort slider flourishes (session composer): a rainbow fill at "max" and an
  * animated purple glow at "ultracode" (= xhigh + workflows). See the session UI
  * spec, plans/20260724-claude-code-session-ui.md. */
+/*
+ * Both of these were fixed hex — a purple glow and a five-stop rainbow — which
+ * made the effort control the one part of the composer that looked identical in
+ * every theme. They now read from tokens: the glow from the theme's accent, and
+ * the rainbow from the categorical `chart` scale every theme already defines for
+ * exactly this kind of thing.
+ *
+ * `color-mix` rather than an rgba() literal, because the alpha has to be applied
+ * to a colour that isn't known until a theme is active.
+ */
+/*
+ * `chart-4` so the glow matches the violet the ultracode marker uses, rather
+ * than `primary` — which is #eae8e6 in the default dark theme, i.e. a white
+ * halo around a violet dot.
+ */
 @keyframes ultracode-glow {
 	0%,
 	100% {
-		box-shadow: 0 0 5px 0 rgba(168, 85, 247, 0.45);
+		box-shadow: 0 0 5px 0 color-mix(in oklab, var(--highlight) 45%, transparent);
 	}
 	50% {
-		box-shadow: 0 0 13px 2px rgba(168, 85, 247, 0.85);
+		box-shadow: 0 0 13px 2px
+			color-mix(in oklab, var(--highlight) 85%, transparent);
 	}
 }
 .animate-ultracode-glow {
@@ -261,11 +277,157 @@
 .effort-dot-rainbow {
 	background-image: linear-gradient(
 		90deg,
-		#f87171,
-		#fbbf24,
-		#34d399,
-		#60a5fa,
-		#a855f7
+		var(--color-chart-1),
+		var(--color-chart-2),
+		var(--color-chart-3),
+		var(--color-chart-4),
+		var(--color-chart-5)
+	);
+}
+
+/*
+ * The wavy rule either side of a boundary marker in the transcript.
+ *
+ * A masked SVG rather than repeated "〰" characters: the mask is painted in
+ * `currentColor`, so the rule inherits whatever the row's text colour is and
+ * follows the theme, and it tiles at any width without the letter-spacing and
+ * font-fallback problems a text character brings.
+ */
+.timeline-squiggle {
+	background-color: currentColor;
+	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M0 4 Q 3 0 6 4 T 12 4' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E");
+	mask-repeat: repeat-x;
+	mask-position: center;
+	-webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M0 4 Q 3 0 6 4 T 12 4' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E");
+	-webkit-mask-repeat: repeat-x;
+	-webkit-mask-position: center;
+}
+
+/*
+ * The effort slider.
+ *
+ * Built to match the VS Code control: a CAPSULE track with a tick per position,
+ * a large round knob riding inside it, and the final position marked in the
+ * accent colour because ultracode is a different kind of thing, not simply
+ * "more". The first attempt was a plain range input with a filled bar, which
+ * behaved correctly and looked nothing like the reference.
+ *
+ * Still a real `input[type=range]` underneath. Dragging, clicking anywhere on
+ * the track, arrow keys, Home/End and screen-reader semantics all come from the
+ * element; the capsule and ticks are painted behind it and the thumb is the only
+ * part of the input that is visible. Reimplementing the behaviour with pointer
+ * handlers is how the version before this ended up click-only.
+ *
+ * KNOB SIZE IS LOAD-BEARING. A range thumb travels from `knob/2` to
+ * `width - knob/2`, so the ticks are inset by the same half-knob to line up with
+ * where the knob can actually stop. `--effort-knob` is the single source for
+ * both, and the two drift apart if it is hardcoded in either place.
+ *
+ * COLOURS DERIVE FROM `foreground`, NOT `muted-foreground`. There are six
+ * built-in themes plus whatever gets imported, and the capsule has to separate
+ * from the CARD it sits on in all of them. `muted-foreground` is defined to be
+ * low-contrast, so on solarized-light — mid-tan card, mid-grey muted — it landed
+ * at a 1.17 contrast ratio and the ticks at 1.41, i.e. invisible. `foreground`
+ * is the one token guaranteed to move AWAY from the background, and in the right
+ * direction: lighter on dark themes, darker on light ones.
+ *
+ * A border was tried instead and is worse than useless: `--border` on
+ * solarized-light is #dcd5c0 against a #ddd6c1 card, a ratio of 1.01. That token
+ * is tuned for card-against-background, not for a control inside a card.
+ *
+ * Measured across all six built-ins at these values, the weakest (solarized-
+ * light, a deliberately low-contrast theme) reads capsule 1.24, ticks 1.87, knob
+ * 3.45, accent 2.56 — proportionate to a theme whose own body text sits near
+ * 4.3. The strongest reads 1.66 / 3.70 / 8.19 / 3.32.
+ */
+.effort-track {
+	--effort-knob: 16px;
+	background: color-mix(in oklab, var(--color-foreground) 18%, transparent);
+}
+
+/* One tick per position, centred on where the knob comes to rest. */
+.effort-tick {
+	position: absolute;
+	top: 50%;
+	left: calc(
+		var(--effort-knob) /
+		2 +
+		var(--effort-tick-at) *
+		(100% - var(--effort-knob))
+	);
+	translate: -50% -50%;
+	width: 4px;
+	height: 4px;
+	border-radius: 9999px;
+	background: color-mix(in oklab, var(--color-foreground) 55%, transparent);
+}
+
+/*
+ * The top of the scale carries the accent even when unselected.
+ *
+ * `highlight`, which is the one token every theme defines as its accent colour.
+ *
+ * Not `primary`: in the default dark theme that is #eae8e6, the same near-white
+ * as the knob, so the marker would have vanished into it. Not `chart-4` either,
+ * which is violet in the dark theme but AMBER in the light one — a palette slot,
+ * not an accent.
+ */
+.effort-tick[data-top="true"] {
+	background: var(--highlight);
+}
+
+.effort-slider {
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent;
+	cursor: pointer;
+	height: var(--effort-knob);
+	width: 100%;
+}
+
+/* Transparent: the capsule behind the input is the visible track. */
+.effort-slider::-webkit-slider-runnable-track {
+	height: var(--effort-knob);
+	background: transparent;
+	border: none;
+}
+
+.effort-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	height: var(--effort-knob);
+	width: var(--effort-knob);
+	border-radius: 9999px;
+	background: var(--color-foreground);
+	border: none;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+	transition: transform 120ms ease;
+}
+
+.effort-slider:hover::-webkit-slider-thumb {
+	transform: scale(1.08);
+}
+
+.effort-slider:active::-webkit-slider-thumb {
+	transform: scale(1.04);
+}
+
+.effort-slider:focus-visible::-webkit-slider-thumb {
+	outline: 2px solid var(--color-ring);
+	outline-offset: 2px;
+}
+
+/* At the very top of the scale the knob itself takes the accent. */
+.effort-slider[data-top="true"]::-webkit-slider-thumb {
+	background: var(--highlight);
+}
+
+.effort-slider[data-rainbow="true"]::-webkit-slider-thumb {
+	background-image: linear-gradient(
+		90deg,
+		var(--color-chart-1),
+		var(--color-chart-3),
+		var(--color-chart-5)
 	);
 }
 

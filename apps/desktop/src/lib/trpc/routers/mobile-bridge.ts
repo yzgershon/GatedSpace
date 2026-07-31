@@ -10,6 +10,7 @@ import {
 	type BridgeBindingMode,
 	DEFAULT_BRIDGE_BINDING_MODE,
 } from "main/lib/mobile-bridge/binding";
+import { writeBridgeState } from "main/lib/mobile-bridge/bridge-state";
 import { mobileBridge } from "main/lib/mobile-bridge/server";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
@@ -23,9 +24,20 @@ export const createMobileBridgeRouter = () => {
 		status: publicProcedure.query(() => mobileBridge.status()),
 		start: publicProcedure
 			.input(z.object({ mode: modeSchema }))
-			.mutation(({ input }) =>
-				mobileBridge.start(input.mode as BridgeBindingMode),
-			),
-		stop: publicProcedure.mutation(() => mobileBridge.stop()),
+			.mutation(async ({ input }) => {
+				const mode = input.mode as BridgeBindingMode;
+				const status = await mobileBridge.start(mode);
+				// Remembered only once it actually came up. Recording the intent of a
+				// start that failed would have the app retry a broken mode on every
+				// launch and report an error nobody asked for.
+				if (status.running) writeBridgeState({ enabled: true, mode });
+				return status;
+			}),
+		stop: publicProcedure.mutation(async () => {
+			const status = await mobileBridge.stop();
+			// The mode is kept so turning it back on offers the last one used.
+			writeBridgeState({ enabled: false, mode: mobileBridge.lastMode() });
+			return status;
+		}),
 	});
 };

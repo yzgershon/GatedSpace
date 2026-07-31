@@ -1,6 +1,8 @@
 import { describe, expect, it } from "bun:test";
 import {
 	activeMention,
+	EFFORT_LABELS,
+	EFFORT_LEVELS,
 	nextMode,
 	SESSION_MODES,
 	type SessionMode,
@@ -58,5 +60,34 @@ describe("nextMode", () => {
 		}
 		expect(seen.size).toBe(SESSION_MODES.length);
 		expect(mode).toBe(SESSION_MODES[0].id);
+	});
+});
+
+describe("effort levels", () => {
+	it("keeps the ids the CLI actually accepts", () => {
+		// These are sent verbatim as `/effort <id>`. Renaming one to read better
+		// would make the slider silently stop working.
+		expect([...EFFORT_LEVELS]).toEqual([
+			"low",
+			"medium",
+			"high",
+			"xhigh",
+			"max",
+			"ultracode",
+		]);
+	});
+
+	it("labels every level for display, never showing the raw id", () => {
+		for (const level of EFFORT_LEVELS) {
+			const label = EFFORT_LABELS[level];
+			expect(label.length).toBeGreaterThan(0);
+			// Never the bare id: that is what rendered "xhigh" as "Xhigh".
+			expect(label).not.toBe(level);
+			expect(label[0]).toBe(label[0]?.toUpperCase());
+		}
+	});
+
+	it("spells out the one id that is not a word", () => {
+		expect(EFFORT_LABELS.xhigh).toBe("Extra high");
 	});
 });

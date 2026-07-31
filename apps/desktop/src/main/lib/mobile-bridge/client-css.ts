@@ -157,7 +157,42 @@ nav svg { width: 21px; height: 21px; }
   color: var(--muted); margin-bottom: 4px; font-weight: 600;
 }
 .you .who { color: var(--accent); }
+/* The working mark. Sized like a line of text so it does not shift the
+   conversation when it appears and disappears between turns. */
+.thinking { padding: 12px 0 4px; display: flex; align-items: center; }
+.thinking .mark {
+  font-family: ui-monospace, monospace; font-size: 16px; line-height: 1;
+  color: var(--accent); width: 16px; text-align: center;
+}
 pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: inherit; }
+
+/* ---- attachments ---- */
+/* Sits directly ABOVE the composer and moves with it, so what is about to be
+   sent is visible without covering the conversation. */
+#shelf {
+  position: fixed; left: 0; right: 0; z-index: 5;
+  bottom: calc(60px + env(safe-area-inset-bottom));
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 8px 12px;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+}
+.chip { position: relative; flex: none; }
+.chip img {
+  height: 54px; width: 54px; object-fit: cover;
+  border-radius: 9px; border: 1px solid var(--border); display: block;
+}
+/* Deliberately large for a 54px thumbnail: removing the wrong screenshot
+   because the target was too small is worse than the button looking heavy. */
+.chip .x {
+  position: absolute; top: -6px; right: -6px;
+  width: 21px; height: 21px; min-height: 0; padding: 0;
+  border-radius: 50%; font-size: 14px; line-height: 1;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+}
 
 /* ---- composer ---- */
 footer {
@@ -179,10 +214,11 @@ button {
   padding: 0 16px; font: inherit; font-weight: 600; min-height: 42px;
 }
 button:disabled { opacity: .4; }
-#mic {
+#mic, #attach {
   background: var(--card); color: var(--fg); border: 1px solid var(--border);
   padding: 0; width: 42px; display: flex; align-items: center; justify-content: center;
 }
+#mic:active, #attach:active { background: color-mix(in oklab, var(--card) 80%, var(--fg) 8%); }
 #mic.on {
   background: var(--danger); border-color: var(--danger); color: #fff;
   animation: breathe 1.4s ease-in-out infinite;
@@ -214,6 +250,22 @@ button:disabled { opacity: .4; }
 .swatch { display: flex; gap: 3px; flex: none; }
 .swatch i { width: 13px; height: 13px; border-radius: 4px; display: block; }
 .check { color: var(--accent); flex: none; }
+.opt.sel {
+  border-color: color-mix(in oklab, var(--accent) 55%, var(--border));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--accent) 40%, transparent);
+}
+/* Read-only key/value rows. Bordered like a card so they group as one block
+   rather than reading as more tappable options. */
+.facts {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--card); padding: 12px 14px; margin-bottom: 10px;
+}
+.facts .win:first-child { margin-top: 0; }
+button.danger {
+  width: 100%; background: transparent; color: var(--danger);
+  border: 1px solid color-mix(in oklab, var(--danger) 40%, var(--border));
+  font-weight: 500;
+}
 
 .hint { padding: 8px 2px 0; font-size: 12px; color: var(--muted); }
 .hint.warn { color: var(--warning); }

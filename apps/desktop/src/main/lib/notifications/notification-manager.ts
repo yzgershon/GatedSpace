@@ -15,6 +15,40 @@ import { isPaneVisible } from "./utils";
 const NOTIFICATION_TTL_MS = 10 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 
+/**
+ * How close together two identical events have to be to count as one.
+ *
+ * Several hooks map onto the same lifecycle type, and more than one can fire
+ * for a single turn — "Stop" and "SessionEnd" both mean the pane stopped
+ * working, so both arrive and both used to notify. Two seconds is far longer
+ * than the gap between hooks firing for one event and far shorter than the gap
+ * between two things genuinely worth interrupting for.
+ */
+const REPEAT_WINDOW_MS = 2_000;
+
+/**
+ * Hooks that mean "this agent's process ended", not "your work is done".
+ *
+ * They map to `Stop` because for pane STATUS that is correct — the pane is no
+ * longer working either way. For a notification it is not: closing a pane, or
+ * a one-shot command exiting, announced "has finished its task" for work
+ * nobody had asked about. The interruption is only earned by a turn that
+ * actually completed.
+ */
+const SESSION_TEARDOWN_HOOKS = new Set([
+	"SessionEnd",
+	"sessionEnd",
+	"session_end",
+]);
+
+function isSessionTeardown(event: AgentLifecycleEvent): boolean {
+	return (
+		event.eventType === "Stop" &&
+		typeof event.sourceEventType === "string" &&
+		SESSION_TEARDOWN_HOOKS.has(event.sourceEventType)
+	);
+}
+
 export interface NativeNotification {
 	show(): void;
 	close(): void;
@@ -75,6 +109,8 @@ export class NotificationManager {
 	private counter = 0;
 	private sweepTimer: ReturnType<typeof setInterval> | null = null;
 	private soundThrottle: SoundThrottle = createSoundThrottle();
+	/** When each (pane, event type) last notified — see isRepeat. */
+	private recent = new Map<string, number>();
 
 	constructor(private deps: NotificationManagerDeps) {}
 
@@ -85,6 +121,8 @@ export class NotificationManager {
 
 	handleAgentLifecycle(event: AgentLifecycleEvent): void {
 		if (!isNotifiableEventType(event.eventType)) return;
+		if (isSessionTeardown(event)) return;
+		if (this.isRepeat(event)) return;
 		if (this.shouldSuppressForVisiblePane(event)) return;
 
 		const matrix =
@@ -172,6 +210,30 @@ export class NotificationManager {
 			this.sweepTimer = null;
 		}
 		this.active.clear();
+	}
+
+	/**
+	 * Whether this is the same event arriving again moments later.
+	 *
+	 * Keyed on the pane and the event type rather than on the hook that sent it,
+	 * because the whole point is to collapse two DIFFERENT hooks reporting one
+	 * real occurrence.
+	 */
+	private isRepeat(event: AgentLifecycleEvent): boolean {
+		const key = `${event.sessionId ?? event.paneId ?? "anon"}:${event.eventType}`;
+		const now = (this.deps.now ?? Date.now)();
+		const last = this.recent.get(key);
+		this.recent.set(key, now);
+
+		// Opportunistic cleanup: this map would otherwise grow for the life of
+		// the process, one entry per pane per event type.
+		if (this.recent.size > 200) {
+			for (const [entry, at] of this.recent) {
+				if (now - at > REPEAT_WINDOW_MS) this.recent.delete(entry);
+			}
+		}
+
+		return last !== undefined && now - last < REPEAT_WINDOW_MS;
 	}
 
 	private shouldSuppressForVisiblePane(event: AgentLifecycleEvent): boolean {

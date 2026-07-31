@@ -14,6 +14,7 @@ import {
 	SUPERSET_HOME_DIR,
 	SUPERSET_SENSITIVE_FILE_MODE,
 } from "../app-environment";
+import { markStartup } from "../startup-timing";
 
 const DB_PATH = join(SUPERSET_HOME_DIR, "local.db");
 
@@ -92,9 +93,22 @@ sqlite.function("uuid_is_valid_v4", (value: unknown) => {
 
 console.log(`[local-db] Database initialized at: ${DB_PATH}`);
 console.log(`[local-db] Running migrations from: ${migrationsFolder}`);
+markStartup("local-db opened");
 
 export const localDb = drizzle(sqlite, { schema });
 
+/*
+ * Timed because this runs at MODULE IMPORT, which puts it in front of
+ * `app.whenReady()` and therefore in front of the window appearing.
+ *
+ * The suspicion worth confirming or killing: drizzle's migrator reads and
+ * hashes every file in the migrations folder on every launch, and there are 40+
+ * of them. If that is tens of milliseconds it is beneath notice; if it is
+ * hundreds it is worth restructuring. Guessing here is not an option, because
+ * the only ways to make it faster involve deciding for ourselves whether a
+ * migration has already run, and getting THAT wrong corrupts the database
+ * rather than merely slowing it down.
+ */
 try {
 	migrate(localDb, { migrationsFolder });
 } catch (error) {
@@ -102,5 +116,6 @@ try {
 }
 
 console.log("[local-db] Migrations complete");
+markStartup("local-db migrated");
 
 export type LocalDb = typeof localDb;

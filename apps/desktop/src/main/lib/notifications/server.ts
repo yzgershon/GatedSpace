@@ -104,6 +104,7 @@ app.get("/hook/complete", (req, res) => {
 		workspaceId: workspaceId as string | undefined,
 		terminalId: terminalId as string | undefined,
 		eventType: mappedEventType,
+		...(typeof eventType === "string" ? { sourceEventType: eventType } : {}),
 	};
 
 	if (DEBUG_HOOKS_ENABLED) {

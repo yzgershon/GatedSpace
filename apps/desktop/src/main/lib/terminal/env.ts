@@ -24,11 +24,17 @@ let cachedMacosSystemCertAvailable: boolean | null = null;
 
 function startLocaleProbe(): void {
 	if (cachedUtf8Locale || localeProbeInFlight) return;
+	// `locale`, `grep` and `cut` are POSIX tools and LANG/LC_ALL are POSIX
+	// concepts — there is nothing here for Windows to answer. It used to run
+	// anyway: cmd.exe would be handed a pipeline it cannot parse, fail
+	// instantly, and in failing FLASH A CONSOLE WINDOW on every launch, because
+	// this is called from prewarmTerminalEnv during startup.
+	if (os.platform() === "win32") return;
 	localeProbeInFlight = true;
 
 	exec(
 		"locale 2>/dev/null | grep LANG= | cut -d= -f2",
-		{ encoding: "utf-8", timeout: 1000 },
+		{ encoding: "utf-8", timeout: 1000, windowsHide: true },
 		(error, stdout) => {
 			localeProbeInFlight = false;
 			if (error) return;

@@ -196,9 +196,13 @@ export const BackgroundTerminalsButton = memo(
 
 		if (!isOpen && backgroundCount === 0) return null;
 
-		const label = `${backgroundCount} background terminal session${
+		// "3 shells running in the background", not "3 background terminal
+		// sessions". The question this answers is "is my build still going",
+		// asked at a glance from across the room, and the answer should read as
+		// an English sentence rather than as a data structure.
+		const label = `${backgroundCount} shell${
 			backgroundCount === 1 ? "" : "s"
-		}`;
+		} running in the background`;
 
 		const handleAdopt = (terminalId: string) => {
 			clearTerminalBackgroundMarker(workspaceId, terminalId);
@@ -241,7 +245,7 @@ export const BackgroundTerminalsButton = memo(
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" className="w-80">
 					<DropdownMenuLabel className="text-xs">
-						Background terminal sessions
+						Shells running in the background
 					</DropdownMenuLabel>
 					<DropdownMenuSeparator />
 					<div className="max-h-80 overflow-y-auto">
@@ -252,7 +256,7 @@ export const BackgroundTerminalsButton = memo(
 						)}
 						{!sessionsQuery.isLoading && backgroundSessions.length === 0 && (
 							<div className="px-2 py-3 text-xs text-muted-foreground">
-								No background terminal sessions
+								Nothing running in the background
 							</div>
 						)}
 						{backgroundSessions.map((session) => (

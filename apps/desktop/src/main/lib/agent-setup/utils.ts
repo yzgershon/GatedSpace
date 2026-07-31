@@ -42,6 +42,9 @@ function findBinaryPathsWindows(name: string): string[] {
 	const result = execFileSync("where.exe", [name], {
 		encoding: "utf-8",
 		stdio: ["pipe", "pipe", "ignore"],
+		// where.exe is a console program. Agent setup resolves several binaries
+		// during startup, so without this each one blinks a console window.
+		windowsHide: true,
 	});
 	return result.trim().split("\r\n").filter(Boolean);
 }

@@ -11,6 +11,7 @@ import { useWorkspaceTransactionsStore } from "renderer/stores/workspace-creates
 import { WorkspaceCreateErrorState } from "./components/WorkspaceCreateErrorState";
 import { WorkspaceCreatingState } from "./components/WorkspaceCreatingState";
 import { WorkspaceHostIncompatibleState } from "./components/WorkspaceHostIncompatibleState";
+import { WorkspaceLoadingState } from "./components/WorkspaceLoadingState";
 import { WorkspaceNotFoundState } from "./components/WorkspaceNotFoundState";
 import { useRemoteHostStatus } from "./hooks/useRemoteHostStatus";
 import { WorkspaceProvider } from "./providers/WorkspaceProvider";
@@ -79,8 +80,11 @@ function V2WorkspaceLayout() {
 
 	const hostStatus = useRemoteHostStatus(workspace);
 
+	// Not yet known to be missing — `isReady` now waits for the local host
+	// service to actually report, so this covers the whole cold-start window
+	// instead of ending a second early and falling through to "not found".
 	if (!workspaceId || (!workspace && !isReady)) {
-		return <div className="flex h-full w-full" />;
+		return <WorkspaceLoadingState />;
 	}
 
 	if (!workspace) {
@@ -110,7 +114,7 @@ function V2WorkspaceLayout() {
 		);
 	}
 	if (hostStatus.status === "loading") {
-		return <div className="flex h-full w-full" />;
+		return <WorkspaceLoadingState />;
 	}
 
 	return (

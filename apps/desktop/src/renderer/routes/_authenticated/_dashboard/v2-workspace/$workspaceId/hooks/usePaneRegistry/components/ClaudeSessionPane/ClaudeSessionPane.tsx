@@ -15,8 +15,9 @@ import { workspaceTrpc } from "@superset/workspace-client";
 import { useCallback, useEffect, useState } from "react";
 import { useWorkspaceHostTarget } from "renderer/hooks/host-service/useWorkspaceHostUrl";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { SessionPaneSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import { SessionView } from "./SessionView";
-import type { UsageLimits } from "./UsageBanner";
+import type { UsageLimits } from "./usage-limits";
 import {
 	type ClaudePresetLaunch,
 	useClaudePresetLaunch,
@@ -68,6 +69,7 @@ function ClaudeSessionPaneInner({
 		send,
 		interrupt,
 		restart,
+		restoring,
 	} = useClaudeSession({
 		paneKey: paneId,
 		cwd,
@@ -174,6 +176,7 @@ function ClaudeSessionPaneInner({
 			draftKey={paneId}
 			limits={limits}
 			onRestart={restart}
+			restoring={restoring}
 		/>
 	);
 }
@@ -219,12 +222,12 @@ export function ClaudeSessionPane({
 		);
 	}
 
+	// Resolving the worktree path and the launch preset. Shaped like the pane
+	// that is about to appear rather than centred text: this is the first thing
+	// on screen when the app reopens a saved session, and a lone "Loading…"
+	// there is what made a launch look like it had failed.
 	if (!cwd || !launchReady) {
-		return (
-			<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-				Loading…
-			</div>
-		);
+		return <SessionPaneSkeleton className="h-full" />;
 	}
 
 	return (

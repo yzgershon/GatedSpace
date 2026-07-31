@@ -14,7 +14,8 @@
  *    CLI flag actually does, which for the last one is not what the extension
  *    claims — bypassPermissions never pauses for anything.
  *  - Shift+Tab cycles modes, because the popup says it does.
- *  - Effort: 6 positions low→ultracode; the "max" dot is rainbow and "ultracode"
+ *  - Effort: a real slider over 6 positions low→ultracode, draggable and
+ *    keyboard-operable; "max" gets a rainbow knob and "ultracode"
  *    (= xhigh + workflows) glows purple.
  *  - NO mic. GatedVoice owns dictation, and a button that only looks like it
  *    listens is worse than no button.
@@ -34,7 +35,13 @@ import {
 	SquareSlash,
 	Zap,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+	type CSSProperties,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionStatus } from "shared/claude-session/timeline";
 import { imageFiles, prepareImage } from "./composer-images";
@@ -55,6 +62,22 @@ export const EFFORT_LEVELS = [
 	"ultracode",
 ] as const;
 export type EffortLevel = (typeof EFFORT_LEVELS)[number];
+
+/**
+ * How each level is written for a human.
+ *
+ * The ids are what the CLI's `/effort` command takes, and one of them —
+ * `xhigh` — is not a word. Capitalising the id produced "Xhigh", which reads as
+ * a typo next to "Low" and "Medium".
+ */
+export const EFFORT_LABELS: Record<EffortLevel, string> = {
+	low: "Low",
+	medium: "Medium",
+	high: "High",
+	xhigh: "Extra high",
+	max: "Max",
+	ultracode: "Ultracode",
+};
 
 export const SESSION_MODES = [
 	{
@@ -159,45 +182,76 @@ export function nextMode(mode: SessionMode): SessionMode {
 	return next?.id ?? "manual";
 }
 
-function EffortDots({
+/**
+ * Effort as an actual slider.
+ *
+ * This was a row of six buttons drawn as dots. It LOOKED like a slider and
+ * behaved like a radio group: you could click a position but not drag to one,
+ * which is the specific gap between something that resembles a control and
+ * something that is one.
+ *
+ * A real `input[type=range]` rather than pointer handlers on a div. Dragging,
+ * clicking anywhere on the track, arrow keys, Home/End and the right
+ * screen-reader semantics are all inherent to the element; rebuilding them by
+ * hand is how the previous version ended up click-only.
+ *
+ * The knob takes the accent at the top of the scale, because ultracode needs an
+ * xhigh-capable model and turns on orchestration — it is not simply "more", so
+ * it should not look like simply the far end. Colours are theme tokens
+ * throughout: earlier versions pinned literal purple and stayed purple in every
+ * theme.
+ */
+function EffortSlider({
 	effort,
 	onChange,
 }: {
 	effort: EffortLevel;
 	onChange: (e: EffortLevel) => void;
 }) {
-	const activeIndex = EFFORT_LEVELS.indexOf(effort);
+	const activeIndex = Math.max(0, EFFORT_LEVELS.indexOf(effort));
+	const lastIndex = EFFORT_LEVELS.length - 1;
 	const isUltracode = effort === "ultracode";
+
 	return (
 		<div
 			className={cn(
-				"flex items-center gap-1.5 rounded-full px-1.5 py-1",
+				// The capsule IS the track. The input on top is transparent apart
+				// from its knob, so the two cannot drift out of alignment the way a
+				// separately-drawn bar would.
+				"effort-track relative flex h-5 w-[92px] items-center rounded-full",
 				isUltracode && "animate-ultracode-glow",
 			)}
 		>
-			{EFFORT_LEVELS.map((level, i) => {
-				const filled = i <= activeIndex;
-				const isMaxDot = level === "max" && effort === "max";
-				return (
-					<button
-						key={level}
-						type="button"
-						aria-label={level}
-						title={level}
-						onClick={() => onChange(level)}
-						className={cn(
-							"size-2 rounded-full transition-colors",
-							isMaxDot && "effort-dot-rainbow",
-							!isMaxDot &&
-								(filled
-									? isUltracode
-										? "bg-purple-500"
-										: "bg-foreground/70"
-									: "bg-muted-foreground/30"),
-						)}
-					/>
-				);
-			})}
+			{EFFORT_LEVELS.map((level, index) => (
+				<span
+					key={level}
+					aria-hidden="true"
+					className="effort-tick"
+					data-top={level === "ultracode"}
+					// A fraction, not a percentage: the CSS multiplies it by the
+					// knob-adjusted width, which is the only span the knob can cover.
+					style={{ "--effort-tick-at": index / lastIndex } as CSSProperties}
+				/>
+			))}
+			<input
+				type="range"
+				min={0}
+				max={lastIndex}
+				step={1}
+				value={activeIndex}
+				onChange={(event) => {
+					const next = EFFORT_LEVELS[Number(event.target.value)];
+					if (next) onChange(next);
+				}}
+				// Named and described for assistive tech as the scale it is, rather
+				// than as a bare number between 0 and 5.
+				aria-label="Effort"
+				aria-valuetext={EFFORT_LABELS[effort]}
+				title={EFFORT_LABELS[effort]}
+				data-top={isUltracode}
+				data-rainbow={effort === "max"}
+				className="effort-slider relative"
+			/>
 		</div>
 	);
 }
@@ -288,12 +342,12 @@ function ModesPopover({
 					<SlidersHorizontal className="size-4 shrink-0 text-muted-foreground" />
 					<span className="text-[13px] text-foreground">
 						Effort{" "}
-						<span className="text-muted-foreground/80 capitalize">
-							({effort})
+						<span className="text-muted-foreground/80">
+							({EFFORT_LABELS[effort]})
 						</span>
 					</span>
 					<div className="flex-1" />
-					<EffortDots effort={effort} onChange={onEffortChange} />
+					<EffortSlider effort={effort} onChange={onEffortChange} />
 				</div>
 			</PopoverContent>
 		</Popover>
@@ -633,10 +687,22 @@ export function SessionComposer({
 							? "Queue another message…"
 							: "ctrl esc to focus or unfocus Claude"
 					}
-					className="w-full resize-none bg-transparent px-4 pt-3.5 pb-1 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/50"
+					className="w-full resize-none bg-transparent px-4 pt-3.5 pb-2.5 text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/50"
 				/>
 
-				<div className="flex items-center gap-0.5 px-2.5 pb-2.5">
+				{/*
+				 * A hairline between what you type and the controls under it, the
+				 * way VS Code's composer draws it.
+				 *
+				 * Deliberately faint — at /50 of the border token it reads as a
+				 * change of surface rather than as a rule, which is the point: it
+				 * should separate the two halves without becoming another line to
+				 * look at. Edge to edge rather than inset, so it reads as the
+				 * composer being in two parts rather than as a stray divider.
+				 *
+				 * On the border token, so it follows the theme like everything else.
+				 */}
+				<div className="flex items-center gap-0.5 border-border/50 border-t px-2.5 pt-2 pb-2.5">
 					<input
 						ref={fileInputRef}
 						type="file"

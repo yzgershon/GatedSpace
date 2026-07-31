@@ -23,9 +23,10 @@ import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { networkInterfaces } from "node:os";
 import express from "express";
+import type { UserImagePayload } from "../../../shared/claude-session/events";
 import { buildTimeline } from "../../../shared/claude-session/timeline";
 import { builtInThemes } from "../../../shared/themes/built-in";
-import { getClaudeProfile } from "../claude-profile";
+import { getClaudeProfile, setClaudeProfileMode } from "../claude-profile";
 import { claudeSessionManager } from "../claude-session/session-manager";
 import { loadSessionTranscript } from "../claude-session/transcript";
 import { readProfileLimits } from "../claude-session/usage-refresh";
@@ -35,6 +36,7 @@ import {
 	DEFAULT_BRIDGE_BINDING_MODE,
 	resolveBinding,
 } from "./binding";
+import { readBridgeState } from "./bridge-state";
 import { MOBILE_BRIDGE_HTML } from "./client-html";
 import { pushService } from "./push";
 import {
@@ -67,8 +69,15 @@ export interface BridgeStatus {
 	error?: string;
 }
 
-/** A body bigger than this is not a prompt someone typed on a phone. */
-const MAX_PROMPT_BYTES = 32 * 1024;
+/**
+ * Big enough for a handful of downscaled screenshots, which is what a phone
+ * message actually carries. The old 32KB was sized for text alone and rejected
+ * the first image outright.
+ */
+const MAX_PROMPT_BYTES = 24 * 1024 * 1024;
+
+/** A backstop against a client that ignores the phone's own limit. */
+const MAX_IMAGES_PER_MESSAGE = 6;
 
 /**
  * How much of a transcript the phone gets. A session can run to megabytes, and
@@ -142,6 +151,45 @@ function sessionTitles(): Map<string, string> {
 	return titles;
 }
 
+/**
+ * Images off the phone, validated into the shape the session takes.
+ *
+ * Everything here arrives over the network, so nothing is trusted: each entry
+ * has to be an object with real base64, and anything that is not is dropped
+ * rather than passed along to be discovered later by the CLI.
+ *
+ * The phone already downscales before uploading, so these are hundreds of KB
+ * rather than the several MB a camera produces. The cap is a backstop against
+ * a client that does not.
+ */
+function parseImages(value: unknown): UserImagePayload[] {
+	if (!Array.isArray(value)) return [];
+	const images: UserImagePayload[] = [];
+	for (const entry of value.slice(0, MAX_IMAGES_PER_MESSAGE)) {
+		if (!entry || typeof entry !== "object") continue;
+		const image = entry as Record<string, unknown>;
+		if (typeof image.data !== "string" || !image.data) continue;
+		// Base64 only. A data: URL slipping through would be sent to the model
+		// as image bytes and decode to nothing.
+		if (!/^[A-Za-z0-9+/=\s]+$/.test(image.data)) continue;
+		images.push({
+			name: typeof image.name === "string" ? image.name : "image.jpg",
+			mediaType:
+				typeof image.mediaType === "string" &&
+				image.mediaType.startsWith("image/")
+					? image.mediaType
+					: "image/jpeg",
+			data: image.data,
+			...(typeof image.width === "number" ? { width: image.width } : {}),
+			...(typeof image.height === "number" ? { height: image.height } : {}),
+			...(typeof image.thumbnail === "string"
+				? { thumbnail: image.thumbnail }
+				: {}),
+		});
+	}
+	return images;
+}
+
 class MobileBridge {
 	private server: Server | null = null;
 	private token = "";
@@ -155,6 +203,31 @@ class MobileBridge {
 	 * our loopback port.
 	 */
 	private publicOrigin: string | null = null;
+
+	/** The last mode asked for, so a stopped bridge can offer it again. */
+	lastMode(): BridgeBindingMode {
+		return this.mode;
+	}
+
+	/**
+	 * Bring the bridge back up if it was left on.
+	 *
+	 * Called at startup, before any window exists: the phone depends on this
+	 * being up, and waiting for the renderer would mean a bridge that only
+	 * returns once someone opens the app's UI on the machine they are away from.
+	 */
+	async restore(): Promise<BridgeStatus> {
+		const state = readBridgeState();
+		if (!state.enabled) return this.status();
+		const status = await this.start(state.mode);
+		if (!status.running) {
+			console.warn("[mobile-bridge] Could not restore on launch", {
+				mode: state.mode,
+				error: status.error,
+			});
+		}
+		return status;
+	}
 
 	status(): BridgeStatus {
 		if (!this.server) {
@@ -385,9 +458,12 @@ class MobileBridge {
 				id: profile.id,
 				label: profile.label,
 				active: profile.id === state.activeProfileId,
+				// Whether the CLI has actually been logged in for this account.
+				// An unauthenticated one shows no usage for a reason worth stating.
+				ready: profile.ready,
 				limits: readProfileLimits(profile.configDir),
 			}));
-			res.json({ accounts });
+			res.json({ accounts, mode: state.mode });
 		});
 
 		/**
@@ -447,6 +523,36 @@ class MobileBridge {
 				return;
 			}
 			res.json(pending);
+		});
+
+		/**
+		 * Which account is active, and switching it.
+		 *
+		 * The switch decides which account the NEXT session spawns against —
+		 * sessions already running keep the account they started with, because
+		 * their CLI process was launched with that config dir and cannot be moved.
+		 * Said plainly on the phone rather than left to be discovered.
+		 */
+		app.post("/api/accounts/active", (req, res) => {
+			const id = (req.body as { id?: unknown })?.id;
+			if (typeof id !== "string" || !id) {
+				res.status(400).json({ error: "no account given" });
+				return;
+			}
+			const state = getClaudeProfile();
+			// "auto" is a real choice — failover — so it is allowed alongside the
+			// concrete profile ids.
+			if (id !== "auto" && !state.profiles.some((p) => p.id === id)) {
+				res.status(404).json({ error: "no such account" });
+				return;
+			}
+			setClaudeProfileMode(id);
+			const next = getClaudeProfile();
+			res.json({
+				ok: true,
+				mode: next.mode,
+				activeProfileId: next.activeProfileId,
+			});
 		});
 
 		/** Where a new session could run. Feeds the picker behind the "+". */
@@ -529,8 +635,26 @@ class MobileBridge {
 			// a property of the conversation, not of how much of it was sent.
 			const timeline = buildTimeline(events);
 
+			const running = claudeSessionManager.isRunning(key);
+
+			/*
+			 * "Is a turn in flight", which is NOT the same as "is the process
+			 * alive".
+			 *
+			 * The phone's working mark was driven by `running`, and for a session
+			 * pane the CLI process stays up between turns — so the mark never went
+			 * away. This is the same signal the desktop's own working line uses
+			 * (`timeline.status === "streaming"`), so the two agree by
+			 * construction rather than by coincidence.
+			 *
+			 * Gated on `running` as well, because a transcript read from disk
+			 * carries no `result` event: folding a finished conversation leaves the
+			 * status at "streaming" forever, which would pin the mark on for every
+			 * session in history.
+			 */
 			res.json({
-				running: claudeSessionManager.isRunning(key),
+				running,
+				thinking: running && timeline.status === "streaming",
 				events: events.slice(-limit),
 				truncated: events.length > limit,
 				...(timeline.usage ? { context: timeline.usage } : {}),
@@ -539,8 +663,13 @@ class MobileBridge {
 
 		app.post("/api/sessions/:key/send", (req, res) => {
 			const key = req.params.key;
-			const text = (req.body as { text?: unknown })?.text;
-			if (typeof text !== "string" || !text.trim()) {
+			const body = req.body as { text?: unknown; images?: unknown };
+			const text = typeof body?.text === "string" ? body.text : "";
+			const images = parseImages(body?.images);
+
+			// An image on its own is a message — sending a screenshot with no
+			// words is the most natural thing to do from a phone.
+			if (!text.trim() && images.length === 0) {
 				res.status(400).json({ error: "empty prompt" });
 				return;
 			}
@@ -548,7 +677,7 @@ class MobileBridge {
 				res.status(404).json({ error: "no such session" });
 				return;
 			}
-			claudeSessionManager.send(key, text, false, []);
+			claudeSessionManager.send(key, text, false, images);
 			res.json({ ok: true, id: randomUUID() });
 		});
 

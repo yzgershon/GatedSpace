@@ -11,9 +11,9 @@ import { cn } from "@superset/ui/utils";
 import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
+import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type {
-	RateLimitInfo,
 	SessionTimeline,
 	SessionUsage,
 } from "shared/claude-session/timeline";
@@ -26,7 +26,7 @@ import {
 } from "./SessionComposer";
 import { SessionTimelineView } from "./SessionTimelineView";
 import { SessionUsageStrip } from "./SessionUsageStrip";
-import { UsageBanner, type UsageLimits } from "./UsageBanner";
+import type { UsageLimits } from "./usage-limits";
 
 interface SessionViewProps {
 	timeline: SessionTimeline;
@@ -44,51 +44,12 @@ interface SessionViewProps {
 	/** Subscription windows for the active account, for the warning banner. */
 	limits?: UsageLimits | null;
 	onRestart?: () => void;
-}
-
-/**
- * The CLI reports rate-limit state on its own channel. Anything other than
- * "allowed" is worth surfacing: otherwise a throttled session just looks slow,
- * and a rejected one looks broken for no visible reason.
- */
-function RateLimitChip({ rateLimit }: { rateLimit: RateLimitInfo }) {
-	const status = rateLimit.status;
-	if (!status || status === "allowed") return null;
-
-	const rejected = status.includes("reject") || status.includes("exceeded");
-	// The field is seconds in every capture so far; treat a large value as ms
-	// rather than rendering a date in 1970.
-	const resetsAt = rateLimit.resetsAt
-		? new Date(
-				rateLimit.resetsAt > 1e12
-					? rateLimit.resetsAt
-					: rateLimit.resetsAt * 1000,
-			)
-		: null;
-
-	return (
-		<span
-			className={cn(
-				"rounded px-1.5 py-0.5 text-[11px]",
-				rejected
-					? "bg-destructive/10 text-destructive"
-					: "bg-warning/10 text-warning",
-			)}
-			title={
-				resetsAt
-					? `Rate limit ${status} · resets ${resetsAt.toLocaleString()}`
-					: `Rate limit ${status}`
-			}
-		>
-			{rejected ? "Rate limited" : "Approaching limit"}
-			{resetsAt
-				? ` · resets ${resetsAt.toLocaleTimeString([], {
-						hour: "numeric",
-						minute: "2-digit",
-					})}`
-				: ""}
-		</span>
-	);
+	/**
+	 * The stored transcript is still loading. Distinguishes a resumed session
+	 * that hasn't painted yet from a genuinely new one, so the openers below
+	 * aren't offered for a conversation that already exists.
+	 */
+	restoring?: boolean;
 }
 
 function formatTokens(count: number): string {
@@ -170,9 +131,11 @@ function SessionHeader({
 			</div>
 
 			<div className="flex-1" />
-			{timeline.rateLimit ? (
-				<RateLimitChip rateLimit={timeline.rateLimit} />
-			) : null}
+			{/*
+			 * No rate-limit chip. It restated, in a yellow tag, what the usage strip
+			 * two inches to the left already shows continuously and more precisely —
+			 * and it overlapped that strip while doing it.
+			 */}
 			{timeline.usage ? <ContextChip usage={timeline.usage} /> : null}
 			{header ? (
 				// The CLI's own name for the mode, not the one the user picked from —
@@ -262,9 +225,15 @@ export function SessionView({
 	draftKey,
 	limits,
 	onRestart,
+	restoring = false,
 }: SessionViewProps) {
+	// Restoring outranks empty: a conversation being read off disk is not an
+	// empty one, and offering "Explain this codebase" over a session with a
+	// hundred messages in it is actively wrong, not just premature.
 	const isEmpty =
-		timeline.items.length === 0 && timeline.status !== "streaming";
+		!restoring &&
+		timeline.items.length === 0 &&
+		timeline.status !== "streaming";
 	const { ref: scrollRef, onScroll } = useStickToBottom();
 	const claudeIcon = usePresetIcon("claude");
 
@@ -306,6 +275,11 @@ export function SessionView({
 							))}
 						</div>
 					</div>
+				) : restoring && timeline.items.length === 0 ? (
+					// Nothing painted yet, but there IS something coming. Once the first
+					// rows land this falls through to the real timeline, so the skeleton
+					// is never shown over partial content.
+					<SessionTranscriptSkeleton />
 				) : (
 					<SessionTimelineView timeline={timeline} />
 				)}
@@ -344,13 +318,10 @@ export function SessionView({
 			<div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-background via-background/85 to-transparent" />
 
 			{/*
-			 * The banner shares the composer's floating column so it sits directly
-			 * above the box, where the reference puts it — a warning you read as
-			 * you reach to type, rather than a chip in a corner you notice after.
+			 * No usage banner above the composer. It appeared over the box you were
+			 * about to type in, to tell you a percentage the header already shows —
+			 * a dismissible interruption that repeated itself every session.
 			 */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center px-4 pb-[6.5rem]">
-				<UsageBanner limits={limits} />
-			</div>
 			<SessionComposer
 				status={timeline.status}
 				slashCommands={timeline.header?.slashCommands ?? []}

@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveUsageWindow } from "shared/usage-window";
 import { getClaudeProjectRoots, listClaudeProfiles } from "./claude-profile";
 
 export interface UsageModel {
@@ -85,22 +86,19 @@ function readClaudeQuota(
 			"utf8",
 		);
 		const o = JSON.parse(raw);
+		// Resolved against NOW rather than trusted as written. A snapshot is only
+		// true until its own reset moment; past that the window rolled over, and
+		// showing the old percentage is what made the panel read "100% used" and
+		// "resets now" at the same time.
+		const readAt = Date.now();
 		const win = (raw: unknown, minutes: number): QuotaWindow | null => {
-			if (!raw || typeof raw !== "object") return null;
-			const w = raw as {
-				used_percentage?: number | null;
-				resets_at?: number | null;
-				resets_label?: string | null;
-			};
-			return w.used_percentage != null
+			const resolved = resolveUsageWindow(raw, readAt);
+			return resolved?.usedPercent != null
 				? {
-						usedPercent: Math.round(w.used_percentage),
+						usedPercent: resolved.usedPercent,
 						windowMinutes: minutes,
-						resetsAt: typeof w.resets_at === "number" ? w.resets_at : null,
-						resetsLabel:
-							typeof w.resets_label === "string" && w.resets_label.trim()
-								? w.resets_label
-								: null,
+						resetsAt: resolved.resetsAt,
+						resetsLabel: resolved.resetsLabel,
 					}
 				: null;
 		};
@@ -284,12 +282,23 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 							for (const w of [rl.primary, rl.secondary]) {
 								if (!w || w.used_percent == null) continue;
 								const minutes = w.window_minutes ?? 10080;
+								// Same staleness rule as Claude's windows: Codex records a
+								// real epoch, and once it has passed the percentage beside it
+								// belongs to a window that has already ended.
+								const resolved = resolveUsageWindow(
+									{
+										used_percentage: w.used_percent,
+										// Codex records a real epoch; absent stays absent rather
+										// than becoming an imminent countdown.
+										resets_at: w.resets_at ?? null,
+									},
+									Date.now(),
+								);
+								if (resolved?.usedPercent == null) continue;
 								q[windowSlot(minutes)] = {
-									usedPercent: Math.round(w.used_percent),
+									usedPercent: resolved.usedPercent,
 									windowMinutes: minutes,
-									// Codex records a real epoch; absent stays absent rather
-									// than becoming an imminent countdown.
-									resetsAt: w.resets_at ?? null,
+									resetsAt: resolved.resetsAt,
 									resetsLabel: null,
 								};
 							}

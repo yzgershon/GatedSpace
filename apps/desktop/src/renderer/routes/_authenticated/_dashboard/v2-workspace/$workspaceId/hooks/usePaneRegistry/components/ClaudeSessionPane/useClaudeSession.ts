@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from "react";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { EffortLevel, SessionMode } from "./SessionComposer";
+import { isRestoringTranscript } from "./session-restore";
 import {
 	ensureSession,
 	getSessionSnapshot,
@@ -103,6 +104,11 @@ export function useClaudeSession({
 		timeline: snapshot.timeline,
 		mode: snapshot.mode,
 		effort: snapshot.effort,
+		/** The stored conversation is still being read off disk. */
+		restoring: isRestoringTranscript({
+			restore: snapshot.restore,
+			resumeSessionId,
+		}),
 		setMode,
 		setEffort,
 		send,

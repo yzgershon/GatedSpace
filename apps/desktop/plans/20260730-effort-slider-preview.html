@@ -1,0 +1,157 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Effort slider — all themes</title>
+<style>
+body{margin:0;font-family:ui-sans-serif,system-ui,sans-serif;display:grid;
+grid-template-columns:repeat(2,1fr)}
+.pane{padding:24px;background:var(--background);color:var(--foreground);min-height:230px}
+.row{display:flex;align-items:center;gap:8px;background:var(--card);
+border:1px solid var(--border);border-radius:10px;padding:9px 13px;margin-bottom:9px}
+.label{font-size:13px}.dim{color:var(--muted-foreground);font-size:13px}.spacer{flex:1}
+.cap{position:relative;display:flex;align-items:center;height:20px;width:92px;
+border-radius:9999px}
+.glow{animation:ultracode-glow 2s ease-in-out infinite}
+h3{font:600 11px ui-sans-serif;letter-spacing:.09em;text-transform:uppercase;
+color:var(--muted-foreground);margin:0 0 12px}
+@keyframes ultracode-glow {
+	0%,
+	100% {
+		box-shadow: 0 0 5px 0 color-mix(in oklab, var(--highlight) 45%, transparent);
+	}
+	50% {
+		box-shadow: 0 0 13px 2px
+			color-mix(in oklab, var(--highlight) 85%, transparent);
+	}
+}
+
+/*
+ * The effort slider.
+ *
+ * Built to match the VS Code control: a CAPSULE track with a tick per position,
+ * a large round knob riding inside it, and the final position marked in the
+ * accent colour because ultracode is a different kind of thing, not simply
+ * "more". The first attempt was a plain range input with a filled bar, which
+ * behaved correctly and looked nothing like the reference.
+ *
+ * Still a real `input[type=range]` underneath. Dragging, clicking anywhere on
+ * the track, arrow keys, Home/End and screen-reader semantics all come from the
+ * element; the capsule and ticks are painted behind it and the thumb is the only
+ * part of the input that is visible. Reimplementing the behaviour with pointer
+ * handlers is how the version before this ended up click-only.
+ *
+ * KNOB SIZE IS LOAD-BEARING. A range thumb travels from `knob/2` to
+ * `width - knob/2`, so the ticks are inset by the same half-knob to line up with
+ * where the knob can actually stop. `--effort-knob` is the single source for
+ * both, and the two drift apart if it is hardcoded in either place.
+ *
+ * COLOURS DERIVE FROM `foreground`, NOT `muted-foreground`. There are six
+ * built-in themes plus whatever gets imported, and the capsule has to separate
+ * from the CARD it sits on in all of them. `muted-foreground` is defined to be
+ * low-contrast, so on solarized-light — mid-tan card, mid-grey muted — it landed
+ * at a 1.17 contrast ratio and the ticks at 1.41, i.e. invisible. `foreground`
+ * is the one token guaranteed to move AWAY from the background, and in the right
+ * direction: lighter on dark themes, darker on light ones.
+ *
+ * A border was tried instead and is worse than useless: `--border` on
+ * solarized-light is #dcd5c0 against a #ddd6c1 card, a ratio of 1.01. That token
+ * is tuned for card-against-background, not for a control inside a card.
+ *
+ * Measured across all six built-ins at these values, the weakest (solarized-
+ * light, a deliberately low-contrast theme) reads capsule 1.24, ticks 1.87, knob
+ * 3.45, accent 2.56 — proportionate to a theme whose own body text sits near
+ * 4.3. The strongest reads 1.66 / 3.70 / 8.19 / 3.32.
+ */
+.effort-track {
+	--effort-knob: 16px;
+	background: color-mix(in oklab, var(--foreground) 18%, transparent);
+}
+
+/* One tick per position, centred on where the knob comes to rest. */
+.effort-tick {
+	position: absolute;
+	top: 50%;
+	left: calc(
+		var(--effort-knob) /
+		2 +
+		var(--effort-tick-at) *
+		(100% - var(--effort-knob))
+	);
+	translate: -50% -50%;
+	width: 4px;
+	height: 4px;
+	border-radius: 9999px;
+	background: color-mix(in oklab, var(--foreground) 55%, transparent);
+}
+
+/*
+ * The top of the scale carries the accent even when unselected.
+ *
+ * `highlight`, which is the one token every theme defines as its accent colour.
+ *
+ * Not `primary`: in the default dark theme that is #eae8e6, the same near-white
+ * as the knob, so the marker would have vanished into it. Not `chart-4` either,
+ * which is violet in the dark theme but AMBER in the light one — a palette slot,
+ * not an accent.
+ */
+.effort-tick[data-top="true"] {
+	background: var(--highlight);
+}
+
+.effort-slider {
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent;
+	cursor: pointer;
+	height: var(--effort-knob);
+	width: 100%;
+}
+
+/* Transparent: the capsule behind the input is the visible track. */
+.effort-slider::-webkit-slider-runnable-track {
+	height: var(--effort-knob);
+	background: transparent;
+	border: none;
+}
+
+.effort-slider::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	height: var(--effort-knob);
+	width: var(--effort-knob);
+	border-radius: 9999px;
+	background: var(--foreground);
+	border: none;
+	box-shadow: 0 1px 3px rgb(0 0 0 / 0.4);
+	transition: transform 120ms ease;
+}
+
+.effort-slider:hover::-webkit-slider-thumb {
+	transform: scale(1.08);
+}
+
+.effort-slider:active::-webkit-slider-thumb {
+	transform: scale(1.04);
+}
+
+.effort-slider:focus-visible::-webkit-slider-thumb {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+
+/* At the very top of the scale the knob itself takes the accent. */
+.effort-slider[data-top="true"]::-webkit-slider-thumb {
+	background: var(--highlight);
+}
+
+.effort-slider[data-rainbow="true"]::-webkit-slider-thumb {
+	background-image: linear-gradient(
+		90deg,
+		var(--chart-1),
+		var(--chart-3),
+		var(--chart-5)
+	);
+}
+
+@layer base {
+	* {
+		@apply border-border antialiased;
+	}
+</style></head><body><div class="pane" style="--background:#151110;--foreground:#eae8e6;--card:#201E1C;--muted-foreground:#a8a5a3;--border:#2a2827;--ring:#3a3837;--highlight:#e07850;--chart1:#e07850;--chart3:#d4a84b;--chart5:#dc6b6b;"><h3>Ember (default dark)</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div><div class="pane" style="--background:oklch(1 0 0);--foreground:oklch(0.145 0 0);--card:oklch(0.97 0 0);--muted-foreground:oklch(0.556 0 0);--border:oklch(0.922 0 0);--ring:oklch(0.708 0 0);--highlight:oklch(0.646 0.222 41.116);--chart1:oklch(0.646 0.222 41.116);--chart3:oklch(0.398 0.07 227.392);--chart5:oklch(0.769 0.188 70.08);"><h3>Light</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div><div class="pane" style="--background:#282a36;--foreground:#e4e4e0;--card:#2f303c;--muted-foreground:#a5a6a7;--border:#41434d;--ring:#ff79c6;--highlight:#ff79c6;--chart1:#ff79c6;--chart3:#8be9fd;--chart5:#bd93f9;"><h3>Dracula</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div><div class="pane" style="--background:#211719;--foreground:#e4e4e0;--card:#281e20;--muted-foreground:#a6a2a3;--border:#3c3335;--ring:#ff3131;--highlight:#ff3131;--chart1:#ff3131;--chart3:#8be9fd;--chart5:#bd93f9;"><h3>Koi</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div><div class="pane" style="--background:#272822;--foreground:#f8f8f2;--card:#3e3d32;--muted-foreground:#b8b3a4;--border:#49483e;--ring:#a6e22e;--highlight:#a6e22e;--chart1:#f92672;--chart3:#66d9ef;--chart5:#ae81ff;"><h3>Monokai</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div><div class="pane" style="--background:#eee8d5;--foreground:#616161;--card:#ddd6c1;--muted-foreground:#84908e;--border:#dcd5c0;--ring:#c58f79;--highlight:#cb4b16;--chart1:#268bd2;--chart3:#859900;--chart5:#d33682;"><h3>Solarized Light</h3><div class="row"><span class="label">Effort</span><span class="dim">(Low)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="0" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(High)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="2" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Extra high)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="3" data-top="false" data-rainbow="false"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Max)</span><span class="spacer"></span><div class="cap effort-track"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="4" data-top="false" data-rainbow="true"></div></div><div class="row"><span class="label">Effort</span><span class="dim">(Ultracode)</span><span class="spacer"></span><div class="cap effort-track glow"><span class="effort-tick" data-top="false" style="--effort-tick-at:0.0"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.2"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.4"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.6"></span><span class="effort-tick" data-top="false" style="--effort-tick-at:0.8"></span><span class="effort-tick" data-top="true" style="--effort-tick-at:1.0"></span><input class="effort-slider" type="range" min="0" max="5" step="1" value="5" data-top="true" data-rainbow="false"></div></div></div></body></html>

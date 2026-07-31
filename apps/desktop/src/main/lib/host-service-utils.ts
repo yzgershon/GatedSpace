@@ -7,7 +7,21 @@ export const MAX_HOST_LOG_BYTES = 5 * 1024 * 1024;
 
 export const HEALTH_POLL_TIMEOUT_MS = 10_000;
 
-const HEALTH_POLL_INTERVAL_MS = 200;
+/**
+ * How often to ask whether the host service is listening yet.
+ *
+ * Two intervals rather than one, because this is pure dead time: the service is
+ * already up and answering, and we are asleep. A flat 200ms wasted ~100ms of
+ * every launch on average, on the one step the whole app waits for.
+ *
+ * Tight at first, then relaxed. The service takes a couple of seconds to boot,
+ * so the fast interval only applies while a quick answer is plausible; past that
+ * the extra requests would be noise against a port that is not ready.
+ */
+const HEALTH_POLL_FAST_INTERVAL_MS = 50;
+const HEALTH_POLL_SLOW_INTERVAL_MS = 200;
+/** After this long, stop polling tightly and settle into the slow interval. */
+const HEALTH_POLL_FAST_WINDOW_MS = 3_000;
 
 /**
  * Open an append-mode log fd, truncating first if it exceeds maxBytes.
@@ -98,7 +112,8 @@ export async function pollHealthCheck(
 	secret: string,
 	timeoutMs = HEALTH_POLL_TIMEOUT_MS,
 ): Promise<boolean> {
-	const deadline = Date.now() + timeoutMs;
+	const startedAt = Date.now();
+	const deadline = startedAt + timeoutMs;
 	while (Date.now() < deadline) {
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 2_000);
@@ -113,7 +128,11 @@ export async function pollHealthCheck(
 		} finally {
 			clearTimeout(timeout);
 		}
-		await new Promise((r) => setTimeout(r, HEALTH_POLL_INTERVAL_MS));
+		const interval =
+			Date.now() - startedAt < HEALTH_POLL_FAST_WINDOW_MS
+				? HEALTH_POLL_FAST_INTERVAL_MS
+				: HEALTH_POLL_SLOW_INTERVAL_MS;
+		await new Promise((r) => setTimeout(r, interval));
 	}
 	return false;
 }

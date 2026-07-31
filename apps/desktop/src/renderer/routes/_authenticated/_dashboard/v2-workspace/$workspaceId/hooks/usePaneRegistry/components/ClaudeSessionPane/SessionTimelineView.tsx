@@ -693,6 +693,18 @@ function TimelineItemRow({
 			);
 		}
 		case "notice":
+			// A boundary, not a problem: the conversation carries on, it just runs
+			// differently from here. A wavy rule reads as a seam in the transcript
+			// where a bordered callout would read as something having gone wrong.
+			if (item.divider) {
+				return (
+					<div className="flex items-center gap-3 py-1 text-muted-foreground/50">
+						<span className="timeline-squiggle h-2 flex-1" aria-hidden="true" />
+						<span className="shrink-0 text-[11px]">{item.text}</span>
+						<span className="timeline-squiggle h-2 flex-1" aria-hidden="true" />
+					</div>
+				);
+			}
 			return (
 				<Row state={item.fatal ? "error" : "prose"}>
 					<div

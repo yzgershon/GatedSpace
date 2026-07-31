@@ -26,12 +26,20 @@ import {
 	type SessionTimeline,
 	settled,
 } from "shared/claude-session/timeline";
-import type { EffortLevel, SessionMode } from "./SessionComposer";
+import {
+	EFFORT_LABELS,
+	type EffortLevel,
+	SESSION_MODES,
+	type SessionMode,
+} from "./SessionComposer";
+import type { SessionRestoreState } from "./session-restore";
 
 export interface SessionSnapshot {
 	timeline: SessionTimeline;
 	mode: SessionMode;
 	effort: EffortLevel;
+	/** Progress of the stored-transcript load. See SessionRestoreState. */
+	restore: SessionRestoreState;
 }
 
 export interface SessionStartOptions {
@@ -63,13 +71,27 @@ interface SessionEntry {
 
 /** Auto by default so edits land — matches how Yish runs Codex. */
 const DEFAULT_MODE: SessionMode = "bypassPermissions";
-const DEFAULT_EFFORT: EffortLevel = "high";
+
+/**
+ * What the CLI itself boots at. A FACT about the binary, not a preference.
+ *
+ * Kept separate from our own default below, because the two answer different
+ * questions and one constant was being used for both: "what does the slider
+ * start on" and "does the running process already agree with the slider". Once
+ * those diverge, conflating them means the UI shows one effort while the CLI
+ * runs another, with nothing to reveal it.
+ */
+const CLI_DEFAULT_EFFORT: EffortLevel = "high";
+
+/** Where the slider starts. Above the CLI's own default, deliberately. */
+const DEFAULT_EFFORT: EffortLevel = "xhigh";
 
 /** Stable identity for panes whose session hasn't been created yet. */
 const EMPTY_SNAPSHOT: SessionSnapshot = {
 	timeline: emptyTimeline(),
 	mode: DEFAULT_MODE,
 	effort: DEFAULT_EFFORT,
+	restore: null,
 };
 
 const entries = new Map<string, SessionEntry>();
@@ -102,6 +124,13 @@ function update(
 	for (const listener of entry.listeners) listener();
 }
 
+/** Move a pane's restore state, notifying subscribers. */
+function setRestore(key: string, restore: SessionRestoreState): void {
+	update(key, (snapshot) =>
+		snapshot.restore === restore ? snapshot : { ...snapshot, restore },
+	);
+}
+
 /**
  * Attach to (and if needed spawn) the session for `key`. Idempotent — safe to
  * call on every mount; only the first call subscribes and starts.
@@ -120,6 +149,7 @@ export function ensureSession(key: string, opts: SessionStartOptions): void {
 	// is safe — the session isn't running yet, there's nothing to miss.
 	if (opts.resumeSessionId) {
 		const sessionId = opts.resumeSessionId;
+		setRestore(key, "loading");
 		// Cost comes from a sidecar, not the transcript — the CLI writes no cost
 		// field there, and its per-result figure restarts at zero in every new
 		// process. Fetched alongside history so a restored pane opens showing what
@@ -152,11 +182,16 @@ export function ensureSession(key: string, opts: SessionStartOptions): void {
 				});
 			})
 			.finally(() => {
+				// Before attach, not after: attach spawns the process, and the pane
+				// should stop showing a skeleton the moment the stored transcript is
+				// on screen rather than waiting on the CLI to say hello.
+				setRestore(key, "done");
 				attach(key, opts);
 			});
 		return;
 	}
 
+	setRestore(key, "done");
 	attach(key, opts);
 }
 
@@ -185,6 +220,14 @@ function attach(key: string, opts: SessionStartOptions): void {
 
 	if (!entry.started) {
 		entry.started = true;
+		// The slider's default sits ABOVE the CLI's, so a brand new session has
+		// to be told — there is no spawn flag for effort. Without this the pane
+		// would display xhigh while the process ran at high, which is worse than
+		// having no default at all. Queued rather than sent: the CLI only accepts
+		// slash commands once it has said hello.
+		if (entry.snapshot.effort !== CLI_DEFAULT_EFFORT) {
+			entry.pendingEffort = entry.snapshot.effort;
+		}
 		void electronTrpcClient.claudeSession.start.mutate({
 			key,
 			cwd: opts.cwd,
@@ -265,13 +308,17 @@ export function setSessionMode(key: string, mode: SessionMode): void {
 	const entry = getOrCreateEntry(key);
 	if (entry.snapshot.mode === mode) return;
 	update(key, (snapshot) => ({ ...snapshot, mode }));
+	addSwitchMarker(
+		key,
+		`Switched to ${SESSION_MODES.find((m) => m.id === mode)?.label ?? mode}`,
+	);
 
 	const sessionId = entry.snapshot.timeline.header?.sessionId;
 	const options = entry.options;
 	if (!entry.started || !sessionId || !options) return;
 	// A fresh process comes up at the CLI's default effort — re-apply the
 	// slider once the resumed session says hello.
-	if (entry.snapshot.effort !== DEFAULT_EFFORT) {
+	if (entry.snapshot.effort !== CLI_DEFAULT_EFFORT) {
 		entry.pendingEffort = entry.snapshot.effort;
 	}
 	void electronTrpcClient.claudeSession.restart.mutate({
@@ -303,6 +350,35 @@ function applyEffort(key: string, effort: EffortLevel): void {
 	});
 }
 
+/**
+ * Mark a boundary in the transcript: everything below it ran differently.
+ *
+ * Session-local by design. It records a choice the USER made in this window,
+ * not something the CLI reported, so it is not in main's replay buffer and does
+ * not survive a reload. Persisting it would mean inventing transcript entries
+ * the CLI never wrote, which is a worse trade than a marker that fades with the
+ * session it describes.
+ */
+function addSwitchMarker(key: string, text: string): void {
+	update(key, (snapshot) => ({
+		...snapshot,
+		timeline: {
+			...snapshot.timeline,
+			items: [
+				...snapshot.timeline.items,
+				{
+					kind: "notice" as const,
+					// Distinct per marker so React keeps them apart when the same
+					// setting is changed back and forth.
+					id: `switch-${snapshot.timeline.items.length}-${text}`,
+					text,
+					divider: true,
+				},
+			],
+		},
+	}));
+}
+
 function flushPendingEffort(key: string): void {
 	const entry = entries.get(key);
 	if (!entry?.pendingEffort) return;
@@ -315,6 +391,7 @@ export function setSessionEffort(key: string, effort: EffortLevel): void {
 	const entry = getOrCreateEntry(key);
 	if (entry.snapshot.effort === effort) return;
 	update(key, (snapshot) => ({ ...snapshot, effort }));
+	addSwitchMarker(key, `Effort set to ${EFFORT_LABELS[effort]}`);
 
 	// Before init the session can't take slash commands yet — hold it.
 	if (!entry.snapshot.timeline.header) {

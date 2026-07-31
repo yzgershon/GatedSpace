@@ -10,12 +10,14 @@ import {
 	protocol,
 	session,
 } from "electron";
+import log from "electron-log/main";
 import { makeAppSetup } from "lib/electron-app/factories/app/setup";
 import {
 	handleAuthCallback,
 	loadToken,
 	parseAuthDeepLink,
 } from "lib/trpc/routers/auth/utils/auth-functions";
+import { resolveSpawnConfig } from "lib/trpc/routers/host-service-coordinator";
 import { applyShellEnvToProcess } from "lib/trpc/routers/workspaces/utils/shell-env";
 import { env as mainEnv } from "main/env.main";
 import {
@@ -35,7 +37,9 @@ import { resolveDevWorkspaceName } from "./lib/dev-workspace-name";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
 import { getHostServiceCoordinator } from "./lib/host-service-coordinator";
+import { listKnownOrganizationIds } from "./lib/host-service-manifest";
 import { localDb } from "./lib/local-db";
+import { isLocalOnlyBuild, LOCAL_ORG_ID } from "./lib/local-mode";
 import { requestLocalNetworkAccess } from "./lib/local-network-permission";
 import { mobileBridge } from "./lib/mobile-bridge/server";
 import {
@@ -44,6 +48,7 @@ import {
 } from "./lib/persistence/persistence";
 import { ensureProjectIconsDir, getProjectIconPath } from "./lib/project-icons";
 import { initSentry } from "./lib/sentry";
+import { markStartup, timeStartupPhase } from "./lib/startup-timing";
 import {
 	prewarmTerminalRuntime,
 	reconcileDaemonSessions,
@@ -55,6 +60,13 @@ import {
 import { disposeTray, initTray } from "./lib/tray";
 import { startNetworkLogger, stopNetworkLogger } from "./network-logger";
 import { MainWindow } from "./windows/main";
+
+// First statement in the module body, so it runs once every import above has
+// been evaluated. That number IS the main bundle's load cost, and it is spent
+// before Electron will even fire `ready` — so it is charged directly to launch.
+// Worth isolating: the gap between this and "electron ready" is Electron's own
+// boot, which we cannot shrink, while this half is our own dependency graph.
+markStartup("main bundle evaluated");
 
 console.log("[main] Local database ready:", !!localDb);
 const IS_DEV = process.env.NODE_ENV === "development";
@@ -361,6 +373,69 @@ if (!gotTheLock) {
 
 	(async () => {
 		await app.whenReady();
+		markStartup("electron ready");
+
+		/**
+		 * Start the host service NOW, not when the renderer gets round to asking.
+		 *
+		 * This is the slowest step in a launch by a wide margin — measured at
+		 * ~9s from window creation on a real cold start, because spawning it is
+		 * node boot plus migrations plus a health check. Every workspace the app
+		 * shows waits on it, so it has to be the first thing moving, not the last.
+		 *
+		 * It used to be last: the only caller was a React provider that cannot run
+		 * until the window exists, the tree mounts, AND (in cloud mode) two network
+		 * round-trips of auth hydration finish. The slowest step was queued behind
+		 * the most variable one.
+		 *
+		 * The org id comes from disk rather than from a session, which is what lets
+		 * this run at all in cloud mode. A first-ever launch knows nothing and
+		 * prewarms nothing — correct, and the renderer still asks once it has a
+		 * session.
+		 *
+		 * Not awaited: the window must not wait on this either. `start` is
+		 * idempotent and deduplicates concurrent calls, so the renderer asking
+		 * again on mount joins this attempt instead of racing it — and gets the
+		 * live connection straight back if it has already finished.
+		 */
+		void (async () => {
+			const prewarmOrgIds = new Set(listKnownOrganizationIds());
+			// A local-only build knows its org without having run before, so a fresh
+			// install still gets the head start.
+			if (isLocalOnlyBuild()) prewarmOrgIds.add(LOCAL_ORG_ID);
+			// Said out loud, because the first version of this returned here silently
+			// and the only evidence was an ABSENT log line. A whole build cycle went
+			// into working out that "no output" meant "found nothing" rather than
+			// "never ran". A no-op on the path being measured has to announce itself.
+			markStartup(`host service prewarm: ${prewarmOrgIds.size} org(s) known`);
+			if (prewarmOrgIds.size === 0) return;
+
+			const config = await resolveSpawnConfig().catch((error: unknown) => {
+				// Cloud build with no stored token yet: nothing to prewarm with. The
+				// renderer handles it after sign-in.
+				log.info(`[startup] host service prewarm skipped: ${String(error)}`);
+				return null;
+			});
+			if (!config) return;
+
+			await Promise.all(
+				[...prewarmOrgIds].map(async (organizationId) => {
+					try {
+						await getHostServiceCoordinator().start(organizationId, config);
+						markStartup(`host service ready (${organizationId.slice(0, 8)})`);
+					} catch (error) {
+						// Costs nothing to lose: the renderer still asks on mount, and
+						// that path already surfaces the failure to the user.
+						log.warn(`[startup] host service prewarm failed: ${String(error)}`);
+					}
+				}),
+			);
+		})();
+		// Started here rather than from the renderer, and deliberately not
+		// awaited: the phone must be able to reach this machine without anyone
+		// opening a settings page on it, and a slow Tailscale handshake should
+		// not hold up the window appearing.
+		void mobileBridge.restore();
 		registerWithMacOSNotificationCenter();
 		requestAppleEventsAccess();
 		requestLocalNetworkAccess();
@@ -413,19 +488,31 @@ if (!gotTheLock) {
 		ensureProjectIconsDir();
 		setWorkspaceDockIcon();
 		initSentry();
-		await initAppState();
+		await timeStartupPhase("initAppState", initAppState);
 		initTanstackDbPersistence();
 
-		try {
-			await startNetworkLogger();
-		} catch (error) {
-			console.error("[main] Failed to start network logger:", error);
-		}
+		// Not awaited: it measured 173ms, spent entirely in front of the window.
+		// It is a diagnostic logger — the worst case for starting it late is that
+		// it misses the first few requests, which is a far better trade than
+		// holding the whole app back. Kept here rather than moved after
+		// `createWindow` so it still starts before the renderer does anything.
+		void timeStartupPhase("startNetworkLogger", startNetworkLogger).catch(
+			(error: unknown) => {
+				console.error("[main] Failed to start network logger:", error);
+			},
+		);
 
-		await loadWebviewBrowserExtension();
+		// Everything from here to makeAppSetup blocks the window — and therefore
+		// the boot screen — from appearing at all. Timed rather than trimmed on a
+		// hunch: `reconcileDaemonSessions` genuinely has to precede the renderer's
+		// restore, so the only safe cuts are the ones the numbers justify.
+		await timeStartupPhase(
+			"loadWebviewBrowserExtension",
+			loadWebviewBrowserExtension,
+		);
 
 		// Must happen before renderer restore runs
-		await reconcileDaemonSessions();
+		await timeStartupPhase("reconcileDaemonSessions", reconcileDaemonSessions);
 		prewarmTerminalRuntime();
 
 		try {
@@ -472,7 +559,9 @@ if (!gotTheLock) {
 			});
 		}
 
-		await makeAppSetup(() => MainWindow());
+		await timeStartupPhase("createWindow", () =>
+			makeAppSetup(() => MainWindow()),
+		);
 		setupAutoUpdater();
 		initTray();
 

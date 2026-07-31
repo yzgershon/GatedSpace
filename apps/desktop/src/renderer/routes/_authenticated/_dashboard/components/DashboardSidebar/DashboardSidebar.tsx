@@ -37,6 +37,7 @@ import { DashboardSidebarPortsList } from "./components/DashboardSidebarPortsLis
 import { DashboardSidebarProjectSection } from "./components/DashboardSidebarProjectSection";
 import { DashboardSidebarRail } from "./components/DashboardSidebarRail";
 import { DashboardSidebarSectionRenameProvider } from "./components/DashboardSidebarSectionRenameContext";
+import { DashboardSidebarSkeleton } from "./components/DashboardSidebarSkeleton";
 import { V2SetupScriptCard } from "./components/V2SetupScriptCard";
 import { useDashboardSidebarData } from "./hooks/useDashboardSidebarData";
 import { useDashboardSidebarShortcuts } from "./hooks/useDashboardSidebarShortcuts";
@@ -105,8 +106,12 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 export function DashboardSidebar({
 	isCollapsed = false,
 }: DashboardSidebarProps) {
-	const { groups, refreshWorkspacePullRequest, toggleProjectCollapsed } =
-		useDashboardSidebarData();
+	const {
+		groups,
+		isReady: sidebarDataReady,
+		refreshWorkspacePullRequest,
+		toggleProjectCollapsed,
+	} = useDashboardSidebarData();
 	const { reorderProjects } = useDashboardSidebarState();
 	const navigate = useNavigate();
 	const matchRoute = useMatchRoute();
@@ -181,6 +186,12 @@ export function DashboardSidebar({
 
 	const workspaceShortcutLabels = useDashboardSidebarShortcuts(orderedGroups);
 
+	// Only when there is genuinely nothing to show yet. A sidebar that already
+	// has rows must keep them while a refetch is in flight, or every background
+	// refresh would blink the tree away — the cache-first rule the workspace
+	// read path is built on.
+	const showSkeleton = !sidebarDataReady && orderedGroups.length === 0;
+
 	const activeV2Project = useMemo(() => {
 		if (!activeV2WorkspaceId) return null;
 		for (const project of groups) {
@@ -248,6 +259,7 @@ export function DashboardSidebar({
 									) : (
 										<>
 											<div className="flex-1 overflow-y-auto hide-scrollbar">
+												{showSkeleton ? <DashboardSidebarSkeleton /> : null}
 												<DndContext
 													sensors={sensors}
 													collisionDetection={closestCenter}

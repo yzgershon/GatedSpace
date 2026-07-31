@@ -61,33 +61,81 @@ describe("voice input", () => {
 	});
 
 	it("appends to the composer instead of replacing it", () => {
-		expect(script).toContain("baseText + committedText");
+		expect(script).toContain("input.value = baseText + dictated");
 	});
 
 	it("rebuilds the transcript from index 0 rather than accumulating", () => {
-		// The duplication bug: reading from event.resultIndex and doing
-		// `final += ...` re-appends already-finished words once per event,
-		// because browsers commonly report resultIndex as 0 every time.
+		// event.results is cumulative and event.resultIndex is only a hint —
+		// browsers commonly report it as 0 every event, so appending re-adds
+		// finished words once per event.
 		expect(script).toContain("for (var i = 0; i < event.results.length; i++)");
-		// The loop INITIALISER specifically — `event.resultIndex` still appears
-		// in the comment above it explaining why this must not be used.
 		expect(script).not.toContain("i = event.resultIndex");
 	});
 
-	it("banks finished text before a restart clears the results", () => {
-		expect(script).toContain("committedText += sessionText");
+	it("builds a NEW recognizer for each restart", () => {
+		// THE bug that survived three fixes. Restarting the same instance does
+		// not clear its results list on Android, so the first event of the new
+		// session re-delivered every word of the old one — on top of the text
+		// already banked from it.
+		expect(script).toContain("function newRecognizer()");
+		expect(script).toContain("recog = newRecognizer()");
+		// The old shape: restarting the instance that just ended.
+		expect(script).not.toContain(
+			"try { recog.start(); } catch (e) { stopMic(); }",
+		);
+	});
+
+	it("banks a finished instance's text before the next one starts", () => {
+		expect(script).toContain(
+			"committed = mergeSpeech(committed, instanceFinal)",
+		);
+	});
+
+	it("merges rather than concatenates", () => {
+		// THE bug, finally understood: Android hands back the whole transcript on
+		// every restart, so appending it to what was banked compounded every
+		// prefix — "hellohello thishello this is".
+		expect(script).toContain("function mergeSpeech(");
+		expect(script).toContain("paint(mergeSpeech(committed,");
+		expect(script).not.toContain("committed += instanceFinal");
+	});
+
+	it("ignores events from a recognizer it has moved on from", () => {
+		// A discarded instance can still deliver one last event, which would
+		// paint stale text over the live transcript.
+		expect(script).toContain("if (instance !== recog) return");
 	});
 
 	it("restarts itself so a pause does not end dictation", () => {
-		expect(script).toContain("recog.onend");
+		expect(script).toContain("instance.onend");
+		expect(script).toContain("restartTimer = setTimeout");
+	});
+
+	it("waits a beat before restarting", () => {
+		// Chrome ends immediately when it hears nothing; an instant restart is a
+		// tight loop that holds the microphone open.
+		expect(script).toMatch(/restartTimer = setTimeout\([\s\S]*?\}, \d+\)/);
+	});
+
+	it("refuses a second start while one is already running", () => {
+		// Two recognizers both writing to the box is its own duplication bug.
+		const startMic = script.slice(script.indexOf("function startMic()"));
+		expect(startMic.slice(0, 300)).toContain("if (listening) return");
 	});
 
 	it("clears the listening flag before stopping, so onend cannot restart it", () => {
 		// Ordering bug bait: stop() fires onend, and onend restarts while
-		// `listening` is still true. The mic would be impossible to turn off.
+		// listening is still true. The mic would be impossible to turn off.
 		const stopMic = script.slice(script.indexOf("function stopMic()"));
 		expect(stopMic.indexOf("listening = false")).toBeLessThan(
-			stopMic.indexOf("recog.stop()"),
+			stopMic.indexOf("instance.stop()"),
+		);
+	});
+
+	it("keeps what was said when the mic is switched off mid-sentence", () => {
+		const stopMic = script.slice(script.indexOf("function stopMic()"));
+		expect(stopMic.slice(0, 700)).toContain(
+			"committed = mergeSpeech(committed, instanceFinal)",
 		);
 	});
 
@@ -161,7 +209,7 @@ describe("reading a long conversation", () => {
 		// Otherwise one deep scroll-back makes every later session pull its
 		// whole history over cellular.
 		const open = script.slice(script.indexOf("function openSession("));
-		expect(open.slice(0, 400)).toContain("eventLimit = 200");
+		expect(open.slice(0, 800)).toContain("eventLimit = 200");
 	});
 });
 
@@ -186,6 +234,96 @@ describe("the context meter", () => {
 
 	it("still reports tokens when the window size is unknown", () => {
 		expect(script).toContain("pct === null");
+	});
+});
+
+describe("attachments", () => {
+	const script = scriptBody();
+
+	it("has a + and a picker in the composer", () => {
+		expect(MOBILE_BRIDGE_HTML).toContain('id="attach"');
+		expect(MOBILE_BRIDGE_HTML).toContain('accept="image/*"');
+		expect(MOBILE_BRIDGE_HTML).toContain("multiple");
+	});
+
+	it("downscales before uploading", () => {
+		// A phone photo is several MB, which is slow over cellular and over the
+		// size the session accepts anyway.
+		expect(script).toContain("MAX_IMAGE_EDGE");
+		expect(script).toContain('canvas.toDataURL("image/jpeg", 0.85)');
+	});
+
+	it("strips the data: prefix, sending base64 only", () => {
+		// The server rejects anything that is not base64, and a data URL would
+		// decode to nothing on the model's side.
+		expect(script).toContain('.split(",")[1]');
+	});
+
+	it("sends a much smaller thumbnail alongside", () => {
+		// It rides inside the event, which lives for the whole session.
+		expect(script).toContain('thumb.toDataURL("image/jpeg", 0.6)');
+	});
+
+	it("lets an image be a message on its own", () => {
+		expect(script).toContain(
+			"if ((!text && !pending.length) || !current) return",
+		);
+	});
+
+	it("keeps the images staged when the send fails", () => {
+		// Otherwise a failed send means re-picking every screenshot.
+		const send = script.slice(script.indexOf("function send()"));
+		const clearIndex = send.indexOf("pending = []");
+		const catchIndex = send.indexOf(".catch(");
+		expect(clearIndex).toBeGreaterThan(-1);
+		expect(clearIndex).toBeLessThan(catchIndex);
+	});
+
+	it("resets the file input so the same photo can be picked twice", () => {
+		// Without this, choosing the same file again fires no change event.
+		expect(script).toContain('fileInput.value = ""');
+	});
+
+	it("caps how many go in one message", () => {
+		expect(script).toContain("MAX_ATTACHMENTS");
+	});
+
+	it("clears the shelf when leaving a conversation", () => {
+		// It is fixed to the viewport rather than inside the composer, so it
+		// would otherwise float over the sessions list.
+		const setTab = script.slice(script.indexOf("function setTab("));
+		expect(setTab.slice(0, 600)).toContain("pending = []");
+	});
+});
+
+describe("the thinking mark", () => {
+	const script = scriptBody();
+
+	it("is driven by the turn, not by the process being alive", () => {
+		// `running` is true for the whole time a session pane is open, because the
+		// CLI process persists between turns. Driving the mark from it meant it
+		// pulsed forever and told you nothing.
+		expect(script).toContain("if (data.thinking)");
+		expect(script).not.toContain(
+			"if (data.running) main.appendChild(thinkingRow())",
+		);
+	});
+
+	it("stops its animation when the turn ends", () => {
+		// The element is replaced on each poll, but the interval it started is
+		// not — it has to be cleared or it keeps firing for the life of the page.
+		const refresh = script.slice(script.indexOf("function refresh()"));
+		expect(refresh).toContain(
+			"else { clearInterval(thinkTimer); thinkTimer = null; }",
+		);
+	});
+
+	it("also stops when the pane is detached mid-animation", () => {
+		expect(script).toContain("if (!mark.isConnected)");
+	});
+
+	it("uses the desktop's own frames", () => {
+		expect(script).toContain("SPINNER_FRAMES");
 	});
 });
 
@@ -282,7 +420,7 @@ describe("starting a session", () => {
 
 	it("hides it inside a conversation too", () => {
 		const open = script.slice(script.indexOf("function openSession("));
-		expect(open.slice(0, 400)).toContain("newBtn.hidden = true");
+		expect(open.slice(0, 800)).toContain("newBtn.hidden = true");
 	});
 
 	it("blocks a second tap while the first is in flight", () => {

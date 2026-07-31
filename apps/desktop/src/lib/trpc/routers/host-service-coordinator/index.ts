@@ -17,7 +17,7 @@ const orgInput = z.object({ organizationId: z.string() });
  * always wins; local-only builds fall back to a sentinel token and flag the
  * child to skip cloud calls. Cloud builds with no token still throw.
  */
-async function resolveSpawnConfig() {
+export async function resolveSpawnConfig() {
 	const { token } = await loadToken();
 	if (token) {
 		return {

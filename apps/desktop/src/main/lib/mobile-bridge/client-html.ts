@@ -56,7 +56,18 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 
 <p class="hint" id="hint" hidden></p>
 
+<div id="shelf" hidden></div>
+
 <footer id="composer" hidden>
+  <!-- accept + capture: the picker offers the camera AND the gallery, which is
+       what "send a screenshot" needs on a phone. multiple, because a bug report
+       is rarely one screen. -->
+  <input type="file" id="file" accept="image/*" multiple hidden />
+  <button id="attach" aria-label="Attach images">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <path d="M12 5v14M5 12h14"/>
+    </svg>
+  </button>
   <textarea id="input" rows="1" placeholder="Send a prompt…" enterkeyhint="send"></textarea>
   <button id="mic" aria-label="Dictate" aria-pressed="false" hidden>
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

@@ -11,7 +11,10 @@
  * you get to from Sessions. State is three variables and a render call; a
  * framework here would cost more than it saved.
  */
+import { SPEECH_MERGE_JS } from "./speech-merge";
+
 export const MOBILE_BRIDGE_APP_JS = `
+${SPEECH_MERGE_JS}
 // The token comes out of the URL immediately — history and shoulders both keep
 // what is in an address bar — and is kept in localStorage.
 //
@@ -40,6 +43,7 @@ var main = $("main"), title = $("title"), back = $("back"), dot = $("dot");
 var composer = $("composer"), input = $("input"), sendBtn = $("send"), tabs = $("tabs");
 var newBtn = $("new");
 var hint = $("hint");
+var attachBtn = $("attach"), fileInput = $("file"), shelf = $("shelf");
 
 $("ver").textContent = "v__PAGE_VERSION__";
 
@@ -125,9 +129,14 @@ function setTab(next) {
   tab = next;
   current = null;
   clearInterval(timer); timer = null;
+  clearInterval(thinkTimer); thinkTimer = null;
   composer.hidden = true;
   back.hidden = true;
   hint.hidden = true;
+  // The shelf is fixed to the viewport, not inside the composer, so it has to
+  // be dismissed explicitly or it floats over the sessions list.
+  pending = [];
+  renderShelf();
   // Only the sessions list turns it back on. "+" on the usage screen would be
   // a button that starts work from a screen about not having any left.
   newBtn.hidden = true;
@@ -440,6 +449,13 @@ function renderSettings() {
     main.appendChild(opt);
   });
 
+  main.appendChild(sectionHeader("Account"));
+  var accountBox = document.createElement("div");
+  accountBox.className = "muted";
+  accountBox.textContent = "Loading…";
+  main.appendChild(accountBox);
+  renderAccounts(accountBox);
+
   main.appendChild(sectionHeader("Notifications"));
   var status = document.createElement("p");
   status.className = "muted";
@@ -491,6 +507,115 @@ function renderSettings() {
     ios.textContent = "On iPhone you have to add this to your home screen first — Share, then Add to Home Screen — and open it from there.";
     main.appendChild(ios);
   }
+
+  renderConnection();
+}
+
+/**
+ * Switching which Claude account the next session uses.
+ *
+ * Sessions already running keep the account they were launched with — their CLI
+ * process was started against that config directory and cannot be moved — so
+ * this is worded as affecting the NEXT one rather than left to be discovered.
+ */
+function renderAccounts(box) {
+  api("/usage").then(function (data) {
+    var accounts = data.accounts || [];
+    box.textContent = "";
+    box.className = "";
+    if (!accounts.length) {
+      box.className = "muted";
+      box.textContent = "No Claude accounts configured.";
+      return;
+    }
+
+    // "Auto" is a real option, not an absence of one: it fails over to whichever
+    // account still has usage left.
+    var options = [{ id: "auto", label: "Auto", sub: "Whichever account has usage left" }];
+    accounts.forEach(function (a) {
+      options.push({
+        id: a.id,
+        label: a.label,
+        sub: a.ready === false ? "Not signed in" : (a.active ? "In use now" : "Ready")
+      });
+    });
+
+    options.forEach(function (o) {
+      var row = document.createElement("div");
+      var chosen = data.mode === o.id || (data.mode !== "auto" && o.id === data.mode);
+      row.className = "opt" + (chosen ? " sel" : "");
+      var body = document.createElement("div");
+      body.className = "body";
+      var n = document.createElement("div");
+      n.className = "name";
+      n.textContent = o.label;
+      var sub = document.createElement("div");
+      sub.className = "sub muted";
+      sub.textContent = o.sub;
+      body.appendChild(n); body.appendChild(sub);
+      row.appendChild(body);
+      if (chosen) {
+        var tick = document.createElement("span");
+        tick.className = "check";
+        tick.textContent = "✓";
+        row.appendChild(tick);
+      }
+      row.onclick = function () {
+        api("/accounts/active", {
+          method: "POST",
+          body: JSON.stringify({ id: o.id })
+        }).then(function () {
+          renderAccounts(box);
+        }).catch(function (e) {
+          box.className = "err";
+          box.textContent = e.message;
+        });
+      };
+      box.appendChild(row);
+    });
+
+    var note = document.createElement("p");
+    note.className = "muted";
+    note.textContent = "Applies to the next session you start. Sessions already running keep the account they began with.";
+    box.appendChild(note);
+  }).catch(function (e) {
+    box.className = "err";
+    box.textContent = e.message;
+  });
+}
+
+/** What this phone is connected to, and how. Diagnostics, not decoration. */
+function renderConnection() {
+  main.appendChild(sectionHeader("Connection"));
+  var list = document.createElement("div");
+  list.className = "facts";
+  [
+    ["Link", location.host],
+    ["Encrypted", window.isSecureContext ? "Yes" : "No — LAN mode"],
+    ["Installed", window.matchMedia("(display-mode: standalone)").matches ? "Yes" : "Running in the browser"],
+    ["Page", "v__PAGE_VERSION__"]
+  ].forEach(function (pair) {
+    var row = document.createElement("div");
+    row.className = "win";
+    var k = document.createElement("span");
+    k.textContent = pair[0];
+    var v = document.createElement("span");
+    v.textContent = pair[1];
+    row.appendChild(k); row.appendChild(v);
+    list.appendChild(row);
+  });
+  main.appendChild(list);
+
+  var unpair = document.createElement("button");
+  unpair.className = "danger";
+  unpair.textContent = "Forget this phone";
+  unpair.onclick = function () {
+    // Local only: it drops the token this device holds. The desktop is
+    // untouched, so another device that is paired stays paired.
+    localStorage.removeItem("bridge-token");
+    location.reload();
+  };
+  main.appendChild(unpair);
 }
 
 /* ------------------------------------------------------------ notifications */
@@ -661,6 +786,40 @@ function formatTokens(n) {
   return (Math.round(n / 100000) / 10).toFixed(1) + "M";
 }
 
+/*
+ * "Still working", phone-sized.
+ *
+ * The desktop shows a mark, a gerund typing itself in, an elapsed counter and
+ * a token count. None of that fits a phone chat pane, and the question being
+ * asked here is smaller: is it still going, or has it stopped and I missed it?
+ *
+ * So: the mark alone, cycling the SAME frames the desktop uses, in the theme
+ * accent. One glyph answers the question and costs one line.
+ */
+var SPINNER_FRAMES = ["·", "✢", "✳", "∗", "✻", "✽"];
+var thinkTimer = null;
+
+function thinkingRow() {
+  var row = document.createElement("div");
+  row.className = "thinking";
+  var mark = document.createElement("span");
+  mark.className = "mark";
+  mark.textContent = SPINNER_FRAMES[0];
+  row.appendChild(mark);
+
+  clearInterval(thinkTimer);
+  // 120ms is the desktop's cadence, so the two read as the same animation.
+  var frame = 0;
+  thinkTimer = setInterval(function () {
+    // Stop as soon as the row leaves the document, or the interval outlives
+    // the render that created it and keeps firing against a detached node.
+    if (!mark.isConnected) { clearInterval(thinkTimer); thinkTimer = null; return; }
+    frame = (frame + 1) % SPINNER_FRAMES.length;
+    mark.textContent = SPINNER_FRAMES[frame];
+  }, 120);
+  return row;
+}
+
 function refresh() {
   if (!current) return;
   api("/sessions/" + encodeURIComponent(current) + "/events?limit=" + eventLimit).then(function (data) {
@@ -695,12 +854,20 @@ function refresh() {
       e.textContent = "Nothing yet.";
       main.appendChild(e);
     }
+    // Driven by "thinking", not "running". The latter means the CLI process is
+    // alive, which for a session pane is the entire time it is open — the mark
+    // used to pulse forever because of it.
+    if (data.thinking) main.appendChild(thinkingRow());
+    else { clearInterval(thinkTimer); thinkTimer = null; }
     if (atBottom) window.scrollTo(0, document.body.scrollHeight);
   }).catch(function (e) { fail(e.message); });
 }
 
 function openSession(id) {
   current = id;
+  // Images staged for one conversation must not follow you into another.
+  pending = [];
+  renderShelf();
   // Back to the cheap default for each session opened, so one long scroll-back
   // does not make every later session pull its whole history.
   eventLimit = 200;
@@ -722,18 +889,25 @@ newBtn.onclick = function () { renderNewSession(); };
 
 function send() {
   var text = input.value.trim();
-  if (!text || !current) return;
+  // An image on its own is a valid message — "look at this" is the whole point
+  // of sending a screenshot.
+  if ((!text && !pending.length) || !current) return;
   // Dictation NEVER sends by itself. This drives an agent that runs shell
   // commands, and a recogniser that hears "delete" for "commit" should cost a
   // glance at the box, not a turn.
   stopMic();
   sendBtn.disabled = true;
+  var images = pending;
   api("/sessions/" + encodeURIComponent(current) + "/send", {
     method: "POST",
-    body: JSON.stringify({ text: text })
+    body: JSON.stringify({ text: text, images: images })
   }).then(function () {
     input.value = "";
     input.style.height = "auto";
+    // Cleared only on success. A failed send that emptied the shelf would mean
+    // re-picking the screenshots.
+    pending = [];
+    renderShelf();
     setTimeout(refresh, 300);
   }).catch(function (e) { fail(e.message); })
     .then(function () { sendBtn.disabled = false; });
@@ -747,12 +921,148 @@ function autosize() {
 }
 input.addEventListener("input", autosize);
 
+/* ------------------------------------------------------------ attachments */
+
+/*
+ * Screenshots are the reason to drive an agent from a phone at all: the thing
+ * you want to show it is already on this screen.
+ *
+ * Images are DOWNSCALED here rather than sent as they came off the camera. A
+ * modern phone photo is 4-8MB, which is slow over cellular and over the size
+ * the session will accept anyway; 1600px on the long edge is more than enough
+ * for a screenshot to stay readable, and turns a 6MB upload into a few hundred
+ * KB.
+ */
+
+/** Long edge, in px, after downscaling. Screenshots stay legible well below this. */
+var MAX_IMAGE_EDGE = 1600;
+/** Enough for a bug report; a guard against selecting an entire camera roll. */
+var MAX_ATTACHMENTS = 6;
+
+var pending = [];   // images chosen but not yet sent
+
+function readImage(file) {
+  return new Promise(function (resolve, reject) {
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      URL.revokeObjectURL(url);
+      var scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.width, img.height));
+      var w = Math.max(1, Math.round(img.width * scale));
+      var h = Math.max(1, Math.round(img.height * scale));
+      var canvas = document.createElement("canvas");
+      canvas.width = w; canvas.height = h;
+      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+
+      // A separate, much smaller render for the chip and the desktop's own
+      // transcript. It rides inside the event, which lives for the whole
+      // session, so it has to stay tiny.
+      var ts = Math.min(1, 160 / Math.max(w, h));
+      var thumb = document.createElement("canvas");
+      thumb.width = Math.max(1, Math.round(w * ts));
+      thumb.height = Math.max(1, Math.round(h * ts));
+      thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
+
+      resolve({
+        name: file.name || "image.jpg",
+        mediaType: "image/jpeg",
+        width: w,
+        height: h,
+        // JPEG regardless of what came in: a PNG screenshot re-encodes to a
+        // fraction of the size at a quality no one can tell apart on a phone.
+        data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1],
+        thumbnail: thumb.toDataURL("image/jpeg", 0.6)
+      });
+    };
+    img.onerror = function () {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not read " + (file.name || "that image")));
+    };
+    img.src = url;
+  });
+}
+
+function renderShelf() {
+  shelf.innerHTML = "";
+  shelf.hidden = pending.length === 0;
+  pending.forEach(function (image, index) {
+    var chip = document.createElement("div");
+    chip.className = "chip";
+    var img = document.createElement("img");
+    img.src = image.thumbnail;
+    img.alt = image.name;
+    var remove = document.createElement("button");
+    remove.className = "x";
+    remove.setAttribute("aria-label", "Remove " + image.name);
+    remove.textContent = "×";
+    remove.onclick = function () {
+      pending.splice(index, 1);
+      renderShelf();
+    };
+    chip.appendChild(img); chip.appendChild(remove);
+    shelf.appendChild(chip);
+  });
+}
+
+attachBtn.onclick = function () { fileInput.click(); };
+
+fileInput.onchange = function () {
+  var files = Array.prototype.slice.call(fileInput.files || []);
+  // Reset immediately: without this, picking the same photo twice in a row
+  // fires no change event the second time.
+  fileInput.value = "";
+  if (!files.length) return;
+
+  var room = MAX_ATTACHMENTS - pending.length;
+  if (room <= 0) {
+    showHint("That is as many images as one message takes.", true);
+    return;
+  }
+  if (files.length > room) {
+    showHint("Only the first " + room + " images were added.", true);
+  }
+
+  attachBtn.disabled = true;
+  Promise.all(files.slice(0, room).map(readImage)).then(function (images) {
+    pending = pending.concat(images);
+    renderShelf();
+  }).catch(function (e) {
+    showHint(e.message, true);
+  }).then(function () {
+    attachBtn.disabled = false;
+  });
+};
+
 /* ------------------------------------------------------------------ voice */
+
+/*
+ * Dictation, and the bug that survived three attempts to fix it.
+ *
+ * Chrome ends a recognition session on its own every few seconds, so staying
+ * live means restarting. The previous versions restarted the SAME
+ * SpeechRecognition object — and on Android that object does NOT clear its
+ * results list when it restarts. So the new session's very first onresult
+ * still contained every finished word from the old one, on top of the text
+ * already banked from that same session. "hello world" became
+ * "hello world hello world", which is precisely what kept being reported.
+ *
+ * Rebuilding the transcript from index 0 (the previous fix) is necessary and
+ * was not sufficient, because it assumed a restart gives a clean list.
+ *
+ * A FRESH INSTANCE per restart cannot carry old results — there is nothing to
+ * carry. Each instance therefore owns exactly one span of text, banked into
+ * committed when it ends, and the box is always
+ * base + committed + this instance's transcript.
+ */
 
 var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 var micBtn = $("mic");
-var recog = null, listening = false;
-var baseText = "", committedText = "", sessionText = "";
+var listening = false;
+var recog = null;          // the instance currently running, if any
+var baseText = "";         // what was in the box when dictation started
+var committed = "";        // text from instances that have already ended
+var instanceFinal = "";    // finalised text from the RUNNING instance only
+var restartTimer = null;
 
 function showHint(message, warn) {
   hint.textContent = message;
@@ -769,33 +1079,41 @@ if (!SR) {
   micBtn.onclick = function () { if (listening) stopMic(); else startMic(); };
 }
 
-function startMic() {
-  recog = new SR();
-  recog.continuous = true;
-  recog.interimResults = true;
-  recog.lang = navigator.language || "en-US";
+/** The box is always the text that was there plus everything dictated since. */
+function paint(dictated) {
+  input.value = baseText + dictated;
+  autosize();
+}
 
-  baseText = input.value ? input.value.replace(/\\s+$/, "") + " " : "";
-  committedText = "";
-  sessionText = "";
+function newRecognizer() {
+  var instance = new SR();
+  instance.continuous = true;
+  instance.interimResults = true;
+  instance.lang = navigator.language || "en-US";
+  instanceFinal = "";
 
-  recog.onresult = function (event) {
-    // REBUILD from index 0 every time; never accumulate. event.results is
-    // cumulative and event.resultIndex is only a hint — browsers frequently
-    // report it as 0 on every event, so appending re-adds finished words once
-    // per event, which is what produced "hello hello hello".
+  instance.onresult = function (event) {
+    // Ignore anything from an instance we have already moved on from. A
+    // discarded recognizer can still deliver one last event.
+    if (instance !== recog) return;
+    // Rebuilt from 0 rather than accumulated: event.results is cumulative and
+    // event.resultIndex is only a hint, commonly reported as 0 every time.
     var finals = "", interim = "";
     for (var i = 0; i < event.results.length; i++) {
       var result = event.results[i];
-      if (result.isFinal) finals += result[0].transcript;
-      else interim += result[0].transcript;
+      if (result.isFinal) finals += result[0].transcript + " ";
+      else interim += result[0].transcript + " ";
     }
-    sessionText = finals;
-    input.value = baseText + committedText + finals + interim;
-    autosize();
+    instanceFinal = finals.trim();
+    // mergeSpeech, NOT concatenation. On Android this transcript often already
+    // contains everything banked in committed, and appending it is what
+    // produced "hellohello thishello this is".
+    paint(mergeSpeech(committed, (finals + interim).trim()));
   };
 
-  recog.onerror = function (event) {
+  instance.onerror = function (event) {
+    if (instance !== recog) return;
+    // Both are normal during a pause and are followed by onend, which restarts.
     if (event.error === "no-speech" || event.error === "aborted") return;
     showHint(event.error === "not-allowed"
       ? "Microphone blocked. Allow it for this site in your browser settings."
@@ -803,17 +1121,47 @@ function startMic() {
     stopMic();
   };
 
-  recog.onend = function () {
+  instance.onend = function () {
+    if (instance !== recog) return;
+    // Bank what this instance produced, merged rather than appended for the
+    // same reason as above.
+    committed = mergeSpeech(committed, instanceFinal);
+    instanceFinal = "";
+    recog = null;
     if (!listening) return;
-    // Bank finished text before restarting: the new session starts with an
-    // empty results list, so a rebuild-from-zero would erase it otherwise.
-    committedText += sessionText;
-    sessionText = "";
-    try { recog.start(); } catch (e) { stopMic(); }
+    // A beat before restarting: Chrome ends immediately when it hears nothing,
+    // and an instant restart becomes a tight loop that pins the mic on.
+    restartTimer = setTimeout(function () {
+      if (!listening) return;
+      recog = newRecognizer();
+      if (!recog) stopMic();
+    }, 120);
   };
 
-  try { recog.start(); } catch (e) { showHint("Could not start voice input.", true); return; }
+  try {
+    instance.start();
+  } catch (e) {
+    return null;
+  }
+  return instance;
+}
+
+function startMic() {
+  // Guard against a second start while one is live: two recognizers both
+  // writing to the box is its own duplication bug.
+  if (listening) return;
+
+  baseText = input.value ? input.value.replace(/\\s+$/, "") + " " : "";
+  committed = "";
+  instanceFinal = "";
+
   listening = true;
+  recog = newRecognizer();
+  if (!recog) {
+    listening = false;
+    showHint("Could not start voice input.", true);
+    return;
+  }
   hint.hidden = true;
   micBtn.classList.add("on");
   micBtn.setAttribute("aria-pressed", "true");
@@ -822,11 +1170,19 @@ function startMic() {
 function stopMic() {
   // Cleared FIRST so onend does not restart what we are deliberately stopping.
   listening = false;
+  clearTimeout(restartTimer);
+  restartTimer = null;
   micBtn.classList.remove("on");
   micBtn.setAttribute("aria-pressed", "false");
-  if (!recog) return;
-  try { recog.stop(); } catch (e) {}
+  var instance = recog;
   recog = null;
+  if (!instance) return;
+  // Keep whatever the running instance had finalised — stopping mid-sentence
+  // should not throw away the sentence.
+  committed = mergeSpeech(committed, instanceFinal);
+  instanceFinal = "";
+  paint(committed);
+  try { instance.stop(); } catch (e) {}
 }
 
 /* ------------------------------------------------------------------- boot */

@@ -222,11 +222,32 @@ describe("NotificationManager", () => {
 	});
 
 	describe("tracking and replacement", () => {
+		/*
+		 * These fire the same event twice for one pane, which is exactly what the
+		 * repeat guard collapses. The behaviour under test is a LATER event
+		 * superseding an earlier one, so the clock moves between them rather than
+		 * the guard being weakened to accommodate the test.
+		 */
+		let clock = 0;
+		let deps: TestDeps;
+		let manager: NotificationManager;
+
+		beforeEach(() => {
+			clock = 0;
+			deps = createDeps({ now: () => clock });
+			manager = new NotificationManager(deps);
+		});
+
+		function later() {
+			clock += 60_000;
+		}
+
 		it("replaces notification for the same paneId", () => {
 			manager.handleAgentLifecycle(makeEvent({ paneId: "pane-1" }));
 			const first = lastNotification(deps);
 			expect(manager.activeCount).toBe(1);
 
+			later();
 			manager.handleAgentLifecycle(makeEvent({ paneId: "pane-1" }));
 			expect(manager.activeCount).toBe(1);
 			expect(first.close).toHaveBeenCalled();
@@ -278,6 +299,7 @@ describe("NotificationManager", () => {
 			const first = lastNotification(deps);
 			expect(manager.activeCount).toBe(1);
 
+			later();
 			manager.handleAgentLifecycle(
 				makeEvent({ paneId: undefined, sessionId: "session-1" }),
 			);
@@ -317,6 +339,7 @@ describe("NotificationManager", () => {
 			);
 			const first = lastNotification(deps);
 
+			later();
 			manager.handleAgentLifecycle(
 				makeEvent({
 					paneId: "pane-1",
@@ -332,6 +355,7 @@ describe("NotificationManager", () => {
 
 		it("assigns unique keys when paneId is missing", () => {
 			manager.handleAgentLifecycle(makeEvent({ paneId: undefined }));
+			later();
 			manager.handleAgentLifecycle(makeEvent({ paneId: undefined }));
 			expect(manager.activeCount).toBe(2);
 		});
@@ -483,6 +507,99 @@ describe("NotificationManager", () => {
 				}),
 			).handleAgentLifecycle(makeEvent());
 			expect(pushToPhone).not.toHaveBeenCalled();
+		});
+	});
+	describe("not interrupting twice for one thing", () => {
+		it("collapses two hooks reporting the same event", () => {
+			// "Stop" and "SessionEnd" both map to Stop and both arrive for one
+			// turn, which is why every completion notified twice.
+			const d = createDeps();
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent({ sourceEventType: "Stop" }));
+			m.handleAgentLifecycle(makeEvent({ sourceEventType: "PostToolUse" }));
+			expect(d.notifications.length).toBe(1);
+		});
+
+		it("still notifies once the window has passed", () => {
+			let now = 1_000;
+			const d = createDeps({ now: () => now });
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent());
+			now += 60_000;
+			m.handleAgentLifecycle(makeEvent());
+			expect(d.notifications.length).toBe(2);
+		});
+
+		it("keeps different panes independent", () => {
+			// Two agents finishing at the same moment are two things to know
+			// about, not one repeat.
+			const d = createDeps();
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent({ paneId: "pane-1" }));
+			m.handleAgentLifecycle(makeEvent({ paneId: "pane-2" }));
+			expect(d.notifications.length).toBe(2);
+		});
+
+		it("keeps different event types independent", () => {
+			const d = createDeps();
+			const m = new NotificationManager(d);
+			m.handleAgentLifecycle(makeEvent({ eventType: "Stop" }));
+			m.handleAgentLifecycle(makeEvent({ eventType: "PermissionRequest" }));
+			expect(d.notifications.length).toBe(2);
+		});
+	});
+
+	describe("only interrupting when the work is actually done", () => {
+		it("says nothing when a session merely ended", () => {
+			// SessionEnd maps to Stop because for pane STATUS that is right. It is
+			// not "your agent finished the thing you asked for" — closing a pane
+			// announced a completion nobody was waiting on.
+			const d = createDeps();
+			new NotificationManager(d).handleAgentLifecycle(
+				makeEvent({ sourceEventType: "SessionEnd" }),
+			);
+			expect(d.notifications.length).toBe(0);
+			expect(d.playSound).not.toHaveBeenCalled();
+		});
+
+		it("covers the other spellings agents use", () => {
+			for (const hook of ["sessionEnd", "session_end"]) {
+				const d = createDeps();
+				new NotificationManager(d).handleAgentLifecycle(
+					makeEvent({ sourceEventType: hook }),
+				);
+				expect(d.notifications.length).toBe(0);
+			}
+		});
+
+		it("still notifies for a real turn completion", () => {
+			const d = createDeps();
+			new NotificationManager(d).handleAgentLifecycle(
+				makeEvent({ sourceEventType: "Stop" }),
+			);
+			expect(d.notifications.length).toBe(1);
+		});
+
+		it("does not silence a permission request from a session-end hook name", () => {
+			// Only Stop is affected; the guard must not swallow a real prompt.
+			const d = createDeps();
+			new NotificationManager(d).handleAgentLifecycle(
+				makeEvent({
+					eventType: "PermissionRequest",
+					sourceEventType: "SessionEnd",
+				}),
+			);
+			expect(d.notifications.length).toBe(1);
+		});
+
+		it("keeps the phone in step with the desktop on both rules", () => {
+			const pushToPhone = mock(() => {});
+			const m = new NotificationManager(createDeps({ pushToPhone }));
+			m.handleAgentLifecycle(makeEvent({ sourceEventType: "SessionEnd" }));
+			expect(pushToPhone).not.toHaveBeenCalled();
+			m.handleAgentLifecycle(makeEvent({ sourceEventType: "Stop" }));
+			m.handleAgentLifecycle(makeEvent({ sourceEventType: "Stop" }));
+			expect(pushToPhone).toHaveBeenCalledTimes(1);
 		});
 	});
 });

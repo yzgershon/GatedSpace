@@ -14,8 +14,15 @@
  * it is a window onto a desktop that has to be reachable.
  */
 
-/** Bumped whenever the page changes in a way worth confirming on the device. */
-export const MOBILE_BRIDGE_PAGE_VERSION = "6";
+/**
+ * The phone page's own version, shown in its header.
+ *
+ * Deliberately NOT the desktop app's version: the page changes on its own
+ * cadence, and a number that tracked the installer would jump by several
+ * releases for a one-line CSS fix. Bump the last part for each change worth
+ * confirming on the device.
+ */
+export const MOBILE_BRIDGE_PAGE_VERSION = "1.3.0";
 
 export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
 	name: "GatedSpace",

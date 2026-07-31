@@ -5,6 +5,7 @@ initSentry();
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import ReactDom from "react-dom/client";
 import { BootErrorBoundary } from "./components/BootErrorBoundary";
+import { applyStoredAuthTokenBeforeRender } from "./lib/auth-bootstrap";
 import {
 	cleanupBootErrorHandling,
 	initBootErrorHandling,
@@ -76,10 +77,24 @@ suppressMiddleClickAutoscroll();
 // Tells GatedVoice whether to paste or type; see lib/focus-surface.ts.
 trackFocusSurface();
 
-if (!rootElement) {
-	reportBootError("Missing <app> root element");
-} else if (!isBootErrorReported()) {
-	ReactDom.createRoot(rootElement).render(
+/*
+ * The stored auth token is applied BEFORE the first render, not in an effect
+ * after it.
+ *
+ * Better Auth's session store fires its first request the moment something
+ * subscribes during render. With the token arriving later, that request went out
+ * unauthenticated and the app had to make a second one and WAIT for it — 4.7s of
+ * cold launch, measured. Applying it here makes the first request the
+ * authenticated one.
+ *
+ * Wrapped in a function rather than using top-level await, so this does not
+ * depend on the renderer bundle's module format. It is bounded by a timeout
+ * inside, because nothing may indefinitely prevent the app from painting.
+ */
+async function bootstrapRenderer(root: Element) {
+	await applyStoredAuthTokenBeforeRender();
+	if (isBootErrorReported()) return;
+	ReactDom.createRoot(root).render(
 		<BootErrorBoundary
 			onError={(error) => reportBootError("Render failed", error)}
 		>
@@ -87,4 +102,12 @@ if (!rootElement) {
 		</BootErrorBoundary>,
 	);
 	markBootMounted();
+}
+
+if (!rootElement) {
+	reportBootError("Missing <app> root element");
+} else if (!isBootErrorReported()) {
+	void bootstrapRenderer(rootElement).catch((error: unknown) => {
+		reportBootError("Boot failed", error);
+	});
 }

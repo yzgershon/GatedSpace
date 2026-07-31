@@ -11,7 +11,7 @@
  * because it reads as good news.
  */
 import { cn } from "@superset/ui/utils";
-import type { UsageLimits } from "./UsageBanner";
+import type { UsageLimits } from "./usage-limits";
 
 /**
  * The statusline's block meter: ▕████░░░░▏

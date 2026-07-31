@@ -97,6 +97,50 @@ export function deriveHostWorkspacesQueryTargets({
 	return targets;
 }
 
+/**
+ * Whether the workspace read path has finished finding out what exists.
+ *
+ * The subtlety that makes this its own function: `[].every()` is `true`. Asking
+ * "did every host query settle" while NO host has been discovered yet answers
+ * "yes" — so on a cold start, for the whole second or two before the local
+ * host service publishes its port, the merged list is empty AND claims to be
+ * complete. Anything gated on this reads that as "it isn't there": the restored
+ * workspace route rendered "Workspace not found" on every launch, then
+ * corrected itself once the real rows arrived.
+ *
+ * So readiness has two halves, and both have to hold:
+ *  - discovery: we have a local host URL, or the attempt to get one has
+ *    finished. While it is still coming there is nothing to be ready about.
+ *  - settlement: every discovered host answered, failed, or served a snapshot.
+ *
+ * `hostServiceSettled` rather than the coordinator's process status, which was
+ * the first attempt at this and did not work. `getProcessStatus` reports
+ * "stopped" for a service that has never been asked to start as well as for one
+ * that failed — identical values, opposite meanings — and at launch the first
+ * one is always true. So the flash survived the fix that was supposed to remove
+ * it. Only the caller that owns the start attempt knows whether it has been
+ * made, which is why that answer is passed in rather than derived here.
+ *
+ * A failed start still counts as settled: we tried, it did not work, and the
+ * honest thing is to show the real state plus the error the provider raises.
+ * A spinner that never resolves would be worse than a wrong answer shown fast.
+ */
+export function isHostWorkspacesReady({
+	targetsSettled,
+	activeHostUrl,
+	hostServiceSettled,
+}: {
+	/** Result of the per-host query settlement check. */
+	targetsSettled: boolean;
+	activeHostUrl: string | null;
+	/** A start attempt for the local host service has succeeded or failed. */
+	hostServiceSettled: boolean;
+}): boolean {
+	const localHostPending = activeHostUrl === null && !hostServiceSettled;
+	if (localHostPending) return false;
+	return targetsSettled;
+}
+
 const SNAPSHOT_KEY_PREFIX = "host-workspaces:v1";
 
 function snapshotKey(organizationId: string, machineId: string): string {

@@ -101,7 +101,12 @@ async function tailscale(args: string[]): Promise<string> {
 	let lastError: unknown;
 	for (const binary of TAILSCALE_CANDIDATES) {
 		try {
-			const { stdout } = await run(binary, args, { timeout: 15_000 });
+			// windowsHide: tailscale.exe is a console program, and the bridge now
+			// restores itself at launch — so every start would flash a console box.
+			const { stdout } = await run(binary, args, {
+				timeout: 15_000,
+				windowsHide: true,
+			});
 			return stdout;
 		} catch (error) {
 			const code = (error as { code?: string }).code;
@@ -194,6 +199,7 @@ export function stopTailscaleServeSync(): void {
 			execFileSync(binary, buildServeOffArgs(), {
 				timeout: 5_000,
 				stdio: "ignore",
+				windowsHide: true,
 			});
 			return;
 		} catch (error) {

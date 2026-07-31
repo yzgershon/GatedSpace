@@ -62,6 +62,9 @@ export async function runTeardown({
 				cwd: worktreePath,
 				detached: true,
 				stdio: ["ignore", "pipe", "pipe"],
+				// The shell here is cmd.exe or PowerShell on Windows; a teardown
+				// script is background work and should not pop a console window.
+				windowsHide: true,
 				env: {
 					...baseEnv,
 					...wrapperEnv,

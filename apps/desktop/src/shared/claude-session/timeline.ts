@@ -64,6 +64,16 @@ export interface NoticeItem {
 	text: string;
 	/** This notice explains why the session stopped. */
 	fatal?: boolean;
+	/**
+	 * Render as a centred rule through the conversation rather than a boxed
+	 * warning.
+	 *
+	 * For things that mark a BOUNDARY — the model changed, the effort changed —
+	 * where the useful information is "everything below here ran differently".
+	 * A bordered callout states that as a problem; a divider states it as a
+	 * point in time, which is what it is.
+	 */
+	divider?: boolean;
 }
 export interface ResultItem {
 	kind: "result";
@@ -281,17 +291,38 @@ export function withUserMessage(
 /**
  * Describe an image block read back from a stored transcript.
  *
- * A transcript records that an image was attached and its media type, but
- * nothing about how it looked, so the chip gets a generated name and no
- * dimensions — which is exactly what `UserAttachment` leaves optional.
+ * The transcript DOES carry the picture — `source.data` is the base64 the CLI
+ * was given. An earlier version of this threw that away and returned a name and
+ * a media type, on the belief that a transcript records only that an image was
+ * attached. The result was that scrolling back through a resumed conversation
+ * showed "image-1.png" where the screenshot used to be, which is precisely when
+ * you want to see it: while reading the reply it produced.
+ *
+ * So the data becomes the preview. It costs memory — a restored conversation
+ * now holds its images rather than their filenames — but a chip you cannot
+ * identify is worth nothing, and the alternative (a sidecar cache of our own
+ * thumbnails) would be a second copy of something already on disk.
+ *
+ * Dimensions stay absent: the transcript does not record them, and the preview
+ * makes them unnecessary.
  */
 function transcriptAttachment(block: unknown, index: number): UserAttachment {
-	const source = (block as { source?: { media_type?: unknown } }).source;
+	const source = (
+		block as {
+			source?: { media_type?: unknown; data?: unknown; type?: unknown };
+		}
+	).source;
 	const mediaType =
 		typeof source?.media_type === "string" ? source.media_type : "image/png";
+	const data = typeof source?.data === "string" ? source.data : null;
 	return {
 		name: `image-${index + 1}.${mediaType.split("/")[1] ?? "png"}`,
 		mediaType,
+		// Only for base64 blocks. A URL-sourced image would need fetching, which
+		// is not this function's job, and an invented data URL would render broken.
+		...(data && source?.type !== "url"
+			? { thumbnail: `data:${mediaType};base64,${data}` }
+			: {}),
 	};
 }
 

@@ -13,6 +13,7 @@ import {
 	getHostWorkspacesQueryKey,
 	type HostWorkspaceItem,
 	type HostWorkspaceRow,
+	isHostWorkspacesReady,
 	loadHostWorkspacesSnapshot,
 	mergeHostWorkspaces,
 	saveHostWorkspacesSnapshot,
@@ -40,8 +41,10 @@ export interface HostWorkspacesCacheOps {
 export interface UseHostWorkspacesResult {
 	workspaces: HostWorkspaceItem[];
 	/**
-	 * True once every host answered, failed, or served a snapshot. Gates
-	 * empty states only — existing rows always render (cache-first rule).
+	 * True once the local host service has reported in AND every discovered
+	 * host answered, failed, or served a snapshot. Gates empty states and
+	 * not-found states only — existing rows always render (cache-first rule).
+	 * See `isHostWorkspacesReady` for why discovery is half of this.
 	 */
 	isReady: boolean;
 	cache: HostWorkspacesCacheOps;
@@ -63,7 +66,8 @@ export interface UseHostWorkspacesResult {
 export function useHostWorkspacesSource(): UseHostWorkspacesResult {
 	const collections = useCollections();
 	const queryClient = useQueryClient();
-	const { activeHostUrl, machineId } = useLocalHostService();
+	const { activeHostUrl, machineId, hostServiceSettled } =
+		useLocalHostService();
 	const relayUrl = useRelayUrl();
 
 	const { data: hosts = [] } = useLiveQuery(
@@ -214,18 +218,24 @@ export function useHostWorkspacesSource(): UseHostWorkspacesResult {
 		[targets, queries, snapshots, cloudRows],
 	);
 
-	// Readiness reflects host-query settlement only. The Electric collection
-	// is a fallback merge, NOT a gate: an Electric collection can stay
-	// !isReady indefinitely on an offline cold start (it serves persisted
-	// rows without reaching ready), so gating on cloudReady would hang the
-	// empty state forever for a genuinely-empty local host while offline.
-	const isReady = queries.every(
+	// Readiness reflects host discovery + host-query settlement only. The
+	// Electric collection is a fallback merge, NOT a gate: an Electric
+	// collection can stay !isReady indefinitely on an offline cold start (it
+	// serves persisted rows without reaching ready), so gating on cloudReady
+	// would hang the empty state forever for a genuinely-empty local host
+	// while offline.
+	const targetsSettled = queries.every(
 		(query, index) =>
 			query.isSuccess ||
 			query.isError ||
 			targets[index]?.hostUrl === null ||
 			snapshots.has(targets[index]?.machineId ?? ""),
 	);
+	const isReady = isHostWorkspacesReady({
+		targetsSettled,
+		activeHostUrl,
+		hostServiceSettled,
+	});
 
 	const cache = useMemo<HostWorkspacesCacheOps>(() => {
 		const targetFor = (hostId: string) =>

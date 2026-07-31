@@ -28,6 +28,7 @@ import {
 	toQuotaSnapshot,
 	type UsageReport,
 } from "shared/claude-session/usage-report";
+import { resolveUsageWindow } from "shared/usage-window";
 import { resolveExecutable } from "./resolve-executable";
 
 /** A one-shot local command; if it hasn't answered by now it never will. */
@@ -92,6 +93,12 @@ function runUsage(configDir: string): Promise<UsageReport | null> {
 				{
 					stdio: ["pipe", "pipe", "ignore"],
 					shell: needsShell,
+					// `claude` on Windows is a .cmd shim, so `shell: true` routes this
+					// through cmd.exe — and a GUI process spawning a console child gets
+					// a console ALLOCATED for it, i.e. a visible window. This ticker
+					// fires once at launch per account, so without this a launch
+					// flashed a console box for every signed-in profile.
+					windowsHide: true,
 					env: { ...process.env, CLAUDE_CONFIG_DIR: configDir },
 				},
 			);
@@ -253,21 +260,17 @@ export function readProfileLimits(configDir: string): ProfileLimits {
 		);
 		if (!parsed || typeof parsed !== "object") return empty;
 		const record = parsed as Record<string, unknown>;
-		const percent = (value: unknown): number | null => {
-			if (!value || typeof value !== "object") return null;
-			const used = (value as { used_percentage?: unknown }).used_percentage;
-			return typeof used === "number" ? Math.round(used) : null;
-		};
-		const resets = (value: unknown): string | null => {
-			if (!value || typeof value !== "object") return null;
-			const label = (value as { resets_label?: unknown }).resets_label;
-			return typeof label === "string" && label.trim() ? label : null;
-		};
+		// Resolved against NOW, not read verbatim: a window past its reset moment
+		// has rolled over, and reporting the previous window's percentage is how
+		// the strip came to show "53% used" an hour after it reset.
+		const now = Date.now();
+		const fiveHour = resolveUsageWindow(record.five_hour, now);
+		const weekly = resolveUsageWindow(record.seven_day, now);
 		return {
-			fiveHourPercent: percent(record.five_hour),
-			fiveHourResets: resets(record.five_hour),
-			weeklyPercent: percent(record.seven_day),
-			weeklyResets: resets(record.seven_day),
+			fiveHourPercent: fiveHour?.usedPercent ?? null,
+			fiveHourResets: fiveHour?.resetsLabel ?? null,
+			weeklyPercent: weekly?.usedPercent ?? null,
+			weeklyResets: weekly?.resetsLabel ?? null,
 			updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : null,
 		};
 	} catch {

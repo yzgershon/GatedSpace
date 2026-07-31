@@ -206,7 +206,8 @@ export function useDashboardSidebarData() {
 		[collections],
 	);
 
-	const { workspaces: hostWorkspaces } = useHostWorkspaces();
+	const { workspaces: hostWorkspaces, isReady: hostWorkspacesReady } =
+		useHostWorkspaces();
 	const hostWorkspacesById = useMemo(
 		() => new Map(hostWorkspaces.map((workspace) => [workspace.id, workspace])),
 		[hostWorkspaces],
@@ -409,6 +410,12 @@ export function useDashboardSidebarData() {
 
 	return {
 		groups,
+		/**
+		 * False while the workspace list is still being fetched. Only meaningful
+		 * alongside an empty `groups`: a sidebar with rows in it is never
+		 * "loading" as far as the user is concerned, whatever is still in flight.
+		 */
+		isReady: hostWorkspacesReady,
 		refreshWorkspacePullRequest,
 		toggleProjectCollapsed,
 	};
