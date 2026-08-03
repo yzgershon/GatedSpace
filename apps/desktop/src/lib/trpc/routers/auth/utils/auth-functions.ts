@@ -1,9 +1,17 @@
 import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import { join } from "node:path";
-import { SUPERSET_HOME_DIR } from "main/lib/app-environment";
+import {
+	SUPERSET_HOME_DIR,
+	SUPERSET_SENSITIVE_FILE_MODE,
+} from "main/lib/app-environment";
+import { restrictToCurrentUser } from "main/lib/secure-file";
 import { PROTOCOL_SCHEME } from "shared/constants";
-import { decrypt, encrypt } from "./crypto-storage";
+import {
+	decryptSecret,
+	encryptSecret,
+	needsReencryption,
+} from "./crypto-storage";
 
 interface StoredAuth {
 	token: string;
@@ -31,12 +39,40 @@ export async function loadToken(): Promise<{
 	expiresAt: string | null;
 }> {
 	try {
-		const data = decrypt(await fs.readFile(TOKEN_FILE));
+		const raw = await fs.readFile(TOKEN_FILE);
+		const data = decryptSecret(raw);
 		const parsed: StoredAuth = JSON.parse(data);
+
+		// Migrate on read. The legacy scheme derives its key from a registry
+		// value any local process can read, so a token left in that format is
+		// recoverable by anyone who can read the file — rewriting it here means
+		// the weak blob does not survive the first launch after this change.
+		if (needsReencryption(raw)) {
+			try {
+				await writeTokenFile(data);
+			} catch {
+				// A failed rewrite is not worth failing the sign-in that just
+				// succeeded; the next launch tries again.
+			}
+		}
+
 		return { token: parsed.token, expiresAt: parsed.expiresAt };
 	} catch {
 		return { token: null, expiresAt: null };
 	}
+}
+
+/**
+ * Writes the token blob with owner-only permissions.
+ *
+ * The mode matters as much as the encryption: this file used to be written
+ * with no mode at all, so it inherited whatever the home directory granted.
+ */
+async function writeTokenFile(plaintext: string): Promise<void> {
+	await fs.writeFile(TOKEN_FILE, encryptSecret(plaintext), {
+		mode: SUPERSET_SENSITIVE_FILE_MODE,
+	});
+	restrictToCurrentUser(TOKEN_FILE);
 }
 
 /**
@@ -50,7 +86,7 @@ export async function saveToken({
 	expiresAt: string;
 }): Promise<void> {
 	const storedAuth: StoredAuth = { token, expiresAt };
-	await fs.writeFile(TOKEN_FILE, encrypt(JSON.stringify(storedAuth)));
+	await writeTokenFile(JSON.stringify(storedAuth));
 	authEvents.emit("token-saved", { token, expiresAt });
 }
 

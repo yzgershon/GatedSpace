@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — UI density proposal</title>
+<style>
+  :root {
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --muted:#2a2827; --muted-foreground:#a8a5a3; --border:#2a2827;
+    --success:#4bb377; --warning:#d4a84b; --destructive:#cc4444;
+    --highlight:#e07850;
+    --diff-surface:#1a1817;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--background); color:var(--foreground);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;
+    padding:28px 32px 60px;
+  }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--muted-foreground); font-size:13px; margin:0 0 28px; }
+  h2 { font-size:14px; margin:34px 0 10px; letter-spacing:.01em; }
+  .why { color:var(--muted-foreground); font-size:12.5px; margin:0 0 12px; max-width:70ch; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  .panel { border:1px solid var(--border); border-radius:10px; padding:14px; background:var(--background); }
+  .tag { font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+         color:var(--muted-foreground); margin-bottom:10px; display:block; }
+  .tag.now { color:var(--muted-foreground); }
+  .tag.next { color:var(--success); }
+  .metric { font-size:11px; color:var(--muted-foreground); margin-top:10px; font-variant-numeric:tabular-nums; }
+
+  /* ---------- tool rows ---------- */
+  .row { position:relative; padding-left:32px; }
+  .row + .row { margin-top:var(--row-gap,14px); }
+  .dot { position:absolute; left:8px; top:7px; width:7px; height:7px; border-radius:99px; }
+  .dot.ok { background:var(--success); } .dot.run { background:var(--warning); } .dot.prose{ background:#a8a5a355; }
+  .head { display:flex; align-items:baseline; gap:8px; min-width:0; }
+  .tname { font-weight:600; font-size:var(--tool-name,13.5px); }
+  .targ { color:var(--muted-foreground); font-size:var(--tool-arg,13px);
+          overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .targ.mono { font-family:ui-monospace,Consolas,monospace; font-size:var(--tool-mono,12px); }
+  .tlabel { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#a8a5a399; }
+
+  .body { margin-top:var(--body-gap,6px); border:1px solid var(--border);
+          border-radius:8px; overflow:hidden; }
+  .stream { display:flex; }
+  .gutter { width:36px; flex:none; padding:var(--pad-y,8px) 0 0 12px;
+            font-family:ui-monospace,Consolas,monospace; font-size:10px;
+            letter-spacing:.08em; text-transform:uppercase; color:#a8a5a373; }
+  pre { margin:0; padding:var(--pad-y,8px) 12px; font-family:ui-monospace,Consolas,monospace;
+        font-size:11.5px; line-height:var(--mono-lh,19px); color:var(--muted-foreground);
+        white-space:pre; overflow:hidden; flex:1; min-width:0; }
+  .more { display:flex; justify-content:space-between; border-top:1px solid #2a282799;
+          padding:4px 12px; font-size:11px; color:#a8a5a3d9; }
+
+  /* diff mock */
+  .diffwrap { position:relative; background:var(--diff-surface); }
+  .diff { font-family:ui-monospace,Consolas,monospace; font-size:11.5px; line-height:17px;
+          padding:6px 0; overflow:hidden; }
+  .dl { padding:0 12px; white-space:pre; }
+  .dl.add { background:#4bb37722; color:#cfe9da; }
+  .dl.del { background:#cc444422; color:#f0cccc; }
+  .fade-bg { position:absolute; left:0; right:0; bottom:0; height:40px; pointer-events:none;
+             background:linear-gradient(to top, var(--background), transparent); }
+  .fade-diff { position:absolute; left:0; right:0; bottom:0; height:40px; pointer-events:none;
+               background:linear-gradient(to top, var(--diff-surface), transparent); }
+
+  /* ---------- pinned prompt ---------- */
+  .pin { background:var(--card); border-radius:10px; padding:10px 16px; font-size:13.5px;
+         box-shadow:0 1px 2px #0006; position:relative; }
+  .pin.next { border:1px solid #ffffff0f; box-shadow:0 1px 0 #ffffff08 inset, 0 6px 16px -8px #000; }
+  .ptext { white-space:pre-wrap; overflow:hidden; }
+  .fade-card { position:absolute; left:16px; right:16px; bottom:26px; height:22px; pointer-events:none;
+               background:linear-gradient(to top, var(--card), transparent); }
+  .pfoot { margin-top:2px; font-size:11px; color:#a8a5a3b3; display:flex; gap:6px; align-items:center; }
+  .chev { display:inline-block; width:0;height:0;border-left:4px solid transparent;
+          border-right:4px solid transparent;border-top:4px solid #a8a5a3b3; }
+
+  /* ---------- attachments ---------- */
+  .chips { display:flex; gap:8px; flex-wrap:wrap; }
+  .thumb-now { height:96px; width:224px; border:1px solid var(--border); border-radius:6px;
+               background:linear-gradient(135deg,#3a3634,#26221f); }
+  .chip-next { display:inline-flex; align-items:center; gap:7px; height:26px; padding:0 8px 0 4px;
+               border:1px solid var(--border); border-radius:6px; background:var(--card);
+               font-size:11.5px; color:var(--muted-foreground); }
+  .chip-next .mini { width:18px; height:18px; border-radius:3px;
+                     background:linear-gradient(135deg,#3a3634,#26221f); flex:none; }
+  .chip-next .x { color:#a8a5a380; font-size:12px; }
+
+  /* ---------- scale mock ---------- */
+  .scale-card { border:1px solid var(--border); border-radius:10px; padding:16px; max-width:560px; }
+  .srow { display:flex; align-items:center; gap:14px; margin:14px 0; }
+  .slabel { width:120px; font-size:13px; }
+  .track { flex:1; height:4px; border-radius:99px; background:#ffffff1a; position:relative; }
+  .track i { position:absolute; inset:0 auto 0 0; border-radius:99px; background:var(--foreground); }
+  .knob { position:absolute; top:50%; width:14px; height:14px; border-radius:99px;
+          background:var(--foreground); transform:translate(-50%,-50%); }
+  .pct { width:52px; text-align:right; font-size:12px; color:var(--muted-foreground);
+         font-variant-numeric:tabular-nums; }
+  .reset { margin-top:6px; font-size:12px; color:var(--muted-foreground);
+           border:1px solid var(--border); background:transparent; border-radius:7px;
+           padding:5px 11px; cursor:default; }
+  .note { font-size:12px; color:var(--muted-foreground); margin-top:10px; }
+</style>
+</head>
+<body>
+
+<h1>UI density — proposal</h1>
+<p class="sub">Left is 1.17.34 as it renders today. Right is what I'd change. Same real theme colours.</p>
+
+<!-- 1 -->
+<h2>1 · Tool rows</h2>
+<p class="why">The space goes to three places: the gap between rows, the gap under the header,
+and the padding inside each body. Trimming all three keeps the type size identical — nothing
+gets harder to read, there's just less air. Roughly 22% less height per call.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now</span>
+    <div style="--row-gap:14px;--body-gap:6px;--pad-y:8px">
+      <div class="row"><span class="dot ok"></span>
+        <div class="head"><span class="tname">Read</span><span class="targ mono">SessionTimelineView.tsx</span></div>
+      </div>
+      <div class="row"><span class="dot ok"></span>
+        <div class="head"><span class="tname">Bash</span><span class="targ mono">bun test apps/desktop</span></div>
+        <div class="body"><div class="stream"><span class="gutter">in</span><pre>bun test apps/desktop</pre></div>
+          <div style="margin:0 12px;border-top:1px solid #2a282799"></div>
+          <div class="stream"><span class="gutter">out</span><pre>2424 pass
+52 fail</pre></div>
+        </div>
+      </div>
+      <div class="row"><span class="dot run"></span>
+        <div class="head"><span class="tname">Edit</span><span class="targ mono">server.ts</span></div>
+      </div>
+    </div>
+    <div class="metric">header → body 6px · row gap 14px · body padding 8px</div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed</span>
+    <div style="--row-gap:9px;--body-gap:3px;--pad-y:5px">
+      <div class="row"><span class="dot ok"></span>
+        <div class="head"><span class="tname">Read</span><span class="targ mono">SessionTimelineView.tsx</span></div>
+      </div>
+      <div class="row"><span class="dot ok"></span>
+        <div class="head"><span class="tname">Bash</span><span class="targ mono">bun test apps/desktop</span></div>
+        <div class="body"><div class="stream"><span class="gutter">in</span><pre>bun test apps/desktop</pre></div>
+          <div style="margin:0 12px;border-top:1px solid #2a282799"></div>
+          <div class="stream"><span class="gutter">out</span><pre>2424 pass
+52 fail</pre></div>
+        </div>
+      </div>
+      <div class="row"><span class="dot run"></span>
+        <div class="head"><span class="tname">Edit</span><span class="targ mono">server.ts</span></div>
+      </div>
+    </div>
+    <div class="metric">header → body 3px · row gap 9px · body padding 5px</div>
+  </div>
+</div>
+
+<!-- 2 -->
+<h2>2 · The missing fade on Edit / Write</h2>
+<p class="why">Bash fades because its body sits on the page background. A diff paints its own
+surface, so the existing fade class would blend to the wrong colour — which is why it was left
+off rather than forgotten. The fix is a fade that matches the diff surface, so a clipped edit
+reads as clipped instead of chopped.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now — cut off flat</span>
+    <div class="row"><span class="dot ok"></span>
+      <div class="head"><span class="tname">Edit</span><span class="targ mono">server.ts</span></div>
+      <div class="body"><div class="diffwrap"><div class="diff" style="max-height:85px">
+        <div class="dl del">- app.use(express.json({ limit: MAX_PROMPT_BYTES }));</div>
+        <div class="dl add">+ app.disable("x-powered-by");</div>
+        <div class="dl">  </div>
+        <div class="dl add">+ // Body parsing happens after the token gate now.</div>
+        <div class="dl add">+ app.use("/api", express.json({ limit: SMALL }));</div>
+        <div class="dl">  const app = express();</div>
+      </div></div>
+      <div class="more"><span>Show more</span><span>18 lines</span></div></div>
+    </div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed — fades to the diff surface</span>
+    <div class="row"><span class="dot ok"></span>
+      <div class="head"><span class="tname">Edit</span><span class="targ mono">server.ts</span></div>
+      <div class="body"><div class="diffwrap"><div class="diff" style="max-height:85px">
+        <div class="dl del">- app.use(express.json({ limit: MAX_PROMPT_BYTES }));</div>
+        <div class="dl add">+ app.disable("x-powered-by");</div>
+        <div class="dl">  </div>
+        <div class="dl add">+ // Body parsing happens after the token gate now.</div>
+        <div class="dl add">+ app.use("/api", express.json({ limit: SMALL }));</div>
+        <div class="dl">  const app = express();</div>
+      </div><div class="fade-diff"></div></div>
+      <div class="more"><span>Show more</span><span>18 lines</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- 3 -->
+<h2>3 · The pinned prompt</h2>
+<p class="why">Today it clamps at <b>2</b> lines with a 16px fade and a text "Show more". You asked
+for 3 lines, a fade that signals there's more, and click-to-expand. Clicking already works — it's
+just not obvious. So: 3 lines, a cleaner fade, a hairline border to separate it from the
+conversation scrolling underneath, and a chevron instead of a text link.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now — 2 lines, text link</span>
+    <div class="pin">
+      <div class="ptext" style="max-height:40px">so theres little things about GatedSpace that need to be changed. like for example in the screenshot you can see that it says resets now implying that its at 0%</div>
+      <div class="fade-card" style="height:16px;bottom:24px"></div>
+      <div class="pfoot">Show more</div>
+    </div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed — 3 lines, chevron, click to expand</span>
+    <div class="pin next">
+      <div class="ptext" style="max-height:60px">so theres little things about GatedSpace that need to be changed. like for example in the screenshot you can see that it says resets now implying that its at 0% for 5hr session but it still says 100% used from last time</div>
+      <div class="fade-card"></div>
+      <div class="pfoot"><span class="chev"></span> Click to expand</div>
+    </div>
+  </div>
+</div>
+
+<!-- 4 -->
+<h2>4 · Composer attachments</h2>
+<p class="why">Currently capped at 96×224px, which is a preview, not a chip — two screenshots
+push the composer up and eat the conversation. VS Code uses a compact chip: tiny thumbnail,
+filename, remove. Click still opens the full lightbox.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now — 96px tall</span>
+    <div class="chips"><div class="thumb-now"></div><div class="thumb-now"></div></div>
+    <div class="metric">max-h-24 max-w-56 · 96 × 224 px</div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed — 26px chip</span>
+    <div class="chips">
+      <span class="chip-next"><span class="mini"></span>screenshot.png<span class="x">✕</span></span>
+      <span class="chip-next"><span class="mini"></span>image.png<span class="x">✕</span></span>
+    </div>
+    <div class="metric">26 px tall · click opens the lightbox, as now</div>
+  </div>
+</div>
+
+<!-- 5 -->
+<h2>5 · Appearance → Scale</h2>
+<p class="why">The window already has a zoom, but it's Electron's and it scales
+<i>everything</i> — sidebar included. Independent control needs CSS zoom on the two regions
+instead, which is what this would add.</p>
+<div class="scale-card">
+  <div class="srow">
+    <span class="slabel">Main area</span>
+    <span class="track"><i style="width:50%"></i><span class="knob" style="left:50%"></span></span>
+    <span class="pct">100%</span>
+  </div>
+  <div class="srow">
+    <span class="slabel">Left sidebar</span>
+    <span class="track"><i style="width:35%"></i><span class="knob" style="left:35%"></span></span>
+    <span class="pct">85%</span>
+  </div>
+  <button class="reset">Reset to 100%</button>
+  <p class="note">Main area covers the tabs and the session. The sidebar scales on its own,
+  so shrinking one doesn't touch the other. Range 70–130% in 5% steps.</p>
+</div>
+
+</body>
+</html>

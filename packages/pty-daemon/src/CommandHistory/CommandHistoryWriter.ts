@@ -13,6 +13,7 @@
  */
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureSecureDir } from "../secure-fs/index.ts";
 import type { CommandHistoryRow } from "./CommandHistory.ts";
 
 /**
@@ -32,7 +33,9 @@ export class CommandHistoryWriter {
 		this.filePath = path.join(dir, "command-history.jsonl");
 		this.maxBytes = maxBytes;
 		try {
-			fs.mkdirSync(dir, { recursive: true });
+			// Owner-only: a row is a command line, which can carry a secret
+			// inline (`export API_KEY=…`, a URL with a password in it).
+			ensureSecureDir(dir);
 			this.bytes = fs.statSync(this.filePath).size;
 		} catch {
 			// Missing file is the normal first-run case; a failure to create the
@@ -49,7 +52,7 @@ export class CommandHistoryWriter {
 		try {
 			if (this.bytes >= this.maxBytes) this.rotate();
 			const line = `${JSON.stringify(row)}\n`;
-			fs.appendFileSync(this.filePath, line);
+			fs.appendFileSync(this.filePath, line, { mode: 0o600 });
 			this.bytes += Buffer.byteLength(line);
 		} catch {
 			this.failed = true;

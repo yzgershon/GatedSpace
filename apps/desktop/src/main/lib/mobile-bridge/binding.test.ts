@@ -25,9 +25,12 @@ const TYPICAL: InterfaceMap = {
 };
 
 describe("resolveBinding", () => {
-	it("defaults to LAN", () => {
-		// Matching BridgeSpace: works on the same Wi-Fi with no VPN to set up.
-		expect(DEFAULT_BRIDGE_BINDING_MODE).toBe("lan");
+	it("defaults to tailnet-only, never to LAN", () => {
+		// The bridge can type into a live agent session, so a default that
+		// binds 0.0.0.0 over plain HTTP publishes that to every network the
+		// machine joins. Must stay in step with BRIDGE_DEFAULT_STATE.mode.
+		expect(DEFAULT_BRIDGE_BINDING_MODE).toBe("tailscale-serve");
+		expect(DEFAULT_BRIDGE_BINDING_MODE).not.toBe("lan");
 	});
 
 	it("LAN binds every interface but SHOWS a routable address", () => {

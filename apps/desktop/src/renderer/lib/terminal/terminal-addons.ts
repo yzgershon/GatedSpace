@@ -7,6 +7,7 @@ import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { Utf8Base64 } from "./clipboard-base64";
+import { WriteOnlyClipboardProvider } from "./clipboard-provider";
 import { attachRepaintWatchdog } from "./terminal-repaint-watchdog";
 
 export interface LoadAddonsResult {
@@ -30,7 +31,10 @@ export function loadAddons(terminal: XTerm): LoadAddonsResult {
 	let webglAddon: WebglAddon | null = null;
 
 	// Utf8Base64 replaces the addon's UTF-8-unsafe default codec (#4839).
-	terminal.loadAddon(new ClipboardAddon(new Utf8Base64()));
+	// WriteOnlyClipboardProvider refuses OSC 52 reads — see clipboard-provider.
+	terminal.loadAddon(
+		new ClipboardAddon(new Utf8Base64(), new WriteOnlyClipboardProvider()),
+	);
 
 	const unicode11 = new Unicode11Addon();
 	terminal.loadAddon(unicode11);

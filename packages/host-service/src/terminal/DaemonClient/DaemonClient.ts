@@ -17,6 +17,10 @@
 
 import * as net from "node:net";
 import {
+	ensureDaemonToken,
+	ptyDaemonTokenPath,
+} from "@superset/pty-daemon/auth";
+import {
 	CURRENT_PROTOCOL_VERSION,
 	encodeFrame,
 	FrameDecoder,
@@ -256,6 +260,7 @@ export class DaemonClient {
 		this.send({
 			type: "hello",
 			protocols: [CURRENT_PROTOCOL_VERSION],
+			token: ensureDaemonToken(ptyDaemonTokenPath(this.opts.socketPath)),
 		});
 		const ack = await this.waitForFrame(
 			(m) => m.type === "hello-ack" || m.type === "error",

@@ -1,13 +1,7 @@
-import {
-	existsSync,
-	mkdirSync,
-	readdirSync,
-	readFileSync,
-	unlinkSync,
-	writeFileSync,
-} from "node:fs";
+import { existsSync, readdirSync, readFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { SUPERSET_HOME_DIR } from "./app-environment";
+import { ensureSecureDir, writeSecureFile } from "./secure-file";
 
 export interface HostServiceManifest {
 	pid: number;
@@ -37,17 +31,12 @@ function manifestPath(organizationId: string): string {
 
 export function writeManifest(manifest: HostServiceManifest): void {
 	const dir = manifestDir(manifest.organizationId);
-	if (!existsSync(dir)) {
-		mkdirSync(dir, { recursive: true, mode: 0o700 });
-	}
-	writeFileSync(
-		manifestPath(manifest.organizationId),
-		JSON.stringify(manifest),
-		{
-			encoding: "utf-8",
-			mode: 0o600,
-		},
-	);
+	// The manifest carries the host service's endpoint AND its pre-shared key,
+	// so reading it is equivalent to holding the key. The 0o600 this used to
+	// pass does nothing on NTFS — see secure-file.
+	ensureSecureDir(dir);
+	const path = manifestPath(manifest.organizationId);
+	writeSecureFile(path, JSON.stringify(manifest));
 }
 
 export function readManifest(

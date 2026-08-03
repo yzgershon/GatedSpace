@@ -42,6 +42,7 @@ import { localDb } from "./lib/local-db";
 import { isLocalOnlyBuild, LOCAL_ORG_ID } from "./lib/local-mode";
 import { requestLocalNetworkAccess } from "./lib/local-network-permission";
 import { mobileBridge } from "./lib/mobile-bridge/server";
+import { installPermissionsPolicy } from "./lib/permissions-policy";
 import {
 	initTanstackDbPersistence,
 	shutdownTanstackDbPersistence,
@@ -374,6 +375,11 @@ if (!gotTheLock) {
 	(async () => {
 		await app.whenReady();
 		markStartup("electron ready");
+
+		// Before any window or webview exists: the Browser pane and webviews
+		// share the app partition, so without this a page we merely display can
+		// ask for the camera, the mic, or the clipboard and be granted it.
+		installPermissionsPolicy();
 
 		/**
 		 * Start the host service NOW, not when the renderer gets round to asking.

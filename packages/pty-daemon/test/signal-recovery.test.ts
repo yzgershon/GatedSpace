@@ -14,6 +14,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
+import { ptyDaemonTokenPath, readDaemonToken } from "../src/auth/index.ts";
 import {
 	CURRENT_PROTOCOL_VERSION,
 	encodeFrame,
@@ -88,7 +89,13 @@ describe("daemon SIGKILL recovery", () => {
 	test("clients receive close events when daemon dies via SIGKILL", async () => {
 		// Open a connection, complete handshake, send a list to confirm health.
 		const client = await connect();
-		client.send({ type: "hello", protocols: [CURRENT_PROTOCOL_VERSION] });
+		client.send({
+			type: "hello",
+			protocols: [CURRENT_PROTOCOL_VERSION],
+			// Spawned daemon, so it enforces auth; it writes the token before
+			// the socket starts accepting.
+			token: readDaemonToken(ptyDaemonTokenPath(SOCK)) ?? undefined,
+		});
 		await client.waitFor((m) => m.type === "hello-ack", 2000);
 
 		// Capture disconnect.

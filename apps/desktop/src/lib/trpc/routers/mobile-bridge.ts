@@ -39,5 +39,15 @@ export const createMobileBridgeRouter = () => {
 			writeBridgeState({ enabled: false, mode: mobileBridge.lastMode() });
 			return status;
 		}),
+		/**
+		 * Unpairs every device by issuing a new token.
+		 *
+		 * The token deliberately survives restarts so a phone pairs once — which
+		 * left no way to undo pairing at all until this existed. A lost handset,
+		 * or a link forwarded to someone once, kept working indefinitely.
+		 */
+		revokeToken: publicProcedure.mutation(async () => {
+			return await mobileBridge.revokeToken();
+		}),
 	});
 };

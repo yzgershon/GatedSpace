@@ -4,6 +4,7 @@ import {
 } from "node:child_process";
 import { promisify } from "node:util";
 import { shellEnv } from "shell-env";
+import { resolveBinaryFromPath } from "./resolve-binary";
 
 const execFileAsync = promisify(execFile);
 
@@ -214,10 +215,13 @@ export async function execWithShellEnv(
 		: process.env;
 
 	try {
-		return await execFileAsync(cmd, args, {
+		const env = await getProcessEnvWithShellEnv(baseEnv);
+		// Absolute path, because callers pass `cwd` pointing at a repo the user
+		// cloned rather than wrote, and Windows searches cwd before PATH.
+		return await execFileAsync(resolveBinaryFromPath(cmd, env), args, {
 			...options,
 			encoding: "utf8",
-			env: await getProcessEnvWithShellEnv(baseEnv),
+			env,
 		});
 	} catch (error) {
 		// Only retry on ENOENT (command not found), only on macOS

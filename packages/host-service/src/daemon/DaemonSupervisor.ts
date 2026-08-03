@@ -15,6 +15,10 @@ import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+	ensureDaemonToken,
+	ptyDaemonTokenPath,
+} from "@superset/pty-daemon/auth";
+import {
 	isPositiveInteger,
 	signalProcessTreeAndGroups,
 } from "@superset/pty-daemon/process-tree";
@@ -1201,6 +1205,7 @@ export async function listDaemonSessions(
 						type: "hello",
 						protocols: [CURRENT_PROTOCOL_VERSION],
 						clientVersion: "supervisor-list",
+						token: ensureDaemonToken(ptyDaemonTokenPath(socketPath)),
 					}),
 				);
 			} catch {
@@ -1372,6 +1377,7 @@ function probeDaemonHello(
 						type: "hello",
 						protocols: [CURRENT_PROTOCOL_VERSION],
 						clientVersion: "supervisor-probe",
+						token: ensureDaemonToken(ptyDaemonTokenPath(socketPath)),
 					}),
 				);
 			} catch {

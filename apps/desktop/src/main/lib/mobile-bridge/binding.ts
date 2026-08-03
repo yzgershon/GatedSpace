@@ -28,7 +28,15 @@ export const BRIDGE_BINDING_MODES: BridgeBindingMode[] = [
 	"loopback",
 ];
 
-export const DEFAULT_BRIDGE_BINDING_MODE: BridgeBindingMode = "lan";
+/**
+ * Matches BRIDGE_DEFAULT_STATE.mode. Both fallbacks used to say "lan", which
+ * binds 0.0.0.0 over plain HTTP — so any path that reached a default rather
+ * than the persisted state published an agent that runs shell commands to
+ * every network the machine was on. `tailscale-serve` is tailnet-only, and on
+ * a machine without Tailscale it fails to start rather than falling back to
+ * something broader.
+ */
+export const DEFAULT_BRIDGE_BINDING_MODE: BridgeBindingMode = "tailscale-serve";
 
 export function isBridgeBindingMode(
 	value: unknown,

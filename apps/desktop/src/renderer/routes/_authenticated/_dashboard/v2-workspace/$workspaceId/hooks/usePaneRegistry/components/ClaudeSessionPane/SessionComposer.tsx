@@ -567,12 +567,21 @@ export function SessionComposer({
 					attachFiles(files);
 				}}
 				className={cn(
-					"pointer-events-auto relative w-full max-w-3xl rounded-2xl border bg-card shadow-lg transition-colors",
+					"pointer-events-auto relative w-full max-w-3xl rounded-2xl border bg-card transition-[border-color,box-shadow]",
+					/*
+					 * The resting border used to be `transparent`, which is why this
+					 * read flatter than the reference: the box had no edge of its own
+					 * and leaned entirely on a soft shadow. It keeps a real edge now,
+					 * on the theme's border token rather than a hardcoded white so it
+					 * survives the light themes, plus a tighter, deeper shadow than
+					 * shadow-lg — the box should sit ABOVE the conversation, and a
+					 * diffuse shadow reads as haze rather than lift.
+					 */
 					dragging
-						? "border-highlight ring-1 ring-highlight"
+						? "border-highlight shadow-[0_0_0_3px_color-mix(in_oklab,var(--highlight)_22%,transparent)]"
 						: focused
-							? "border-primary"
-							: "border-transparent",
+							? "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_12%,transparent),0_18px_40px_-12px_rgb(0_0_0/0.55)]"
+							: "border-border shadow-[0_10px_30px_-12px_rgb(0_0_0/0.45),0_2px_6px_-2px_rgb(0_0_0/0.25)]",
 				)}
 			>
 				{showPalette && onRunCommand ? (
@@ -586,6 +595,20 @@ export function SessionComposer({
 							// shouldn't be left holding "/model" afterwards.
 							void onRunCommand(`/model ${id}`);
 							setText("");
+						}}
+						builtins={{
+							effortLabel: EFFORT_LABELS[effort],
+							attachFile: () => {
+								setText("");
+								fileInputRef.current?.click();
+							},
+							// Leave the "@" behind so the mention list opens on it, the
+							// same as clicking the button in the bar.
+							mentionFile: () => setText("@"),
+							// These two open the palette's own panels, which is what
+							// typing the command by hand already does.
+							switchModel: () => setText("/model"),
+							accountUsage: () => setText("/usage"),
 						}}
 					/>
 				) : null}
@@ -619,6 +642,10 @@ export function SessionComposer({
 							<ImageChip
 								key={`${image.name}-${index}`}
 								attachment={image}
+								// Row height here: you just picked the image, so a preview
+								// tile shows you what you are already looking at and takes
+								// the height out of the conversation to do it.
+								compact
 								// The composer still holds the full payload, so expanding here
 								// shows what will actually be sent rather than the preview.
 								fullSource={`data:${image.mediaType};base64,${image.data}`}
@@ -702,7 +729,13 @@ export function SessionComposer({
 				 *
 				 * On the border token, so it follows the theme like everything else.
 				 */}
-				<div className="flex items-center gap-0.5 border-border/50 border-t px-2.5 pt-2 pb-2.5">
+				{/*
+				 * Full-strength divider and 3px/4px padding, down from /50 and
+				 * 8px/10px. At half opacity the rule was doing the job of a hint
+				 * rather than a separation, and the padding made a 46px bar out of
+				 * 28px icons — eleven pixels that belong to the conversation.
+				 */}
+				<div className="flex items-center gap-0.5 border-border border-t px-2.5 pt-[3px] pb-1">
 					<input
 						ref={fileInputRef}
 						type="file"

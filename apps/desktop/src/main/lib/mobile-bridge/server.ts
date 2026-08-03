@@ -39,6 +39,7 @@ import {
 import { readBridgeState } from "./bridge-state";
 import { MOBILE_BRIDGE_HTML } from "./client-html";
 import { pushService } from "./push";
+import { isAllowedPushEndpoint } from "./push-endpoint";
 import {
 	MOBILE_BRIDGE_ICON_SVG,
 	MOBILE_BRIDGE_MANIFEST,
@@ -50,7 +51,11 @@ import {
 	stopTailscaleServe,
 	stopTailscaleServeSync,
 } from "./tailscale-serve";
-import { loadOrCreateBridgeToken, tokensMatch } from "./token";
+import {
+	loadOrCreateBridgeToken,
+	rotateBridgeToken,
+	tokensMatch,
+} from "./token";
 import { mergeTranscriptWithBuffer } from "./transcript-merge";
 import { listBridgeWorkspaceTargets } from "./workspace-targets";
 
@@ -75,6 +80,13 @@ export interface BridgeStatus {
  * the first image outright.
  */
 const MAX_PROMPT_BYTES = 24 * 1024 * 1024;
+
+/**
+ * Every other /api route takes small control JSON — a session id, an account
+ * id, a push endpoint. Scoping the large limit to the one route that carries
+ * screenshots means a caller cannot allocate 24 MB against `/api/themes`.
+ */
+const MAX_CONTROL_JSON_BYTES = 64 * 1024;
 
 /** A backstop against a client that ignores the phone's own limit. */
 const MAX_IMAGES_PER_MESSAGE = 6;
@@ -317,6 +329,28 @@ class MobileBridge {
 	}
 
 	/**
+	 * Issues a new token, so every device that paired before now is locked out.
+	 *
+	 * This is the thing that was missing. `rotateBridgeToken` existed and had
+	 * no callers, which meant a paired phone stayed paired forever — a lost
+	 * handset, or a link forwarded to someone once, kept working with no way to
+	 * take it back short of editing a file by hand.
+	 *
+	 * Restarting when already running is not optional: the running server holds
+	 * the old token in memory and would keep honouring it until the next launch.
+	 */
+	async revokeToken(): Promise<BridgeStatus> {
+		rotateBridgeToken();
+		if (!this.server) {
+			// Not serving — the next start reads the new token off disk.
+			return this.status();
+		}
+		const mode = this.mode;
+		await this.stop();
+		return this.start(mode);
+	}
+
+	/**
 	 * Quit path. Blocks on the Tailscale teardown because the callers cannot
 	 * await — `exitImmediately` calls `app.exit(0)` on the next line.
 	 */
@@ -342,7 +376,13 @@ class MobileBridge {
 
 	private buildApp(): express.Express {
 		const app = express();
-		app.use(express.json({ limit: MAX_PROMPT_BYTES }));
+		app.disable("x-powered-by");
+		// NOTE: no body parser here. It used to be global with a 24 MB limit,
+		// which meant any request — to any path, authenticated or not — could
+		// make the Electron MAIN PROCESS buffer 24 MB and JSON.parse it
+		// synchronously. Concurrent requests froze the whole app. Body parsing
+		// now happens after the token gate, and only the route that carries
+		// images gets the large limit. See below.
 
 		// No CORS headers anywhere on purpose. Nothing should be calling this
 		// from another origin, and `Access-Control-Allow-Origin: *` on a
@@ -400,15 +440,28 @@ class MobileBridge {
 		});
 
 		app.use("/api", (req, res, next) => {
-			const provided =
-				req.get("x-bridge-token") ??
-				(typeof req.query.t === "string" ? req.query.t : undefined);
+			// Header only. `?t=` used to be accepted here as well, but nothing
+			// needs it: the pairing link carries the token to the PAGE (`/`,
+			// which is unauthenticated anyway), the page strips its query string
+			// and uses the header thereafter, and the service worker sends the
+			// header too. Accepting it meant a token could reach server logs,
+			// browser history and referrer headers for no benefit.
+			const provided = req.get("x-bridge-token");
 			if (!tokensMatch(this.token, provided)) {
 				res.status(401).json({ error: "unauthorized" });
 				return;
 			}
 			next();
 		});
+
+		// Body parsing, AFTER the gate. The large limit is scoped to the one
+		// route that carries screenshots; everything else takes small JSON, so
+		// an authenticated caller cannot allocate 24 MB against `/api/themes`.
+		app.use(
+			"/api/sessions/:key/send",
+			express.json({ limit: MAX_PROMPT_BYTES }),
+		);
+		app.use("/api", express.json({ limit: MAX_CONTROL_JSON_BYTES }));
 
 		app.get("/api/sessions", (_req, res) => {
 			// `listSessions`, NOT `getLiveSessionIds`: the latter returns Claude's
@@ -491,10 +544,9 @@ class MobileBridge {
 
 		app.post("/api/push/subscribe", (req, res) => {
 			const body = req.body as { endpoint?: unknown };
-			if (
-				typeof body?.endpoint !== "string" ||
-				!body.endpoint.startsWith("https://")
-			) {
+			// A bare https:// check let a caller aim the desktop's per-event
+			// POSTs at any host. See push-endpoint.
+			if (!isAllowedPushEndpoint(body?.endpoint)) {
 				res.status(400).json({ error: "bad subscription" });
 				return;
 			}

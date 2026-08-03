@@ -1,6 +1,6 @@
 {
 	"name": "@superset/host-service",
-	"version": "1.17.31",
+	"version": "1.17.36",
 	"private": true,
 	"type": "module",
 	"exports": {

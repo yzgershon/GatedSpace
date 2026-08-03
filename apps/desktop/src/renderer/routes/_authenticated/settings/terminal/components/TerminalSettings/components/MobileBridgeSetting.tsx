@@ -64,8 +64,20 @@ export function MobileBridgeSetting() {
 		onSettled: () => utils.mobileBridge.status.invalidate(),
 	});
 
+	const revoke = electronTrpc.mobileBridge.revokeToken.useMutation({
+		onSuccess: (result) => {
+			utils.mobileBridge.status.setData(undefined, result);
+			toast.success("Devices unpaired", {
+				description: "Open the new link on any phone you still want to use.",
+			});
+		},
+		onError: (error) =>
+			toast.error("Couldn't unpair", { description: error.message }),
+		onSettled: () => utils.mobileBridge.status.invalidate(),
+	});
+
 	const running = status?.running ?? false;
-	const pending = start.isPending || stop.isPending;
+	const pending = start.isPending || stop.isPending || revoke.isPending;
 
 	/**
 	 * Switching mode while running restarts the bridge on the new one.
@@ -163,6 +175,25 @@ export function MobileBridgeSetting() {
 							}}
 						>
 							Copy
+						</Button>
+					</div>
+					{/*
+					 * The link stays valid forever once opened, because the token
+					 * survives restarts so a phone pairs once. That is the right
+					 * default and it needs an undo — without one, a lost phone or a
+					 * link sent to someone keeps working with no way to take it back.
+					 */}
+					<div className="flex items-center justify-between gap-2 pt-1">
+						<p className="text-xs text-muted-foreground">
+							Anyone who opened this link still has access.
+						</p>
+						<Button
+							size="sm"
+							variant="ghost"
+							disabled={pending}
+							onClick={() => revoke.mutate()}
+						>
+							Unpair devices
 						</Button>
 					</div>
 				</div>

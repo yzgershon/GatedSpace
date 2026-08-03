@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as net from "node:net";
 import * as os from "node:os";
 import * as path from "node:path";
+import { verifyDaemonToken } from "../auth/index.ts";
 import {
 	CommandHistory,
 	CommandHistoryWriter,
@@ -52,6 +53,12 @@ export interface ServerOptions {
 	 * they can drive sessions deterministically without a real shell.
 	 */
 	spawnPty?: HandlerCtx["spawnPty"];
+	/**
+	 * Shared secret every client must present in its `hello`. Production
+	 * always sets this (see main.ts); tests leave it unset, which disables
+	 * the check so they can drive the socket directly.
+	 */
+	authToken?: string;
 }
 
 const DEFAULT_OUTBOUND_BUFFER_CAP_BYTES = 8 * 1024 * 1024;
@@ -415,6 +422,21 @@ export class Server {
 					type: "error",
 					message: `no compatible protocol; daemon supports ${SUPPORTED_PROTOCOL_VERSIONS.join(",")}`,
 					code: "EVERSION",
+				});
+				conn.socket.destroy();
+				return;
+			}
+			// Reaching this socket means being able to spawn processes and type
+			// into live shells, so proving filesystem access to the token file
+			// is the boundary — the socket itself is not one on Windows.
+			if (
+				this.opts.authToken !== undefined &&
+				!verifyDaemonToken(this.opts.authToken, msg.token)
+			) {
+				conn.send({
+					type: "error",
+					message: "authentication failed",
+					code: "EAUTH",
 				});
 				conn.socket.destroy();
 				return;

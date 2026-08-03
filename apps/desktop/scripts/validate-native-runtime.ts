@@ -5,6 +5,8 @@
  * 1) libsql internals are accidentally bundled into dist/main (dynamic require risk)
  * 2) @parcel/watcher internals are accidentally bundled into dist/main
  * 3) required native runtime packages are missing from apps/desktop/node_modules
+ * 4) a child entrypoint that runs under ELECTRON_RUN_AS_NODE reaches a
+ *    top-level `require("electron")` (see validateNodeEntrypointsAvoidElectron)
  */
 
 import { existsSync, lstatSync, readdirSync, readFileSync } from "node:fs";
@@ -269,6 +271,133 @@ function validateOnlyExpectedExternalRequires(): void {
 
 	console.log(
 		"[validate:native-runtime] OK: main output only contains expected external requires",
+	);
+}
+
+/**
+ * Entrypoints spawned with ELECTRON_RUN_AS_NODE=1. They get plain Node, where
+ * `require("electron")` throws MODULE_NOT_FOUND.
+ */
+const nodeEntrypoints = [
+	"host-service.js",
+	"terminal-host.js",
+	"pty-daemon.js",
+	"pty-subprocess.js",
+	"git-task-worker.js",
+];
+
+/** Relative `require()` targets, so the emitted chunk graph can be walked. */
+function collectRelativeRequires(filePath: string): string[] {
+	const content = readFileSync(filePath, "utf8");
+	const specifiers: string[] = [];
+	const pattern = /require\("(\.[^"]+)"\)/g;
+	let match = pattern.exec(content);
+	while (match?.[1]) {
+		specifiers.push(match[1]);
+		match = pattern.exec(content);
+	}
+	return specifiers;
+}
+
+/** True when the call sits at module scope rather than inside a function body. */
+function hasTopLevelElectronRequire(filePath: string): boolean {
+	const content = readFileSync(filePath, "utf8");
+	if (!content.includes('require("electron")')) return false;
+
+	const sourceFile = ts.createSourceFile(
+		filePath,
+		content,
+		ts.ScriptTarget.Latest,
+		true,
+		ts.ScriptKind.JS,
+	);
+	let found = false;
+
+	function visit(node: ts.Node): void {
+		if (found) return;
+		if (
+			ts.isCallExpression(node) &&
+			ts.isIdentifier(node.expression) &&
+			node.expression.text === "require" &&
+			node.arguments.length === 1
+		) {
+			const [argument] = node.arguments;
+			if (
+				argument &&
+				ts.isStringLiteralLike(argument) &&
+				argument.text === "electron"
+			) {
+				let parent: ts.Node | undefined = node.parent;
+				let insideFunction = false;
+				while (parent) {
+					if (ts.isFunctionLike(parent)) {
+						insideFunction = true;
+						break;
+					}
+					parent = parent.parent;
+				}
+				if (!insideFunction) found = true;
+			}
+		}
+		ts.forEachChild(node, visit);
+	}
+
+	visit(sourceFile);
+	return found;
+}
+
+/**
+ * A static `import … from "electron"` anywhere in a child entrypoint's module
+ * graph is fatal, and silently so: rollup hoists the external dep to a
+ * top-level `require("electron")` in every chunk that reaches it, the child
+ * dies at load with MODULE_NOT_FOUND before it can listen, and the app window
+ * still opens looking healthy while every feature behind that child is dead.
+ *
+ * This is not hypothetical — 1.17.33 shipped it. One `import { safeStorage }
+ * from "electron"` added to crypto-storage.ts (reachable from host-service via
+ * auth-functions) took the whole host service down with exit code 1 on every
+ * launch. Import electron lazily inside a function in any module a child
+ * entrypoint can reach.
+ */
+function validateNodeEntrypointsAvoidElectron(): void {
+	const distMainDir = join(projectRoot, "dist", "main");
+	assertExists(
+		distMainDir,
+		"Main bundle output not found. Run `bun run compile:app` first.",
+	);
+
+	for (const entrypoint of nodeEntrypoints) {
+		const entryPath = join(distMainDir, entrypoint);
+		if (!existsSync(entryPath)) continue;
+
+		const visited = new Set<string>();
+		const offenders: string[] = [];
+		const queue = [entryPath];
+
+		while (queue.length > 0) {
+			const current = queue.pop();
+			if (!current || visited.has(current) || !existsSync(current)) continue;
+			visited.add(current);
+
+			if (hasTopLevelElectronRequire(current)) {
+				offenders.push(current.slice(distMainDir.length + 1));
+			}
+			for (const specifier of collectRelativeRequires(current)) {
+				queue.push(join(current, "..", specifier));
+			}
+		}
+
+		if (offenders.length > 0) {
+			fail(
+				`${entrypoint} runs under ELECTRON_RUN_AS_NODE, where require("electron") throws.\n` +
+					`Top-level electron require reached via: ${offenders.join(", ")}\n` +
+					"Import electron lazily inside a function instead of at module scope.",
+			);
+		}
+	}
+
+	console.log(
+		"[validate:native-runtime] OK: node entrypoints avoid top-level electron requires",
 	);
 }
 
@@ -539,6 +668,7 @@ function validateDuckdbPrepared(): void {
 function main(): void {
 	validateWorkspacePackagesBundled();
 	validateOnlyExpectedExternalRequires();
+	validateNodeEntrypointsAvoidElectron();
 	validateLibsqlNotBundled();
 	validateParcelWatcherNotBundled();
 	validateNativeModulesPrepared();

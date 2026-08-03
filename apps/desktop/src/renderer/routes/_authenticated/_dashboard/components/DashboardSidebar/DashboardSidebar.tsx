@@ -47,6 +47,12 @@ import type { DashboardSidebarProject } from "./types";
 
 interface DashboardSidebarProps {
 	isCollapsed?: boolean;
+	/**
+	 * Applied to the root. Carries the sidebar's CSS zoom so the scale lands
+	 * without inserting a wrapper element — an extra flex box between the
+	 * resizable panel and this `flex h-full` root cropped the rail.
+	 */
+	style?: React.CSSProperties;
 }
 
 interface SortableProjectWrapperProps {
@@ -105,6 +111,7 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 
 export function DashboardSidebar({
 	isCollapsed = false,
+	style,
 }: DashboardSidebarProps) {
 	const {
 		groups,
@@ -233,7 +240,7 @@ export function DashboardSidebar({
 			<DashboardSidebarHoverProvider>
 				<DashboardSidebarPortsProvider enabled={!isCollapsed}>
 					<DashboardSidebarHoverCardOverlay>
-						<div className="flex h-full">
+						<div className="flex h-full" style={style}>
 							{/*
 							 * Collapsed means "the rail IS the sidebar". Previously only
 							 * the width changed, so the panel kept rendering into whatever

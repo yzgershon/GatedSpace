@@ -29,6 +29,13 @@ export interface HelloMessage {
 	type: "hello";
 	protocols: number[];
 	clientVersion?: string;
+	/**
+	 * Shared secret from the daemon's token file (see ../auth). Optional on
+	 * the wire so a new client can still talk to an older daemon that predates
+	 * auth — that daemon ignores the field. A daemon that has a token loaded
+	 * requires it.
+	 */
+	token?: string;
 }
 
 export interface HelloAckMessage {

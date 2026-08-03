@@ -12,7 +12,7 @@
  * - Auth token: ~/.superset/terminal-host.token
  */
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import {
 	chmodSync,
 	existsSync,
@@ -25,6 +25,7 @@ import { createServer, type Server, Socket } from "node:net";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SUPERSET_DIR_NAME } from "shared/constants";
+import { writeSecureFile } from "../lib/secure-file";
 import {
 	type CancelCreateOrAttachRequest,
 	type ClearScrollbackRequest,
@@ -105,13 +106,20 @@ function ensureAuthToken(): string {
 
 	// Generate new token (32 bytes = 64 hex chars)
 	const token = randomBytes(32).toString("hex");
-	writeFileSync(TOKEN_PATH, token, { mode: 0o600 });
+	// 0o600 alone is a no-op on NTFS; this also writes a real ACL.
+	writeSecureFile(TOKEN_PATH, token);
 	log("info", "Generated new auth token");
 	return token;
 }
 
 function validateToken(token: string): boolean {
-	return token === authToken;
+	// Constant time: `===` returns on the first differing byte, which leaks the
+	// length of the matching prefix to anyone who can time the reply and lets a
+	// local caller recover the token byte by byte.
+	const expected = Buffer.from(authToken, "utf-8");
+	const provided = Buffer.from(token, "utf-8");
+	if (expected.length !== provided.length) return false;
+	return timingSafeEqual(expected, provided);
 }
 
 // =============================================================================

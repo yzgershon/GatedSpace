@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — composer proposal</title>
+<style>
+  :root{
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c; --popover:#201e1c;
+    --muted:#2a2827; --muted-foreground:#a8a5a3; --border:#2a2827;
+    --highlight:#e07850; --success:#4bb377;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--background);color:var(--foreground);
+       font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:26px 30px 70px}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--muted-foreground);font-size:13px;margin:0 0 26px}
+  h2{font-size:14px;margin:32px 0 8px}
+  .why{color:var(--muted-foreground);font-size:12.5px;margin:0 0 12px;max-width:74ch}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start}
+  .panel{border:1px solid var(--border);border-radius:10px;padding:16px;background:var(--background)}
+  .tag{font-size:10px;letter-spacing:.09em;text-transform:uppercase;margin-bottom:12px;display:block}
+  .tag.now{color:var(--muted-foreground)} .tag.next{color:var(--success)}
+  .metric{font-size:11px;color:var(--muted-foreground);margin-top:12px;font-variant-numeric:tabular-nums}
+
+  /* composer box */
+  .box{border-radius:16px;background:var(--card);width:100%}
+  .box.now{border:1px solid transparent;box-shadow:0 10px 15px -3px #0000001a,0 4px 6px -4px #0000001a}
+  .box.next{border:1px solid #ffffff14;
+            box-shadow:0 0 0 1px #00000040, 0 18px 40px -12px #000000b8, 0 2px 6px -2px #0000006b}
+  .box.next.focus{border-color:#ffffff2e;
+            box-shadow:0 0 0 1px #ffffff1a, 0 0 0 4px #ffffff08, 0 18px 40px -12px #000000cc}
+  .field{padding:14px 16px;color:var(--muted-foreground);font-size:13.5px;min-height:56px}
+  .bar-now{display:flex;align-items:center;gap:2px;border-top:1px solid #2a282780;
+           padding:8px 10px 10px}
+  .bar-next{display:flex;align-items:center;gap:2px;border-top:1px solid #3a3634;
+            padding:3px 10px 4px}
+  .bar-prev{display:flex;align-items:center;gap:2px;border-top:1px solid #3a3634;
+            padding:5px 10px 5px}
+  .ruler{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted-foreground);
+         margin-top:8px;font-variant-numeric:tabular-nums}
+  .ruler i{display:block;background:#e0785080;width:3px}
+  .ic{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+      border-radius:7px;color:#eae8e6bf;font-size:15px}
+  .ic:hover{background:#ffffff0f}
+  .spacer{flex:1}
+  .send{width:32px;height:32px;border-radius:9px;background:#e07850;color:#1a1413;
+        display:flex;align-items:center;justify-content:center;margin-left:4px;font-size:15px}
+  .auto{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--muted-foreground);padding:0 6px}
+
+  /* slash menu */
+  .menu{border:1px solid var(--border);border-radius:10px;background:var(--popover);
+        box-shadow:0 12px 28px -10px #000000cc;overflow:hidden;width:100%}
+  .sect{padding:7px 12px 3px;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;
+        color:#a8a5a385}
+  .mi{display:flex;align-items:center;gap:10px;padding:6px 12px;font-size:13px}
+  .mi:hover{background:#ffffff0d}
+  .mi.sel{background:#2f5d8a4d}
+  .mi .label{flex:1;min-width:0}
+  .mi .desc{display:block;font-size:11.5px;color:#a8a5a394;margin-top:1px}
+  .mi .right{color:var(--muted-foreground);font-size:12px;flex:none}
+  .rule{height:1px;background:#2a2827;margin:5px 0}
+  .toggle{width:30px;height:17px;border-radius:99px;background:#3a3634;position:relative;flex:none}
+  .toggle.on{background:#2f6f52}
+  .toggle i{position:absolute;top:2px;width:13px;height:13px;border-radius:99px;background:#eae8e6;
+            left:2px}
+  .toggle.on i{left:15px}
+  .dots{display:flex;align-items:center;gap:4px;background:#3a363480;border-radius:99px;
+        padding:3px 7px;flex:none}
+  .dots b{width:4px;height:4px;border-radius:99px;background:#a8a5a370;display:block}
+  .dots b.a{width:11px;height:11px;background:#eae8e6}
+  .mono{font-family:ui-monospace,Consolas,monospace;font-size:12px}
+  .flat{padding:4px 12px;font-family:ui-monospace,Consolas,monospace;font-size:12px;
+        color:var(--muted-foreground)}
+  .note{font-size:12px;color:var(--muted-foreground);margin-top:10px;max-width:74ch}
+  .warn{border-left:2px solid var(--highlight);padding-left:10px}
+</style>
+</head>
+<body>
+
+<h1>Composer — proposal</h1>
+<p class="sub">Left is 1.17.35 as it renders. Right is proposed. Real theme colours.</p>
+
+<h2>1 · The box: glow, hairline, utility bar height</h2>
+<p class="why">Three changes in one element. The border is currently <b>transparent</b> until
+focus, so the box has no edge of its own and relies entirely on a soft shadow — that is why it
+reads as flatter. The proposed version keeps a permanent hairline edge, a tighter and deeper
+shadow, and a brighter divider. The utility bar loses 4px of padding (8/10 → 5/5).</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now</span>
+    <div class="box now">
+      <div class="field">ctrl esc to focus or unfocus Claude</div>
+      <div class="bar-now">
+        <span class="ic">+</span><span class="ic">@</span><span class="ic">⌗</span>
+        <span class="spacer"></span>
+        <span class="auto">⚡ Auto</span><span class="send">↑</span>
+      </div>
+    </div>
+    <div class="metric">border transparent · shadow-lg · divider #2a2827 at 50% · bar 8px/10px</div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed (unfocused / focused)</span>
+    <div class="box next">
+      <div class="field">ctrl esc to focus or unfocus Claude</div>
+      <div class="bar-next">
+        <span class="ic">+</span><span class="ic">@</span><span class="ic">⌗</span>
+        <span class="spacer"></span>
+        <span class="auto">⚡ Auto</span><span class="send">↑</span>
+      </div>
+    </div>
+    <div style="height:14px"></div>
+    <div class="box next focus">
+      <div class="field" style="color:var(--foreground)">focused — brighter edge, wider glow</div>
+      <div class="bar-next">
+        <span class="ic">+</span><span class="ic">@</span><span class="ic">⌗</span>
+        <span class="spacer"></span>
+        <span class="auto">⚡ Auto</span><span class="send">↑</span>
+      </div>
+    </div>
+    <div class="metric">1px edge always · layered shadow · divider full-strength · bar 3px/4px</div>
+  </div>
+</div>
+
+<h2>1b · Where the hairline sits</h2>
+<p class="why">Same three bars, stacked, so the divider position is directly comparable. Every
+pixel taken off the bar moves the hairline down and gives the conversation that much more
+height — the bar is the same three icons either way.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now — 46px bar</span>
+    <div class="box now"><div class="field" style="min-height:34px">…</div>
+      <div class="bar-now"><span class="ic">+</span><span class="ic">@</span><span class="ic">⌗</span>
+      <span class="spacer"></span><span class="auto">⚡ Auto</span><span class="send">↑</span></div>
+    </div>
+    <div class="ruler"><i style="height:46px"></i> 8px top + 28px icons + 10px bottom = 46px</div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed — 35px bar</span>
+    <div class="box next"><div class="field" style="min-height:34px">…</div>
+      <div class="bar-next"><span class="ic">+</span><span class="ic">@</span><span class="ic">⌗</span>
+      <span class="spacer"></span><span class="auto">⚡ Auto</span><span class="send">↑</span></div>
+    </div>
+    <div class="ruler"><i style="height:35px"></i> 3px top + 28px icons + 4px bottom = 35px</div>
+    <div class="metric">11px shorter than now, 3px shorter than the first pass</div>
+  </div>
+</div>
+
+<h2>2 · The slash menu</h2>
+<p class="why">Today it is a flat mono list of whatever the session reported — your skills, and
+nothing else. The reference groups by purpose, gives each row a description, and puts live state
+on the right (current model, effort, toggles) so the menu doubles as a status readout.</p>
+<div class="cols">
+  <div class="panel">
+    <span class="tag now">Now</span>
+    <div class="menu">
+      <div class="sect">Slash commands</div>
+      <div class="flat">/banner-design</div>
+      <div class="flat">/brand</div>
+      <div class="flat">/design</div>
+      <div class="flat">/design-system</div>
+      <div class="flat">/higgsfield-generate</div>
+      <div class="flat">/higgsfield-marketplace-cards</div>
+    </div>
+    <div class="metric">one flat list · no descriptions · no state</div>
+  </div>
+  <div class="panel">
+    <span class="tag next">Proposed</span>
+    <div class="menu">
+      <div class="sect">Context</div>
+      <div class="mi sel"><span class="label">Attach file…<span class="desc">Upload a file to include in conversation</span></span></div>
+      <div class="mi"><span class="label">Mention file from this project…</span></div>
+      <div class="mi"><span class="label">Clear conversation</span></div>
+      <div class="rule"></div>
+      <div class="sect">Model</div>
+      <div class="mi"><span class="label">Switch model…</span><span class="right">Opus</span></div>
+      <div class="mi"><span class="label">Effort <span style="color:#a8a5a394">(Extra high)</span></span>
+        <span class="dots"><b></b><b></b><b></b><b class="a"></b><b></b><b></b></span></div>
+      <div class="mi"><span class="label">Account &amp; usage…</span></div>
+      <div class="rule"></div>
+      <div class="sect">Skills</div>
+      <div class="mi"><span class="label mono">/banner-design</span></div>
+      <div class="mi"><span class="label mono">/brand</span></div>
+      <div class="mi"><span class="label mono">/design</span></div>
+    </div>
+    <div class="metric">grouped · descriptions · live state on the right</div>
+  </div>
+</div>
+
+<p class="note warn"><b>Two rows from the reference I have left out, deliberately.</b>
+<b>Rewind</b> and <b>Thinking</b> are VS Code extension features — GatedSpace drives the
+<code>claude</code> CLI directly and has neither a conversation-rewind mechanism nor a thinking
+toggle to bind to. Drawing them would be drawing buttons that do nothing. <b>Switch models when a
+message is flagged</b> is the same. If you want any of them they are real features to build, not
+menu entries — say which and I will scope it separately.</p>
+
+<p class="note">Everything else maps to something that already exists: Attach file is the
+<code>+</code> button, Mention file is <code>@</code>, Switch model and Effort are the controls
+already in the utility bar, Account &amp; usage is the existing <code>/usage</code> panel.</p>
+
+</body>
+</html>

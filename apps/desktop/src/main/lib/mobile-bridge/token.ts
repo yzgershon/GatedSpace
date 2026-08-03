@@ -20,14 +20,14 @@
  * owner-only permissions.
  */
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
 	ensureSupersetHomeDirExists,
 	SUPERSET_HOME_DIR,
-	SUPERSET_SENSITIVE_FILE_MODE,
 } from "../app-environment";
+import { writeSecureFile } from "../secure-file";
 
 const TOKEN_FILE = join(SUPERSET_HOME_DIR, "bridge-token");
 
@@ -57,7 +57,8 @@ export function rotateBridgeToken(): string {
 	const token = generateBridgeToken();
 	try {
 		ensureSupersetHomeDirExists();
-		writeFileSync(TOKEN_FILE, token, { mode: SUPERSET_SENSITIVE_FILE_MODE });
+		// The mode alone is a no-op on NTFS; this also writes a real ACL.
+		writeSecureFile(TOKEN_FILE, token);
 	} catch (error) {
 		// Serve the in-memory token anyway. It works until the next restart,
 		// which beats refusing to start the bridge over a disk problem.

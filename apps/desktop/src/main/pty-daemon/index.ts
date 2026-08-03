@@ -35,6 +35,8 @@ import * as path from "node:path";
 import {
 	clearSnapshot,
 	DAEMON_PACKAGE_VERSION,
+	ensureDaemonToken,
+	ptyDaemonTokenPath,
 	readSnapshot,
 	Server,
 } from "@superset/pty-daemon";
@@ -99,6 +101,10 @@ async function runFresh(): Promise<void> {
 		daemonVersion,
 		bufferCap: args.bufferBytes,
 		scrollbackDir: resolveScrollbackDir(args.scrollbackDir),
+		// Must stay in step with the package's main.ts. This is the entry the
+		// DESKTOP bundle ships, so omitting the token here leaves the real
+		// daemon unauthenticated no matter what the package copy does.
+		authToken: ensureDaemonToken(ptyDaemonTokenPath(args.socket)),
 	});
 	await server.listen();
 	process.stderr.write(
@@ -153,6 +159,7 @@ async function runHandoffReceiver(): Promise<void> {
 		socketPath,
 		daemonVersion,
 		scrollbackDir: resolveScrollbackDir(),
+		authToken: ensureDaemonToken(ptyDaemonTokenPath(socketPath)),
 	});
 
 	try {

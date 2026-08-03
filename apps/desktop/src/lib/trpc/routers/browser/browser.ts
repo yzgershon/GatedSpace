@@ -1,6 +1,7 @@
 import { observable } from "@trpc/server/observable";
 import { session } from "electron";
 import { browserManager } from "main/lib/browser/browser-manager";
+import { BROWSER_SCRIPT_NAMES, getBrowserScript } from "shared/browser-scripts";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
@@ -63,12 +64,26 @@ export const createBrowserRouter = () => {
 				return { base64 };
 			}),
 
-		evaluateJS: publicProcedure
-			.input(z.object({ paneId: z.string(), code: z.string() }))
+		/**
+		 * Runs one of a fixed set of scripts (see shared/browser-scripts).
+		 *
+		 * This used to take the script text itself, which made it arbitrary
+		 * code execution inside whatever page the pane had loaded — including a
+		 * site the user is signed in to — for anything able to make a tRPC
+		 * call. There was only ever one caller passing one constant, so the
+		 * caller names the script and the text lives here.
+		 */
+		evaluateScript: publicProcedure
+			.input(
+				z.object({
+					paneId: z.string(),
+					script: z.enum(BROWSER_SCRIPT_NAMES),
+				}),
+			)
 			.mutation(async ({ input }) => {
 				const result = await browserManager.evaluateJS(
 					input.paneId,
-					input.code,
+					getBrowserScript(input.script),
 				);
 				return { result };
 			}),

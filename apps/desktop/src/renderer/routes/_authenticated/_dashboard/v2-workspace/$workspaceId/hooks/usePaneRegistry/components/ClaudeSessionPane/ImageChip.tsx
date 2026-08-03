@@ -68,17 +68,79 @@ export function ImageChip({
 	fullSource,
 	onRemove,
 	className,
+	compact = false,
 }: {
 	attachment: UserAttachment;
 	fullSource?: string;
 	onRemove?: () => void;
 	className?: string;
+	/**
+	 * Row-height chip instead of a preview tile.
+	 *
+	 * For the composer. A 96px tile there is a preview of something you are
+	 * still looking at — you just picked it — so it buys nothing and costs the
+	 * conversation real height, and two of them push the composer up the pane.
+	 * In the TIMELINE the tile earns its space, because scrolling back the
+	 * picture is the only thing that says which screenshot this was.
+	 */
+	compact?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
 	const preview = attachment.thumbnail;
 	// Prefer the full image when it's available (the composer has it); the
 	// preview is enough to open otherwise.
 	const expanded = fullSource ?? preview;
+
+	if (compact) {
+		return (
+			<>
+				<span
+					className={cn(
+						"inline-flex h-[26px] items-center gap-1.5 rounded-md border border-border bg-card pr-1.5 pl-1 text-[11.5px]",
+						className,
+					)}
+				>
+					<button
+						type="button"
+						onClick={() => setOpen(true)}
+						title={attachment.name}
+						className="flex min-w-0 items-center gap-1.5 focus-visible:outline-none"
+					>
+						{preview ? (
+							<img
+								src={preview}
+								alt=""
+								className="size-[18px] shrink-0 rounded-[3px] object-cover"
+							/>
+						) : (
+							<ImageIcon className="size-3.5 shrink-0 text-muted-foreground" />
+						)}
+						{/* No dimensions. They were never the question being asked. */}
+						<span className="max-w-40 truncate text-muted-foreground">
+							{attachment.name}
+						</span>
+					</button>
+					{onRemove ? (
+						<button
+							type="button"
+							aria-label={`Remove ${attachment.name}`}
+							onClick={onRemove}
+							className="shrink-0 text-muted-foreground/70 transition-colors hover:text-foreground"
+						>
+							<X className="size-3" />
+						</button>
+					) : null}
+				</span>
+				{open && expanded ? (
+					<Lightbox
+						source={expanded}
+						name={attachment.name}
+						onClose={() => setOpen(false)}
+					/>
+				) : null}
+			</>
+		);
+	}
 
 	if (!preview) {
 		return (

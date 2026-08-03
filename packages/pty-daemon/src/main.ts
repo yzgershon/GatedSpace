@@ -18,6 +18,7 @@
 import * as os from "node:os";
 import * as path from "node:path";
 import packageJson from "../package.json" with { type: "json" };
+import { ensureDaemonToken, ptyDaemonTokenPath } from "./auth/index.ts";
 import type { HandoffMessage } from "./protocol/index.ts";
 import { Server } from "./Server/index.ts";
 import { clearSnapshot, readSnapshot } from "./SessionStore/index.ts";
@@ -92,6 +93,7 @@ async function runFresh(): Promise<void> {
 		daemonVersion,
 		bufferCap: args.bufferBytes,
 		scrollbackDir: resolveScrollbackDir(args.scrollbackDir),
+		authToken: ensureDaemonToken(ptyDaemonTokenPath(args.socket)),
 	});
 	await server.listen();
 	process.stderr.write(
@@ -156,6 +158,7 @@ async function runHandoffReceiver(): Promise<void> {
 		socketPath,
 		daemonVersion,
 		scrollbackDir: resolveScrollbackDir(),
+		authToken: ensureDaemonToken(ptyDaemonTokenPath(socketPath)),
 	});
 
 	try {

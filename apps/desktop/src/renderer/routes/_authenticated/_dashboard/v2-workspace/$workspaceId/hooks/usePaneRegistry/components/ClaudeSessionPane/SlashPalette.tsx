@@ -290,12 +290,72 @@ function UsagePanel({ report }: { report: UsageReport }) {
 	);
 }
 
+export interface BuiltinActions {
+	/** Shown on the right of "Switch model…", e.g. "Opus". */
+	modelLabel?: string;
+	/** Shown beside "Effort", e.g. "Extra high". */
+	effortLabel?: string;
+	attachFile: () => void;
+	mentionFile: () => void;
+	switchModel: () => void;
+	accountUsage: () => void;
+}
+
+interface BuiltinRow {
+	id: string;
+	section: "Context" | "Model";
+	label: string;
+	description?: string;
+	/** Live state, right-aligned. */
+	value?: string;
+	run: () => void;
+	/** Matched against what the user has typed after the "/". */
+	keywords: string[];
+}
+
+function builtinRows(actions: BuiltinActions): BuiltinRow[] {
+	return [
+		{
+			id: "attach",
+			section: "Context",
+			label: "Attach file…",
+			description: "Upload a file to include in conversation",
+			run: actions.attachFile,
+			keywords: ["attach", "file", "upload", "image", "screenshot"],
+		},
+		{
+			id: "mention",
+			section: "Context",
+			label: "Mention file from this project…",
+			run: actions.mentionFile,
+			keywords: ["mention", "file", "project", "reference"],
+		},
+		{
+			id: "model",
+			section: "Model",
+			label: "Switch model…",
+			value: actions.modelLabel,
+			run: actions.switchModel,
+			keywords: ["model", "switch", "opus", "sonnet", "haiku"],
+		},
+		{
+			id: "usage",
+			section: "Model",
+			label: "Account & usage…",
+			value: actions.effortLabel ? `Effort ${actions.effortLabel}` : undefined,
+			run: actions.accountUsage,
+			keywords: ["account", "usage", "limit", "cost", "tokens", "effort"],
+		},
+	];
+}
+
 export function SlashPalette({
 	text,
 	commands,
 	onPickCommand,
 	onRunCommand,
 	onPickModel,
+	builtins,
 }: {
 	/** What's in the composer right now, starting with "/". */
 	text: string;
@@ -305,6 +365,15 @@ export function SlashPalette({
 	/** Run a local command in the live session and hand back its raw reply. */
 	onRunCommand: (command: string) => Promise<string | null>;
 	onPickModel: (id: string) => void;
+	/**
+	 * The composer's own controls, surfaced here as menu rows.
+	 *
+	 * Everything in this menu already exists somewhere in the utility bar —
+	 * nothing new is wired up. The menu is a second, discoverable way to reach
+	 * them, which is what the reference does: typing "/" is faster than finding
+	 * an icon, and the right-hand column doubles as a status readout.
+	 */
+	builtins?: BuiltinActions;
 }) {
 	const panel = panelFor(text);
 	const [raw, setRaw] = useState<string | null>(null);
@@ -339,14 +408,79 @@ export function SlashPalette({
 		.filter((c) => c.toLowerCase().startsWith(query))
 		.slice(0, 8);
 
-	if (!panel && matches.length === 0) return null;
+	// Built-ins filter on their own keywords, so "/mod" reaches "Switch model…"
+	// without the user having to know it is not a real slash command.
+	const rows = builtins ? builtinRows(builtins) : [];
+	const builtinMatches = rows.filter(
+		(row) =>
+			query.length === 0 ||
+			row.keywords.some((word) => word.startsWith(query)) ||
+			row.label.toLowerCase().includes(query),
+	);
+	const sections: BuiltinRow["section"][] = ["Context", "Model"];
+
+	if (!panel && matches.length === 0 && builtinMatches.length === 0)
+		return null;
 
 	return (
 		<div className="absolute bottom-full left-0 z-40 mb-1 max-h-[26rem] w-full overflow-y-auto rounded-lg border border-border bg-popover shadow-md">
+			{sections.map((section) => {
+				const inSection = builtinMatches.filter(
+					(row) => row.section === section,
+				);
+				if (inSection.length === 0) return null;
+				return (
+					<div className="flex flex-col py-1" key={section}>
+						<div className="px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground/60">
+							{section}
+						</div>
+						{inSection.map((row) => (
+							<button
+								key={row.id}
+								type="button"
+								// The textarea blurs before a click lands, which would close
+								// the palette first — take the action on mousedown.
+								onMouseDown={(e) => {
+									e.preventDefault();
+									row.run();
+								}}
+								className="flex items-center gap-3 px-2.5 py-1.5 text-left transition-colors hover:bg-accent"
+							>
+								<span className="min-w-0 flex-1">
+									<span className="block truncate text-[13px] text-foreground">
+										{row.label}
+									</span>
+									{row.description ? (
+										<span className="block truncate text-[11.5px] text-muted-foreground/70">
+											{row.description}
+										</span>
+									) : null}
+								</span>
+								{row.value ? (
+									<span className="shrink-0 text-[12px] text-muted-foreground">
+										{row.value}
+									</span>
+								) : null}
+							</button>
+						))}
+					</div>
+				);
+			})}
+
 			{matches.length > 0 ? (
-				<div className="flex flex-col py-1">
+				<div
+					className={cn(
+						"flex flex-col py-1",
+						builtinMatches.length > 0 && "border-border/60 border-t",
+					)}
+				>
+					{/*
+					 * "Skills", not "Slash commands": these are the user's own, and
+					 * the rows above are commands too. Naming the section after what
+					 * is in it is the only thing that distinguishes them.
+					 */}
 					<div className="px-2.5 py-1 text-[11px] uppercase tracking-wide text-muted-foreground/60">
-						Slash commands
+						Skills
 					</div>
 					{matches.map((command) => (
 						<button

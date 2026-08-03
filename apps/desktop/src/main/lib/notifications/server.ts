@@ -7,6 +7,7 @@ import { env } from "shared/env.shared";
 import type { AgentLifecycleEvent } from "shared/notification-types";
 import { HOOK_PROTOCOL_VERSION } from "../terminal/env";
 import { mapEventType } from "./map-event-type";
+import { shouldRejectOrigin } from "./origin-guard";
 import { resolvePaneId } from "./resolve-pane-id";
 
 // Re-export types for backwards compatibility
@@ -38,12 +39,27 @@ const app = express();
 // Parse JSON request bodies
 app.use(express.json());
 
-// CORS
+/**
+ * Refuse anything that came from a web page.
+ *
+ * The callers here are shell hook scripts invoking curl, and curl neither
+ * sends an Origin header nor cares about CORS. The old middleware set
+ * `Access-Control-Allow-Origin: *`, which did nothing for those callers and
+ * everything for a browser — any page the user happened to visit could reach
+ * this fixed port (51741) and forge agent-lifecycle events, or read the
+ * responses of the routes below.
+ *
+ * A request carrying an Origin came from a page, so it is not ours. Requests
+ * without one (curl, the OS opening the auth callback) pass through.
+ */
 app.use((req, res, next) => {
-	res.setHeader("Access-Control-Allow-Origin", "*");
-	res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+	if (shouldRejectOrigin(req.headers.origin)) {
+		return res.status(403).json({ error: "cross_origin_forbidden" });
+	}
+	// Deliberately no Access-Control-Allow-Origin: without it a browser cannot
+	// read a reply even if one is somehow elicited.
 	if (req.method === "OPTIONS") {
-		return res.status(200).end();
+		return res.status(204).end();
 	}
 	next();
 });

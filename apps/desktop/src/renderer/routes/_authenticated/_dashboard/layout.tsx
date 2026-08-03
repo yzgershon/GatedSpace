@@ -17,6 +17,7 @@ import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/u
 import { useDevSeedV2Sidebar } from "renderer/routes/_authenticated/hooks/useDevSeedV2Sidebar";
 import { useHostWorkspaces } from "renderer/routes/_authenticated/providers/HostWorkspacesProvider";
 import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
+import { useUiScaleStore, zoomStyle } from "renderer/stores/ui-scale";
 import {
 	COLLAPSED_WORKSPACE_SIDEBAR_WIDTH,
 	DEFAULT_WORKSPACE_SIDEBAR_WIDTH,
@@ -112,6 +113,11 @@ function DashboardLayout() {
 		openNewWorkspaceModal(currentWorkspace?.projectId),
 	);
 
+	const mainScale = useUiScaleStore((state) => state.mainScale);
+	const sidebarScale = useUiScaleStore((state) => state.sidebarScale);
+	const mainZoom = zoomStyle(mainScale);
+	const sidebarZoom = zoomStyle(sidebarScale);
+
 	const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
 
 	useHotkey(
@@ -163,7 +169,16 @@ function DashboardLayout() {
 				setWorkspaceSidebarWidth(DEFAULT_WORKSPACE_SIDEBAR_WIDTH)
 			}
 		>
-			<DashboardSidebar isCollapsed={isWorkspaceSidebarCollapsed()} />
+			{/*
+			 * The zoom goes ON the sidebar's own root, not on a wrapper around it.
+			 * A wrapper is an extra flex box between the resizable panel and a
+			 * child that already sets `flex h-full`, and it cropped the rail and
+			 * fought the drag handle. Passing a style down adds no layout box.
+			 */}
+			<DashboardSidebar
+				isCollapsed={isWorkspaceSidebarCollapsed()}
+				style={sidebarZoom}
+			/>
 		</ResizablePanel>
 	);
 
@@ -179,10 +194,19 @@ function DashboardLayout() {
 			<CommandPaletteHost />
 			{sidebarOutsideColumn && sidebarPanel}
 			<div className="flex flex-1 flex-col min-w-0 min-h-0">
-				<TopBar />
+				{/*
+				 * The main scale is applied to the top bar and the outlet
+				 * INDIVIDUALLY rather than to the column that holds them, because
+				 * the sidebar renders inside that column when it isn't lifted out —
+				 * zooming the column would multiply the sidebar's own scale by this
+				 * one. See renderer/stores/ui-scale.
+				 */}
+				<div style={mainZoom}>
+					<TopBar />
+				</div>
 				<div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
 					{!sidebarOutsideColumn && sidebarPanel}
-					<div className="flex flex-1 min-h-0 min-w-0">
+					<div style={mainZoom} className="flex flex-1 min-h-0 min-w-0">
 						{versionMismatch ? <CrossVersionMismatchState /> : <Outlet />}
 					</div>
 				</div>

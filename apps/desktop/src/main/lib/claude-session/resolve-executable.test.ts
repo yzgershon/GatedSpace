@@ -63,9 +63,26 @@ describe("resolveExecutable", () => {
 		expect(result.command).toBe("D:\\tools\\claude.exe");
 	});
 
-	it("hands an unresolvable name to the shell so it reports the real error", () => {
+	it("spawns an unresolvable name directly rather than via a shell", () => {
+		// It used to ask for a shell here so the shell would report the error.
+		// But `binary` arrives from the tRPC start input as a bare string, so
+		// that turned every unresolvable value into a command line. ENOENT is
+		// the better error anyway — it names what was missing.
 		const result = resolveExecutable("claude", win([]));
-		expect(result).toEqual({ command: "claude", needsShell: true });
+		expect(result).toEqual({ command: "claude", needsShell: false });
+	});
+
+	it("never shells out a name carrying cmd.exe metacharacters", () => {
+		const result = resolveExecutable("x & calc.exe", win([]));
+		expect(result.needsShell).toBe(false);
+	});
+
+	it("never shells out an unresolvable explicit path", () => {
+		const result = resolveExecutable(
+			"C:\\nope\\claude.exe & calc.exe",
+			win([]),
+		);
+		expect(result.needsShell).toBe(false);
 	});
 
 	it("never needs a shell off Windows", () => {

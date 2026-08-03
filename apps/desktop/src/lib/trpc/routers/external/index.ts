@@ -23,6 +23,7 @@ import {
 	resolvePath,
 	spawnAsync,
 } from "./helpers";
+import { checkLocalAbsolutePath, describeRejection } from "./local-path";
 
 /**
  * Wraps a tRPC handler so a `RelativePathWithoutCwdError` (thrown by
@@ -131,6 +132,16 @@ export function resolveDefaultEditor(projectId?: string): ExternalApp | null {
 	return row?.defaultEditor ?? null;
 }
 
+/** Refuses relative and network paths before they reach the OS. */
+function assertLocalAbsolutePath(candidate: string, procedure: string): void {
+	const rejection = checkLocalAbsolutePath(candidate);
+	if (rejection === null) return;
+	throw new TRPCError({
+		code: "BAD_REQUEST",
+		message: describeRejection(rejection, procedure, candidate),
+	});
+}
+
 async function openPathInApp(
 	filePath: string,
 	app: ExternalApp,
@@ -199,6 +210,7 @@ export const createExternalRouter = () => {
 		openInFinder: publicProcedure
 			.input(z.string())
 			.mutation(async ({ input }) => {
+				assertLocalAbsolutePath(input, "openInFinder");
 				shell.showItemInFolder(input);
 			}),
 
@@ -214,13 +226,10 @@ export const createExternalRouter = () => {
 				// openInApp hands `path` directly to the editor CLI / shell; with no
 				// cwd input there's no safe way to interpret a relative path, so we
 				// reject them loudly instead of silently resolving against Electron's
-				// working directory.
-				if (!nodePath.isAbsolute(input.path)) {
-					throw new TRPCError({
-						code: "BAD_REQUEST",
-						message: `openInApp requires an absolute path (got ${JSON.stringify(input.path)}).`,
-					});
-				}
+				// working directory. UNC paths are refused for a different reason —
+				// they are absolute, so the old check passed them straight through to
+				// the OS, which then authenticates to the remote host.
+				assertLocalAbsolutePath(input.path, "openInApp");
 				await openPathInApp(input.path, input.app);
 
 				// Persist defaults only after successful launch
@@ -319,6 +328,10 @@ export const createExternalRouter = () => {
 			.mutation(({ input }) =>
 				withResolveGuard(async () => {
 					const filePath = resolvePath(input.path, input.worktreePath);
+					// Both branches below reach the OS with this path, and a UNC one
+					// makes Windows authenticate to the remote host before anything
+					// opens.
+					assertLocalAbsolutePath(filePath, "openFileInEditor");
 					const app = input.app ?? resolveDefaultEditor(input.projectId);
 
 					if (!app) {

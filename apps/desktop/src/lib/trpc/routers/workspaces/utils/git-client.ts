@@ -5,6 +5,7 @@ import {
 import { promisify } from "node:util";
 import { USER_GIT_ENV_SIMPLE_GIT_OPTIONS } from "@superset/shared/simple-git-options";
 import simpleGit, { type SimpleGit, type SimpleGitOptions } from "simple-git";
+import { resolveBinaryFromPath } from "./resolve-binary";
 import { getProcessEnvWithShellPath } from "./shell-env";
 
 const execFileAsync = promisify(execFile);
@@ -37,7 +38,10 @@ export async function execGitWithShellPath(
 		options?.env ? { ...process.env, ...options.env } : process.env,
 	);
 
-	return execFileAsync("git", args, {
+	// Absolute path: callers set `cwd` to a repo the user cloned but did not
+	// write, and Windows searches cwd before PATH — so a `git.cmd` committed at
+	// the repo root would otherwise run instead of git.
+	return execFileAsync(resolveBinaryFromPath("git", env), args, {
 		...options,
 		encoding: "utf8",
 		env,

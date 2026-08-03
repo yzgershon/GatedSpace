@@ -1,11 +1,11 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import {
 	ensureSupersetHomeDirExists,
 	SUPERSET_HOME_DIR,
-	SUPERSET_SENSITIVE_FILE_MODE,
 } from "../app-environment";
+import { writeSecureFile } from "../secure-file";
 import {
 	audienceOf,
 	buildVapidAuthorization,
@@ -76,9 +76,8 @@ function readJsonFile<T>(path: string): T | null {
 
 function writeJsonFile(path: string, value: unknown): void {
 	ensureSupersetHomeDirExists();
-	writeFileSync(path, JSON.stringify(value, null, 2), {
-		mode: SUPERSET_SENSITIVE_FILE_MODE,
-	});
+	// Holds the VAPID private key; the mode alone is a no-op on NTFS.
+	writeSecureFile(path, JSON.stringify(value, null, 2));
 }
 
 class PushService {

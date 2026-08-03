@@ -6,6 +6,7 @@ import {
 } from "../../../utils/settings-search";
 import { FontSettingSection } from "./components/FontSettingSection";
 import { MarkdownStyleSection } from "./components/MarkdownStyleSection";
+import { ScaleSection } from "./components/ScaleSection";
 import { ThemeSection } from "./components/ThemeSection";
 
 /**
@@ -49,6 +50,10 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 		SETTING_ITEM_ID.APPEARANCE_CUSTOM_THEMES,
 		visibleItems,
 	);
+	const showScale = isItemVisible(
+		SETTING_ITEM_ID.APPEARANCE_SCALE,
+		visibleItems,
+	);
 	const showThemeSection = showTheme || showCustomThemes;
 
 	return (
@@ -62,6 +67,7 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 
 			<SectionList>
 				{showThemeSection && <ThemeSection key="theme" />}
+				{showScale && <ScaleSection key="scale" />}
 				{showMarkdown && <MarkdownStyleSection key="markdown" />}
 				{showEditorFont && (
 					<FontSettingSection key="editor-font" variant="editor" />

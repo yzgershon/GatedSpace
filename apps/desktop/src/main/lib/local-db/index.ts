@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { chmodSync, existsSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import * as schema from "@superset/local-db";
 
@@ -12,8 +12,8 @@ import { env } from "../../env.main";
 import {
 	ensureSupersetHomeDirExists,
 	SUPERSET_HOME_DIR,
-	SUPERSET_SENSITIVE_FILE_MODE,
 } from "../app-environment";
+import { secureExistingFile } from "../secure-file";
 import { markStartup } from "../startup-timing";
 
 const DB_PATH = join(SUPERSET_HOME_DIR, "local.db");
@@ -77,11 +77,10 @@ function getMigrationsDirectory(): string {
 const migrationsFolder = getMigrationsDirectory();
 
 const sqlite = new Database(DB_PATH);
-try {
-	chmodSync(DB_PATH, SUPERSET_SENSITIVE_FILE_MODE);
-} catch {
-	// Best-effort; directory permissions should still protect the DB.
-}
+// chmod alone is a no-op on NTFS, and "directory permissions should still
+// protect the DB" was the assumption that failed — the home directory carried
+// a grant to a lower-trust local group, which every file under it inherited.
+secureExistingFile(DB_PATH);
 sqlite.pragma("journal_mode = WAL");
 sqlite.pragma("foreign_keys = OFF");
 sqlite.function("uuid_v4", () => randomUUID());

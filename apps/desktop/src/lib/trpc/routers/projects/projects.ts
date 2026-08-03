@@ -45,6 +45,7 @@ import {
 } from "../workspaces/utils/git";
 import { getSimpleGitWithShellPath } from "../workspaces/utils/git-client";
 import { execWithShellEnv } from "../workspaces/utils/shell-env";
+import { checkProjectRoot, describeProjectRootRejection } from "./project-root";
 import { getDefaultProjectColor } from "./utils/colors";
 import { discoverAndSaveProjectIcon } from "./utils/favicon-discovery";
 import { fetchGitHubOwner, getGitHubAvatarUrl } from "./utils/github";
@@ -1119,6 +1120,17 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 			.mutation(async ({ input }): Promise<OpenNewResult> => {
 				const selectedPath = input.path;
 
+				// The project root is what workspace-fs confines writes to, so a
+				// caller choosing it walks around that confinement rather than
+				// breaking it. See project-root.
+				const rootRejection = checkProjectRoot(selectedPath);
+				if (rootRejection) {
+					return {
+						canceled: false,
+						error: describeProjectRootRejection(rootRejection, selectedPath),
+					};
+				}
+
 				if (!existsSync(selectedPath)) {
 					return { canceled: false, error: "Path does not exist" };
 				}
@@ -1171,6 +1183,15 @@ export const createProjectsRouter = (getWindow: () => BrowserWindow | null) => {
 		initGitAndOpen: publicProcedure
 			.input(z.object({ path: z.string() }))
 			.mutation(async ({ input }) => {
+				// Same reasoning as openFromPath, and worse here: this one also
+				// runs `git init` wherever it is pointed.
+				const rootRejection = checkProjectRoot(input.path);
+				if (rootRejection) {
+					throw new TRPCError({
+						code: "BAD_REQUEST",
+						message: describeProjectRootRejection(rootRejection, input.path),
+					});
+				}
 				const { defaultBranch } = await initGitRepo(input.path);
 
 				const project = upsertProject(input.path, defaultBranch);

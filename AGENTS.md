@@ -82,6 +82,14 @@ desktop <version> <commit>` provisions one from a commit. Full upstream runbook:
 > bun run build`). Most changes go to BOTH. Don't ask the user how to ship — it's all
 > in `docs/RELEASING.md`.
 
+> **NEVER pass `--config.directories.output`.** `electron-builder.ts` already
+> sets `output: "release"`, and every build belongs in that one directory,
+> overwriting the last. Overriding it per build to keep them side by side
+> accumulated **46 release folders and ~70 GB** before anyone noticed — each one
+> holds a full ~500 MB installer plus an unpacked app. If you genuinely need to
+> keep a specific installer, copy that one `.exe` somewhere; do not fork the
+> output directory.
+
 ## Code Quality
 
 **Biome runs at root level** (not per-package) for speed:
@@ -105,6 +113,9 @@ desktop <version> <commit>` provisions one from a commit. Full upstream runbook:
 9. **TanStack DB / Electric live queries are cache-first** - `useLiveQuery` can return persisted rows in `data` while the collection is still not `isReady`. Always render existing rows first. Use `isReady` only to decide what to show when no row/data exists yet: no data + not ready = loading/skeleton/null; no data + ready = empty/not-found. Never hide, blank, or replace existing `data` just because `isReady` is false or `isLoading` is true. This cache-first rendering rule does not apply to write/seeding side effects: wait for strict readiness before deriving missing rows or writing defaults, unless the write is provably idempotent.
 10. **PR titles are conventional commits** - PRs are squash-merged using the PR title as the commit subject, so every title needs a conventional-commit type and scope, e.g. `feat(desktop): add copy-logs button to failed CI checks` or `fix(host-service): guard against missing PR`.
 11. **Mobile is iOS-only for the time being** - `apps/mobile` targets iOS only. Don't add Android fallbacks or platform guards for iOS-only APIs (e.g. `@expo/ui/swift-ui`), and don't treat Android incompatibility as a blocker until Android is explicitly put in scope.
+12. **`HANDOFF.md` is the current-state file and it is deliberately untracked** - `CLAUDE.md` imports it, so it loads into every session in this checkout automatically. It is gitignored on purpose (in-flight notes, and it records security trade-offs that should not ship on the public repo) — do not "fix" that by committing it. Two consequences: a fresh clone and any **worktree** will not have it, and the import is a no-op there; and it goes stale silently unless you update it. Update it before you stop working.
+13. **The pty-daemon has TWO entrypoints and they are synced by hand** - `packages/pty-daemon/src/main.ts` and `apps/desktop/src/main/pty-daemon/index.ts`. The **desktop one is what ships**: electron-vite bundles it to `dist/main/pty-daemon.js`, which is what the supervisor spawns. The package copy is only used by a headless (non-Electron) deploy. Changing daemon startup in one and not the other produces a change that passes every test and does nothing in the real app — that is exactly how socket authentication got added and stayed off. `apps/desktop/src/main/pty-daemon/entry-parity.test.ts` guards the specific case of a `Server` built without `authToken`; it cannot guard the general case, so check both files by hand whenever you touch daemon construction.
+14. **`chmod` / `mode` does not protect a file on Windows** - Node's `mode` argument only toggles the read-only attribute on NTFS; it never writes a DACL, so the file inherits whatever its parent directory grants. Anything holding a secret must go through `main/lib/secure-file` (`writeSecureFile` / `ensureSecureDir` / `secureExistingFile`), which sets the mode AND replaces the inherited ACL. Note that `(OI)(CI)` are directory-only inheritance flags — passing them for a file makes `icacls` reject the grant after inheritance has already been stripped, leaving an empty DACL that locks out the owner too.
 
 
 ---

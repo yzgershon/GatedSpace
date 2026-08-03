@@ -19,7 +19,6 @@ import { usePickElementIntent } from "renderer/stores/pick-element-intent";
 import { formatPickedElement, type PickedElement } from "shared/element-picker";
 import type { StoreApi } from "zustand/vanilla";
 import type { PaneViewerData } from "../../types";
-import { ELEMENT_PICKER_SCRIPT } from "../usePaneRegistry/components/BrowserPane/element-picker-script";
 import { appendSessionDraftText } from "../usePaneRegistry/components/ClaudeSessionPane";
 import {
 	resolveTarget,
@@ -91,8 +90,8 @@ export function usePickElementConsumer({
 
 		toast.info("Click an element", { description: "Escape to cancel." });
 
-		void electronTrpcClient.browser.evaluateJS
-			.mutate({ paneId: browserPaneId, code: ELEMENT_PICKER_SCRIPT })
+		void electronTrpcClient.browser.evaluateScript
+			.mutate({ paneId: browserPaneId, script: "element-picker" })
 			.then(({ result }) => {
 				// The router wraps the script's value as `{ result }`, and the script
 				// resolves null on Escape. Destructure rather than fall back to the

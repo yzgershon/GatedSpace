@@ -2,6 +2,7 @@
 // Speaks the daemon's wire protocol (v2) over a Unix socket.
 
 import * as net from "node:net";
+import { ptyDaemonTokenPath, readDaemonToken } from "../../src/auth/index.ts";
 import {
 	encodeFrame,
 	FrameDecoder,
@@ -225,7 +226,11 @@ export async function connectAndHello(
 	socketPath: string,
 ): Promise<DaemonClient> {
 	const c = await connect(socketPath);
-	c.send({ type: "hello", protocols: [2] });
+	// Read rather than ensure: tests that drive an in-process Server pass no
+	// authToken, so no file exists and no token is sent. Tests that spawn the
+	// real daemon get one, and it is written before the socket accepts.
+	const token = readDaemonToken(ptyDaemonTokenPath(socketPath)) ?? undefined;
+	c.send({ type: "hello", protocols: [2], token });
 	await c.waitFor((m) => m.type === "hello-ack");
 	return c;
 }

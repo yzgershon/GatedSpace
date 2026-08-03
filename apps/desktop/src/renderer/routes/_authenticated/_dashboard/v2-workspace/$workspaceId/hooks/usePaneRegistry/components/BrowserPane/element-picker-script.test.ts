@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { ELEMENT_PICKER_SCRIPT } from "./element-picker-script";
+import { ELEMENT_PICKER_SCRIPT } from "shared/browser-scripts/element-picker-script";
 
 /**
  * The script is a STRING handed to `executeJavaScript`. Nothing typechecks it,

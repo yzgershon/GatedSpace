@@ -17,6 +17,7 @@
 
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { ensureSecureDir } from "../secure-fs/index.ts";
 
 export const DEFAULT_MAX_FILE_BYTES = 16 * 1024 * 1024;
 export const DEFAULT_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
@@ -47,7 +48,10 @@ export class SessionLogger {
 		this.dir = dir;
 		this.maxFileBytes = opts.maxFileBytes ?? DEFAULT_MAX_FILE_BYTES;
 		try {
-			fs.mkdirSync(dir, { recursive: true });
+			// Owner-only: these files are a verbatim record of everything the
+			// terminal displayed, which includes echoed commands and anything a
+			// command printed — API keys, tokens, connection strings.
+			ensureSecureDir(dir);
 			this.ready = true;
 			this.sweep(opts.retentionMs ?? DEFAULT_RETENTION_MS);
 		} catch (err) {
@@ -138,7 +142,7 @@ export class SessionLogger {
 				if (fs.existsSync(logPath)) fs.renameSync(logPath, rotated);
 				state.fileBytes = 0;
 			}
-			fs.appendFileSync(logPath, data);
+			fs.appendFileSync(logPath, data, { mode: 0o600 });
 			state.fileBytes += data.byteLength;
 		} catch (err) {
 			state.failed = true;

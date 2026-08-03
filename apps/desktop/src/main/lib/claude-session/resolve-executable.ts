@@ -38,6 +38,24 @@ function looksLikePath(binary: string): boolean {
 	return binary.includes("/") || binary.includes(sep) || isAbsolute(binary);
 }
 
+/**
+ * What to return when nothing was found.
+ *
+ * This used to be `{ needsShell: true }`, with the reasoning that the shell
+ * would "produce the real error". It did — but it also made every unresolvable
+ * binary a shell command line. `binary` arrives from the tRPC start input as a
+ * bare string, so a value like `x & calc.exe` resolves to nothing, gets handed
+ * to cmd.exe, and runs as two commands.
+ *
+ * Spawning it directly fails with ENOENT instead, which is a better error
+ * anyway: it names the thing that was missing rather than whatever a shell
+ * makes of it. A shell is still used for a `.cmd`/`.bat` shim, but only after
+ * tryCandidate has confirmed that file actually exists.
+ */
+function notFound(binary: string): ResolvedExecutable {
+	return { command: binary, needsShell: false };
+}
+
 export function resolveExecutable(
 	binary: string,
 	options: ResolveOptions = {},
@@ -65,7 +83,7 @@ export function resolveExecutable(
 
 	// An explicit path is used as given — the user pointed at something specific.
 	if (looksLikePath(binary)) {
-		return tryCandidate(binary) ?? { command: binary, needsShell: true };
+		return tryCandidate(binary) ?? notFound(binary);
 	}
 
 	const pathDirs =
@@ -78,6 +96,5 @@ export function resolveExecutable(
 		if (found) return found;
 	}
 
-	// Not found: hand it to the shell and let it produce the real error.
-	return { command: binary, needsShell: true };
+	return notFound(binary);
 }

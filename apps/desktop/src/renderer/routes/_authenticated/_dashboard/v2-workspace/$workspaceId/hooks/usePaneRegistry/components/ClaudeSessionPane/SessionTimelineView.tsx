@@ -28,6 +28,7 @@ import { cn } from "@superset/ui/utils";
 import { ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { MarkdownRenderer } from "renderer/components/MarkdownRenderer";
+import { useResolvedTheme } from "renderer/stores/theme";
 import {
 	groupSubagents,
 	type SessionTimeline,
@@ -37,6 +38,7 @@ import {
 	turnTokenTotal,
 	type UserTextItem,
 } from "shared/claude-session/timeline";
+import { getEditorTheme } from "shared/themes";
 import { ImageChip } from "./ImageChip";
 import { DIFF_MAX_CHARS, SessionDiff } from "./SessionDiff";
 import { WorkingIndicator } from "./WorkingIndicator";
@@ -66,14 +68,16 @@ const DIFF_MAX_HEIGHT = MAX_BODY_LINES * DIFF_LINE_HEIGHT;
  * stuck to the top of the screen is a ten-line hole in the answer you're
  * reading, which is the opposite of what pinning it was for.
  */
-const PROMPT_MAX_LINES = 2;
+const PROMPT_MAX_LINES = 3;
 const PROMPT_LINE_HEIGHT = 20;
 /**
  * The fade has to be shorter than the clamp, or it washes out text that is
  * still meant to be readable. At two lines a 32px fade covered most of the
  * second one, which made the pinned prompt look broken rather than truncated.
+ * Three lines affords a little more, and the extra height is what makes it
+ * read as "there is more" rather than as a rendering artefact.
  */
-const PROMPT_FADE_HEIGHT = 16;
+const PROMPT_FADE_HEIGHT = 22;
 
 /** Shells get the IN/OUT treatment: their input is as interesting as their output. */
 const SHELL_TOOLS = new Set(["Bash", "PowerShell", "BashOutput", "KillShell"]);
@@ -333,17 +337,25 @@ function Clamped({
 	maxHeight,
 	lines,
 	fade,
+	fadeColor,
 }: {
 	children: React.ReactNode;
 	maxHeight: number;
 	/** Shown on the toggle so expanding isn't a blind click. */
 	lines?: number;
 	/**
-	 * Gradient `from-` class matching the surface behind the clipped content. Left
-	 * off where the surface is theme-supplied (a diff paints its own background),
-	 * because a fade to the wrong colour reads as a rendering bug.
+	 * Gradient `from-` class matching the surface behind the clipped content.
+	 * Works where the surface is one of ours; see `fadeColor` for the rest.
 	 */
 	fade?: string;
+	/**
+	 * A resolved CSS colour, for surfaces the THEME paints rather than Tailwind —
+	 * a diff sets its own `backgroundColor` from the editor theme, so no `from-`
+	 * class can match it and fading to one reads as a rendering bug. Passing the
+	 * real colour is what lets an edit fade like everything else instead of
+	 * ending in a hard cut.
+	 */
+	fadeColor?: string;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const [overflowing, setOverflowing] = useState(false);
@@ -359,7 +371,15 @@ function Clamped({
 	});
 
 	return (
-		<>
+		/*
+		 * The toggle floats INSIDE the panel and only on hover.
+		 *
+		 * It used to be a full-width bordered row beneath the body, which cost a
+		 * whole line of vertical space on every clipped tool call — in a pane
+		 * where vertical space is the entire currency — to say something the fade
+		 * already says. Overlaying it costs nothing and matches the reference.
+		 */
+		<div className="group/clamp relative">
 			<div className="relative">
 				<div
 					ref={boxRef}
@@ -368,12 +388,20 @@ function Clamped({
 				>
 					{children}
 				</div>
-				{!expanded && overflowing && fade ? (
+				{!expanded && overflowing && (fade || fadeColor) ? (
 					<div
 						className={cn(
-							"pointer-events-none absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t to-transparent",
+							"pointer-events-none absolute inset-x-0 bottom-0 h-10",
+							fade && "bg-gradient-to-t to-transparent",
 							fade,
 						)}
+						style={
+							fadeColor
+								? {
+										background: `linear-gradient(to top, ${fadeColor}, transparent)`,
+									}
+								: undefined
+						}
 					/>
 				) : null}
 			</div>
@@ -381,17 +409,20 @@ function Clamped({
 				<button
 					type="button"
 					onClick={() => setExpanded((v) => !v)}
-					className="flex w-full items-center justify-between border-border/60 border-t px-3 py-1 text-[11px] text-muted-foreground/85 transition-colors hover:text-foreground focus-visible:outline-none"
+					// The line count moves to the tooltip. It was worth a column in a
+					// full-width row; it is not worth widening a floating chip.
+					title={lines ? `${lines} line${lines === 1 ? "" : "s"}` : undefined}
+					className={cn(
+						"absolute right-2 bottom-2 rounded-md border border-border bg-popover px-2 py-0.5 text-[11px] text-muted-foreground shadow-sm transition-opacity hover:text-foreground",
+						// Keyboard users never hover, so focus has to reveal it too or
+						// the control is unreachable without a mouse.
+						"opacity-0 group-hover/clamp:opacity-100 focus-visible:opacity-100 focus-visible:outline-none",
+					)}
 				>
-					<span>{expanded ? "Show less" : "Show more"}</span>
-					{lines ? (
-						<span className="tabular-nums">
-							{lines} line{lines === 1 ? "" : "s"}
-						</span>
-					) : null}
+					{expanded ? "Show less" : "Click to expand"}
 				</button>
 			) : null}
-		</>
+		</div>
 	);
 }
 
@@ -401,7 +432,11 @@ function ToolPanel({ children }: { children: React.ReactNode }) {
 		// No fill, only a border — sampled off the reference, where an IN/OUT panel
 		// sits directly on the page. A tinted panel turned every shell call into a
 		// heavy block and made a run of them read as stripes.
-		<div className="mt-1.5 overflow-hidden rounded-lg border border-border/70">
+		//
+		// mt-1: the body belongs to the header above it, so the gap that binds
+		// them has to stay smaller than the gap BETWEEN calls, or a run of tools
+		// reads as evenly-spaced fragments instead of header-plus-body pairs.
+		<div className="mt-1 overflow-hidden rounded-lg border border-border/70">
 			{children}
 		</div>
 	);
@@ -425,13 +460,13 @@ function StreamRow({
 	clamp?: number;
 }) {
 	const body = (
-		<pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre px-3 py-2 font-mono text-[11.5px] leading-relaxed text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+		<pre className="min-w-0 flex-1 overflow-x-auto whitespace-pre px-3 py-[5px] font-mono text-[11.5px] leading-relaxed text-muted-foreground [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
 			{text}
 		</pre>
 	);
 	return (
 		<div className="flex">
-			<span className="w-9 shrink-0 select-none py-2 pl-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/45">
+			<span className="w-9 shrink-0 select-none py-[5px] pl-3 font-mono text-[10px] uppercase tracking-wider text-muted-foreground/45">
 				{label}
 			</span>
 			{clamp ? (
@@ -471,6 +506,10 @@ function ShellPanel({ item }: { item: ToolItem }) {
 }
 
 function DiffPanel({ item }: { item: ToolItem }) {
+	// The same colour SessionDiff paints itself with, so the clip fades into the
+	// diff instead of ending on a hard edge.
+	const theme = useResolvedTheme();
+	const diffSurface = getEditorTheme(theme).colors.background;
 	const path =
 		str(item.input, "file_path") ?? str(item.input, "path") ?? "file";
 	const pairs = editPairs(item);
@@ -480,7 +519,7 @@ function DiffPanel({ item }: { item: ToolItem }) {
 	if (pairs.length === 0 || tooBig) return null;
 	return (
 		<ToolPanel>
-			<Clamped maxHeight={DIFF_MAX_HEIGHT}>
+			<Clamped maxHeight={DIFF_MAX_HEIGHT} fadeColor={diffSurface}>
 				<div className="flex flex-col">
 					{pairs.map((pair, index) => (
 						<SessionDiff
@@ -506,7 +545,7 @@ function OutputPanel({ text }: { text: string }) {
 				lines={countLines(text)}
 				fade="from-background"
 			>
-				<pre className="overflow-x-auto whitespace-pre-wrap break-words px-3 py-2 font-mono text-[11.5px] leading-relaxed text-muted-foreground">
+				<pre className="overflow-x-auto whitespace-pre-wrap break-words px-3 py-[5px] font-mono text-[11.5px] leading-relaxed text-muted-foreground">
 					{text}
 				</pre>
 			</Clamped>
@@ -625,7 +664,7 @@ function SubagentGroup({
 				{label ?? "Subagent"} · {steps} step{steps === 1 ? "" : "s"}
 			</button>
 			<Collapse open={open}>
-				<div className="flex flex-col gap-3 border-border/60 border-t py-2.5">
+				<div className="flex flex-col gap-2 border-border/60 border-t py-2">
 					{items.map((child) => (
 						<TimelineItemRow
 							key={child.id}
@@ -758,7 +797,13 @@ function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
 	const clamped = !expanded && overflowing;
 
 	return (
-		<div className="sticky top-0 z-10 rounded-lg bg-card px-4 py-2.5 text-[13.5px] text-foreground shadow-sm">
+		/*
+		 * The hairline border and the deeper shadow are what stop this reading as
+		 * part of the conversation. It is pinned, so content scrolls UNDER it —
+		 * without an edge of its own the two merge and the pane looks like it is
+		 * rendering wrong.
+		 */
+		<div className="sticky top-0 z-10 rounded-lg border border-border/50 bg-card px-4 py-2.5 text-[13.5px] text-foreground shadow-[0_1px_0_theme(colors.white/6%)_inset,0_6px_16px_-8px_rgb(0_0_0/0.55)]">
 			{prompt.attachments?.length ? (
 				<div className="mb-1.5 flex flex-wrap items-start gap-1.5">
 					{prompt.attachments.map((attachment, index) => (
@@ -780,14 +825,26 @@ function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
 					aria-expanded={overflowing ? expanded : undefined}
 				>
 					<div className="relative">
+						{/*
+						 * The clamp is keyed off `expanded` ALONE, never off the overflow
+						 * measurement.
+						 *
+						 * Keying it off `clamped` (which required `overflowing`) was a
+						 * deadlock, and the reason this control has never once appeared:
+						 * with no maxHeight the div renders at its natural height, so
+						 * scrollHeight equals clientHeight, so `overflowing` stays false,
+						 * so the maxHeight that would have made it overflow is never
+						 * applied. The measurement can only see overflow that the clamp
+						 * itself creates.
+						 */}
 						<div
 							ref={textRef}
 							className={cn(
 								"whitespace-pre-wrap break-words",
-								clamped && "overflow-hidden",
+								!expanded && "overflow-hidden",
 							)}
 							style={
-								clamped
+								!expanded
 									? { maxHeight: PROMPT_MAX_LINES * PROMPT_LINE_HEIGHT }
 									: undefined
 							}
@@ -802,8 +859,20 @@ function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
 						) : null}
 					</div>
 					{overflowing ? (
-						<span className="mt-0.5 block text-[11px] text-muted-foreground/70">
-							{expanded ? "Show less" : "Show more"}
+						/*
+						 * A chevron rather than a text link. Clicking to expand already
+						 * worked; nothing said so, because "Show more" under a clamped
+						 * block reads as a label rather than an affordance. The arrow
+						 * points the way it will move and turns as it opens.
+						 */
+						<span className="mt-1 flex items-center gap-1 text-[11px] text-muted-foreground/70">
+							<ChevronRight
+								className={cn(
+									"size-3 transition-transform duration-200",
+									expanded && "rotate-90",
+								)}
+							/>
+							{expanded ? "Show less" : "Click to expand"}
 						</span>
 					) : null}
 				</button>
@@ -871,7 +940,13 @@ export function SessionTimelineView({
 						<PinnedPrompt prompt={turn.prompt} />
 					) : null}
 					{turn.items.length > 0 ? (
-						<div className="mt-3 flex flex-col gap-3">
+						/*
+						 * gap-2 rather than gap-3. Vertical air is the scarcest thing in
+						 * this pane — every pixel between calls is a pixel not showing
+						 * what the agent is doing — and the status dots already separate
+						 * one call from the next without needing space to do it.
+						 */
+						<div className="mt-2 flex flex-col gap-2">
 							{turn.items.map((item) => (
 								<TimelineItemRow
 									key={item.id}
