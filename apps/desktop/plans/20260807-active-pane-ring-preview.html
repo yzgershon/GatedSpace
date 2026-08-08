@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — active pane ring</title>
+<style>
+  /* Verbatim from renderer/globals.css (dark) + lib/agent-accent.ts, 2026-08-07. */
+  :root {
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --muted:#2a2827; --muted-foreground:#a8a5a3; --border:#2a2827;
+    --highlight:#e07850;            /* what the ring uses TODAY */
+    --claude:#d97757;               /* what the HEADER uses */
+    --codex:#10a37f;
+    --gemini:#4285f4;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--background); color:var(--foreground);
+         font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif; padding:26px 30px 60px; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--muted-foreground); font-size:13px; margin:0 0 4px; max-width:82ch; }
+  h2 { font-size:14px; margin:30px 0 8px; }
+  .why { color:var(--muted-foreground); font-size:12.5px; margin:0 0 14px; max-width:80ch; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#c9c6c4; }
+  .row { display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:11px; color:var(--muted-foreground); margin:0 0 6px; letter-spacing:.04em; }
+
+  /* ---- a pane, matching the real structure ---- */
+  .pane { width:330px; border-radius:8px; overflow:hidden; background:var(--background);
+          border:1px solid var(--border); position:relative; }
+  .bar { height:2px; width:100%; }
+  .hdr { display:flex; align-items:center; gap:8px; padding:7px 10px; font-size:12.5px; }
+  .dot { width:12px; height:12px; border-radius:3px; flex:none; }
+  .body { padding:12px 12px 26px; font-size:12.5px; color:var(--muted-foreground); }
+
+  /* Ring variants. Inset so it never changes layout. */
+  .r-now    { box-shadow: inset 0 0 0 2px var(--highlight); }
+  .r-a      { box-shadow: inset 0 0 0 2px var(--accent); }
+  .r-b      { box-shadow: inset 0 0 0 1px var(--accent); }
+  .r-c      { box-shadow: inset 0 0 0 2px var(--accent),
+                          0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent); }
+  /* AS SHIPPED: the bloom moved INSIDE. An outer glow is clipped by the pane's
+     own overflow-hidden and by the resizable panel around it, so it would have
+     silently rendered as a plain 2px ring. */
+  .r-shipped { box-shadow: inset 0 0 0 2px var(--accent),
+                           inset 0 0 0 5px color-mix(in oklab, var(--accent) 22%, transparent); }
+  .dim { opacity:.55; }
+</style>
+</head>
+<body>
+
+<h1>Highlight around the active pane</h1>
+<p class="sub">
+  Colours copied verbatim from <code>globals.css</code> and <code>lib/agent-accent.ts</code>.
+</p>
+<p class="sub">
+  Worth knowing before you pick: <strong>a ring already exists</strong>
+  (<code>ring-2 ring-highlight ring-inset</code>) — but it is painted with
+  <code>--highlight</code> <span style="color:var(--highlight)">#e07850</span>, while the header
+  uses Claude's accent <span style="color:var(--claude)">#d97757</span>. Two different oranges,
+  which is probably why it reads as "just the header" rather than a matched frame. It is also
+  hidden whenever the tab has only one pane, or the pane is maximised.
+</p>
+
+<h2>The problem, side by side</h2>
+<p class="why">Same pane, today's ring vs. the header's own colour. The mismatch is subtle but it is what makes it look unintentional.</p>
+<div class="row">
+  <div>
+    <p class="label">TODAY — ring is --highlight, header is Claude</p>
+    <div class="pane r-now">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))">
+        <span class="dot" style="background:var(--claude)"></span> Claude
+      </div>
+      <div class="body">active pane</div>
+    </div>
+  </div>
+  <div>
+    <p class="label">PROPOSED — ring uses the pane's accent</p>
+    <div class="pane r-a" style="--accent:var(--claude)">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))">
+        <span class="dot" style="background:var(--claude)"></span> Claude
+      </div>
+      <div class="body">active pane</div>
+    </div>
+  </div>
+</div>
+
+<h2>Weight — pick one</h2>
+<p class="why">All inset, so nothing shifts when a pane becomes active. <strong>B</strong> is the current thickness; <strong>C</strong> adds a soft outer bloom that reads more clearly against a dark neighbour.</p>
+<div class="row">
+  <div><p class="label">A · 1px — quiet</p>
+    <div class="pane r-b" style="--accent:var(--claude)">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))"><span class="dot" style="background:var(--claude)"></span> Claude</div>
+      <div class="body">active</div></div>
+  </div>
+  <div><p class="label">B · 2px — current weight</p>
+    <div class="pane r-a" style="--accent:var(--claude)">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))"><span class="dot" style="background:var(--claude)"></span> Claude</div>
+      <div class="body">active</div></div>
+  </div>
+  <div><p class="label">C · 2px + bloom</p>
+    <div class="pane r-c" style="--accent:var(--claude)">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))"><span class="dot" style="background:var(--claude)"></span> Claude</div>
+      <div class="body">active</div></div>
+  </div>
+</div>
+
+<h2>Why per-agent matters — four panes, one active</h2>
+<p class="why">The accents already exist for exactly this reason. With the ring matching, the active pane and which agent it is are one glance, not two.</p>
+<div class="row">
+  <div class="pane r-a" style="--accent:var(--claude); width:250px">
+    <div class="bar" style="background:var(--claude)"></div>
+    <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))"><span class="dot" style="background:var(--claude)"></span> Claude</div>
+    <div class="body">active</div></div>
+  <div class="pane dim" style="width:250px">
+    <div class="bar" style="background:var(--codex); opacity:.45"></div>
+    <div class="hdr"><span class="dot" style="background:var(--codex); opacity:.45"></span> Codex</div>
+    <div class="body">inactive</div></div>
+  <div class="pane dim" style="width:250px">
+    <div class="bar" style="background:var(--gemini); opacity:.45"></div>
+    <div class="hdr"><span class="dot" style="background:var(--gemini); opacity:.45"></span> Gemini</div>
+    <div class="body">inactive</div></div>
+  <div class="pane dim" style="width:250px">
+    <div class="hdr"><span class="dot" style="background:#3a3837"></span> Terminal</div>
+    <div class="body">no agent — falls back to --highlight</div></div>
+</div>
+
+<h2>As shipped — C, with the bloom moved inside</h2>
+<p class="why">
+  You picked C. Its outer glow would have been clipped by the pane's own
+  <code>overflow-hidden</code> and by the resizable panel around it, so it would have quietly
+  degraded to a plain 2px ring. The soft band is drawn just inside the solid edge instead:
+  same read, nothing cropped. Claude and Codex shown together so the per-agent colour is obvious.
+</p>
+<div class="row">
+  <div><p class="label">Claude · active</p>
+    <div class="pane r-shipped" style="--accent:var(--claude)">
+      <div class="bar" style="background:var(--claude)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--claude) 17%, var(--muted))"><span class="dot" style="background:var(--claude)"></span> Claude</div>
+      <div class="body">active — ring traces the header colour exactly</div></div>
+  </div>
+  <div><p class="label">Codex · active</p>
+    <div class="pane r-shipped" style="--accent:var(--codex)">
+      <div class="bar" style="background:var(--codex)"></div>
+      <div class="hdr" style="background:color-mix(in oklab, var(--codex) 17%, var(--muted))"><span class="dot" style="background:var(--codex)"></span> Codex</div>
+      <div class="body">active</div></div>
+  </div>
+  <div><p class="label">Terminal · active, no agent</p>
+    <div class="pane r-shipped" style="--accent:var(--highlight)">
+      <div class="hdr"><span class="dot" style="background:#3a3837"></span> Terminal</div>
+      <div class="body">falls back to --highlight</div></div>
+  </div>
+</div>
+
+<h2>Two decisions for you</h2>
+<p class="why">
+  <strong>1. Weight:</strong> A, B or C above.<br>
+  <strong>2. Should it show with only ONE pane open?</strong> Today it is deliberately hidden
+  then — the reasoning being there is nothing to disambiguate. But you described wanting to see
+  which pane is active, and a frame that appears and disappears depending on pane count is its own
+  kind of confusing. Say the word and it shows always.
+</p>
+
+</body>
+</html>

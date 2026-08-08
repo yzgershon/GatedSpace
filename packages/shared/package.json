@@ -151,6 +151,10 @@
 		"./rrule": {
 			"types": "./src/rrule.ts",
 			"default": "./src/rrule.ts"
+		},
+		"./session-lock": {
+			"types": "./src/session-lock.ts",
+			"default": "./src/session-lock.ts"
 		}
 	},
 	"scripts": {

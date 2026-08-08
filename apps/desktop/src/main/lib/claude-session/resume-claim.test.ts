@@ -58,4 +58,42 @@ describe("resolveResumeClaim", () => {
 			claim: "sess-2",
 		});
 	});
+
+	it("refuses an id a live ACP session in the host service holds", () => {
+		// ACP writes to the same ~/.claude/projects transcripts the panes do, so
+		// a holder outside this process destroys a transcript exactly like a
+		// second pane would — and `owned` cannot see it.
+		const held = new Set(["sess-acp"]);
+		expect(
+			resolveResumeClaim("pane-a", "sess-acp", new Map(), allLive, held),
+		).toEqual({ claim: null, blockedByExternal: true });
+	});
+
+	it("names the pane when both a pane and an outside process hold it", () => {
+		// "Already open in another pane" is the more actionable message, so the
+		// local conflict wins the report. Either way the caller forks.
+		const owned = new Map([["pane-a", "sess-1"]]);
+		const held = new Set(["sess-1"]);
+		expect(
+			resolveResumeClaim("pane-b", "sess-1", owned, allLive, held),
+		).toEqual({ claim: null, blockedBy: "pane-a" });
+	});
+
+	it("forks even when the holder is this key's own id", () => {
+		// pane-a owns sess-1 AND an ACP session grabbed it. Re-resuming would put
+		// two live writers on one transcript, so this is the one case where a key
+		// does not get to re-resume what it already owns.
+		const owned = new Map([["pane-a", "sess-1"]]);
+		const held = new Set(["sess-1"]);
+		expect(
+			resolveResumeClaim("pane-a", "sess-1", owned, allLive, held),
+		).toEqual({ claim: null, blockedByExternal: true });
+	});
+
+	it("lets an unrelated id through when something else is held outside", () => {
+		const held = new Set(["sess-other"]);
+		expect(
+			resolveResumeClaim("pane-a", "sess-1", new Map(), allLive, held),
+		).toEqual({ claim: "sess-1" });
+	});
 });

@@ -16,13 +16,31 @@
  * objects).
  */
 import { EventEmitter } from "node:events";
+import { join } from "node:path";
+import {
+	acquireSessionLock,
+	listHeldSessionIds,
+	releaseSessionLock,
+} from "@superset/shared/session-lock";
 import type {
 	ClaudeStreamEvent,
 	UserImagePayload,
 } from "shared/claude-session/events";
+import { SUPERSET_HOME_DIR } from "../app-environment";
 import { getSessionCost, recordSessionCost } from "./cost-store";
 import { resolveResumeClaim } from "./resume-claim";
 import { type ClaudeSessionOptions, ClaudeSessionTransport } from "./transport";
+
+/**
+ * Where cross-process claims on a session id live. Under SUPERSET_HOME_DIR
+ * rather than a path of our own because the host service inherits that env var,
+ * so both processes resolve the same directory without being told about each
+ * other. See `session-lock.ts` for why this is a file and not an RPC.
+ */
+const SESSION_LOCK_DIR = join(SUPERSET_HOME_DIR, "session-locks");
+
+/** Identifies this process in a lock file. */
+const LOCK_HOLDER = { pid: process.pid, kind: "pane" } as const;
 
 export interface SessionExitInfo {
 	code: number | null;
@@ -118,6 +136,25 @@ class ClaudeSessionManager extends EventEmitter {
 		this.emit(`event:${key}`, event);
 	}
 
+	/**
+	 * Drop this key's cross-process claim, if it is still ours to drop.
+	 *
+	 * The guard against releasing another process's lock lives in
+	 * `releaseSessionLock`, but it cannot see a same-pid conflict: if this key
+	 * exited and a DIFFERENT live pane here has since taken the id, a late
+	 * release would unlock a session that is actively writing. Hence the sweep.
+	 */
+	private releaseLockFor(key: string): void {
+		const sessionId = this.sessionIds.get(key);
+		if (!sessionId) return;
+		for (const [otherKey, id] of this.sessionIds) {
+			if (otherKey === key) continue;
+			if (id !== sessionId) continue;
+			if (this.sessions.has(otherKey)) return;
+		}
+		releaseSessionLock(SESSION_LOCK_DIR, sessionId, LOCK_HOLDER.pid);
+	}
+
 	/** Spawn a session for `key`. No-op if one already exists for that key. */
 	start(key: string, opts: ClaudeSessionOptions): void {
 		if (this.sessions.has(key)) return;
@@ -126,16 +163,35 @@ class ClaudeSessionManager extends EventEmitter {
 		// transcript — it has happened twice. Ownership is claimed HERE, on
 		// intent, not when init reports an id: init is a second or two away, and
 		// two panes resuming the same id inside that window would both pass.
-		const { claim, blockedBy } = resolveResumeClaim(
+		// Take the cross-process claim FIRST, because acquiring is atomic and
+		// merely reading is not: between a read and a spawn, the host service
+		// could take the same id. A refusal then feeds the decision below, so
+		// resolveResumeClaim stays the single place that decides.
+		//
+		// Re-entrant within this process, so a second pane on the same id still
+		// gets `ok` here and is caught by the local check instead — which is the
+		// better outcome, since that one can name the pane holding it.
+		const externallyHeld = new Set<string>();
+		if (opts.resumeSessionId) {
+			const lock = acquireSessionLock(
+				SESSION_LOCK_DIR,
+				opts.resumeSessionId,
+				LOCK_HOLDER,
+			);
+			if (!lock.ok) externallyHeld.add(opts.resumeSessionId);
+		}
+		const { claim, blockedBy, blockedByExternal } = resolveResumeClaim(
 			key,
 			opts.resumeSessionId,
 			this.sessionIds,
 			(other) => this.sessions.has(other),
+			externallyHeld,
 		);
 		// Blocked means the id is live elsewhere. Fork rather than start fresh:
 		// the conversation still carries over, but into a new session id, so the
-		// two panes can't overwrite each other's transcript.
-		const options = blockedBy ? { ...opts, forkSession: true } : opts;
+		// two writers can't overwrite each other's transcript.
+		const blocked = Boolean(blockedBy) || blockedByExternal === true;
+		const options = blocked ? { ...opts, forkSession: true } : opts;
 		// A fork's real id is only known at init, so claim nothing until then.
 		if (claim) this.sessionIds.set(key, claim);
 		else this.sessionIds.delete(key);
@@ -143,6 +199,14 @@ class ClaudeSessionManager extends EventEmitter {
 			this.notice(
 				key,
 				"That session is already open in another pane, so this opened a forked copy under a new session id. Both keep their own transcript.",
+			);
+		} else if (blockedByExternal) {
+			// Deliberately does not say "pane" — the holder is an agent session
+			// running outside this window, and telling someone to go close a tab
+			// they can't find is worse than saying nothing.
+			this.notice(
+				key,
+				"That session is already running elsewhere, so this opened a forked copy under a new session id. Both keep their own transcript.",
 			);
 		}
 
@@ -155,6 +219,11 @@ class ClaudeSessionManager extends EventEmitter {
 			if (!isCurrent()) return;
 			if (event.type === "system" && event.subtype === "init") {
 				this.sessionIds.set(key, event.session_id);
+				// A fresh session's id — and a fork's — is only knowable here, so
+				// this is the only chance to claim it. Unconditional because the id
+				// is newly minted: nothing else can hold it, and a refusal would
+				// arrive too late to act on anyway, the process is already running.
+				acquireSessionLock(SESSION_LOCK_DIR, event.session_id, LOCK_HOLDER);
 				// A fresh process starts its cost count at zero, so deltas must be
 				// measured from zero again.
 				this.costThisRun.set(key, 0);
@@ -199,6 +268,10 @@ class ClaudeSessionManager extends EventEmitter {
 			if (!isCurrent()) return;
 			this.emit(`exit:${key}`, info);
 			this.sessions.delete(key);
+			// Nothing is writing this transcript any more, so stop claiming it.
+			// The id stays in `sessionIds` for the pane to display and re-resume;
+			// resuming takes the lock again.
+			this.releaseLockFor(key);
 			// A clean exit is just the end of a session. Anything else died on us,
 			// and saying so beats leaving the pane on a spinner forever.
 			if (info.code !== 0 && info.code !== null) {
@@ -385,6 +458,8 @@ class ClaudeSessionManager extends EventEmitter {
 		this.resolveCapture(key, null);
 		this.busy.delete(key);
 		this.buffers.delete(key);
+		// Before the id is forgotten — releasing needs to know what it held.
+		this.releaseLockFor(key);
 		this.sessionIds.delete(key);
 		this.stderr.delete(key);
 		const transport = this.sessions.get(key);
@@ -408,11 +483,16 @@ class ClaudeSessionManager extends EventEmitter {
 	 * open here is never offered as a plain resume.
 	 */
 	getLiveSessionIds(): string[] {
-		const ids: string[] = [];
+		const ids = new Set<string>();
 		for (const [key, id] of this.sessionIds) {
-			if (this.sessions.has(key)) ids.push(id);
+			if (this.sessions.has(key)) ids.add(id);
 		}
-		return ids;
+		// The lock directory is already the union of every process's claims, so
+		// an ACP session in the host service shows up here without it having to
+		// expose anything. Advisory only — this feeds a list, while the guarantee
+		// that two writers cannot both proceed lives in the atomic acquire.
+		for (const id of listHeldSessionIds(SESSION_LOCK_DIR)) ids.add(id);
+		return [...ids];
 	}
 
 	/** True once a session has been started for this key (even if it exited). */
@@ -453,6 +533,11 @@ class ClaudeSessionManager extends EventEmitter {
 	disposeAll(): void {
 		for (const transport of this.sessions.values()) transport.dispose();
 		this.sessions.clear();
+		// After `sessions.clear()`, so the same-pid sweep sees nothing as live
+		// and every id this process claimed is actually let go. A lock left
+		// behind here would be reclaimed on next launch by the stale-holder
+		// path, but only after making the id look busy to the host service.
+		for (const key of this.sessionIds.keys()) this.releaseLockFor(key);
 		this.buffers.clear();
 		this.sessionIds.clear();
 		this.stderr.clear();

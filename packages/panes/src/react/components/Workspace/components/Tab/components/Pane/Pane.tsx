@@ -293,6 +293,11 @@ export function Pane<TData>({
 	// pane. Maximizing renders just this pane fullscreen (see Tab.tsx).
 	const paneCount = Object.keys(tab.panes).length;
 	const isMaximized = tab.maximizedPaneId === pane.id;
+	// Resolved once and shared: the header fills with it and the active-pane
+	// ring below traces it, so the two cannot drift apart. They previously did —
+	// the ring was hardcoded to `--highlight` (#e07850) while Claude's header
+	// painted #d97757, a near-miss that reads as a rendering fault.
+	const accent = definition?.getAccent?.(context);
 	const maximizeControl =
 		paneCount > 1 ? (
 			<button
@@ -354,13 +359,13 @@ export function Pane<TData>({
 				className={cn(
 					"relative flex h-full w-full flex-col overflow-hidden",
 					PANE_MIN_SIZE_CLASS_NAME,
-					// Highlight the focused pane so the user can see which agent
-					// their keyboard is driving — only when it's ambiguous (more
-					// than one pane visible in the tab).
-					isActive &&
-						paneCount > 1 &&
-						!isMaximized &&
-						"ring-2 ring-highlight ring-inset",
+					// The active-pane ring is painted by an overlay further down,
+					// NOT by a class here. `ring-inset` renders as an inset
+					// box-shadow, which paints above this element's own background
+					// but BELOW its descendants — and every pane body carries its
+					// own `bg-background`, with the header carrying the accent fill.
+					// So the ring that used to live here was covered on all four
+					// edges and had never actually been visible.
 				)}
 				onMouseDown={context.actions.focus}
 			>
@@ -381,9 +386,45 @@ export function Pane<TData>({
 					}
 					onMiddleClick={context.actions.close}
 					onRename={context.actions.setTitle}
-					accent={definition?.getAccent?.(context)}
+					accent={accent}
 				/>
 				<PaneContent>{content}</PaneContent>
+				{/*
+				 * The active-pane ring.
+				 *
+				 * An overlay rather than a class on the container, because an
+				 * inset box-shadow paints UNDER descendants and every pane body
+				 * has its own background — which is why the previous
+				 * `ring-2 ring-highlight ring-inset` was never visible. Rendered
+				 * last and absolutely positioned so it sits above the content it
+				 * frames, and `pointer-events-none` so it cannot eat a click.
+				 *
+				 * Both shadows are INSET on purpose. An outer glow would be
+				 * clipped by this container's `overflow-hidden` and by the
+				 * resizable panel around it, so the softer band is drawn just
+				 * inside the solid edge instead — same bloom, nothing cropped.
+				 *
+				 * Shown whenever the pane is active, including when it is the
+				 * only one. It used to be gated on `paneCount > 1`, on the
+				 * reasoning that a lone pane needs no disambiguating; but a frame
+				 * that appears and vanishes with pane count is its own puzzle,
+				 * and the colour still says WHICH agent has the keyboard.
+				 */}
+				{isActive && (
+					<div
+						aria-hidden="true"
+						className="pointer-events-none absolute inset-0 z-30 rounded-[inherit]"
+						style={{
+							boxShadow: `inset 0 0 0 2px ${
+								accent ?? "var(--highlight)"
+							}, inset 0 0 0 5px ${
+								accent
+									? `color-mix(in oklab, ${accent} 22%, transparent)`
+									: "transparent"
+							}`,
+						}}
+					/>
+				)}
 				{isDropTarget && <DropZoneOverlay position={dropPosition} />}
 			</div>
 		</PaneContextMenu>

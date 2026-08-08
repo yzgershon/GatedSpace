@@ -129,6 +129,20 @@ export async function MainWindow() {
 			// Isolate Electron session from system browser cookies
 			// This ensures desktop uses bearer token auth, not web cookies
 			partition: "persist:superset",
+			// Chromium throttles a backgrounded renderer hard: requestAnimationFrame
+			// stops completely and timers clamp to roughly one per second. Nothing
+			// is lost while away — it is all deferred — so returning to the window
+			// runs the whole backlog in one go: every throttled `refetchInterval`,
+			// the React work behind them, the terminal repaint watchdog, and each
+			// react-query window-focus refetch. That lands as a second or two of
+			// dead input on every single switch back, which is what the maintainer
+			// reported on 2026-08-07.
+			//
+			// This is not a background app that should idle politely. Terminals,
+			// agent sessions and file watchers are all live while it is behind
+			// another window, so paying full renderer cost there is the honest
+			// trade — and it removes the backlog rather than making it faster.
+			backgroundThrottling: false,
 		},
 	});
 

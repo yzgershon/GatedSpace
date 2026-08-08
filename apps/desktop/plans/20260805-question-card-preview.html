@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — AskUserQuestion card</title>
+<style>
+  /* Values copied verbatim from renderer/globals.css (dark), 2026-08-05. */
+  :root {
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --muted:#2a2827; --muted-foreground:#a8a5a3; --border:#2a2827;
+    --ring:#3a3837; --destructive:#cc4444; --success:#4bb377;
+    --highlight:#e07850;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:var(--background); color:var(--foreground);
+    font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;
+    padding:28px 32px 70px;
+  }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:var(--muted-foreground); font-size:13px; margin:0 0 6px; max-width:78ch; }
+  h2 { font-size:14px; margin:34px 0 8px; }
+  .why { color:var(--muted-foreground); font-size:12.5px; margin:0 0 14px; max-width:76ch; }
+  .note { color:var(--muted-foreground); font-size:12px; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#c9c6c4; }
+
+  /* ---- the session timeline these sit inside ---- */
+  .pane { border:1px solid var(--border); border-radius:10px; background:var(--background);
+          padding:16px; max-width:760px; }
+  .msg { position:relative; padding-left:30px; margin-bottom:14px; }
+  .dot { position:absolute; left:8px; top:7px; width:7px; height:7px; border-radius:99px;
+         background:#a8a5a355; }
+  .dot.ok { background:var(--success); }
+  .msg p { margin:0; color:var(--muted-foreground); font-size:13.5px; }
+  .tname { font-weight:600; font-size:13.5px; }
+
+  /* ---- the card ---- */
+  .card { border:1px solid var(--border); border-radius:10px; background:var(--card);
+          overflow:hidden; margin:14px 0 4px; }
+  .card.ask { border-color:#3a3837; }
+  .card-hd { display:flex; align-items:center; gap:9px; padding:11px 14px 0; }
+  .kicker { font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+            color:var(--highlight); font-weight:600; }
+  .kicker.perm { color:var(--muted-foreground); }
+  .q { padding:6px 14px 12px; font-size:14px; font-weight:600; line-height:1.4; }
+  .opts { padding:0 8px 8px; }
+  .opt { display:flex; gap:10px; align-items:flex-start; width:100%; text-align:left;
+         background:transparent; border:1px solid transparent; border-radius:8px;
+         padding:9px 10px; cursor:pointer; color:inherit; font:inherit; }
+  .opt:hover { background:#2a282766; }
+  .opt.sel { background:#2a2827; border-color:var(--ring); }
+  .mark { flex:none; width:15px; height:15px; margin-top:2px; border-radius:99px;
+          border:1.5px solid #6a6664; display:grid; place-items:center; }
+  .mark.box { border-radius:4px; }
+  .opt.sel .mark { border-color:var(--highlight); background:var(--highlight); }
+  .mark svg { display:none; } .opt.sel .mark svg { display:block; }
+  .otext { min-width:0; }
+  .oname { font-size:13.5px; }
+  .odesc { font-size:12.5px; color:var(--muted-foreground); margin-top:1px; line-height:1.45; }
+  .card-ft { display:flex; align-items:center; gap:10px; justify-content:space-between;
+             border-top:1px solid #2a2827; padding:8px 12px; }
+  .btn { background:var(--highlight); color:#1a1413; border:0; border-radius:7px;
+         padding:6px 13px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+  .btn[disabled] { background:#2a2827; color:#6a6664; cursor:default; }
+  .btn.ghost { background:transparent; color:var(--muted-foreground); font-weight:400; }
+  .hint { font-size:11.5px; color:#6a6664; }
+
+  /* answered state */
+  .answered { padding:10px 14px; display:flex; gap:9px; align-items:baseline; }
+  .answered .val { font-weight:600; font-size:13.5px; }
+  .cols { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:start; }
+  @media (max-width:900px){ .cols{ grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+
+<h1>AskUserQuestion in the session pane</h1>
+<p class="sub">
+  Preview before any code, per the standing rule in <code>HANDOFF.md</code>. Colours are
+  copied verbatim from <code>renderer/globals.css</code> (dark), so this is the real theme.
+</p>
+<p class="sub">
+  One thing differs from the screenshots you sent: the terminal shows several questions as
+  <em>tabs</em>. GatedSpace's ACP runtime parks them <strong>one at a time</strong>
+  (<code>parkElicitation</code>), so each arrives as its own card and the next appears after
+  you answer. Nothing needs to change for that — it is how the host already works.
+</p>
+
+<h2>1 &middot; Single-select question</h2>
+<p class="why">
+  The common case. Answering resolves the card immediately, so there is no submit button —
+  one tap, one answer. This is the same plumbing that renders a tool permission, which is
+  why the two look like siblings rather than unrelated widgets.
+</p>
+
+<div class="pane">
+  <div class="msg"><span class="dot ok"></span><span class="tname">Read</span>
+    <p>HANDOFF.md</p></div>
+  <div class="msg"><span class="dot"></span>
+    <p>Before I change the installer I need a decision from you.</p></div>
+
+  <div class="card ask">
+    <div class="card-hd"><span class="kicker">Question</span></div>
+    <div class="q">The installer half-installs over a running GatedSpace. How should it behave instead?</div>
+    <div class="opts">
+      <button class="opt sel">
+        <span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Refuse while the app is open</span>
+          <span class="odesc">Detects a running GatedSpace and stops with a clear message. Nothing is written, so a partial install becomes impossible.</span></span>
+      </button>
+      <button class="opt">
+        <span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Close the app, then install</span>
+          <span class="odesc">Smoothest to use, but it can drop anything live in a GatedSpace terminal without warning.</span></span>
+      </button>
+      <button class="opt">
+        <span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Leave it as is</span>
+          <span class="odesc">You remember to quit before every install.</span></span>
+      </button>
+      <button class="opt">
+        <span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Skip</span>
+          <span class="odesc">Let the agent decide.</span></span>
+      </button>
+    </div>
+  </div>
+  <p class="note" style="padding-left:2px">Agent is waiting.</p>
+</div>
+
+<h2>2 &middot; Multi-select, and the answered state</h2>
+<p class="why">
+  <code>PendingPermission.multiSelect</code> is already in the protocol, so the card only has to
+  switch circles for squares and hold the picks until you submit. Once answered, the card
+  collapses to a single line — it stays in the transcript as a record of what you chose,
+  rather than vanishing or continuing to take up a screenful.
+</p>
+
+<div class="cols">
+  <div class="pane">
+    <div class="card ask">
+      <div class="card-hd"><span class="kicker">Question</span></div>
+      <div class="q">Which leftover hardening items are worth doing next?</div>
+      <div class="opts">
+        <button class="opt"><span class="mark box"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="otext"><span class="oname">Fix the install directory</span>
+            <span class="odesc">Removes the second parallel install.</span></span></button>
+        <button class="opt sel"><span class="mark box"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="otext"><span class="oname">Audit the rest of the security pass</span>
+            <span class="odesc">Ten commits have not been reviewed for the same class of mistake.</span></span></button>
+        <button class="opt sel"><span class="mark box"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="otext"><span class="oname">Clear old installers</span>
+            <span class="odesc">~500 MB each, and they never overwrite one another.</span></span></button>
+      </div>
+      <div class="card-ft">
+        <span class="hint">2 selected</span>
+        <button class="btn">Submit</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pane">
+    <div class="card">
+      <div class="answered">
+        <span class="kicker" style="line-height:1.7">Answered</span>
+        <span class="val">Refuse while the app is open</span>
+      </div>
+    </div>
+    <div class="msg" style="margin-top:14px"><span class="dot ok"></span><span class="tname">Edit</span>
+      <p>electron-builder.ts</p></div>
+    <p class="note" style="padding-left:2px">The turn continues from the answer.</p>
+  </div>
+</div>
+
+<h2>3 &middot; The same component as a tool permission</h2>
+<p class="why">
+  Worth seeing together. A real <code>session/request_permission</code> and a question card are the
+  same <code>PendingPermission</code> shape — only the kicker and the option labels differ. Building
+  one component gets you both, which is why approvals come along with this work whether or not
+  you want them. You currently run in <code>bypassPermissions</code>, so this card would only
+  appear if you changed mode.
+</p>
+
+<div class="pane">
+  <div class="card">
+    <div class="card-hd"><span class="kicker perm">Permission</span></div>
+    <div class="q">Run <code style="font-size:13px">git push origin main</code>?</div>
+    <div class="opts">
+      <button class="opt"><span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Allow once</span></span></button>
+      <button class="opt"><span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Allow for the rest of this session</span></span></button>
+      <button class="opt"><span class="mark"><svg width="9" height="7" viewBox="0 0 9 7"><path d="M1 3.6 3.3 6 8 1" stroke="#1a1413" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="otext"><span class="oname">Reject</span></span></button>
+    </div>
+  </div>
+</div>
+
+<h2>Open choices for you</h2>
+<p class="why">
+  <strong>a.</strong> Keyboard: the terminal uses <code>Esc</code> to cancel and arrows to move.
+  Worth wiring number keys (1–9) to pick an option? That is the fastest thing in the terminal UI
+  and it is cheap here.<br>
+  <strong>b.</strong> Answered cards: collapse to one line as shown, or keep the full option list
+  greyed out so you can see what you did not pick?<br>
+  <strong>c.</strong> The accent. I used <code>--highlight</code> (#e07850) for the selected mark
+  and submit. It matches the app but it is louder than the terminal's teal. Say the word and it
+  goes muted.
+</p>
+
+</body>
+</html>
