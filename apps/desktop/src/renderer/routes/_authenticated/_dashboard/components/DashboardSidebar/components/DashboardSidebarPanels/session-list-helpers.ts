@@ -62,6 +62,51 @@ export function liveSessionKeys(
  * is precisely the two-writer case above. The UI hands out a fork for those,
  * and this returns null so there is nothing to copy.
  */
+/**
+ * Which dated bucket a session falls in, for the list's group headers.
+ *
+ * Boundaries are CALENDAR days, not elapsed hours: something from 11pm last
+ * night is "Yesterday" at 1am, not "Today", because that is what the user means
+ * by it. Anchored on a passed-in `now` so this is testable without freezing the
+ * clock.
+ */
+export type SessionDateGroup =
+	| "Today"
+	| "Yesterday"
+	| "Previous 7 days"
+	| "Previous 30 days"
+	| "Older";
+
+export function sessionDateGroup(
+	lastModified: number,
+	now: number = Date.now(),
+): SessionDateGroup {
+	const startOfToday = new Date(now);
+	startOfToday.setHours(0, 0, 0, 0);
+	const dayMs = 86_400_000;
+	const start = startOfToday.getTime();
+
+	if (lastModified >= start) return "Today";
+	if (lastModified >= start - dayMs) return "Yesterday";
+	if (lastModified >= start - 7 * dayMs) return "Previous 7 days";
+	if (lastModified >= start - 30 * dayMs) return "Previous 30 days";
+	return "Older";
+}
+
+/**
+ * The folder a session belongs to, as a bare name.
+ *
+ * The second line of every row. Renderer is a browser context with no
+ * node:path, so the basename is taken by hand, and both separators are handled
+ * because a cwd can arrive in either shape.
+ */
+export function projectNameFor(cwd: string | null): string | null {
+	if (!cwd) return null;
+	const trimmed = cwd.replace(/[/\\]+$/, "");
+	const name = trimmed.split(/[/\\]/).pop();
+	return name && name.length > 0 ? name : null;
+}
+
 export function resumeCommandFor(
 	provider: AgentSessionProvider,
 	sessionId: string,

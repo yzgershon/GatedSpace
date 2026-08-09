@@ -30,6 +30,47 @@ describe("shell-ready scanner (bytes)", () => {
 		expect(dec.decode(r.output)).toBe("\x1bX");
 	});
 
+	// The real shell integration terminates its OSC with ST, not BEL. Taking
+	// only BEL made the scanner latch on the prefix and swallow the rest of
+	// the stream — prompt and all — until the 3s readiness timeout.
+	it("accepts an ST-terminated marker, not just BEL", () => {
+		const state = createScanState();
+		const r = scanForShellReady(state, enc.encode("\x1b]133;A\x1b\\$ "));
+		expect(r.matched).toBe(true);
+		expect(dec.decode(r.output)).toBe("$ ");
+	});
+
+	it("does not swallow the prompt after an ST-terminated marker", () => {
+		// Verbatim shape captured from a live pty on 2026-08-09.
+		const state = createScanState();
+		const r = scanForShellReady(
+			state,
+			enc.encode(
+				"\x1b]133;A\x1b\\\x1b]9;9;C:\\Dev\\SecondBrain\x1b\\PS C:\\Dev\\SecondBrain> ",
+			),
+		);
+		expect(r.matched).toBe(true);
+		expect(dec.decode(r.output)).toContain("PS C:\\Dev\\SecondBrain> ");
+	});
+
+	it("matches an ST terminator split across chunks", () => {
+		const state = createScanState();
+		const a = scanForShellReady(state, enc.encode("\x1b]133;A\x1b"));
+		expect(a.matched).toBe(false);
+		const b = scanForShellReady(state, enc.encode("\\ready"));
+		expect(b.matched).toBe(true);
+		expect(dec.decode(b.output)).toBe("ready");
+	});
+
+	it("releases held bytes when a terminator never arrives", () => {
+		// A prefix with no terminator must not buffer output without bound.
+		const state = createScanState();
+		const payload = `\x1b]133;A${"x".repeat(600)}`;
+		const r = scanForShellReady(state, enc.encode(payload));
+		expect(r.matched).toBe(false);
+		expect(dec.decode(r.output)).toContain("x".repeat(500));
+	});
+
 	it("passes UTF-8 bytes through verbatim — even split mid-codepoint", () => {
 		// The whole point of the byte scanner: no per-chunk utf-8 decoding,
 		// so a smiley split across chunks survives untouched.

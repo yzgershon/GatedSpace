@@ -30,6 +30,26 @@ export function Workspace<TData>({
 		onInteractionStateChange,
 	});
 
+	/**
+	 * "This pane closed" is INFERRED here, by diffing pane ids frame to frame.
+	 * Nothing calls it; a pane that stopped existing is assumed to have been
+	 * closed.
+	 *
+	 * That inference cannot tell a close from a move, and `onAfterClose` is
+	 * destructive — for a session pane it kills the process and drops the unsent
+	 * prompt. Any moment where an id is transiently missing from the store, for
+	 * any reason, silently destroys work the user typed and has no other copy of.
+	 *
+	 * So the verdict is deferred and then RE-CHECKED against the live store,
+	 * not against the snapshot this effect closed over. A pane that is absent
+	 * for a tick and back afterwards was moved, not closed, and is left alone.
+	 * A genuinely closed pane is still absent when the check runs and disposes
+	 * exactly as before, one tick later — nothing observable depends on that
+	 * timing.
+	 *
+	 * Cheaper than it looks: the timeout only fires when an id actually went
+	 * missing, which is rare, and it is cleared if the effect re-runs first.
+	 */
 	const previousPanesRef = useRef<Map<string, Pane<TData>>>(new Map());
 	useEffect(() => {
 		const current = new Map<string, Pane<TData>>();
@@ -38,13 +58,25 @@ export function Workspace<TData>({
 				current.set(pane.id, pane);
 			}
 		}
+		const vanished: Pane<TData>[] = [];
 		for (const [prevId, prevPane] of previousPanesRef.current) {
-			if (!current.has(prevId)) {
-				registry[prevPane.kind]?.onAfterClose?.(prevPane);
-			}
+			if (!current.has(prevId)) vanished.push(prevPane);
 		}
 		previousPanesRef.current = current;
-	}, [tabs, registry]);
+		if (vanished.length === 0) return;
+
+		const timer = setTimeout(() => {
+			const live = new Set<string>();
+			for (const tab of store.getState().tabs) {
+				for (const id of Object.keys(tab.panes)) live.add(id);
+			}
+			for (const pane of vanished) {
+				if (live.has(pane.id)) continue;
+				registry[pane.kind]?.onAfterClose?.(pane);
+			}
+		}, 0);
+		return () => clearTimeout(timer);
+	}, [tabs, registry, store]);
 
 	const closeTab = async (tabId: string) => {
 		const tab = store.getState().getTab(tabId);

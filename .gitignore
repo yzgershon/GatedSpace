@@ -16,9 +16,11 @@ dist-types
 # electron-builder output (apps/desktop/electron-builder.ts: directories.output);
 # scoped so it can't silently ignore unrelated dirs named "release".
 /apps/desktop/release/
-# Same output under a suffixed name (release-pane-topics/, one-off build dirs).
-# These hold a ~1.2GB app.asar, which GitHub rejects outright at 100MB.
-/apps/desktop/release-*/
+# Same output under a suffixed name (release-pane-topics/, release45/, one-off
+# build dirs). These hold a ~570MB app.asar, which GitHub rejects at 100MB.
+# No hyphen required: a build that had to dodge a locked output dir got named
+# `release45` and slipped past the stricter `release-*` form.
+/apps/desktop/release*/
 *.local
 
 # Editor directories and files

@@ -18,7 +18,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import type { IconType } from "react-icons";
 import { HiOutlineCog6Tooth } from "react-icons/hi2";
-import { LuFlaskConical, LuGauge, LuHistory, LuLayers } from "react-icons/lu";
+import { LuGauge, LuHistory, LuLayers } from "react-icons/lu";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
 import {
 	type SidebarPanel,
@@ -51,7 +51,6 @@ const ITEMS: (PanelItem | ActionItem)[] = [
 		Icon: LuHistory,
 	},
 	{ kind: "action", id: "usage", label: "Usage", Icon: LuGauge },
-	{ kind: "panel", panel: "testing", label: "Testing", Icon: LuFlaskConical },
 ];
 
 function RailButton({
@@ -76,17 +75,42 @@ function RailButton({
 					className={cn(
 						"relative flex size-11 items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 						selected
-							? "text-foreground"
+							? "text-highlight"
 							: "text-muted-foreground hover:text-foreground",
 					)}
 				>
-					{/* An edge bar rather than a filled tile: it survives every theme
-					    without needing a colour that contrasts with both the rail and
-					    the panel. */}
+					{/*
+					 * The bar carries the state; the glow below carries the mood.
+					 *
+					 * Keeping both is deliberate. A glow says "something here is lit", it
+					 * does not say WHICH of three adjacent icons — not at a glance, and
+					 * not with a bright window bleeding through behind the app. Drop the
+					 * bar and selection becomes something you have to look for.
+					 *
+					 * An edge bar rather than a filled tile: it survives every theme
+					 * without needing a colour that contrasts with both the rail and the
+					 * panel.
+					 */}
 					{selected ? (
-						<span className="absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-foreground" />
+						<span className="absolute inset-y-1.5 left-0 w-0.5 rounded-r bg-highlight" />
 					) : null}
-					<Icon className="size-[22px]" />
+					{/*
+					 * Two shadows, tight and wide, rather than one. A single large blur
+					 * reads as haze around the glyph; a tight core plus a wide falloff is
+					 * what reads as lit. Applied to the icon and not the button so the
+					 * light comes off the strokes rather than off a 44px square.
+					 */}
+					<Icon
+						className="size-[22px]"
+						style={
+							selected
+								? {
+										filter:
+											"drop-shadow(0 0 5px color-mix(in oklab, var(--highlight) 80%, transparent)) drop-shadow(0 0 13px color-mix(in oklab, var(--highlight) 45%, transparent))",
+									}
+								: undefined
+						}
+					/>
 				</button>
 			</TooltipTrigger>
 			<TooltipContent side="right">{label}</TooltipContent>
@@ -118,15 +142,39 @@ export function DashboardSidebarRail({
 			{/* w-12 = 48px, which COLLAPSED_WORKSPACE_SIDEBAR_WIDTH must match. */}
 			<div
 				className={cn(
-					"flex h-full w-12 shrink-0 flex-col items-center bg-sidebar",
-					showDivider && "border-r border-border/45",
+					/*
+					 * The rail sits on the APP background, not the sidebar surface.
+					 *
+					 * It used to be `bg-sidebar`, the same colour as the panel beside it,
+					 * separated only by a border at 45% opacity — about a 4% lightness
+					 * step, which is invisible in practice. The result was that there was
+					 * no toolbar: three dim glyphs floating in the panel's own margin.
+					 * Centring them made it read louder, because nothing anchored them to
+					 * an edge either.
+					 *
+					 * Dropping the rail to `bg-background` makes the panel read as the
+					 * raised surface and gives the icons something to belong to. The
+					 * divider goes to full strength for the same reason — at 45% it was
+					 * doing nothing.
+					 */
+					"relative flex h-full w-12 shrink-0 flex-col items-center bg-background",
+					showDivider && "border-r border-border",
 				)}
 			>
 				{/*
-				 * Pushed clear of the top edge. The window's own chrome lives up there
-				 * and the first icon was colliding with it.
+				 * Centred on the rail, not stacked under the top edge.
+				 *
+				 * Absolutely positioned rather than centred with flex, because Settings
+				 * and Help are pinned to the bottom of the same column: with everything
+				 * in flow, equal spacers put the "centre" about 40px high, since the
+				 * lower spacer has to share its space with that bottom group.
+				 *
+				 * This also retires the old `mt-9`, which existed to clear the window
+				 * chrome from the first icon. Nothing is near the top edge now. The
+				 * group is ~132px tall, so it only reaches the chrome on a window under
+				 * ~200px, which is far below any usable size.
 				 */}
-				<div className="mt-9 flex flex-col items-center gap-0.5">
+				<div className="-translate-y-1/2 absolute top-1/2 flex flex-col items-center gap-0.5">
 					{ITEMS.map((item) =>
 						item.kind === "panel" ? (
 							<RailButton

@@ -29,6 +29,8 @@ export interface ClaudeSessionPaneProps {
 	paneId: string;
 	/** Workspace id — used to resolve the worktree path (session cwd). */
 	workspaceId: string;
+	/** How many panes share this tab. Above one, the header goes compact. */
+	paneCount?: number;
 	/** Optional model id; omit for the CLI default. */
 	model?: string;
 	/** Session id saved on the pane from a previous run, if any. */
@@ -45,6 +47,7 @@ function ClaudeSessionPaneInner({
 	paneId,
 	workspaceId,
 	cwd,
+	paneCount,
 	model,
 	resumeSessionId,
 	forkSession,
@@ -54,6 +57,7 @@ function ClaudeSessionPaneInner({
 	paneId: string;
 	workspaceId: string;
 	cwd: string;
+	paneCount?: number;
 	model?: string;
 	resumeSessionId?: string;
 	forkSession?: boolean;
@@ -175,6 +179,7 @@ function ClaudeSessionPaneInner({
 			onRunCommand={runCommand}
 			draftKey={paneId}
 			limits={limits}
+			paneCount={paneCount}
 			onRestart={restart}
 			restoring={restoring}
 		/>
@@ -184,6 +189,7 @@ function ClaudeSessionPaneInner({
 export function ClaudeSessionPane({
 	paneId,
 	workspaceId,
+	paneCount,
 	model,
 	resumeSessionId,
 	forkSession,
@@ -235,6 +241,7 @@ export function ClaudeSessionPane({
 			paneId={paneId}
 			workspaceId={workspaceId}
 			cwd={cwd}
+			paneCount={paneCount}
 			model={model}
 			resumeSessionId={resumeSessionId}
 			forkSession={forkSession}

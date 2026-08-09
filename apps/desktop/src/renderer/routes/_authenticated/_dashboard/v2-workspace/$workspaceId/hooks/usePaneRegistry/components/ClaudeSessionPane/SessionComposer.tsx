@@ -44,7 +44,7 @@ import {
 } from "react";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionStatus } from "shared/claude-session/timeline";
-import { imageFiles, prepareImage } from "./composer-images";
+import { prepareImage } from "./composer-images";
 import { ImageChip } from "./ImageChip";
 import { SlashPalette } from "./SlashPalette";
 import {
@@ -409,14 +409,31 @@ export function SessionComposer({
 	const isRunning = status === "streaming";
 
 	/**
-	 * Decode and downscale in the background, appending as each finishes. Failures
-	 * are named rather than swallowed: a screenshot that silently didn't attach
-	 * looks exactly like the model ignoring it.
+	 * Attach anything, by two different routes.
+	 *
+	 * IMAGES ride in the message as base64 blocks, because that is the only way
+	 * the model can look at a picture, and it is verified to work (transport.ts).
+	 *
+	 * EVERYTHING ELSE goes in as an absolute PATH, and the model reads it off
+	 * disk with its own tools. That is deliberate, not a shortcut. The CLI's
+	 * stream-json input is not known to accept `document` blocks, and inventing
+	 * one that gets silently dropped would look exactly like the model ignoring
+	 * a PDF. Reading from disk is how the CLI already handles files, it works
+	 * for anything it can open — pdf, csv, source, logs — and it costs nothing
+	 * in message size, which matters when the file is 40MB.
+	 *
+	 * Decoding and downscaling images happens in the background, appending as
+	 * each finishes. Failures are named rather than swallowed: a screenshot that
+	 * silently didn't attach looks exactly like the model ignoring it.
 	 */
 	const attachFiles = (files: File[]) => {
 		if (files.length === 0) return;
 		setImageError(null);
-		for (const [index, file] of files.entries()) {
+
+		const images = files.filter((f) => f.type.startsWith("image/"));
+		const others = files.filter((f) => !f.type.startsWith("image/"));
+
+		for (const [index, file] of images.entries()) {
 			void prepareImage(file, index)
 				.then((image) => setImages((current) => [...current, image]))
 				.catch((error: unknown) => {
@@ -425,6 +442,32 @@ export function SessionComposer({
 					);
 				});
 		}
+
+		if (others.length === 0) return;
+		const paths: string[] = [];
+		const unresolved: string[] = [];
+		for (const file of others) {
+			// Electron 32 dropped File.path; webUtils is the supported replacement
+			// and is already on the preload surface. A file with no real path on
+			// disk (a synthetic blob) cannot be read by the CLI, so say so rather
+			// than attach a name that resolves to nothing.
+			const path = window.webUtils?.getPathForFile(file);
+			if (path) paths.push(path);
+			else unresolved.push(file.name);
+		}
+		if (unresolved.length > 0) {
+			setImageError(
+				`Could not resolve a file path for ${unresolved.join(", ")} — save it to disk first.`,
+			);
+		}
+		if (paths.length === 0) return;
+		// Appended to the prompt rather than shown as a chip: the path IS the
+		// instruction here, and the user can see and edit exactly what the model
+		// will be told to read.
+		setText((current) => {
+			const separator = current.trim() ? "\n\n" : "";
+			return `${current}${separator}${paths.join("\n")}`;
+		});
 	};
 
 	// Mirror the draft out to the module store on every change, so an unmount
@@ -560,7 +603,7 @@ export function SessionComposer({
 					setDragging(false);
 				}}
 				onDrop={(e) => {
-					const files = imageFiles(e.dataTransfer.files);
+					const files = Array.from(e.dataTransfer.files ?? []);
 					if (files.length === 0) return;
 					e.preventDefault();
 					setDragging(false);
@@ -666,10 +709,13 @@ export function SessionComposer({
 					ref={textareaRef}
 					value={text}
 					onPaste={(e) => {
-						// Screenshots come in as clipboard FILES, not text. Claim the
-						// paste only when there's an image, so pasting text still works.
-						const files = imageFiles(e.clipboardData?.files);
+						// Screenshots come in as clipboard FILES, not text, and a file
+						// copied in Explorer arrives the same way. Claim the paste only
+						// when there are files AND no text: some apps put both on the
+						// clipboard, and there the text is what the user meant.
+						const files = Array.from(e.clipboardData?.files ?? []);
 						if (files.length === 0) return;
+						if (e.clipboardData?.getData("text/plain")) return;
 						e.preventDefault();
 						attachFiles(files);
 					}}
@@ -739,17 +785,18 @@ export function SessionComposer({
 					<input
 						ref={fileInputRef}
 						type="file"
-						accept="image/*"
+						// No accept filter. It used to be image/* which is why a PDF could
+						// not be picked at all — the picker would not even show it.
 						multiple
 						className="hidden"
 						onChange={(e) => {
-							attachFiles(imageFiles(e.target.files));
+							attachFiles(Array.from(e.target.files ?? []));
 							// Clear it, or picking the same file twice in a row is a no-op.
 							e.target.value = "";
 						}}
 					/>
 					<IconButton
-						label="Attach an image"
+						label="Attach a file"
 						onClick={() => fileInputRef.current?.click()}
 					>
 						<Plus className="size-4" />

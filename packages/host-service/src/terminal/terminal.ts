@@ -473,6 +473,59 @@ function sendMessage(
 	socket.send(JSON.stringify(message));
 }
 
+/**
+ * RFC 6455 caps a close frame's reason at 123 BYTES, and `ws` enforces it by
+ * throwing. Several of our attach errors are longer than that — the workspace
+ * mismatch alone is 160 bytes with real uuids — so `ws.close(1011, reason)`
+ * threw instead of closing, leaving the socket half-open and the pane dead:
+ * the renderer had already received `{type:"error"}` (so it set `_terminated`
+ * and cancelled auto-reconnect) but never got a `close` event to recover from,
+ * so its state stayed "connecting" forever behind a blank xterm. Measured
+ * against a live host on 2026-08-09; 18 of these are in host-service.log.
+ *
+ * Truncate on a byte budget (not a char count — a multi-byte codepoint would
+ * blow the limit) and never let a close throw: failing to close is strictly
+ * worse than closing without a readable reason.
+ */
+const MAX_CLOSE_REASON_BYTES = 123;
+
+export function truncateCloseReason(reason: string): string {
+	const encoder = new TextEncoder();
+	if (encoder.encode(reason).length <= MAX_CLOSE_REASON_BYTES) return reason;
+	// Reserve the ellipsis's own UTF-8 width — it is 3 bytes, not 1, and
+	// budgeting it as one character is how a "safe" clamp still overflows.
+	const ellipsis = "…";
+	const budget = MAX_CLOSE_REASON_BYTES - encoder.encode(ellipsis).length;
+	// Trim by codepoint, never by byte, so we can't emit a split codepoint.
+	let out = "";
+	let used = 0;
+	for (const ch of reason) {
+		const width = encoder.encode(ch).length;
+		if (used + width > budget) break;
+		out += ch;
+		used += width;
+	}
+	return `${out}${ellipsis}`;
+}
+
+function closeSocket(
+	socket: { close: (code?: number, reason?: string) => void },
+	code: number,
+	reason: string,
+) {
+	try {
+		socket.close(code, truncateCloseReason(reason));
+	} catch (error) {
+		// A close that throws is what stranded the pane in the first place.
+		console.warn("[terminal] failed to close socket", error);
+		try {
+			socket.close();
+		} catch {
+			// best-effort; nothing further we can do for this socket
+		}
+	}
+}
+
 function broadcastMessage(
 	session: TerminalSession,
 	message: TerminalServerMessage,
@@ -618,11 +671,16 @@ function resolveShellReady(
 		clearTimeout(session.shellReadyTimeoutId);
 		session.shellReadyTimeoutId = null;
 	}
-	// Flush held marker bytes — they weren't part of a full marker
+	// Flush held marker bytes — they weren't part of a full marker.
+	// Broadcast-or-buffer, exactly like the live path: writing them straight
+	// into the replay FIFO hid them from every socket already attached, so on
+	// a timed-out marker the held bytes only ever surfaced on a LATER attach.
 	if (session.scanState.heldBytes.length > 0) {
 		const heldBytes = Uint8Array.from(session.scanState.heldBytes);
 		session.modeTracker.feed(heldBytes);
-		bufferOutput(session, heldBytes);
+		if (broadcastBytes(session, heldBytes) === 0) {
+			bufferOutput(session, heldBytes);
+		}
 		session.scanState.heldBytes.length = 0;
 	}
 	session.scanState.matchPos = 0;
@@ -745,7 +803,7 @@ export async function disposeSessionAndWait(
 			session.shellReadyTimeoutId = null;
 		}
 		for (const socket of session.sockets) {
-			socket.close(1000, "Session disposed");
+			closeSocket(socket, 1000, "Session disposed");
 		}
 		session.sockets.clear();
 		if (!session.exited) {
@@ -1106,7 +1164,10 @@ export async function createTerminalSessionInternal({
 	// Determine shell readiness support. Adopted sessions are already past
 	// shell startup, so treat them as immediately ready — the OSC 133;A
 	// marker has already flown by and we don't want to gate writes on it.
-	const shellName = shell.split("/").pop() || shell;
+	// Split on BOTH separators: on Windows the shell is an absolute path with
+	// backslashes ("C:\WINDOWS\...\powershell.exe"), which `split("/")` returns
+	// whole, so the basename never matched anything.
+	const shellName = shell.split(/[/\\]/).pop() || shell;
 	const shellSupportsReady =
 		!isAdopted && SHELLS_WITH_READY_MARKER.has(shellName);
 
@@ -1510,7 +1571,7 @@ export function registerWorkspaceTerminalRoute({
 			return {
 				onOpen: (_event, ws) => {
 					if (!terminalId) {
-						ws.close(1011, "Missing terminalId");
+						closeSocket(ws, 1011, "Missing terminalId");
 						return;
 					}
 
@@ -1518,7 +1579,7 @@ export function registerWorkspaceTerminalRoute({
 						const session = await resolveSessionForAttach();
 						if ("error" in session) {
 							sendMessage(ws, { type: "error", message: session.error });
-							ws.close(1011, session.error);
+							closeSocket(ws, 1011, session.error);
 							return;
 						}
 						if (ws.readyState !== SOCKET_OPEN) return;
@@ -1530,7 +1591,7 @@ export function registerWorkspaceTerminalRoute({
 							type: "error",
 							message: "Internal terminal attach error",
 						});
-						ws.close(1011, "Internal terminal attach error");
+						closeSocket(ws, 1011, "Internal terminal attach error");
 					});
 				},
 

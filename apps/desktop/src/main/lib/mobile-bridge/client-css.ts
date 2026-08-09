@@ -214,15 +214,22 @@ button {
   padding: 0 16px; font: inherit; font-weight: 600; min-height: 42px;
 }
 button:disabled { opacity: .4; }
-#mic, #attach {
-  background: var(--card); color: var(--fg); border: 1px solid var(--border);
+/*
+ * Send is a 42px square arrow, not the word "Send" in a padded pill.
+ *
+ * The composer is ONE ROW on a phone and every pixel it spends is width the
+ * prompt does not get. The text button was ~74px; this is 42px, and dropping
+ * the mic beside it gave back another 50 including its gap. That is roughly a
+ * hundred pixels back to the typing area on a device that has none to spare.
+ */
+#send, #attach {
   padding: 0; width: 42px; display: flex; align-items: center; justify-content: center;
 }
-#mic:active, #attach:active { background: color-mix(in oklab, var(--card) 80%, var(--fg) 8%); }
-#mic.on {
-  background: var(--danger); border-color: var(--danger); color: #fff;
-  animation: breathe 1.4s ease-in-out infinite;
+#attach {
+  background: var(--card); color: var(--fg); border: 1px solid var(--border);
 }
+#attach:active { background: color-mix(in oklab, var(--card) 80%, var(--fg) 8%); }
+#send:active { background: color-mix(in oklab, var(--accent) 85%, #000 15%); }
 
 /* ---- usage ---- */
 .acct { border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); padding: 14px; margin-bottom: 10px; }

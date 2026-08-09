@@ -2,7 +2,7 @@
 	"name": "@superset/desktop",
 	"productName": "GatedSpace",
 	"description": "GatedSpace - an agentic development environment for Windows (derived from Superset)",
-	"version": "1.17.40",
+	"version": "1.17.45",
 	"main": "./dist/main/index.js",
 	"resources": "src/resources",
 	"repository": {
@@ -25,7 +25,7 @@
 		"copy:native-modules": "bun run scripts/copy-native-modules.ts",
 		"validate:native-runtime": "bun run scripts/validate-native-runtime.ts",
 		"prebuild": "bun run clean:dev && bun run generate:icons && bun run compile:app && bun run copy:native-modules && bun run validate:native-runtime",
-		"build": "cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
+		"build": "bun run scripts/strip-dist-sourcemaps.ts && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --publish never",
 		"prepackage": "bun run bundle:cli && bun run copy:native-modules && bun run validate:native-runtime",
 		"package": "electron-builder --config electron-builder.ts",
 		"install:deps": "electron-builder install-app-deps",

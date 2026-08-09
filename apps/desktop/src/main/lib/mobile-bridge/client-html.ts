@@ -15,10 +15,12 @@
  * does not sit in browser history or get shoulder-read. It lives in
  * sessionStorage, not localStorage: closing the tab should end the session.
  *
- * VOICE runs entirely on the phone — its microphone, its recogniser, and only
- * text crosses the network. The desktop never sees audio and has no capture
- * path to attack. `SpeechRecognition` needs a SECURE CONTEXT, so over plain
- * HTTP the button hides itself and the page points at the keyboard's mic key.
+ * NO VOICE. In-app dictation was removed on 2026-08-08: it spent a button in a
+ * one-row composer, and it only ever worked over an HTTPS link because the
+ * browser speech API needs a secure context — on the default plain-HTTP
+ * Tailscale address it hid itself and pointed at the keyboard's dictation key,
+ * which is where it should have pointed all along. The desktop still has no
+ * audio capture path of any kind.
  */
 import { MOBILE_BRIDGE_APP_JS } from "./client-app";
 import { MOBILE_BRIDGE_CSS } from "./client-css";
@@ -59,9 +61,14 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 <div id="shelf" hidden></div>
 
 <footer id="composer" hidden>
-  <!-- accept + capture: the picker offers the camera AND the gallery, which is
-       what "send a screenshot" needs on a phone. multiple, because a bug report
-       is rarely one screen. -->
+  <!-- Still image-only, unlike the desktop composer. The bridge sends
+       attachments as base64 image blocks and the phone has no filesystem path
+       to hand the agent instead, so a PDF picked here would fail after the
+       fact rather than at the picker. Opening this up needs an upload endpoint
+       on the bridge; until then the filter is the honest answer.
+       accept + the camera: the picker offers camera AND gallery, which is what
+       "send a screenshot" needs on a phone. multiple, because a bug report is
+       rarely one screen. -->
   <input type="file" id="file" accept="image/*" multiple hidden />
   <button id="attach" aria-label="Attach images">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -69,13 +76,15 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
     </svg>
   </button>
   <textarea id="input" rows="1" placeholder="Send a prompt…" enterkeyhint="send"></textarea>
-  <button id="mic" aria-label="Dictate" aria-pressed="false" hidden>
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>
+  <!-- An arrow, not the word "Send". On a phone the composer is one row and
+       every character of that button is width the prompt does not get. The mic
+       that used to sit here is gone for the same reason: the keyboard has its
+       own dictation key, which works in more places than ours did. -->
+  <button id="send" aria-label="Send">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
     </svg>
   </button>
-  <button id="send">Send</button>
 </footer>
 
 <nav id="tabs" hidden>

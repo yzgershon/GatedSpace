@@ -95,6 +95,14 @@ export interface NotificationManagerDeps {
 		body: string;
 		sessionKey: string | null;
 	}) => void;
+	/**
+	 * Cross-system duplicate guard, shared with the renderer's banner path.
+	 *
+	 * Optional and defaulting to "show it" so the existing tests, which are
+	 * about this class's own rules, are not made to depend on module state
+	 * living in another file. Production wires the real one in main.ts.
+	 */
+	shouldShowBanner?: (title: string, body: string) => boolean;
 	/** Injectable so tests drive the throttle window instead of sleeping. */
 	now?: () => number;
 }
@@ -164,13 +172,29 @@ export class NotificationManager {
 		// desktop, which has no bearing on a device in another room — and the
 		// phone is the one that matters precisely when the desktop is not being
 		// looked at.
-		this.deps.pushToPhone?.({
-			title: bannerTitle,
-			body: bannerBody,
-			sessionKey: event.paneId ?? null,
-		});
+		//
+		// COMPLETION ONLY. The desktop used to push for all three notifiable
+		// events, so a turn that paused for permission and then finished woke the
+		// phone twice for one piece of work. Asked for explicitly: one
+		// notification, when the task is done. Permission and question prompts
+		// still raise a desktop banner — you answer those at the keyboard, and
+		// the phone client cannot answer them at all.
+		if (!isAwaiting) {
+			this.deps.pushToPhone?.({
+				title: bannerTitle,
+				body: bannerBody,
+				sessionKey: event.paneId ?? null,
+			});
+		}
 
 		if (!this.deps.isSupported()) return;
+
+		// Checked AFTER the phone push on purpose. The phone is a separate
+		// device with its own delivery path; suppressing a desktop banner
+		// because the renderer already drew one must not also silence the phone.
+		if (this.deps.shouldShowBanner?.(bannerTitle, bannerBody) === false) {
+			return;
+		}
 
 		const notification = this.deps.createNotification({
 			title: bannerTitle,

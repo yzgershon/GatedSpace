@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — multi-pane cleanup</title>
+<style>
+  /* Tokens copied verbatim from renderer/globals.css (dark), 2026-08-08. */
+  :root{
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --muted:#2a2827; --muted-foreground:#a8a5a3; --border:#2a2827;
+    --destructive:#cc4444; --success:#4bb377; --warning:#d4a84b;
+    --highlight:#e07850; --claude:#d97757; --codex:#10a37f; --sidebar:#1a1615;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--background);color:var(--foreground);
+       font:14px/1.5 -apple-system,"Segoe UI",system-ui,sans-serif;padding:24px 28px 80px}
+  h1{font-size:19px;margin:0 0 6px}
+  h2{font-size:14px;margin:34px 0 6px;padding-top:14px;border-top:1px solid var(--border)}
+  h2:first-of-type{border-top:0}
+  p.s{color:var(--muted-foreground);font-size:13px;margin:0 0 12px;max-width:86ch}
+  .lab{font-size:11px;color:var(--muted-foreground);margin:0 0 6px;letter-spacing:.04em;text-transform:uppercase}
+  code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#c9c6c4}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  .bad{color:var(--destructive);font-weight:600}
+  .good{color:var(--success);font-weight:600}
+  .note{border-left:2px solid var(--warning);padding:8px 12px;margin:12px 0;
+        background:rgba(212,168,75,.07);font-size:13px;max-width:86ch}
+
+  /* ---------- a session pane ---------- */
+  .pane{border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--background);position:relative}
+  .ring{box-shadow:inset 0 0 0 2px var(--claude), inset 0 0 0 5px rgba(217,119,87,.22)}
+  .hdr{display:flex;align-items:center;gap:8px;height:44px;padding:0 16px;
+       border-bottom:1px solid var(--border);font-size:12px;position:relative}
+  .body{padding:14px 16px 34px;font-size:12.5px;color:var(--muted-foreground)}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--success);flex:none}
+  .folder{font-weight:500;color:var(--foreground);white-space:nowrap}
+  .grow{flex:1}
+  .mut{color:rgba(168,165,163,.7);white-space:nowrap}
+  .num{font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* the centred, absolutely-positioned strip — the overlap culprit */
+  .strip-abs{position:absolute;inset-inline:0;display:flex;justify-content:center;pointer-events:none}
+  .strip{display:flex;align-items:center;gap:12px;font-size:11px}
+  .meter{display:inline-flex;height:8px;width:56px;overflow:hidden;border-radius:2px;
+         background:rgba(234,232,230,.1);vertical-align:middle}
+  .meter i{display:block;height:100%;border-radius:2px}
+  .acct{font-weight:500;color:var(--foreground)}
+  .wl{font-weight:500;color:rgba(234,232,230,.7)}
+
+  .ctx-ok{color:rgba(168,165,163,.7)}
+  .ctx-warn{color:var(--warning);font-weight:600}
+  .ctx-bad{color:var(--destructive);font-weight:600}
+
+  /* ---------- left rail ---------- */
+  .rail{width:48px;background:var(--sidebar);border-right:1px solid rgba(42,40,39,.45);
+        display:flex;flex-direction:column;align-items:center;height:330px;position:relative}
+  .ico{width:44px;height:44px;display:flex;align-items:center;justify-content:center;
+       color:var(--muted-foreground);position:relative;font-size:17px}
+  .ico.sel{color:var(--foreground)}
+  .ico.sel::before{content:"";position:absolute;top:6px;bottom:6px;left:0;width:2px;
+                   border-radius:0 2px 2px 0;background:var(--foreground)}
+  .grp{display:flex;flex-direction:column;align-items:center;gap:2px}
+  .rail .spacer{flex:1}
+  .strike{position:relative;opacity:.4}
+  .strike::after{content:"";position:absolute;left:8px;right:8px;top:50%;height:1.5px;background:var(--destructive)}
+
+  /* ---------- recent sessions rows ---------- */
+  .sess{width:290px;background:var(--sidebar);border:1px solid var(--border);border-radius:6px;padding:5px}
+  .srow{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:4px;font-size:12.5px}
+  .srow.hov{background:rgba(234,232,230,.055)}
+  .stitle{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .swhen{font-size:11px;color:var(--muted-foreground);white-space:nowrap}
+  .act{width:22px;height:22px;display:flex;align-items:center;justify-content:center;
+       border-radius:4px;color:var(--muted-foreground);font-size:12px;flex:none}
+  .act.del:hover,.act.del{color:var(--destructive)}
+  .rename input{background:var(--background);border:1px solid var(--highlight);border-radius:4px;
+       color:var(--foreground);font:inherit;font-size:12.5px;padding:2px 6px;width:100%;outline:none}
+</style>
+</head>
+<body>
+
+<h1>Multi-pane cleanup — preview</h1>
+<p class="s">Colours are the real theme tokens from <code>globals.css</code>. Nothing here is coded yet.
+Everything below is a mock so you can point at what is wrong before I touch the app.</p>
+
+<h2>1. The overlap, and why it happens</h2>
+<p class="s">
+  The account strip is <code>position:absolute; inset-x-0; justify-center</code> across the
+  <em>whole</em> header (<code>SessionView.tsx:129</code>). It is not in the layout flow, so it does not
+  push anything aside and nothing reserves room for it. At full width it looks fine. Narrow the pane and it
+  slides straight under the folder name on the left and the context number on the right.
+  <strong>This is the bug, and it is there at any pane width once the header runs out of room.</strong>
+</p>
+
+<div class="row">
+  <div style="width:100%;max-width:430px">
+    <p class="lab">Today · narrow pane <span class="bad">— overlapping</span></p>
+    <div class="pane ring">
+      <div class="hdr">
+        <span class="dot"></span><span class="folder">superset</span>
+        <div class="strip-abs"><div class="strip">
+          <span class="acct">yish@…</span>
+          <span style="display:flex;align-items:center;gap:4px"><span class="wl">5h</span>
+            <span class="meter"><i style="width:62%;background:var(--success)"></i></span>
+            <span class="num">62%</span><span style="color:rgba(234,232,230,.55)">↻ 3:40pm</span></span>
+          <span style="display:flex;align-items:center;gap:4px"><span class="wl">wk</span>
+            <span class="meter"><i style="width:74%;background:var(--warning)"></i></span>
+            <span class="num" style="color:var(--warning)">74%</span><span style="color:rgba(234,232,230,.55)">↻ Mon</span></span>
+          <span class="num mut">$4.12</span>
+        </div></div>
+        <span class="grow"></span>
+        <span class="num ctx-ok">312k / 1M</span>
+        <span class="mut">Auto</span>
+      </div>
+      <div class="body">the strip is drawn on top of the folder name and the context chip</div>
+    </div>
+  </div>
+</div>
+
+<h2>2. Proposed — two options, pick one</h2>
+<p class="s">Both put the strip <strong>in the normal layout flow</strong> instead of floating it, so it can
+never sit on top of anything again. They differ in how much survives when you have more than one pane.</p>
+
+<div class="row">
+  <div style="width:100%;max-width:430px">
+    <p class="lab">Option A · multi-pane, minimal <span class="good">— exactly what you listed</span></p>
+    <div class="pane ring">
+      <div class="hdr">
+        <span class="dot"></span><span class="folder">superset</span>
+        <span class="grow"></span>
+        <span class="num ctx-ok">312k</span>
+        <span class="mut">Auto</span>
+      </div>
+      <div class="body">no account, no windows, no reset times, no cost, no “/ 1M”</div>
+    </div>
+  </div>
+  <div style="width:100%;max-width:430px">
+    <p class="lab">Option B · multi-pane, keep the meters</p>
+    <div class="pane ring">
+      <div class="hdr">
+        <span class="dot"></span><span class="folder">superset</span>
+        <span class="grow"></span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px"><span class="wl">5h</span>
+          <span class="meter" style="width:38px"><i style="width:62%;background:var(--success)"></i></span>
+          <span class="num">62%</span></span>
+        <span style="display:flex;align-items:center;gap:4px;font-size:11px"><span class="wl">wk</span>
+          <span class="meter" style="width:38px"><i style="width:74%;background:var(--warning)"></i></span>
+          <span class="num" style="color:var(--warning)">74%</span></span>
+        <span class="num ctx-ok">312k</span>
+      </div>
+      <div class="body">reset times, cost and account gone — but you can still see how much is left</div>
+    </div>
+  </div>
+</div>
+
+<p class="s" style="margin-top:14px">Single pane keeps everything, since there is room for it:</p>
+<div class="row">
+  <div style="width:100%;max-width:880px">
+    <p class="lab">Single pane · unchanged (but now in flow, so it cannot overlap)</p>
+    <div class="pane ring">
+      <div class="hdr">
+        <span class="dot"></span><span class="folder">superset</span>
+        <span style="margin-left:14px" class="strip">
+          <span class="acct">yish@…</span>
+          <span style="display:flex;align-items:center;gap:4px"><span class="wl">5h</span>
+            <span class="meter"><i style="width:62%;background:var(--success)"></i></span>
+            <span class="num">62%</span><span style="color:rgba(234,232,230,.55)">↻ 3:40pm</span></span>
+          <span style="display:flex;align-items:center;gap:4px"><span class="wl">wk</span>
+            <span class="meter"><i style="width:74%;background:var(--warning)"></i></span>
+            <span class="num" style="color:var(--warning)">74%</span><span style="color:rgba(234,232,230,.55)">↻ Mon</span></span>
+          <span class="num mut">$4.12</span></span>
+        <span class="grow"></span>
+        <span class="num ctx-ok">312k / 1M</span>
+        <span class="mut">Auto</span>
+      </div>
+      <div class="body">one pane — everything stays</div>
+    </div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>I could not find a “region” anywhere in the header.</strong> I read every element it renders:
+  status dot, folder name, account label, 5h window, weekly window, cost, context chip, permission mode
+  (“Auto”), and an MCP server count. No region. It may be part of the account label text itself, or you may
+  be thinking of a different bar. Point me at it in a screenshot and I will get it.
+  Same question for “API key” — the only candidate is the account label, which is the
+  <span class="acct">yish@…</span> item. Say if that is the one and it goes with the rest.
+</div>
+
+<h2>3. Context colour thresholds</h2>
+<p class="s">Yellow above 400k, red at 750k and up, as you asked. Absolute numbers, not percentages,
+so the colour means the same thing regardless of the model's window. Today it is percentage based
+(70% / 90%), so on a 1M window it would not go yellow until 700k.</p>
+<div class="row">
+  <div class="pane" style="width:200px"><div class="hdr" style="padding:0 12px"><span class="grow"></span><span class="num ctx-ok">180k</span></div><div class="body" style="padding:10px 12px 18px">under 400k</div></div>
+  <div class="pane" style="width:200px"><div class="hdr" style="padding:0 12px"><span class="grow"></span><span class="num ctx-warn">512k</span></div><div class="body" style="padding:10px 12px 18px">400k+ — yellow</div></div>
+  <div class="pane" style="width:200px"><div class="hdr" style="padding:0 12px"><span class="grow"></span><span class="num ctx-bad">812k</span></div><div class="body" style="padding:10px 12px 18px">750k+ — red</div></div>
+</div>
+
+<h2>4. Rename from the pane header</h2>
+<p class="s">A pencil appears on hover in each pane's header, next to the name. Click it and the name
+becomes an input, right there. Each pane renames independently, so four agents running at once can all
+be labelled.</p>
+<div class="row">
+  <div class="pane ring" style="width:330px">
+    <div class="hdr" style="padding:0 12px">
+      <span class="dot"></span><span class="folder">superset</span>
+      <span class="act" title="Rename">✎</span>
+      <span class="grow"></span><span class="num ctx-ok">312k</span>
+    </div>
+    <div class="body" style="padding:12px 12px 24px">hover state — pencil visible</div>
+  </div>
+  <div class="pane ring" style="width:330px">
+    <div class="hdr" style="padding:0 12px">
+      <span class="dot"></span>
+      <span class="rename" style="flex:1"><input value="frontend agent" /></span>
+    </div>
+    <div class="body" style="padding:12px 12px 24px">editing — Enter saves, Esc cancels</div>
+  </div>
+</div>
+
+<h2>5. Recent Sessions — rename and delete</h2>
+<p class="s">Hovering a row reveals a pencil and a trash. Renaming here is the one that <em>sticks</em>,
+because it writes the session's own title rather than a per-pane label that dies with the pane.</p>
+<div class="row">
+  <div class="sess">
+    <div class="srow"><span class="stitle">Explain this codebase</span><span class="swhen">2h</span></div>
+    <div class="srow hov"><span class="stitle">test test ignore</span>
+      <span class="act" title="Rename">✎</span><span class="act del" title="Delete">🗑</span>
+      <span class="swhen">4h</span></div>
+    <div class="srow"><span class="stitle">Fix the pane ring</span><span class="swhen">yest</span></div>
+    <div class="srow rename"><input value="ring fix — shipped" /></div>
+  </div>
+</div>
+
+<h2>6. Left rail — centred, Testing removed</h2>
+<p class="s">Today the icons are pinned under a 36px top offset with a spacer below, which is what makes
+them look stranded at the top. Settings and Help stay pinned at the bottom.</p>
+<div class="row" style="gap:34px">
+  <div>
+    <p class="lab">Today</p>
+    <div class="rail">
+      <div class="grp" style="margin-top:36px">
+        <div class="ico sel">▤</div><div class="ico">↺</div><div class="ico">◔</div>
+        <div class="ico strike">⚗</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="grp" style="padding-bottom:6px"><div class="ico">⚙</div><div class="ico" style="height:32px">?</div></div>
+    </div>
+  </div>
+  <div>
+    <p class="lab">Proposed — centred, Testing gone</p>
+    <div class="rail">
+      <div class="grp" style="position:absolute;top:50%;transform:translateY(-50%)">
+        <div class="ico sel">▤</div><div class="ico">↺</div><div class="ico">◔</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="grp" style="padding-bottom:6px"><div class="ico">⚙</div><div class="ico" style="height:32px">?</div></div>
+    </div>
+  </div>
+</div>
+<p class="s" style="margin-top:10px">Icons are placeholders here; the real ones stay as they are
+(Layers, History, Gauge). The selected-item bar on the left edge is preserved.</p>
+
+</body>
+</html>

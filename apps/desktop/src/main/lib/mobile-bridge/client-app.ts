@@ -11,10 +11,7 @@
  * you get to from Sessions. State is three variables and a render call; a
  * framework here would cost more than it saved.
  */
-import { SPEECH_MERGE_JS } from "./speech-merge";
-
 export const MOBILE_BRIDGE_APP_JS = `
-${SPEECH_MERGE_JS}
 // The token comes out of the URL immediately — history and shoulders both keep
 // what is in an address bar — and is kept in localStorage.
 //
@@ -884,7 +881,7 @@ function openSession(id) {
   timer = setInterval(refresh, 2500);
 }
 
-back.onclick = function () { stopMic(); setTab("sessions"); };
+back.onclick = function () { setTab("sessions"); };
 newBtn.onclick = function () { renderNewSession(); };
 
 function send() {
@@ -892,10 +889,6 @@ function send() {
   // An image on its own is a valid message — "look at this" is the whole point
   // of sending a screenshot.
   if ((!text && !pending.length) || !current) return;
-  // Dictation NEVER sends by itself. This drives an agent that runs shell
-  // commands, and a recogniser that hears "delete" for "commit" should cost a
-  // glance at the box, not a turn.
-  stopMic();
   sendBtn.disabled = true;
   var images = pending;
   api("/sessions/" + encodeURIComponent(current) + "/send", {
@@ -1033,156 +1026,26 @@ fileInput.onchange = function () {
   });
 };
 
-/* ------------------------------------------------------------------ voice */
+/* ------------------------------------------------------------------- hint */
 
 /*
- * Dictation, and the bug that survived three attempts to fix it.
+ * In-app dictation was removed on 2026-08-08.
  *
- * Chrome ends a recognition session on its own every few seconds, so staying
- * live means restarting. The previous versions restarted the SAME
- * SpeechRecognition object — and on Android that object does NOT clear its
- * results list when it restarts. So the new session's very first onresult
- * still contained every finished word from the old one, on top of the text
- * already banked from that same session. "hello world" became
- * "hello world hello world", which is precisely what kept being reported.
+ * It cost a button in a one-row composer on a phone, which is the most
+ * expensive real estate in this app, and it only ever worked over an HTTPS
+ * link — the browser speech API needs a secure context, so on a plain-HTTP
+ * Tailscale address the button hid itself and the hint pointed at the
+ * keyboard's own dictation key anyway. That key works everywhere, in every
+ * field, with no permission prompt of ours.
  *
- * Rebuilding the transcript from index 0 (the previous fix) is necessary and
- * was not sufficient, because it assumed a restart gives a clean list.
- *
- * A FRESH INSTANCE per restart cannot carry old results — there is nothing to
- * carry. Each instance therefore owns exactly one span of text, banked into
- * committed when it ends, and the box is always
- * base + committed + this instance's transcript.
+ * showHint stays: the attachment code uses it. (No backticks in this file's
+ * comments — the whole script is a template literal, so one ends the string.)
  */
-
-var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-var micBtn = $("mic");
-var listening = false;
-var recog = null;          // the instance currently running, if any
-var baseText = "";         // what was in the box when dictation started
-var committed = "";        // text from instances that have already ended
-var instanceFinal = "";    // finalised text from the RUNNING instance only
-var restartTimer = null;
 
 function showHint(message, warn) {
   hint.textContent = message;
   hint.className = warn ? "hint warn" : "hint";
   hint.hidden = false;
-}
-
-if (!SR) {
-  showHint("No in-app voice here. Use the mic key on your keyboard.");
-} else if (!window.isSecureContext) {
-  showHint("Voice needs an HTTPS link. Use your keyboard's mic key for now.");
-} else {
-  micBtn.hidden = false;
-  micBtn.onclick = function () { if (listening) stopMic(); else startMic(); };
-}
-
-/** The box is always the text that was there plus everything dictated since. */
-function paint(dictated) {
-  input.value = baseText + dictated;
-  autosize();
-}
-
-function newRecognizer() {
-  var instance = new SR();
-  instance.continuous = true;
-  instance.interimResults = true;
-  instance.lang = navigator.language || "en-US";
-  instanceFinal = "";
-
-  instance.onresult = function (event) {
-    // Ignore anything from an instance we have already moved on from. A
-    // discarded recognizer can still deliver one last event.
-    if (instance !== recog) return;
-    // Rebuilt from 0 rather than accumulated: event.results is cumulative and
-    // event.resultIndex is only a hint, commonly reported as 0 every time.
-    var finals = "", interim = "";
-    for (var i = 0; i < event.results.length; i++) {
-      var result = event.results[i];
-      if (result.isFinal) finals += result[0].transcript + " ";
-      else interim += result[0].transcript + " ";
-    }
-    instanceFinal = finals.trim();
-    // mergeSpeech, NOT concatenation. On Android this transcript often already
-    // contains everything banked in committed, and appending it is what
-    // produced "hellohello thishello this is".
-    paint(mergeSpeech(committed, (finals + interim).trim()));
-  };
-
-  instance.onerror = function (event) {
-    if (instance !== recog) return;
-    // Both are normal during a pause and are followed by onend, which restarts.
-    if (event.error === "no-speech" || event.error === "aborted") return;
-    showHint(event.error === "not-allowed"
-      ? "Microphone blocked. Allow it for this site in your browser settings."
-      : "Voice input stopped (" + event.error + ")", true);
-    stopMic();
-  };
-
-  instance.onend = function () {
-    if (instance !== recog) return;
-    // Bank what this instance produced, merged rather than appended for the
-    // same reason as above.
-    committed = mergeSpeech(committed, instanceFinal);
-    instanceFinal = "";
-    recog = null;
-    if (!listening) return;
-    // A beat before restarting: Chrome ends immediately when it hears nothing,
-    // and an instant restart becomes a tight loop that pins the mic on.
-    restartTimer = setTimeout(function () {
-      if (!listening) return;
-      recog = newRecognizer();
-      if (!recog) stopMic();
-    }, 120);
-  };
-
-  try {
-    instance.start();
-  } catch (e) {
-    return null;
-  }
-  return instance;
-}
-
-function startMic() {
-  // Guard against a second start while one is live: two recognizers both
-  // writing to the box is its own duplication bug.
-  if (listening) return;
-
-  baseText = input.value ? input.value.replace(/\\s+$/, "") + " " : "";
-  committed = "";
-  instanceFinal = "";
-
-  listening = true;
-  recog = newRecognizer();
-  if (!recog) {
-    listening = false;
-    showHint("Could not start voice input.", true);
-    return;
-  }
-  hint.hidden = true;
-  micBtn.classList.add("on");
-  micBtn.setAttribute("aria-pressed", "true");
-}
-
-function stopMic() {
-  // Cleared FIRST so onend does not restart what we are deliberately stopping.
-  listening = false;
-  clearTimeout(restartTimer);
-  restartTimer = null;
-  micBtn.classList.remove("on");
-  micBtn.setAttribute("aria-pressed", "false");
-  var instance = recog;
-  recog = null;
-  if (!instance) return;
-  // Keep whatever the running instance had finalised — stopping mid-sentence
-  // should not throw away the sentence.
-  committed = mergeSpeech(committed, instanceFinal);
-  instanceFinal = "";
-  paint(committed);
-  try { instance.stop(); } catch (e) {}
 }
 
 /* ------------------------------------------------------------------- boot */

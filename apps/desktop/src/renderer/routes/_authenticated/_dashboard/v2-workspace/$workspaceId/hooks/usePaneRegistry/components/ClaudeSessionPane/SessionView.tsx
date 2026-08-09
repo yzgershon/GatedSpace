@@ -43,6 +43,8 @@ interface SessionViewProps {
 	draftKey?: string;
 	/** Subscription windows for the active account, for the warning banner. */
 	limits?: UsageLimits | null;
+	/** Panes sharing this tab. Above one, the header sheds its wider items. */
+	paneCount?: number;
 	onRestart?: () => void;
 	/**
 	 * The stored transcript is still loading. Distinguishes a resumed session
@@ -63,16 +65,33 @@ function formatTokens(count: number): string {
  * running out of context is what explains a long session suddenly behaving
  * differently, and it's invisible until it bites.
  */
-function ContextChip({ usage }: { usage: SessionUsage }) {
+/**
+ * Absolute token counts, not a share of the window.
+ *
+ * The thresholds used to be 70% and 90% of whatever the model reported. On a
+ * 1M window that meant no warning at all until 700k, by which point the useful
+ * moment to act — before the next long turn — is gone. These are the numbers
+ * the user actually steers by.
+ */
+const CONTEXT_WARN_TOKENS = 400_000;
+const CONTEXT_DANGER_TOKENS = 750_000;
+
+function ContextChip({
+	usage,
+	compact,
+}: {
+	usage: SessionUsage;
+	/** Side-by-side panes: the count alone, no "/ 1M" denominator. */
+	compact?: boolean;
+}) {
 	const { contextTokens, contextWindow } = usage;
-	const ratio = contextWindow ? contextTokens / contextWindow : 0;
 	return (
 		<span
 			className={cn(
 				"tabular-nums",
-				ratio >= 0.9
+				contextTokens >= CONTEXT_DANGER_TOKENS
 					? "text-destructive"
-					: ratio >= 0.7
+					: contextTokens >= CONTEXT_WARN_TOKENS
 						? "text-warning"
 						: "text-muted-foreground/70",
 			)}
@@ -83,7 +102,7 @@ function ContextChip({ usage }: { usage: SessionUsage }) {
 			}
 		>
 			{formatTokens(contextTokens)}
-			{contextWindow ? ` / ${formatTokens(contextWindow)}` : ""}
+			{contextWindow && !compact ? ` / ${formatTokens(contextWindow)}` : ""}
 		</span>
 	);
 }
@@ -91,10 +110,13 @@ function ContextChip({ usage }: { usage: SessionUsage }) {
 function SessionHeader({
 	timeline,
 	limits,
+	paneCount,
 }: {
 	timeline: SessionTimeline;
 	limits?: UsageLimits | null;
+	paneCount?: number;
 }) {
+	const compact = (paneCount ?? 1) > 1;
 	const header = timeline.header;
 	const running = timeline.status === "streaming";
 	// Renderer is a browser context — no node:path. Basename by hand (win + posix).
@@ -107,48 +129,65 @@ function SessionHeader({
 	const connectedMcp =
 		header?.mcpServers.filter((s) => s.status === "connected").length ?? 0;
 	return (
-		<div className="relative flex h-11 shrink-0 items-center gap-2 border-b border-border px-4 text-xs">
+		<div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden border-b border-border px-4 text-xs">
 			{running ? (
-				<Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+				<Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
 			) : (
 				<span
 					className={cn(
-						"size-1.5 rounded-full",
+						"size-1.5 shrink-0 rounded-full",
 						timeline.status === "error" ? "bg-destructive" : "bg-success",
 					)}
 				/>
 			)}
-			<span className="font-medium text-foreground">{folder ?? "Session"}</span>
+			<span className="truncate font-medium text-foreground">
+				{folder ?? "Session"}
+			</span>
 
 			{/*
-			 * The account and its limits sit CENTRED, not in the corner. Which
-			 * account is spending, and how much of its window is gone, is the thing
-			 * you want to know without hunting — the terminal statusline put it in
-			 * front of you and losing that was a real regression.
+			 * IN THE LAYOUT FLOW, not floated over it.
+			 *
+			 * This used to be `absolute inset-x-0` with `justify-center`, to centre
+			 * the account and its limits in the header. Being out of flow meant
+			 * nothing reserved room for it and nothing pushed it aside, so the
+			 * moment the header ran short — which is any time panes are side by
+			 * side — it printed straight over the folder name on the left and the
+			 * context count on the right. Centring was not worth an unreadable
+			 * header. `min-w-0` lets it shrink instead of forcing an overflow.
 			 */}
-			<div className="pointer-events-none absolute inset-x-0 flex justify-center">
-				<SessionUsageStrip limits={limits} costUsd={timeline.costUsd} />
+			<div className="flex min-w-0 shrink items-center">
+				<SessionUsageStrip
+					limits={limits}
+					costUsd={timeline.costUsd}
+					compact={compact}
+				/>
 			</div>
 
-			<div className="flex-1" />
+			<div className="min-w-2 flex-1" />
 			{/*
 			 * No rate-limit chip. It restated, in a yellow tag, what the usage strip
 			 * two inches to the left already shows continuously and more precisely —
 			 * and it overlapped that strip while doing it.
 			 */}
-			{timeline.usage ? <ContextChip usage={timeline.usage} /> : null}
+			{timeline.usage ? (
+				<span className="shrink-0">
+					<ContextChip usage={timeline.usage} compact={compact} />
+				</span>
+			) : null}
 			{header ? (
 				// The CLI's own name for the mode, not the one the user picked from —
 				// the composer says "Auto", so a header reading "bypassPermissions"
 				// looks like a different setting entirely.
-				<span className="text-muted-foreground/70">
+				<span className="shrink-0 text-muted-foreground/70">
 					{SESSION_MODES.find((m) => m.id === header.permissionMode)?.label ??
 						header.permissionMode}
 				</span>
 			) : null}
-			{connectedMcp > 0 ? (
+			{/* The MCP count is the least urgent thing here, so it is the first to
+			 * go when panes are sharing the width. */}
+			{connectedMcp > 0 && !compact ? (
 				<span
-					className="text-muted-foreground/70"
+					className="shrink-0 text-muted-foreground/70"
 					title={`${connectedMcp} MCP server${connectedMcp === 1 ? "" : "s"} connected: ${
 						header?.mcpServers
 							.filter((s) => s.status === "connected")
@@ -224,6 +263,7 @@ export function SessionView({
 	onRunCommand,
 	draftKey,
 	limits,
+	paneCount,
 	onRestart,
 	restoring = false,
 }: SessionViewProps) {
@@ -241,7 +281,11 @@ export function SessionView({
 		// `relative`: the composer floats over the timeline rather than docking
 		// under it, so the conversation keeps the full pane width behind it.
 		<div className="relative flex h-full w-full flex-col bg-background">
-			<SessionHeader timeline={timeline} limits={limits} />
+			<SessionHeader
+				timeline={timeline}
+				limits={limits}
+				paneCount={paneCount}
+			/>
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}

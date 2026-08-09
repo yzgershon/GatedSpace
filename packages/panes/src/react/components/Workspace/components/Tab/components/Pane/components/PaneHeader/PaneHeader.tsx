@@ -97,17 +97,27 @@ export function PaneHeader({
 				}
 			}}
 		>
-			{accent && (
+			{accent && !isActive && (
 				/*
-				 * The bar stays visible when the pane is unfocused, just dimmer. It
-				 * answers "what is this pane" — which is worth knowing about the panes
-				 * you are NOT looking at, and is the whole reason to spend colour here.
-				 * Only the tint is focus-dependent.
+				 * Only on the panes you are NOT looking at.
+				 *
+				 * This 2px bar answers "what is this pane" for the unfocused ones,
+				 * which is the whole reason to spend colour here. On the FOCUSED pane
+				 * it was fighting the active-pane ring for identical pixels: the ring
+				 * is a 2px inset shadow on the pane's left edge, this was a 2px
+				 * absolute bar at `left-0` of a header flush to that same edge. Two
+				 * elements painting the same colour in the same 2px, one clipping the
+				 * other depending on stacking — which is exactly what it looked like,
+				 * a bar leaking over the frame.
+				 *
+				 * The ring says it better anyway: it is the same accent, and it runs
+				 * the whole pane rather than the header. So the bar stands down when
+				 * the ring is up. The header tint stays either way.
 				 */
 				<span
 					aria-hidden
 					className="pointer-events-none absolute inset-y-0 left-0 w-0.5 transition-opacity duration-150"
-					style={{ backgroundColor: accent, opacity: isActive ? 1 : 0.45 }}
+					style={{ backgroundColor: accent, opacity: 0.45 }}
 				/>
 			)}
 			{toolbar ? (

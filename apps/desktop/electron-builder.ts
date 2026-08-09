@@ -8,8 +8,12 @@ import { join } from "node:path";
 import type { Configuration } from "electron-builder";
 import pkg from "./package.json";
 import {
+	crossPlatformBinaryExcludes,
+	nodeModulesResidueExcludes,
+	nonRuntimeArtifactExcludes,
 	packagedAsarUnpackGlobs,
 	packagedNodeModuleCopies,
+	rendererBundledPackageExcludes,
 } from "./runtime-dependencies";
 
 const currentYear = new Date().getFullYear();
@@ -102,7 +106,22 @@ const config: Configuration = {
 		// before building (required for Bun 1.3+ isolated installs).
 		...packagedNodeModuleCopies,
 		"!**/.DS_Store",
+		// Applies to `dist/**/*` and to everything electron-builder pulls in
+		// automatically from `dependencies`. The explicit copies above carry the
+		// same excludes via their own `filter`, because a filter on a `from`/`to`
+		// entry replaces these top-level patterns rather than combining with them.
+		...nonRuntimeArtifactExcludes,
+		// onnxruntime and koffi arrive transitively through mastracode, so they
+		// have no entry in packagedNodeModuleCopies to hang a filter on.
+		...crossPlatformBinaryExcludes(targetArch),
+		...rendererBundledPackageExcludes,
+		...nodeModulesResidueExcludes,
 	],
+
+	// Electron ships 55 locale .pak files, 45.4 MB, and the UI is English-only.
+	// Pruned by app-builder-lib's removeUnusedLanguagesIfNeeded, which runs on
+	// Windows too and deletes everything in `locales/` that is not listed here.
+	electronLanguages: ["en-US"],
 
 	// Rebuild native modules for Electron's Node.js version — only when building
 	// for the host arch. Cross-arch node-gyp rebuilds can't run locally (winpty

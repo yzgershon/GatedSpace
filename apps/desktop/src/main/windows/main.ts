@@ -24,6 +24,7 @@ import {
 	getNotificationMatrix,
 	playNotificationSound,
 } from "../lib/notification-sound";
+import { shouldShowBanner } from "../lib/notifications/banner-dedupe";
 import { NotificationManager } from "../lib/notifications/notification-manager";
 import {
 	notificationsApp,
@@ -215,6 +216,7 @@ export async function MainWindow() {
 		createNotification: (opts) => new Notification(opts),
 		playSound: playNotificationSound,
 		getNotificationMatrix,
+		shouldShowBanner,
 		pushToPhone: (notice) => {
 			void pushService.notify(notice);
 		},

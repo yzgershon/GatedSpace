@@ -14,6 +14,26 @@ const OSC_133_A_BYTES = Uint8Array.from(
 	[..."\x1b]133;A"].map((c) => c.charCodeAt(0)),
 );
 const BEL_BYTE = 0x07;
+const ESC_BYTE = 0x1b;
+const BACKSLASH_BYTE = 0x5c;
+/**
+ * Once the `\x1b]133;A` prefix matches, every following byte is withheld until
+ * a string terminator arrives. An OSC string may end with BEL *or* with ST
+ * (`ESC \`) — and ST is what our shell integration actually emits. Verified
+ * against live PTY output on 2026-08-09:
+ *
+ *     \x1b]133;A\x1b\\ \x1b]9;9;C:\Dev\SecondBrain\x1b\\ ... PS C:\Dev>
+ *
+ * Accepting only BEL meant the scanner latched on the prefix and swallowed the
+ * ENTIRE remaining stream — prompt included — until SHELL_READY_TIMEOUT_MS.
+ * Windows escaped it because powershell isn't in SHELLS_WITH_READY_MARKER, but
+ * every bash/zsh/fish terminal was blank for the first 3 seconds and only
+ * recovered on the next repaint.
+ *
+ * The cap is a second line of defence: a shell that emits the prefix and no
+ * terminator at all must not be able to buffer output without bound.
+ */
+const MAX_HELD_BYTES = 512;
 
 /** Shells whose wrapper files inject OSC 133 markers. */
 export const SHELLS_WITH_READY_MARKER = new Set(["zsh", "bash", "fish"]);
@@ -72,7 +92,11 @@ export function scanForShellReady(
 				}
 			}
 		} else {
-			if (b === BEL_BYTE) {
+			// ST is two bytes (`ESC \`). The ESC lands in heldBytes on one
+			// iteration and the `\` closes the string on the next.
+			const prevHeld = state.heldBytes[state.heldBytes.length - 1];
+			const isSt = b === BACKSLASH_BYTE && prevHeld === ESC_BYTE;
+			if (b === BEL_BYTE || isSt) {
 				state.heldBytes.length = 0;
 				state.matchPos = 0;
 				const remaining = data.subarray(i + 1);
@@ -86,6 +110,14 @@ export function scanForShellReady(
 				return { output: merged, matched: true };
 			}
 			state.heldBytes.push(b);
+			// No terminator in a plausible marker's worth of bytes — this was
+			// not an OSC 133;A after all. Release everything rather than keep
+			// swallowing the shell's real output.
+			if (state.heldBytes.length > MAX_HELD_BYTES) {
+				for (const h of state.heldBytes) out.push(h);
+				state.heldBytes.length = 0;
+				state.matchPos = 0;
+			}
 		}
 	}
 

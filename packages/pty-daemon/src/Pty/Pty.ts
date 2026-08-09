@@ -106,8 +106,25 @@ class NodePtyAdapter implements Pty {
 			includeRoot: false,
 			onSignalError: logProcessSignalError,
 		});
-		this.term.kill(killSignal);
+		this.killTerm(killSignal);
 		this.scheduleKillEscalation(killSignal, escalationTargets);
+	}
+
+	/**
+	 * node-pty's Windows backend throws `Signals not supported on windows.` for
+	 * ANY explicit signal — it only accepts a bare `kill()`. Every pane close
+	 * therefore threw out of handleClose, which returned an error instead of
+	 * `closed`: host-service logged "disposeSession daemon close failed", left
+	 * the DB row `active` forever, and never killed the shell. 358 leaked
+	 * shells in one log. Drop the signal on win32; the ConPTY teardown that
+	 * `kill()` performs is the only thing that signal could have meant here.
+	 */
+	private killTerm(signal: NodeJS.Signals): void {
+		if (process.platform === "win32") {
+			this.term.kill();
+			return;
+		}
+		this.term.kill(signal);
 	}
 
 	onData(cb: PtyOnData): void {
@@ -134,7 +151,7 @@ class NodePtyAdapter implements Pty {
 			this.killEscalationTimer = null;
 			signalProcessTargets(targets, "SIGKILL", logProcessSignalError);
 			try {
-				this.term.kill("SIGKILL");
+				this.killTerm("SIGKILL");
 			} catch {
 				// PTY root may have already exited; detached targets still matter.
 			}

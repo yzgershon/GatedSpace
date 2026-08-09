@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { join } from "node:path";
 import { getClaudeProjectRoots } from "../claude-profile";
+import { readSessionTitleOverrides } from "./session-titles";
 
 export interface ClaudeSessionSummary {
 	sessionId: string;
@@ -49,7 +50,8 @@ function getProjectsDirs(): string[] {
 
 function enumerateSessionFiles(): RawFile[] {
 	const seen = new Set<string>();
-	const files: RawFile[] = [];
+	/** Session id → the copy we will show for it. See the comment at the write. */
+	const bySessionId = new Map<string, RawFile>();
 	for (const base of getProjectsDirs()) {
 		let projectDirs: string[];
 		try {
@@ -88,16 +90,43 @@ function enumerateSessionFiles(): RawFile[] {
 				} catch {
 					continue;
 				}
-				files.push({
+				/*
+				 * ONE ROW PER CONVERSATION, not one per account holding a copy.
+				 *
+				 * The realpath check above only catches the same FILE reached by two
+				 * paths. Each account config dir holds a genuine separate copy of the
+				 * transcript, so realpath sees three distinct files and keeps all
+				 * three. Measured on the maintainer's machine: 1,293 files, 429
+				 * distinct session ids — every id present exactly three times, once
+				 * per account. The list takes the newest 60 files, so about twenty
+				 * real conversations were being drawn as sixty rows.
+				 *
+				 * Keyed on session id and resolved by mtime: the copy under the
+				 * account most recently worked in is the one holding the rest of the
+				 * conversation, because that is the copy the CLI has been appending
+				 * to. Size is an equally good proxy for completeness and the two agree
+				 * in the normal case; mtime wins because it is also what the list
+				 * sorts and buckets by, so the chosen copy and the row's position
+				 * cannot disagree.
+				 *
+				 * This decides what is DISPLAYED only. Resuming hands the session id
+				 * to the CLI, which reads whichever config dir it is pointed at, so
+				 * choosing a file here cannot send a resume to the wrong transcript.
+				 */
+				const sessionId = entry.replace(/\.jsonl$/, "");
+				const known = bySessionId.get(sessionId);
+				if (known && known.mtime >= stat.mtimeMs) continue;
+				bySessionId.set(sessionId, {
 					filePath,
 					projectDirName,
-					sessionId: entry.replace(/\.jsonl$/, ""),
+					sessionId,
 					mtime: stat.mtimeMs,
 					size: stat.size,
 				});
 			}
 		}
 	}
+	const files = [...bySessionId.values()];
 	files.sort((a, b) => b.mtime - a.mtime);
 	return files;
 }
@@ -293,6 +322,48 @@ function isEmptySession(summary: ClaudeSessionSummary): boolean {
 	return summary.title === "Untitled session";
 }
 
+/**
+ * Every file on disk holding this session, across all account config dirs.
+ *
+ * The list shows one row per conversation, but there are typically three files
+ * behind it — one per account. Deleting the copy that happened to be shown
+ * leaves the others, and the session reappears on the next refresh looking
+ * exactly like a delete that silently failed.
+ *
+ * Returns real paths, de-duplicated, so a junctioned directory is not trashed
+ * twice.
+ */
+export function findSessionFiles(sessionId: string): string[] {
+	const found: string[] = [];
+	const seen = new Set<string>();
+	for (const base of getProjectsDirs()) {
+		let projectDirs: string[];
+		try {
+			projectDirs = readdirSync(base);
+		} catch {
+			continue;
+		}
+		for (const projectDirName of projectDirs) {
+			const candidate = join(base, projectDirName, `${sessionId}.jsonl`);
+			try {
+				if (!statSync(candidate).isFile()) continue;
+			} catch {
+				continue;
+			}
+			let real: string;
+			try {
+				real = realpathSync(candidate);
+			} catch {
+				real = candidate;
+			}
+			if (seen.has(real)) continue;
+			seen.add(real);
+			found.push(candidate);
+		}
+	}
+	return found;
+}
+
 export function listClaudeSessions(limit = 30): ClaudeSessionSummary[] {
 	let files: RawFile[];
 	try {
@@ -314,5 +385,28 @@ export function listClaudeSessions(limit = 30): ClaudeSessionSummary[] {
 			return fallbackSummary(file);
 		}
 	});
-	return summaries.filter((s) => !isEmptySession(s)).slice(0, limit);
+	return applyTitleOverrides(
+		summaries.filter((s) => !isEmptySession(s)).slice(0, limit),
+	);
+}
+
+/**
+ * A name the user chose beats the one the model generated.
+ *
+ * Applied here rather than in `summarizeFile` so it survives `summaryCache`:
+ * that cache is keyed on the transcript's mtime, and renaming does not touch
+ * the transcript, so a rename would not show up until the session next wrote
+ * to disk. Reading the sidecar once per list call is cheap next to the file
+ * tail reads this function already does.
+ */
+export function applyTitleOverrides(
+	summaries: ClaudeSessionSummary[],
+): ClaudeSessionSummary[] {
+	if (summaries.length === 0) return summaries;
+	const overrides = readSessionTitleOverrides();
+	if (Object.keys(overrides).length === 0) return summaries;
+	return summaries.map((summary) => {
+		const custom = overrides[summary.sessionId];
+		return custom ? { ...summary, title: custom } : summary;
+	});
 }

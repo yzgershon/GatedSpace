@@ -66,6 +66,12 @@ export interface PendingPushNotice {
 	at: number;
 }
 
+/**
+ * How long a pending notice stays readable — long enough for every device the
+ * same push woke, short enough that a later wake never shows old news.
+ */
+const PENDING_NOTICE_TTL_MS = 30_000;
+
 function readJsonFile<T>(path: string): T | null {
 	try {
 		return JSON.parse(readFileSync(path, "utf8")) as T;
@@ -115,8 +121,30 @@ class PushService {
 		return this.loadSubscriptions().length;
 	}
 
+	/**
+	 * The notice for the push that just woke the service worker, or null.
+	 *
+	 * This used to be a plain `return this.pending` — a "take" that never took.
+	 * The field was written on every notify and cleared nowhere, so any later
+	 * wake of the service worker read the SAME notice again and the phone
+	 * re-alerted with text from an event that had already been announced. With
+	 * `renotify: true` in the worker, that reads as a duplicate notification
+	 * arriving out of nowhere.
+	 *
+	 * Expiry rather than a hard consume, deliberately. A push can wake more than
+	 * one subscribed device, and each fetches this independently within a few
+	 * hundred milliseconds; consuming on first read would leave the second phone
+	 * showing the generic fallback. A short window serves every device woken by
+	 * the same push and nothing that comes later.
+	 */
 	takePending(): PendingPushNotice | null {
-		return this.pending;
+		const notice = this.pending;
+		if (!notice) return null;
+		if (Date.now() - notice.at > PENDING_NOTICE_TTL_MS) {
+			this.pending = null;
+			return null;
+		}
+		return notice;
 	}
 
 	/**

@@ -312,6 +312,10 @@ export function usePaneRegistry({
 						<ClaudeSessionPane
 							paneId={ctx.pane.id}
 							workspaceId={workspaceId}
+							// Drives the header's compact mode. With panes side by side
+							// there is no room for reset times and cost, and crowding them
+							// is what made the strip overlap the folder name.
+							paneCount={Object.keys(ctx.tab.panes).length}
 							model={data.model}
 							resumeSessionId={data.resumeSessionId}
 							forkSession={data.forkSession}

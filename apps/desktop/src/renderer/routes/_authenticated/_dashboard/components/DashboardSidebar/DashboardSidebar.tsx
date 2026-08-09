@@ -21,18 +21,21 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { getHostTrpcClient } from "renderer/lib/host-trpc-client";
+import {
+	DEFAULT_COLS,
+	DEFAULT_ROWS,
+} from "renderer/lib/terminal/terminal-runtime";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
 import { useInlineWorkspacePortsEnabled } from "renderer/stores/inline-workspace-ports";
 import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
 import { openSessionInWorkspace } from "renderer/stores/workspace-creates/openSessionInWorkspace";
+import { openTerminalInWorkspace } from "renderer/stores/workspace-creates/openTerminalInWorkspace";
 import { DashboardSidebarHeader } from "./components/DashboardSidebarHeader";
 import { DashboardSidebarHoverCardOverlay } from "./components/DashboardSidebarHoverCardOverlay";
-import {
-	SidebarSessionsPanel,
-	SidebarTestingPanel,
-} from "./components/DashboardSidebarPanels";
+import { SidebarSessionsPanel } from "./components/DashboardSidebarPanels";
 import { DashboardSidebarPortsList } from "./components/DashboardSidebarPortsList";
 import { DashboardSidebarProjectSection } from "./components/DashboardSidebarProjectSection";
 import { DashboardSidebarRail } from "./components/DashboardSidebarRail";
@@ -158,6 +161,62 @@ export function DashboardSidebar({
 		[activeWorkspaceId, collections, navigate],
 	);
 
+	/**
+	 * Resume a session in a real terminal, rather than handing you a command to
+	 * paste somewhere else.
+	 *
+	 * The command itself is unchanged — `resumeCommandFor` builds it from the
+	 * shared catalog, and it is the same string the copy action puts on the
+	 * clipboard. What changes is that it runs here, as the terminal's initial
+	 * command, so resuming is one click instead of copy, find a shell, paste.
+	 *
+	 * The session is created on host-service and AWAITED before the pane is
+	 * written into the layout. The pane opens its WebSocket the moment it
+	 * mounts, and a socket that arrives before the session exists renders as a
+	 * dead terminal — the in-workspace launcher carries the same rule for the
+	 * same reason.
+	 *
+	 * Cols and rows are passed for the reason the launcher passes them: the pty
+	 * prints immediately, and a pty that starts at a different size from the
+	 * xterm reflows its first output out of view.
+	 */
+	const resumeInTerminalFromSidebar = useCallback(
+		async (request: {
+			command: string;
+			cwd: string | null;
+			title: string;
+			provider: string;
+		}) => {
+			if (!activeWorkspaceId) {
+				navigate({ to: "/v2-workspaces" });
+				return;
+			}
+			const client = getHostTrpcClient(activeHostUrl);
+			if (!client) return;
+
+			const terminalId = crypto.randomUUID();
+			await client.terminal.createSession.mutate({
+				terminalId,
+				workspaceId: activeWorkspaceId,
+				initialCommand: request.command,
+				...(request.cwd ? { cwd: request.cwd } : {}),
+				cols: DEFAULT_COLS,
+				rows: DEFAULT_ROWS,
+			});
+
+			if (
+				!openTerminalInWorkspace(collections, activeWorkspaceId, {
+					terminalId,
+					title: request.title,
+					agentId: request.provider,
+				})
+			) {
+				navigate({ to: "/v2-workspaces" });
+			}
+		},
+		[activeWorkspaceId, activeHostUrl, collections, navigate],
+	);
+
 	const activePanel = useSidebarPanelStore((state) => state.activePanel);
 	const panelOpen = useSidebarPanelStore((state) => state.panelOpen);
 	const v2RouteMatch = matchRoute({ to: "/v2-workspace/$workspaceId" });
@@ -256,11 +315,10 @@ export function DashboardSidebar({
 										}
 									/>
 
-									{activePanel === "testing" ? (
-										<SidebarTestingPanel />
-									) : activePanel === "sessions" ? (
+									{activePanel === "sessions" ? (
 										<SidebarSessionsPanel
 											onOpenSession={openSessionFromSidebar}
+											onResumeInTerminal={resumeInTerminalFromSidebar}
 											onNewSession={() => navigate({ to: "/v2-workspaces" })}
 										/>
 									) : (

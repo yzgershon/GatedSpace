@@ -30,8 +30,19 @@ import { getTerminalParkingContainer } from "./terminal-parking";
 const SERIALIZE_SCROLLBACK = 1000;
 const STORAGE_KEY_PREFIX = "terminal-buffer:";
 const DIMS_KEY_PREFIX = "terminal-dims:";
-const DEFAULT_COLS = 120;
-const DEFAULT_ROWS = 32;
+/**
+ * The geometry a terminal is born with, before it has been measured.
+ *
+ * Exported because the SESSION has to be created with the same numbers. The pty
+ * is spawned by host-service and starts printing immediately; the client only
+ * corrects the size once the socket reports `attached`, which is several round
+ * trips later. Anything the shell prints in that window — a PowerShell prompt,
+ * Codex's welcome box, Claude Code's banner — is laid out at whatever size the
+ * pty was given, and then reflowed when the correction lands. Give the two
+ * sides different numbers and that reflow moves output out of view.
+ */
+export const DEFAULT_COLS = 120;
+export const DEFAULT_ROWS = 32;
 const RESIZE_DEBOUNCE_MS = 75;
 
 export interface TerminalRuntime {
@@ -244,6 +255,24 @@ export function createRuntime(
 	wrapper.style.width = "100%";
 	wrapper.style.height = "100%";
 	applyTerminalFontFamilyCssVariable(wrapper, appearance.fontFamily);
+	// Park BEFORE open(). xterm measures its cell size during open() by laying
+	// out a probe glyph, and a wrapper that is in no document has no layout — so
+	// the measurement comes back 0x0 and stays there, because nothing re-measures
+	// until a font option actually changes. Two things then break quietly:
+	// FitAddon's proposeDimensions() bails on a zero cell size, so the first
+	// fit() is a no-op and the terminal keeps its birth geometry; and the WebGL
+	// addon, which attaches a frame later, builds its drawing surface from those
+	// same dimensions. The buffer fills up correctly and nothing paints it.
+	//
+	// That asymmetry is the reported bug: agents repaint constantly and recover
+	// on the first re-measure (font settle, DPR change, the repaint watchdog),
+	// while a plain shell prints its prompt exactly once and has nothing left to
+	// redraw it with — so the pane stays blank for good.
+	//
+	// The parking container is `100vw x 100vh` at `-9999px` for exactly this
+	// reason: attached and measurable, never visible. attachToContainer()
+	// re-parents the wrapper out of it, detachFromContainer() puts it back.
+	getTerminalParkingContainer().appendChild(wrapper);
 	terminal.open(wrapper);
 
 	installTerminalKeyEventHandler(terminal);

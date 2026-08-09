@@ -12,7 +12,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export const SIDEBAR_PANELS = ["workspaces", "sessions", "testing"] as const;
+export const SIDEBAR_PANELS = ["workspaces", "sessions"] as const;
 
 export type SidebarPanel = (typeof SIDEBAR_PANELS)[number];
 
@@ -46,9 +46,10 @@ export const useSidebarPanelStore = create<SidebarPanelState>()(
 		}),
 		{
 			name: "sidebar-panel",
-			// "usage" used to be a panel and is now a dialog on the rail. A stored
-			// value of it would select a branch that no longer exists and render an
-			// empty column, so it falls back rather than persisting a dead state.
+			// "usage" used to be a panel and is now a dialog on the rail; "testing"
+			// was removed in 1.17.41. A stored value of either would select a branch
+			// that no longer exists and render an empty column, so it falls back
+			// rather than persisting a dead state.
 			migrate: (persisted) => {
 				const state = persisted as Partial<SidebarPanelState> | undefined;
 				if (
@@ -59,7 +60,11 @@ export const useSidebarPanelStore = create<SidebarPanelState>()(
 				}
 				return state as SidebarPanelState;
 			},
-			version: 2,
+			// Bumped with the "testing" removal. `migrate` only runs when the stored
+			// version differs, so leaving this at 2 would strand anyone whose saved
+			// panel was "testing": no branch matches, and the rail shows nothing
+			// selected over an empty column.
+			version: 3,
 		},
 	),
 );

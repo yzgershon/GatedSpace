@@ -54,10 +54,13 @@ function Window({
 	label,
 	percent,
 	resets,
+	compact,
 }: {
 	label: string;
 	percent: number | null;
 	resets: string | null;
+	/** Side-by-side panes: meter and number only, no reset time. */
+	compact?: boolean;
 }) {
 	if (percent === null) return null;
 	return (
@@ -79,7 +82,9 @@ function Window({
 			>
 				{percent}%
 			</span>
-			{resets ? <span className="text-foreground/55">↻ {resets}</span> : null}
+			{resets && !compact ? (
+				<span className="text-foreground/55">↻ {resets}</span>
+			) : null}
 		</span>
 	);
 }
@@ -93,9 +98,17 @@ function formatCost(costUsd: number): string {
 export function SessionUsageStrip({
 	limits,
 	costUsd,
+	compact,
 }: {
 	limits?: UsageLimits | null;
 	costUsd?: number;
+	/**
+	 * Panes are side by side, so spend the width on what changes minute to
+	 * minute. Reset times and session cost drop out; the account and both
+	 * meters stay — which account is spending and how much is left are the two
+	 * things worth a glance while four agents run at once.
+	 */
+	compact?: boolean;
 }) {
 	const hasWindows =
 		limits &&
@@ -103,23 +116,34 @@ export function SessionUsageStrip({
 	if (!limits?.label && !hasWindows && costUsd === undefined) return null;
 
 	return (
-		<span className="flex items-center gap-3 text-[11px]">
+		<span
+			className={cn(
+				"flex min-w-0 items-center text-[11px]",
+				compact ? "gap-2" : "gap-3",
+			)}
+		>
 			{limits?.label ? (
 				// The account is first because it qualifies everything after it: the
-				// percentages mean nothing until you know whose they are.
-				<span className="font-medium text-foreground">{limits.label}</span>
+				// percentages mean nothing until you know whose they are. Kept even
+				// when compact — with three accounts in rotation, "whose limit is
+				// this" is the question the strip exists to answer.
+				<span className="truncate font-medium text-foreground">
+					{limits.label}
+				</span>
 			) : null}
 			<Window
 				label="5h"
 				percent={limits?.fiveHourPercent ?? null}
 				resets={limits?.fiveHourResets ?? null}
+				compact={compact}
 			/>
 			<Window
 				label="wk"
 				percent={limits?.weeklyPercent ?? null}
 				resets={limits?.weeklyResets ?? null}
+				compact={compact}
 			/>
-			{costUsd === undefined ? null : (
+			{costUsd === undefined || compact ? null : (
 				<span
 					className="font-medium tabular-nums text-foreground/70"
 					title="API cost for this session"

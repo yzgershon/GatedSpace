@@ -5,6 +5,7 @@ import type {
 } from "electron";
 import { Notification } from "electron";
 import { setBadgeCount } from "main/lib/dock-icon";
+import { shouldShowBanner } from "main/lib/notifications/banner-dedupe";
 import {
 	type AgentLifecycleEvent,
 	type NotificationIds,
@@ -99,6 +100,13 @@ export const createNotificationsRouter = (
 			.mutation(({ input }) => {
 				if (!Notification.isSupported()) {
 					return { success: false as const, reason: "unsupported" as const };
+				}
+
+				// The main process raises its own banner for the same completed
+				// turn, from the hook server. See banner-dedupe for why this is
+				// keyed on the words rather than on a session id.
+				if (!shouldShowBanner(input.title, input.body)) {
+					return { success: true as const, deduped: true as const };
 				}
 
 				const notification = new Notification({

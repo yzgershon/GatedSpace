@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — left rail treatments</title>
+<style>
+  /* Verbatim from renderer/globals.css (dark), 2026-08-08. */
+  :root {
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --muted-foreground:#a8a5a3; --accent:#2a2827; --border:#2a2827;
+    --sidebar:#1a1716; --sidebar-accent:#252220; --sidebar-border:#2a2827;
+    --sidebar-ring:#3a3837; --highlight:#e07850;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:#0f0d0c; color:var(--foreground);
+         font:14px/1.55 -apple-system,"Segoe UI",system-ui,sans-serif; padding:26px 30px 70px; }
+  h1 { font-size:19px; margin:0 0 6px; }
+  .sub { color:var(--muted-foreground); font-size:13px; margin:0 0 6px; max-width:88ch; }
+  h2 { font-size:14px; margin:34px 0 6px; }
+  .why { color:var(--muted-foreground); font-size:12.5px; margin:0 0 14px; max-width:86ch; }
+  code { font-family:ui-monospace,Consolas,monospace; font-size:12px; color:#c9c6c4; }
+  .row { display:flex; gap:22px; flex-wrap:wrap; align-items:flex-start; }
+  .label { font-size:11px; color:var(--muted-foreground); margin:0 0 7px; letter-spacing:.04em; }
+  .tag { font-size:10px; color:#0f0d0c; background:var(--highlight); border-radius:3px;
+         padding:1px 5px; margin-left:6px; vertical-align:1px; }
+
+  /* ---- the real structure: 48px rail + panel ---- */
+  .app { display:flex; height:330px; width:290px; border-radius:8px; overflow:hidden;
+         border:1px solid #000; }
+  .rail { width:48px; flex:none; display:flex; flex-direction:column; align-items:center;
+          background:var(--sidebar); position:relative; }
+  .panel { flex:1; background:var(--sidebar); padding:10px 10px 0; min-width:0; }
+  .spacer { flex:1; }
+  .grp { display:flex; flex-direction:column; align-items:center; gap:2px; }
+  .btn { width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+         position:relative; border-radius:8px; color:var(--muted-foreground); }
+  .btn svg { width:19px; height:19px; }
+  .btn.sel { color:var(--foreground); }
+  .bottom { display:flex; flex-direction:column; align-items:center; padding-bottom:6px; }
+  .bottom .btn { width:44px; height:44px; }
+  .bottom .btn:last-child { width:32px; height:32px; }
+
+  /* panel mock */
+  .pttl { font-size:10px; letter-spacing:.05em; text-transform:uppercase;
+          color:rgba(168,165,163,.6); margin:2px 0 8px; }
+  .prow { font-size:12.5px; color:var(--foreground); padding:5px 4px; white-space:nowrap;
+          overflow:hidden; text-overflow:ellipsis; }
+  .prow span { color:rgba(168,165,163,.6); font-size:11px; float:right; }
+  .seg { display:flex; background:rgba(42,40,39,.6); border-radius:6px; padding:2px; margin-bottom:8px; }
+  .seg div { flex:1; text-align:center; font-size:11px; padding:3px; border-radius:4px;
+             color:var(--muted-foreground); }
+  .seg div.on { background:var(--sidebar); color:var(--foreground); box-shadow:0 1px 2px #0006; }
+
+  /* ================= TREATMENTS ================= */
+
+  /* NOW — rail and panel identical, divider at 45% opacity */
+  .t-now .rail { border-right:1px solid rgba(42,40,39,.45); }
+  .t-now .btn.sel::before { content:""; position:absolute; inset:6px auto 6px 0; width:2px;
+                            border-radius:0 2px 2px 0; background:var(--foreground); left:-6px; }
+
+  /* A — recessed rail: rail drops to app background, panel stays sidebar */
+  .t-a .rail { background:var(--background); border-right:1px solid var(--sidebar-border); }
+  .t-a .btn.sel::before { content:""; position:absolute; inset:6px auto 6px 0; width:2px;
+                          border-radius:0 2px 2px 0; background:var(--highlight); left:0; }
+
+  /* B — active tile, no edge bar */
+  .t-b .rail { background:var(--background); border-right:1px solid var(--sidebar-border); }
+  .t-b .btn.sel { background:var(--sidebar-accent); }
+
+  /* C — accent tile: tinted fill + accent icon */
+  .t-c .rail { background:var(--background); border-right:1px solid var(--sidebar-border); }
+  .t-c .btn.sel { background:color-mix(in oklab, var(--highlight) 15%, transparent);
+                  color:var(--highlight); }
+
+  /* D — the glow you asked about */
+  .t-d .rail { background:var(--background); border-right:1px solid var(--sidebar-border); }
+  .t-d .btn.sel { color:var(--highlight); }
+  .t-d .btn.sel svg { filter:drop-shadow(0 0 6px color-mix(in oklab, var(--highlight) 70%, transparent)); }
+
+  /* E — grouped pill holding the three icons together */
+  .t-e .rail { background:var(--background); border-right:1px solid var(--sidebar-border); }
+  .t-e .grp { background:var(--sidebar); border:1px solid var(--sidebar-border);
+              border-radius:11px; padding:3px 0; }
+  .t-e .btn.sel { color:var(--highlight); }
+  .t-e .btn.sel::before { content:""; position:absolute; inset:8px auto 8px 0; width:2px;
+                          border-radius:0 2px 2px 0; background:var(--highlight); left:-3px; }
+
+  /* ===== A + D — the recessed rail, with the glow ===== */
+  /* Shared base: A's surface and divider, D's accent icon. Only the glow differs. */
+  .t-ad1 .rail, .t-ad2 .rail, .t-ad3 .rail {
+    background:var(--background); border-right:1px solid var(--sidebar-border);
+  }
+  .t-ad1 .btn.sel, .t-ad2 .btn.sel, .t-ad3 .btn.sel { color:var(--highlight); }
+  /* A's edge bar, kept — it is what says WHICH is selected when the glow is subtle,
+     and it is the part that survives for anyone who cannot see the glow well. */
+  .t-ad1 .btn.sel::before, .t-ad2 .btn.sel::before, .t-ad3 .btn.sel::before {
+    content:""; position:absolute; inset:6px auto 6px 0; width:2px;
+    border-radius:0 2px 2px 0; background:var(--highlight); left:0;
+  }
+  .t-ad1 .btn.sel svg { filter:drop-shadow(0 0 4px color-mix(in oklab, var(--highlight) 45%, transparent)); }
+  .t-ad2 .btn.sel svg { filter:drop-shadow(0 0 7px color-mix(in oklab, var(--highlight) 70%, transparent)); }
+  .t-ad3 .btn.sel svg {
+    filter:drop-shadow(0 0 5px color-mix(in oklab, var(--highlight) 80%, transparent))
+           drop-shadow(0 0 13px color-mix(in oklab, var(--highlight) 45%, transparent));
+  }
+  /* Hover, so the rail is not dead until you click. Applies to all three. */
+  .t-ad1 .btn:not(.sel):hover, .t-ad2 .btn:not(.sel):hover, .t-ad3 .btn:not(.sel):hover {
+    color:var(--foreground);
+  }
+
+  .note { font-size:12px; color:var(--muted-foreground); margin:8px 0 0; max-width:34ch; }
+</style>
+</head>
+<body>
+
+<h1>The left rail — what's off, and five ways out</h1>
+<p class="sub">
+  Every colour below is copied from <code>globals.css</code>. Each panel is the real structure:
+  a 48px rail, three centred icons, Settings and Help pinned at the bottom, against a mock
+  sessions panel.
+</p>
+<p class="sub">
+  <strong>The problem isn't the icons.</strong> The rail and the panel are both
+  <code>bg-sidebar</code> — the same <span style="color:#1a1716;background:#fff;padding:0 4px">#1a1716</span>.
+  The only thing between them is <code>border-r border-border/45</code>, which is
+  <code>#2a2827</code> at 45% over <code>#1a1716</code>: about a 4% step, invisible in practice.
+  So there is no toolbar, just three dim glyphs floating in the sessions panel's margin.
+  Centring them made it read stronger, because now nothing anchors them top or bottom.
+</p>
+
+<script>
+const ICONS = {
+  layers:'<path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  history:'<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/>',
+  gauge:'<path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/>',
+  cog:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6h.09A1.65 1.65 0 0 0 10.6 3.09V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>',
+  help:'<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>'
+};
+function svg(name){
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICONS[name]+'</svg>';
+}
+function app(cls){
+  return '<div class="app '+cls+'">'
+    + '<div class="rail">'
+    +   '<div class="spacer"></div>'
+    +   '<div class="grp">'
+    +     '<div class="btn">'+svg('layers')+'</div>'
+    +     '<div class="btn sel">'+svg('history')+'</div>'
+    +     '<div class="btn">'+svg('gauge')+'</div>'
+    +   '</div>'
+    +   '<div class="spacer"></div>'
+    +   '<div class="bottom"><div class="btn">'+svg('cog')+'</div><div class="btn">'+svg('help')+'</div></div>'
+    + '</div>'
+    + '<div class="panel">'
+    +   '<div class="pttl">Recent sessions</div>'
+    +   '<div class="seg"><div class="on">Claude</div><div>Codex</div></div>'
+    +   '<div class="prow">Hello this is where I<span>2m</span></div>'
+    +   '<div class="prow">Resume previous ses<span>51m</span></div>'
+    +   '<div class="prow">ok Ive got a new pro<span>3h</span></div>'
+    +   '<div class="prow">Review Microsoft aud<span>1d</span></div>'
+    +   '<div class="prow">im currently enrolled<span>1d</span></div>'
+    + '</div>'
+  + '</div>';
+}
+const OPTS = [
+  ['t-now','TODAY','Rail and panel are the same surface. The selected bar sits at the far left window edge, where it reads as a rendering artifact rather than a selection.'],
+  ['t-a','A · Recessed rail','Rail drops to the app background so the panel reads as raised. Divider at full strength. Selected bar moves inboard and takes the accent.'],
+  ['t-b','B · Active tile','Same recessed rail, but selection is a filled tile instead of an edge bar. Closest to VS Code and Linear.'],
+  ['t-c','C · Accent tile','Tile tinted with the accent and the icon coloured to match. Loudest of the set.'],
+  ['t-d','D · Glow','Your idea. Accent icon with a soft drop-shadow, no tile at all.'],
+  ['t-e','E · Grouped pill','The three icons sit in their own raised container, so a centred group has something holding it.']
+];
+document.write('<h2>Side by side</h2><p class="why">Left to right: what ships today, then the five. Look at where the rail ENDS and the panel begins — that boundary is the whole problem.</p><div class="row">');
+for (const [cls,label,note] of OPTS) {
+  document.write('<div><p class="label">'+label+(cls==='t-now'?' <span class="tag">now</span>':'')+'</p>'+app(cls)+'<p class="note">'+note+'</p></div>');
+}
+document.write('</div>');
+</script>
+
+<script>
+document.write('<h2>A + D — the one you asked for, at three glow strengths</h2>'
+  + '<p class="why">A\'s recessed rail and full-strength divider, with D\'s accent icon and glow on top. '
+  + 'The only difference across the three is the blur radius and opacity of the drop-shadow.<br><br>'
+  + '<strong>The edge bar is kept deliberately.</strong> A glow says "something here is lit"; it does not '
+  + 'say WHICH of three adjacent icons, especially at the subtle end or against a bright wallpaper '
+  + 'bleeding through. The 2px bar carries the actual state and the glow does the mood, so the '
+  + 'selection is still legible if the glow is turned down or not perceived.</p><div class="row">');
+const COMBO = [
+  ['t-ad1','A+D · subtle','4px at 45%. Reads as a warm edge on the icon rather than a light source. Closest to A with a little life.'],
+  ['t-ad2','A+D · medium','7px at 70%. The obvious middle. Clearly glowing, still one element.'],
+  ['t-ad3','A+D · layered','Two shadows, tight and wide. The most "lit from within" of the three, and the one most likely to compete with the pane ring.']
+];
+for (const [cls,label,note] of COMBO) {
+  document.write('<div><p class="label">'+label+'</p>'+app(cls)+'<p class="note">'+note+'</p></div>');
+}
+document.write('</div>');
+</script>
+
+<h2>What I'd pick, and why</h2>
+<p class="why">
+  <strong>A or B.</strong> Both fix the actual fault — the rail becomes a surface instead of empty
+  margin — and neither adds a new colour to the app. B is the more conventional answer and reads
+  best when the panel is closed, since a filled tile survives without a neighbouring edge to sit
+  against.
+  <br><br>
+  <strong>C and D are louder than this element earns.</strong> The rail is navigation you use a
+  few times an hour; the accent is spent on agent identity elsewhere in the app, and spending it
+  here too dilutes that. D in particular fights the pane ring, which is the one thing in the
+  window that is supposed to glow.
+  <br><br>
+  <strong>E is the one to take if the emptiness is what bothers you</strong> rather than the
+  boundary. It gives the centred group a container, so it stops looking like three icons adrift.
+  It can be combined with A or B.
+</p>
+<p class="why">
+  <strong>On A + D, now that it is built:</strong> it works, and the middle strength is the one.
+  The recessed rail is doing the heavy lifting — that is the fix — and the glow is decoration
+  riding on top of a boundary that now exists. Two things to keep in mind. It still spends the
+  accent on navigation, so if a Claude pane is focused you will have the same orange glowing in
+  two places at once. And a glow cannot be the only thing carrying selection, which is why the
+  edge bar stayed. Take the subtle one if the double-orange bothers you once it is running;
+  it is a one-number change either way.
+</p>
+
+</body>
+</html>

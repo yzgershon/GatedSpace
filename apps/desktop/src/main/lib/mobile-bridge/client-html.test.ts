@@ -31,122 +31,49 @@ describe("the phone page", () => {
 		expect(MOBILE_BRIDGE_HTML).not.toContain("${");
 	});
 
-	it("emits the regex escapes it meant to", () => {
-		// `\\s` in the TS source has to reach the browser as `\s`. Getting this
-		// wrong yields a regex that matches a literal "s".
-		expect(scriptBody()).toContain("replace(/\\s+$/");
-		expect(scriptBody()).not.toContain("replace(/\\\\s+$/");
+	it("emits no doubled backslashes", () => {
+		// The script lives in a TS template literal, where `\\s` in the source is
+		// what reaches the browser as `\s`. Writing `\\\\s` yields a regex that
+		// matches a literal backslash-s and silently never fires.
+		//
+		// This used to pin the one real site, `replace(/\s+$/`, which lived in the
+		// dictation code and went with it. There is no escape left in the script
+		// today, so the guard is now the general form: nothing should emit a
+		// doubled backslash, and the moment something does it is almost certainly
+		// this bug rather than an intentional literal.
+		expect(scriptBody()).not.toContain("\\\\");
 	});
 });
 
-describe("voice input", () => {
+describe("the composer", () => {
 	const script = scriptBody();
 
-	it("uses the phone's own recogniser, never the desktop", () => {
-		// The whole point of the revised 4.3: audio does not leave the phone and
-		// the desktop has no capture path at all.
-		expect(script).toContain("window.webkitSpeechRecognition");
-		expect(script).not.toContain("/api/voice");
+	it("has no in-app dictation", () => {
+		// Removed 2026-08-08 at the maintainer's request. It cost a button in a
+		// one-row composer on a phone, and it only ever worked over an HTTPS link:
+		// SpeechRecognition needs a secure context, and the DEFAULT link mode is
+		// plain HTTP, so for most sessions the button hid itself and the hint told
+		// you to use the keyboard's mic key anyway. The keyboard's own dictation
+		// works in every field with no permission prompt of ours.
+		expect(MOBILE_BRIDGE_HTML).not.toContain('id="mic"');
+		expect(script).not.toContain("SpeechRecognition");
+		expect(script).not.toContain("stopMic");
+		expect(script).not.toContain("mergeSpeech");
 	});
 
-	it("checks the secure context before offering the button", () => {
-		// SpeechRecognition throws on plain HTTP, which is the DEFAULT link mode.
-		// Without this the button would be visible and broken for most users.
-		expect(script).toContain("window.isSecureContext");
+	it("sends with an arrow, not the word Send", () => {
+		// The composer is one row on a phone; a padded text button was ~74px of
+		// width the prompt did not get.
+		expect(MOBILE_BRIDGE_HTML).toContain('id="send" aria-label="Send"');
+		expect(MOBILE_BRIDGE_HTML).not.toMatch(/<button id="send">Send<\/button>/);
 	});
 
-	it("keeps the button hidden until both checks pass", () => {
-		expect(MOBILE_BRIDGE_HTML).toContain('id="mic" aria-label="Dictate"');
-		expect(MOBILE_BRIDGE_HTML).toMatch(/id="mic"[^>]*hidden/);
-	});
-
-	it("appends to the composer instead of replacing it", () => {
-		expect(script).toContain("input.value = baseText + dictated");
-	});
-
-	it("rebuilds the transcript from index 0 rather than accumulating", () => {
-		// event.results is cumulative and event.resultIndex is only a hint —
-		// browsers commonly report it as 0 every event, so appending re-adds
-		// finished words once per event.
-		expect(script).toContain("for (var i = 0; i < event.results.length; i++)");
-		expect(script).not.toContain("i = event.resultIndex");
-	});
-
-	it("builds a NEW recognizer for each restart", () => {
-		// THE bug that survived three fixes. Restarting the same instance does
-		// not clear its results list on Android, so the first event of the new
-		// session re-delivered every word of the old one — on top of the text
-		// already banked from it.
-		expect(script).toContain("function newRecognizer()");
-		expect(script).toContain("recog = newRecognizer()");
-		// The old shape: restarting the instance that just ended.
-		expect(script).not.toContain(
-			"try { recog.start(); } catch (e) { stopMic(); }",
-		);
-	});
-
-	it("banks a finished instance's text before the next one starts", () => {
-		expect(script).toContain(
-			"committed = mergeSpeech(committed, instanceFinal)",
-		);
-	});
-
-	it("merges rather than concatenates", () => {
-		// THE bug, finally understood: Android hands back the whole transcript on
-		// every restart, so appending it to what was banked compounded every
-		// prefix — "hellohello thishello this is".
-		expect(script).toContain("function mergeSpeech(");
-		expect(script).toContain("paint(mergeSpeech(committed,");
-		expect(script).not.toContain("committed += instanceFinal");
-	});
-
-	it("ignores events from a recognizer it has moved on from", () => {
-		// A discarded instance can still deliver one last event, which would
-		// paint stale text over the live transcript.
-		expect(script).toContain("if (instance !== recog) return");
-	});
-
-	it("restarts itself so a pause does not end dictation", () => {
-		expect(script).toContain("instance.onend");
-		expect(script).toContain("restartTimer = setTimeout");
-	});
-
-	it("waits a beat before restarting", () => {
-		// Chrome ends immediately when it hears nothing; an instant restart is a
-		// tight loop that holds the microphone open.
-		expect(script).toMatch(/restartTimer = setTimeout\([\s\S]*?\}, \d+\)/);
-	});
-
-	it("refuses a second start while one is already running", () => {
-		// Two recognizers both writing to the box is its own duplication bug.
-		const startMic = script.slice(script.indexOf("function startMic()"));
-		expect(startMic.slice(0, 300)).toContain("if (listening) return");
-	});
-
-	it("clears the listening flag before stopping, so onend cannot restart it", () => {
-		// Ordering bug bait: stop() fires onend, and onend restarts while
-		// listening is still true. The mic would be impossible to turn off.
-		const stopMic = script.slice(script.indexOf("function stopMic()"));
-		expect(stopMic.indexOf("listening = false")).toBeLessThan(
-			stopMic.indexOf("instance.stop()"),
-		);
-	});
-
-	it("keeps what was said when the mic is switched off mid-sentence", () => {
-		const stopMic = script.slice(script.indexOf("function stopMic()"));
-		expect(stopMic.slice(0, 700)).toContain(
-			"committed = mergeSpeech(committed, instanceFinal)",
-		);
-	});
-
-	it("never sends on its own", () => {
-		// This drives an agent that runs shell commands. A misheard word should
-		// cost a glance at the composer, not a turn.
-		const send = script.slice(
-			script.indexOf("function send()"),
-			script.indexOf("sendBtn.onclick"),
-		);
-		expect(send).toContain("stopMic()");
+	it("keeps the attach picker image-only", () => {
+		// Unlike the desktop composer. The bridge sends attachments as base64
+		// image blocks and the phone has no filesystem path to hand the agent
+		// instead, so a PDF picked here would fail after the fact rather than at
+		// the picker. Opening this up needs an upload endpoint on the bridge.
+		expect(MOBILE_BRIDGE_HTML).toContain('id="file" accept="image/*"');
 	});
 });
 
