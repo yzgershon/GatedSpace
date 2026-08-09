@@ -6,9 +6,9 @@
 
 ### An agentic development environment for Windows
 
-Run Claude Code, Codex, Gemini, and any other CLI coding agent in parallel,
-each in its own isolated git worktree, with built-in terminals, diff review,
-and workspace management.
+Run Claude Code, Codex, Gemini, Kimi K2, Copilot, and any other CLI coding
+agent in parallel, each in its own isolated git worktree, with built-in
+terminals, diff review, and workspace management.
 
 **Free. No account. No cloud. Everything runs on your machine.**
 
@@ -25,9 +25,9 @@ and workspace management.
 
 <br />
 
-![GatedSpace running Claude Code, OpenAI Codex, and Kimi Code in parallel, with the built-in diff review open](.github/assets/hero.png)
+![GatedSpace with two Claude Code sessions and a built-in terminal open side by side in one workspace, agent tabs for Codex, Gemini and Copilot across the top, and git worktrees listed in the left sidebar](.github/assets/hero.png)
 
-<sub>Claude Code, OpenAI Codex, and Kimi Code working the same repo in parallel — each in its own pane, with the built-in diff review on the right.</sub>
+<sub>Two Claude Code sessions and a live terminal in one workspace. Codex, Gemini, Copilot, Kimi K2 and any other CLI agent are a tab away, and shells keep running in the background after you close the app.</sub>
 
 </div>
 
@@ -54,9 +54,10 @@ the [Actions tab](https://github.com/yzgershon/GatedSpace/actions).
 
 ## What it does
 
-- **Parallel agents.** Run several Claude Code / Codex / Gemini / any-CLI-agent
-  sessions side by side, each in its own git worktree, so agents never step on
-  each other's changes.
+- **Parallel agents.** Run several Claude Code / Codex / Gemini / Kimi K2 /
+  Copilot / any-CLI-agent sessions side by side, each in its own git worktree,
+  so agents never step on each other's changes. If it runs in a terminal, it
+  runs here — GatedSpace is not tied to any one model or vendor.
 - **Workspaces.** One project, many worktrees. Create, switch, and tear down
   branches without touching your main checkout.
 - **Built-in terminals.** Persistent PTY sessions that survive app restarts,
@@ -143,6 +144,13 @@ bun run package -- --publish never
 Requires [Bun](https://bun.sh) (see `.bun-version`), Node.js, and on Windows
 the Visual Studio 2022 C++ build tools for native modules. Public builds set
 `NEXT_PUBLIC_LOCAL_ONLY=1` at compile time to bake in local-only mode.
+
+## Themes
+
+The whole app follows the theme, agent panes and terminals included. Here is
+the same workspace in Dracula:
+
+![The same GatedSpace workspace rendered in the Dracula theme](.github/assets/hero-dracula.png)
 
 ## Contributing
 
