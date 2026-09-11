@@ -26,8 +26,9 @@
  */
 import { cn } from "@superset/ui/utils";
 import { ChevronRight } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { MarkdownRenderer } from "renderer/components/MarkdownRenderer";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useResolvedTheme } from "renderer/stores/theme";
 import {
 	groupSubagents,
@@ -35,12 +36,12 @@ import {
 	type ThinkingItem,
 	type TimelineItem,
 	type ToolItem,
-	turnTokenTotal,
 	type UserTextItem,
 } from "shared/claude-session/timeline";
 import { getEditorTheme } from "shared/themes";
 import { ImageChip } from "./ImageChip";
 import { DIFF_MAX_CHARS, SessionDiff } from "./SessionDiff";
+import { foldRuns, foldSummary } from "./tool-folding";
 import { WorkingIndicator } from "./WorkingIndicator";
 import { formatThought } from "./working-indicator";
 
@@ -110,6 +111,30 @@ function Collapse({
 		>
 			<div className="overflow-hidden">{children}</div>
 		</div>
+	);
+}
+
+/**
+ * Clock time against a message, top-right of its row.
+ *
+ * Absolutely positioned and `select-none`, for the reason the prompt's own
+ * stamp is: it must not reflow the text it labels, and it must not end up in
+ * a copied selection of the reply.
+ *
+ * Renders nothing without a time. The CLI only stamps some events, and every
+ * transcript written before the field existed has none — absent has to mean
+ * "no time to show" rather than a default that would be wrong.
+ */
+function MessageClock({ at }: { at?: number }) {
+	const { messageTimestamps } = useSkinTokens();
+	if (!messageTimestamps || at === undefined) return null;
+	return (
+		<span className="pointer-events-none absolute top-0.5 right-0 select-none font-mono text-[9.5px] text-muted-foreground/40 tabular-nums">
+			{new Date(at).toLocaleTimeString(undefined, {
+				hour: "numeric",
+				minute: "2-digit",
+			})}
+		</span>
 	);
 }
 
@@ -559,6 +584,52 @@ function OutputPanel({ text }: { text: string }) {
  * Errors always show their output regardless of the tool's usual treatment — a
  * failed Read that says nothing is the worst row on the screen.
  */
+/**
+ * A folded run of bodyless tool calls, as one line.
+ *
+ * Expandable, which the reference's version is not. Folding is about the
+ * transcript staying readable while an agent reads twenty files; it is not
+ * about hiding what it read, and the moment you want to know, you want the
+ * list rather than a rerun.
+ *
+ * The trailing count is `N steps`, NOT the reference's `[hooks: N]`. There is
+ * no hook here to count — that is a concept from the other app — and borrowing
+ * the label for a number that means something else is how a UI starts lying.
+ */
+function FoldedTools({ items }: { items: ToolItem[] }) {
+	const [open, setOpen] = useState(false);
+	return (
+		<div className="flex flex-col">
+			<button
+				type="button"
+				onClick={() => setOpen((v) => !v)}
+				className="flex w-full items-baseline gap-2 pl-8 text-left focus-visible:outline-none"
+				aria-expanded={open}
+			>
+				<span
+					aria-hidden
+					className="-ml-[26px] w-[18px] shrink-0 text-[10px] text-muted-foreground/45"
+				>
+					◆
+				</span>
+				<span className="min-w-0 flex-1 truncate text-[12.5px] text-muted-foreground/70">
+					{foldSummary(items)}
+				</span>
+				<span className="shrink-0 font-mono text-[10px] text-muted-foreground/35 tabular-nums">
+					{items.length} steps
+				</span>
+			</button>
+			<Collapse open={open}>
+				<div className="mt-2 flex flex-col gap-2">
+					{items.map((item) => (
+						<ToolCall key={item.id} item={item} />
+					))}
+				</div>
+			</Collapse>
+		</div>
+	);
+}
+
 function ToolCall({
 	item,
 	children,
@@ -669,8 +740,9 @@ function SubagentGroup({
 						<TimelineItemRow
 							key={child.id}
 							item={child}
-							groups={undefined}
-							drafts={drafts}
+							subagentChildren={undefined}
+							subagentDrafts={undefined}
+							streaming={drafts?.has(child.id) ?? false}
 						/>
 					))}
 				</div>
@@ -679,16 +751,45 @@ function SubagentGroup({
 	);
 }
 
-function TimelineItemRow({
+/**
+ * One row of the transcript. MEMOIZED, and the prop shape exists to make that
+ * memo actually hit.
+ *
+ * Every token of a streaming reply produces a new timeline, and this list is
+ * not virtualised — so before this, one delta re-rendered every row of the
+ * whole conversation, several times a second, and the cost grew with the length
+ * of the conversation. That is most of what "not snappy while an agent is
+ * working" was.
+ *
+ * `applyEvent` rebuilds the items array but keeps the OBJECT IDENTITY of every
+ * item it did not touch (`items.map(i => i.id === id ? {...} : i)`), so `item`
+ * is a stable reference for every row except the one being written. The other
+ * two props used to defeat that: `groups` was a Map rebuilt on every render and
+ * `drafts` a Set that changes on every delta, so both were a new reference each
+ * time and the memo would never have hit. Passing the already-resolved children
+ * and a plain boolean makes the props of an untouched row identical between
+ * renders, which is the whole point.
+ */
+const TimelineItemRow = memo(function TimelineItemRow({
 	item,
-	groups,
-	drafts,
+	subagentChildren,
+	subagentDrafts,
+	streaming,
 }: {
 	item: TimelineItem;
-	groups: Map<string, TimelineItem[]> | undefined;
-	drafts: ReadonlySet<string> | undefined;
+	/** Children of this tool call, when it spawned a subagent. */
+	subagentChildren: TimelineItem[] | undefined;
+	/**
+	 * The live draft set, passed ONLY to rows that have subagent children —
+	 * those render nested rows that need it. Left undefined everywhere else so
+	 * the prop stays referentially stable and the memo above still hits, which
+	 * is every row that is not a subagent tool call.
+	 */
+	subagentDrafts: ReadonlySet<string> | undefined;
+	/** Whether THIS row is the one currently being written. */
+	streaming: boolean;
 }) {
-	const streaming = drafts?.has(item.id) ?? false;
+	const { messageTimestamps } = useSkinTokens();
 	switch (item.kind) {
 		case "user":
 			// Prompts are rendered by the turn wrapper, which frames the turn.
@@ -696,7 +797,20 @@ function TimelineItemRow({
 		case "text":
 			return (
 				<Row state="prose">
-					<div className="text-[13.5px] text-foreground">
+					{/*
+					 * `relative` + a reserved right pad so the clock can be absolutely
+					 * placed. In flow it would sit after a markdown block and land
+					 * under the last paragraph rather than beside the first line.
+					 */}
+					<div
+						className={cn(
+							"relative text-[13.5px] text-foreground",
+							// Reserved whether or not this message has a stamp, so prose
+							// does not reflow as timestamps appear down the transcript.
+							messageTimestamps && "pr-12",
+						)}
+					>
+						<MessageClock at={item.at} />
 						{/*
 						 * MarkdownRenderer is built for full-page documents: its article
 						 * carries px-8 py-6 and the wrapper is a full-height scroller.
@@ -724,10 +838,11 @@ function TimelineItemRow({
 		case "thinking":
 			return <ThinkingBlock item={item} streaming={streaming} />;
 		case "tool": {
-			const children = groups?.get(item.toolUseId);
 			return (
 				<ToolCall item={item}>
-					{children ? <SubagentGroup items={children} drafts={drafts} /> : null}
+					{subagentChildren ? (
+						<SubagentGroup items={subagentChildren} drafts={subagentDrafts} />
+					) : null}
 				</ToolCall>
 			);
 		}
@@ -771,7 +886,7 @@ function TimelineItemRow({
 		default:
 			return null;
 	}
-}
+});
 
 /**
  * The turn's prompt, pinned and clamped.
@@ -781,6 +896,7 @@ function TimelineItemRow({
  * ones, and a "show more" that appears on a two-word prompt looks broken.
  */
 function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
+	const { promptAccentBar, messageTimestamps } = useSkinTokens();
 	const [expanded, setExpanded] = useState(false);
 	const [overflowing, setOverflowing] = useState(false);
 	const textRef = useRef<HTMLDivElement>(null);
@@ -803,7 +919,32 @@ function PinnedPrompt({ prompt }: { prompt: UserTextItem }) {
 		 * without an edge of its own the two merge and the pane looks like it is
 		 * rendering wrong.
 		 */
-		<div className="sticky top-0 z-10 rounded-lg border border-border/50 bg-card px-4 py-2.5 text-[13.5px] text-foreground shadow-[0_1px_0_theme(colors.white/6%)_inset,0_6px_16px_-8px_rgb(0_0_0/0.55)]">
+		<div
+			className={cn(
+				"sticky top-0 z-10 rounded-lg border border-border/50 bg-card px-4 py-2.5 text-[13.5px] text-foreground shadow-[0_1px_0_theme(colors.white/6%)_inset,0_6px_16px_-8px_rgb(0_0_0/0.55)]",
+				/*
+				 * The accent rule is `before:` rather than a real element so it can
+				 * be inset from the rounded corners without a wrapper. It stops at
+				 * top-2.5/bottom-2.5 on purpose — running the full height would
+				 * poke past the radius and read as a rendering fault.
+				 */
+				promptAccentBar &&
+					"before:absolute before:top-2.5 before:bottom-2.5 before:left-0 before:w-[2px] before:rounded-full before:bg-highlight before:content-['']",
+			)}
+		>
+			{/*
+			 * Absolute so it never reflows the prompt text, and only rendered when
+			 * the event actually carried a time — a transcript folded from disk
+			 * predates the field, and an invented time is worse than none.
+			 */}
+			{messageTimestamps && prompt.at !== undefined ? (
+				<span className="absolute top-2.5 right-3 select-none font-mono text-[9.5px] text-muted-foreground/40 tabular-nums">
+					{new Date(prompt.at).toLocaleTimeString(undefined, {
+						hour: "numeric",
+						minute: "2-digit",
+					})}
+				</span>
+			) : null}
 			{prompt.attachments?.length ? (
 				<div className="mb-1.5 flex flex-wrap items-start gap-1.5">
 					{prompt.attachments.map((attachment, index) => (
@@ -909,12 +1050,40 @@ function splitTurns(items: TimelineItem[]): Turn[] {
 
 export function SessionTimelineView({
 	timeline,
+	onInterrupt,
 }: {
 	timeline: SessionTimeline;
+	/**
+	 * Stop the running turn from the status line, the way the reference does.
+	 *
+	 * The inline composer has no Stop button — it is one row with no toolbar —
+	 * so the affordance moves to the line that is already telling you a turn is
+	 * running. Optional, because the panel composer still carries its own and
+	 * does not need a second one.
+	 */
+	onInterrupt?: () => void;
 }) {
-	const { topLevel, groups } = groupSubagents(timeline.items);
-	const drafts = new Set(timeline.drafts.map((d) => d.id));
-	const turns = splitTurns(topLevel);
+	const { statusLine, toolSummaries } = useSkinTokens();
+	/*
+	 * Derived once per items change, not once per render.
+	 *
+	 * These three walk the whole conversation. They used to run on every render
+	 * — including every render caused by a token arriving — and each rebuilt the
+	 * objects the rows below take as props, so nothing downstream could be
+	 * memoized even in principle. Keyed on `timeline.items`, which `applyEvent`
+	 * only replaces when the transcript actually changes.
+	 */
+	const { topLevel, groups } = useMemo(
+		() => groupSubagents(timeline.items),
+		[timeline.items],
+	);
+	const turns = useMemo(() => splitTurns(topLevel), [topLevel]);
+	// NOT memoized on items: the drafts list is what changes while a reply
+	// streams, and it is a handful of ids rather than a walk of the transcript.
+	const drafts = useMemo(
+		() => new Set(timeline.drafts.map((d) => d.id)),
+		[timeline.drafts],
+	);
 
 	// The counter measures the whole turn, not the current gap in it. Held in a
 	// ref and stamped on the idle→streaming edge, so it survives the working line
@@ -947,14 +1116,29 @@ export function SessionTimelineView({
 						 * one call from the next without needing space to do it.
 						 */
 						<div className="mt-2 flex flex-col gap-2">
-							{turn.items.map((item) => (
-								<TimelineItemRow
-									key={item.id}
-									item={item}
-									groups={groups}
-									drafts={drafts}
-								/>
-							))}
+							{foldRuns(turn.items, toolSummaries, groups, drafts).map(
+								(entry) =>
+									entry.kind === "fold" ? (
+										<FoldedTools key={entry.id} items={entry.items} />
+									) : (
+										<TimelineItemRow
+											key={entry.item.id}
+											item={entry.item}
+											subagentChildren={
+												entry.item.kind === "tool"
+													? groups?.get(entry.item.toolUseId)
+													: undefined
+											}
+											subagentDrafts={
+												entry.item.kind === "tool" &&
+												groups?.has(entry.item.toolUseId)
+													? drafts
+													: undefined
+											}
+											streaming={drafts.has(entry.item.id)}
+										/>
+									),
+							)}
 						</div>
 					) : null}
 				</div>
@@ -973,12 +1157,27 @@ export function SessionTimelineView({
 			 * being asked.
 			 */}
 			{timeline.status === "streaming" ? (
-				<div className={cn(turns.length > 0 && "mt-3")}>
+				<div className={cn("flex items-baseline", turns.length > 0 && "mt-3")}>
 					<WorkingIndicator
 						startedAt={turnStartedAt}
-						tokens={turnTokenTotal(timeline.turnTokens)}
-						className="pl-8"
+						className="min-w-0 flex-1 pl-8"
 					/>
+					{statusLine === "rich" && onInterrupt ? (
+						/*
+						 * `[stop]`, in the reference's own shape: dim mono at the right
+						 * end of the working line, brackets and all. It reads as part of
+						 * the status rather than as a button parked next to it, which is
+						 * the point — the thing telling you a turn is running is the
+						 * natural place to end it.
+						 */
+						<button
+							type="button"
+							onClick={onInterrupt}
+							className="shrink-0 font-mono text-[10.5px] text-muted-foreground/45 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+						>
+							[stop]
+						</button>
+					) : null}
 				</div>
 			) : null}
 		</div>

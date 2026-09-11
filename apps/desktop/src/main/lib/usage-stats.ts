@@ -20,12 +20,31 @@ export interface UsageModel {
 	name: string;
 	in: number;
 	out: number;
+	/**
+	 * Prompt-cache reads. Billed at ~10% of the input rate but ENORMOUS in
+	 * volume — a single long agent session measured 548M of these against 9k
+	 * of uncached input. Leaving them out is what made the cost estimate read
+	 * roughly 10x low.
+	 */
+	cacheRead: number;
+	/** Prompt-cache writes. Billed ABOVE the input rate (1.25x at 5m TTL, 2x at 1h). */
+	cacheWrite: number;
 	total: number;
 }
 export interface UsageDay {
 	day: string;
 	total: number;
 	byModel: Record<string, number>;
+	/**
+	 * The day's tokens split the way pricing needs them.
+	 *
+	 * `byModel` flattens each model to `in + out`, which cannot be costed:
+	 * cache reads bill at ~10% of input and cache writes ABOVE it, so a day
+	 * that is 99% cache reads would price as if it were all fresh input. The
+	 * breakdown is already accumulated per day per model — this stops throwing
+	 * it away at the last step.
+	 */
+	models: UsageModel[];
 }
 export interface QuotaWindow {
 	usedPercent: number;
@@ -160,7 +179,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 	if (!force && cache && now - cache.at < CACHE_MS) return cache.stats;
 
 	const home = homedir();
-	type Tok = { in: number; out: number };
+	type Tok = { in: number; out: number; cacheRead: number; cacheWrite: number };
 	const perDayModel = new Map<string, Map<string, Tok>>();
 	const modelTotals = new Map<string, Tok>();
 	const sessions = new Set<string>();
@@ -169,7 +188,14 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 	let messages = 0;
 	const quotas: ProviderQuota[] = [];
 
-	const add = (day: string, name: string, tin: number, tout: number) => {
+	const add = (
+		day: string,
+		name: string,
+		tin: number,
+		tout: number,
+		tcacheRead = 0,
+		tcacheWrite = 0,
+	) => {
 		let dm = perDayModel.get(day);
 		if (!dm) {
 			dm = new Map();
@@ -177,18 +203,22 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 		}
 		let cell = dm.get(name);
 		if (!cell) {
-			cell = { in: 0, out: 0 };
+			cell = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
 			dm.set(name, cell);
 		}
 		cell.in += tin;
 		cell.out += tout;
+		cell.cacheRead += tcacheRead;
+		cell.cacheWrite += tcacheWrite;
 		let total = modelTotals.get(name);
 		if (!total) {
-			total = { in: 0, out: 0 };
+			total = { in: 0, out: 0, cacheRead: 0, cacheWrite: 0 };
 			modelTotals.set(name, total);
 		}
 		total.in += tin;
 		total.out += tout;
+		total.cacheRead += tcacheRead;
+		total.cacheWrite += tcacheWrite;
 	};
 
 	// ---- Claude Code ----
@@ -217,10 +247,19 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 			const u = o.message.usage;
 			const tin = u.input_tokens || 0;
 			const tout = u.output_tokens || 0;
+			const tcacheRead = u.cache_read_input_tokens || 0;
+			const tcacheWrite = u.cache_creation_input_tokens || 0;
 			const d = new Date(o.timestamp);
 			hours[d.getHours()] += tout;
 			activeDays.add(d.toISOString().slice(0, 10));
-			add(d.toISOString().slice(0, 10), name, tin, tout);
+			add(
+				d.toISOString().slice(0, 10),
+				name,
+				tin,
+				tout,
+				tcacheRead,
+				tcacheWrite,
+			);
 		}
 	}
 
@@ -324,7 +363,14 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 		0,
 	);
 	const models: UsageModel[] = [...modelTotals.entries()]
-		.map(([name, t]) => ({ name, in: t.in, out: t.out, total: t.in + t.out }))
+		.map(([name, t]) => ({
+			name,
+			in: t.in,
+			out: t.out,
+			cacheRead: t.cacheRead,
+			cacheWrite: t.cacheWrite,
+			total: t.in + t.out + t.cacheRead + t.cacheWrite,
+		}))
 		.sort((a, b) => b.total - a.total);
 	const favorite = models[0]?.name ?? "-";
 	const peakHour = hours.indexOf(Math.max(...hours));
@@ -370,6 +416,14 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 			byModel: Object.fromEntries(
 				[...dm.entries()].map(([m, t]) => [m, t.in + t.out]),
 			),
+			models: [...dm.entries()].map(([name, t]) => ({
+				name,
+				in: t.in,
+				out: t.out,
+				cacheRead: t.cacheRead,
+				cacheWrite: t.cacheWrite,
+				total: t.in + t.out,
+			})),
 		})),
 		quotas,
 		generatedAt: new Date(now).toISOString(),

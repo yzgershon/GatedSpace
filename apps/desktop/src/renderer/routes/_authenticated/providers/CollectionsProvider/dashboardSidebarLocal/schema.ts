@@ -319,6 +319,27 @@ export const v2UserPreferencesSchema = z.object({
 	sidebarFileLinks: linkTierMapSchema.default(DEFAULT_SIDEBAR_FILE_LINKS),
 	portOpenAction: linkActionSchema.default(DEFAULT_PORT_OPEN_ACTION),
 	terminalPresetsInitialized: z.boolean().default(false),
+	/**
+	 * Which appearance the window wears.
+	 *
+	 * "vscode" is the layout GatedSpace shipped through 1.17.48 — edge-to-edge
+	 * mosaic panes, presets on their own row, account in the top bar. It is kept
+	 * as a named option rather than deleted so there is a way back that does not
+	 * involve reinstalling an older build.
+	 *
+	 * "liquid-glass" is the card-based layout: gutters and radius on panes,
+	 * presets merged into a centred header control, a restructured sidebar with
+	 * nested sessions and a pinned footer. The name is just a name.
+	 */
+	appearanceSkin: z.enum(["vscode", "liquid-glass"]).default("liquid-glass"),
+	/**
+	 * Master switch for the whole right sidebar — the panel AND its toggle in
+	 * the top bar. Off by default as of 2026-08-18 at the maintainer's request:
+	 * he does not use Files/Changes/Browser and wanted the control gone, not
+	 * merely collapsed. Distinct from `rightSidebarOpen`, which is the ordinary
+	 * expanded/collapsed state and only means anything while this is true.
+	 */
+	rightSidebarEnabled: z.boolean().default(false),
 	rightSidebarOpen: z.boolean().default(true),
 	rightSidebarTab: z.enum(["changes", "files"]).default("changes"),
 	rightSidebarWidth: z.number().default(340),
@@ -337,6 +358,8 @@ export const DEFAULT_V2_USER_PREFERENCES: V2UserPreferencesRow = {
 	sidebarFileLinks: DEFAULT_SIDEBAR_FILE_LINKS,
 	portOpenAction: DEFAULT_PORT_OPEN_ACTION,
 	terminalPresetsInitialized: false,
+	appearanceSkin: "liquid-glass",
+	rightSidebarEnabled: false,
 	rightSidebarOpen: true,
 	rightSidebarTab: "changes",
 	rightSidebarWidth: 340,

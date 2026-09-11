@@ -94,7 +94,7 @@ export function V2OpenInMenuButton({
 						}
 						className={cn(
 							"group flex items-center gap-1.5 h-6 px-1.5 sm:pl-1.5 sm:pr-2 rounded-l border border-r-0 border-border/60 bg-secondary/50 text-xs font-medium",
-							"transition-all duration-150 ease-out",
+							"transition-[background-color,border-color,color,opacity] duration-100 ease-out",
 							"hover:bg-secondary hover:border-border",
 							"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 							"active:scale-[0.98]",
@@ -137,7 +137,7 @@ export function V2OpenInMenuButton({
 						disabled={isLoading}
 						className={cn(
 							"flex items-center justify-center size-6 rounded-r border border-border/60 bg-secondary/50 text-muted-foreground",
-							"transition-all duration-150 ease-out",
+							"transition-[background-color,border-color,color,opacity] duration-100 ease-out",
 							"hover:bg-secondary hover:border-border hover:text-foreground",
 							"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
 							"active:scale-[0.98]",

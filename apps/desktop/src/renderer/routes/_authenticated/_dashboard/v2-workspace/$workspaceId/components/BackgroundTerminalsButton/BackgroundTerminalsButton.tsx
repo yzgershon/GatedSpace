@@ -28,6 +28,8 @@ import {
 } from "renderer/lib/performance/stress-instrumentation";
 import {
 	clearTerminalBackgroundMarker,
+	forgetTerminalBackgroundLabel,
+	getTerminalBackgroundLabel,
 	getTerminalBackgroundMarkerIdsKey,
 	subscribeTerminalBackgroundMarkers,
 } from "renderer/lib/terminal/terminal-background-intents";
@@ -51,10 +53,16 @@ interface BackgroundTerminalsButtonProps {
 }
 
 /**
- * Tab-bar control that surfaces running terminal daemon sessions for the
- * workspace that have no pane attached (e.g. moved to background via the
- * terminal pane header). Renders nothing when there are none; otherwise a
- * single button with a dropdown to re-open or kill each background session.
+ * Top-bar control for shells that are RUNNING something with no pane attached
+ * (e.g. moved to the background from the terminal pane header).
+ *
+ * It sits beside the open-in-file-explorer button rather than on the tab strip:
+ * it is a property of the workspace, not of any one tab, and the tab strip is
+ * gone under Liquid Glass.
+ *
+ * Renders nothing when nothing is running. There is no history here on purpose
+ * — a shell that finished an hour ago is not a background job, and a control
+ * that keeps reporting one is worse than no control.
  */
 export const BackgroundTerminalsButton = memo(
 	function BackgroundTerminalsButton({
@@ -186,26 +194,38 @@ export const BackgroundTerminalsButton = memo(
 			workspaceId,
 		]);
 
+		/*
+		 * The host is the only authority on whether a shell is running.
+		 *
+		 * This used to be `Math.max(serverCount, optimisticBackgroundCount)`,
+		 * where the optimistic half came from a marker written when a terminal
+		 * was sent to the background and cleared only on a later round trip. So
+		 * the button outlived the job it was reporting: background a build, let
+		 * it finish, and the chip stayed up claiming a shell was running. The
+		 * markers still drive adopt, they just no longer inflate the count.
+		 *
+		 * Backgrounding a terminal detaches its pane, which changes
+		 * `attachedTerminalIds`, which is part of the query key — so the count
+		 * refetches immediately anyway and nothing was gained by guessing.
+		 */
 		const backgroundCount =
 			isOpen && sessionsQuery.data
 				? backgroundSessions.length
-				: Math.max(
-						backgroundCountQuery.data?.count ?? 0,
-						optimisticBackgroundCount,
-					);
+				: (backgroundCountQuery.data?.count ?? 0);
 
 		if (!isOpen && backgroundCount === 0) return null;
 
-		// "3 shells running in the background", not "3 background terminal
-		// sessions". The question this answers is "is my build still going",
-		// asked at a glance from across the room, and the answer should read as
-		// an English sentence rather than as a data structure.
+		// "1 shell running", not "1 background terminal session". The question
+		// this answers is "is my build still going", asked at a glance from
+		// across the room, and the answer should read as an English sentence
+		// rather than as a data structure.
 		const label = `${backgroundCount} shell${
 			backgroundCount === 1 ? "" : "s"
-		} running in the background`;
+		} running`;
 
 		const handleAdopt = (terminalId: string) => {
 			clearTerminalBackgroundMarker(workspaceId, terminalId);
+			forgetTerminalBackgroundLabel(terminalId);
 			const result = focusOrAddTerminalPane(store, terminalId);
 			void utils.terminal.listSessions.invalidate({ workspaceId });
 			void utils.terminal.countBackgroundSessions.invalidate({ workspaceId });
@@ -217,6 +237,7 @@ export const BackgroundTerminalsButton = memo(
 			try {
 				await killSession.mutateAsync({ terminalId, workspaceId });
 				clearTerminalBackgroundMarker(workspaceId, terminalId);
+				forgetTerminalBackgroundLabel(terminalId);
 			} catch (error) {
 				console.error(
 					"[BackgroundTerminalsButton] Failed to kill session:",
@@ -233,19 +254,27 @@ export const BackgroundTerminalsButton = memo(
 			<DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
 				<DropdownMenuTrigger asChild>
 					<Button
-						className="h-7 gap-1 rounded-md border border-border/60 bg-muted/30 px-2 text-xs text-muted-foreground shadow-none hover:bg-accent/60 hover:text-foreground"
+						className="h-7 gap-1.5 rounded-full px-2.5 text-[11.5px] text-muted-foreground shadow-none hover:bg-accent/50 hover:text-foreground"
 						size="sm"
 						type="button"
 						variant="ghost"
 					>
-						<Archive className="size-3.5" />
+						{/*
+						 * A live dot, not an archive box. The state being reported is
+						 * "working", and the same dot means the same thing on a pane
+						 * header and a session row.
+						 */}
+						<span className="relative flex size-1.5 shrink-0">
+							<span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-400/60" />
+							<span className="relative inline-flex size-1.5 rounded-full bg-emerald-400" />
+						</span>
 						<span>{label}</span>
-						<ChevronDown className="size-3" />
+						<ChevronDown className="size-3 opacity-50" />
 					</Button>
 				</DropdownMenuTrigger>
 				<DropdownMenuContent align="end" className="w-80">
 					<DropdownMenuLabel className="text-xs">
-						Shells running in the background
+						Shells running
 					</DropdownMenuLabel>
 					<DropdownMenuSeparator />
 					<div className="max-h-80 overflow-y-auto">
@@ -259,6 +288,12 @@ export const BackgroundTerminalsButton = memo(
 								Nothing running in the background
 							</div>
 						)}
+						{/*
+						 * The TAB the shell came from, not the shell's own title.
+						 * Every agent shell reports itself as "claude", so a list of
+						 * them named nothing; "GatedSpace Edits" is the answer to
+						 * "which one of these is building".
+						 */}
 						{backgroundSessions.map((session) => (
 							<DropdownMenuItem
 								key={session.terminalId}
@@ -267,7 +302,9 @@ export const BackgroundTerminalsButton = memo(
 							>
 								<Archive className="size-3.5 shrink-0 text-muted-foreground" />
 								<span className="min-w-0 flex-1 truncate text-xs">
-									{session.title ?? "Terminal"}
+									{getTerminalBackgroundLabel(session.terminalId) ??
+										session.title ??
+										"Terminal"}
 								</span>
 								{session.createdAt > 0 && (
 									<span className="shrink-0 text-xs text-muted-foreground/70">

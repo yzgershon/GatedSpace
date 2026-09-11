@@ -21,6 +21,7 @@ import {
 } from "react-icons/lu";
 import { STROKE_WIDTH_THICK } from "renderer/components/WorkspaceSidebar/constants";
 import { ZoomStable } from "renderer/components/ZoomStable";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useZoomFactor } from "renderer/hooks/useZoomFactor";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
@@ -53,6 +54,7 @@ export function DashboardSidebarHeader({
 	panel = "workspaces",
 }: DashboardSidebarHeaderProps) {
 	const openModal = useOpenNewWorkspaceModal();
+	const { accountPlacement, sidebarNav } = useSkinTokens();
 	const openNewProject = useOpenNewProjectModal();
 	const openTemplateGallery = useOpenTemplateGalleryModal();
 	const navigate = useNavigate();
@@ -119,7 +121,14 @@ export function DashboardSidebarHeader({
 		return (
 			<div className="flex flex-col items-center gap-2 border-b border-border/45 py-2">
 				<UsageDialog open={isUsageOpen} onOpenChange={setIsUsageOpen} />
-				<OrganizationDropdown variant="collapsed" />
+				{/*
+				 * Under Liquid Glass the account is pinned to the sidebar FOOTER, so
+				 * rendering it here as well showed "Yishai Ultra" twice — once at the
+				 * top and once at the bottom.
+				 */}
+				{accountPlacement === "topbar" && (
+					<OrganizationDropdown variant="collapsed" />
+				)}
 
 				<Tooltip delayDuration={300}>
 					<TooltipTrigger asChild>
@@ -238,33 +247,68 @@ export function DashboardSidebarHeader({
 			    zoom and overflowing this fixed-height row. It's Mac-only because the
 			    pinned row height it matches is Mac-only; elsewhere the row height (h-8)
 			    scales with zoom, so the controls should scale with it. */}
-			<div
-				className="drag -mx-2 flex h-8 items-center gap-1.5 pr-2"
-				style={
-					isMac
-						? {
-								paddingLeft: `${80 / zoomFactor}px`,
-								height: `${32 / zoomFactor}px`,
-							}
-						: { paddingLeft: "8px" }
-				}
-			>
-				<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
-					<SidebarToggle />
-					<NavigationControls />
-				</ZoomStable>
-				<ZoomStable enabled={isMac} className="ml-auto">
-					<ResourceConsumption surface="v2" />
-				</ZoomStable>
-			</div>
-			<OrganizationDropdown variant="expanded" />
+			{/*
+			 * The chrome row belongs to the icon-nav layout only. Under the text
+			 * nav the brand row above already carries the collapse toggle and the
+			 * back/forward controls, and rendering both put two SidebarToggles in
+			 * one column eight pixels apart.
+			 */}
+			{sidebarNav === "icons" ? (
+				<div
+					className="drag -mx-2 flex h-8 items-center gap-1.5 pr-2"
+					style={
+						isMac
+							? {
+									paddingLeft: `${80 / zoomFactor}px`,
+									height: `${32 / zoomFactor}px`,
+								}
+							: { paddingLeft: "8px" }
+					}
+				>
+					<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
+						<SidebarToggle />
+						<NavigationControls />
+					</ZoomStable>
+					<ZoomStable enabled={isMac} className="ml-auto">
+						<ResourceConsumption surface="v2" />
+					</ZoomStable>
+				</div>
+			) : null}
+			{accountPlacement === "topbar" && (
+				<OrganizationDropdown variant="expanded" />
+			)}
 
 			{panel === "workspaces" ? (
-				<div className="flex items-center gap-0">
+				/*
+				 * A rule and real spacing above.
+				 *
+				 * "Usage" and "New Workspace" are different KINDS of row — one
+				 * selects a panel, the other opens a modal — and they were sitting
+				 * flush against each other in the same column with nothing between
+				 * them, which is what made the gap read as an accident rather than
+				 * as a break. Separated only under the text nav; the icon layout
+				 * has the account row in between already.
+				 */
+				<div
+					className={cn(
+						"flex items-center gap-0",
+						sidebarNav === "text" && "mt-2 border-border/50 border-t pt-2",
+					)}
+				>
+					{/*
+					 * No shortcut label.
+					 *
+					 * It appeared on hover at the right of this row and reserved its
+					 * width from the flex line, so "New Workspace" truncated to
+					 * "New Work..." — the shortcut was hiding the name of the thing
+					 * it was a shortcut for. The binding is unchanged and still in
+					 * the command palette; only the caption is gone.
+					 */}
 					<button
 						type="button"
 						onClick={() => openModal()}
-						className="group flex flex-1 min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+						title={`New Workspace (${shortcutText})`}
+						className="group flex flex-1 min-w-0 items-center gap-1.5 rounded-[8px] px-2.5 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent/60 hover:text-foreground"
 					>
 						<LuPlus
 							className="size-4 shrink-0"
@@ -272,14 +316,6 @@ export function DashboardSidebarHeader({
 						/>
 						<span className="flex-1 truncate text-left whitespace-nowrap">
 							New Workspace
-						</span>
-						<span
-							className={cn(
-								"shrink-0 text-[10px] font-mono tabular-nums text-muted-foreground/60",
-								"opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
-							)}
-						>
-							{shortcutText}
 						</span>
 					</button>
 					<DropdownMenu>

@@ -13,7 +13,10 @@ import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-works
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
-import { getPresetLaunchPlan } from "renderer/stores/tabs/preset-launch";
+import {
+	getPresetLaunchPlan,
+	type PresetOpenTarget,
+} from "renderer/stores/tabs/preset-launch";
 import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import {
 	filterMatchingPresetsForProject,
@@ -159,7 +162,7 @@ export function useV2PresetExecution({
 	const executePreset = useCallback(
 		async (
 			preset: V2TerminalPresetRow,
-			options?: { target?: "new-tab" | "active-tab" },
+			options?: { target?: PresetOpenTarget },
 		) => {
 			const state = store.getState();
 			const activeTabId = state.activeTabId;
@@ -167,7 +170,7 @@ export function useV2PresetExecution({
 			const title = preset.name || undefined;
 			const commands = resolvePresetCommands(preset);
 			const activeTerminal =
-				target === "active-tab" && preset.executionMode === "sequential"
+				target !== "new-tab" && preset.executionMode === "sequential"
 					? getActiveTerminalPane(state)
 					: null;
 			// Sequential mode is one shell command sent to one terminal; every
@@ -266,11 +269,28 @@ export function useV2PresetExecution({
 					case "active-tab-single": {
 						const terminalId = await createTerminal(launchCommands[0]);
 						const pane = makeTerminalPane(terminalId, title, preset.agentId);
-						if (!activeTabId) {
-							state.addTab({ panes: [pane] });
+						/*
+						 * Re-read the store, because the target tab can be GONE by now.
+						 *
+						 * The launcher pane fires the launch and closes itself in the
+						 * same tick, without awaiting — and closing a tab's only pane
+						 * removes the tab. So by the time the terminal resolves,
+						 * `activeTabId` may name a tab that no longer exists, `addPane`
+						 * silently does nothing, and the pane never appears. Which is
+						 * exactly what "click New tab, then Codex, and nothing shows
+						 * up" was: a launcher alone in a fresh tab, versus one made by
+						 * the pane header's `+` where a sibling pane kept the tab alive.
+						 *
+						 * `state` is the snapshot from before the await and cannot
+						 * answer this.
+						 */
+						const live = store.getState();
+						const target = activeTabId ? live.getTab(activeTabId) : null;
+						if (!target) {
+							live.addTab({ panes: [pane] });
 							break;
 						}
-						state.addPane({ tabId: activeTabId, pane });
+						live.addPane({ tabId: activeTabId as string, pane });
 						break;
 					}
 
@@ -283,8 +303,14 @@ export function useV2PresetExecution({
 						const panes = ids.map((id) =>
 							makeTerminalPane(id, title, preset.agentId),
 						);
-						if (!activeTabId) {
-							state.addTab({
+						// Same race as active-tab-single: the launcher may have taken
+						// its tab with it while these terminals were being created.
+						const liveMulti = store.getState();
+						const targetMulti = activeTabId
+							? liveMulti.getTab(activeTabId)
+							: null;
+						if (!targetMulti) {
+							liveMulti.addTab({
 								panes: panes as [
 									CreatePaneInput<PaneViewerData>,
 									...CreatePaneInput<PaneViewerData>[],
@@ -293,7 +319,7 @@ export function useV2PresetExecution({
 							break;
 						}
 						for (const pane of panes) {
-							state.addPane({ tabId: activeTabId, pane });
+							liveMulti.addPane({ tabId: activeTabId as string, pane });
 						}
 						break;
 					}

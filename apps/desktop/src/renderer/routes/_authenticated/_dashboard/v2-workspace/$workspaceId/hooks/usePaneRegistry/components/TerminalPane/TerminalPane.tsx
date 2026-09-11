@@ -36,7 +36,6 @@ import { useWorkspaceWsUrl } from "renderer/routes/_authenticated/_dashboard/v2-
 import { useTheme } from "renderer/stores/theme";
 import { resolveTerminalThemeType } from "renderer/stores/theme/utils";
 import { TerminalRichInput } from "./components/TerminalRichInput";
-import { TerminalStickyPrompt } from "./components/TerminalStickyPrompt";
 import { useLinkClickHint } from "./hooks/useLinkClickHint";
 import { type HoveredLink, useLinkHoverState } from "./hooks/useLinkHoverState";
 import { useTerminalAppearance } from "./hooks/useTerminalAppearance";
@@ -435,6 +434,7 @@ export function TerminalPane({
 		<div
 			role="application"
 			className="relative flex h-full w-full flex-col p-2"
+			style={{ backgroundColor: appearance.background }}
 			onDragEnter={handleDragEnter}
 			onDragOver={handleDragOver}
 			onDragLeave={handleDragLeave}
@@ -451,12 +451,26 @@ export function TerminalPane({
 					className="h-full w-full"
 					style={{ backgroundColor: appearance.background }}
 				/>
+				{/*
+				 * NOTHING is layered over the terminal canvas from the top.
+				 *
+				 * `TerminalStickyPrompt` used to pin the session's last user
+				 * message here with `absolute inset-x-0 top-0 z-10` and
+				 * `bg-background/90 backdrop-blur-sm` — a near-opaque, blurred bar
+				 * across the FIRST ROWS of the terminal. That is the "Claude and
+				 * Codex terminals are cut off at the top" report, and the "the
+				 * text is there, I just cannot see it" one: the output was
+				 * rendering correctly the whole time with a panel drawn over it.
+				 *
+				 * It only ever appeared for claude/codex bindings and only while
+				 * scrolled up, which is why a plain shell looked fine and why the
+				 * dev instance looked fine too — its fresh host database has no
+				 * agent bindings, so the bar never rendered there.
+				 *
+				 * The scroll-to-bottom button stays: it is bottom-centre and
+				 * covers no output.
+				 */}
 				<ScrollToBottomButton terminal={terminal} />
-				<TerminalStickyPrompt
-					terminal={terminal}
-					workspaceId={workspaceId}
-					terminalId={terminalId}
-				/>
 			</div>
 			<TerminalRichInput
 				workspaceId={workspaceId}

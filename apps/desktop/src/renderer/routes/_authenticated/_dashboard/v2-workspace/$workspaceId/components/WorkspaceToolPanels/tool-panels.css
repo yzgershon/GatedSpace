@@ -1,0 +1,204 @@
+.gs-tool-workspace {
+	/* Match the main pane well across the tool gutters and rounded corners. */
+	background: var(--gs-pane-well, transparent);
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) var(--tool-right);
+	grid-template-rows: minmax(0, 1fr) var(--tool-bottom);
+	grid-template-areas: "main right" "bottom bottom";
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+	transition:
+		grid-template-columns 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		grid-template-rows 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gs-tool-workspace-resizing {
+	transition: none;
+	user-select: none;
+}
+.gs-tool-main {
+	grid-area: main;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+.gs-tool-slot {
+	position: relative;
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+.gs-tool-slot-right {
+	grid-area: right;
+	padding: 18px 18px 18px 0;
+}
+.gs-tool-slot-bottom {
+	grid-area: bottom;
+	padding: 0 18px 18px;
+}
+.gs-tool-slot[data-open="false"] {
+	padding: 0;
+	pointer-events: none;
+}
+.gs-tool-panel {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: var(--gs-pane-radius, 14px);
+	background: var(--gs-pane-surface, var(--background));
+	box-shadow: var(--gs-pane-shadow, none);
+}
+.gs-tool-panel-drop {
+	border-color: var(--highlight);
+}
+.gs-tool-chooser {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
+	padding: 24px;
+}
+.gs-tool-choices {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
+	max-width: 400px;
+	margin: auto;
+}
+.gs-tool-choice {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-height: 56px;
+	padding: 12px 16px;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--muted) 55%, transparent);
+	text-align: left;
+	font-size: 15px;
+	transition: background-color 150ms;
+}
+.gs-tool-choice:hover {
+	background: var(--muted);
+}
+.gs-tool-choice:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+.gs-tool-panel .gs-tool-view {
+	--gs-pane-inset: 0px;
+	--gs-pane-radius: 0px;
+	--gs-pane-border-width: 0px;
+	--gs-pane-shadow: none;
+	--gs-pane-ring-width: 0px;
+	--gs-pane-ring-glow: 0px;
+	--gs-pane-header-height: 44px;
+	--gs-pane-title-size: 14px;
+	--gs-pane-action-size: 28px;
+	animation: gs-tool-content-in 180ms ease-out;
+}
+.gs-tool-tab-list {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border) transparent;
+}
+.gs-tool-view [data-pane-id] {
+	min-height: 0;
+	min-width: 0;
+}
+.gs-tool-tab {
+	overflow: hidden;
+	animation: gs-tool-tab-in 150ms ease-out;
+	transition:
+		background-color 160ms,
+		border-color 160ms;
+}
+.gs-tool-icon {
+	display: flex;
+	width: 30px;
+	height: 30px;
+	flex-shrink: 0;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	transition:
+		background-color 150ms,
+		color 150ms;
+}
+.gs-tool-icon:hover,
+.gs-tool-icon[data-state="open"] {
+	background: var(--muted);
+	color: var(--foreground);
+}
+.gs-tool-icon:focus-visible {
+	outline: 1px solid var(--ring);
+	outline-offset: 1px;
+}
+.gs-tool-icon:disabled {
+	opacity: 0.35;
+}
+.gs-tool-resize {
+	position: absolute;
+	z-index: 40;
+	touch-action: none;
+}
+.gs-tool-resize-right {
+	inset: 18px auto 18px 0;
+	width: 6px;
+	cursor: col-resize;
+}
+.gs-tool-resize-bottom {
+	inset: 0 18px auto;
+	height: 6px;
+	cursor: row-resize;
+}
+.gs-tool-resize:hover,
+.gs-tool-resize:focus-visible {
+	background: color-mix(in srgb, var(--highlight) 40%, transparent);
+	border-radius: 8px;
+}
+@keyframes gs-tool-content-in {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+.gs-tool-tab-exiting {
+	animation: gs-tool-tab-out 150ms ease-in forwards;
+}
+@keyframes gs-tool-tab-in {
+	from {
+		opacity: 0;
+		max-width: 0;
+	}
+	to {
+		opacity: 1;
+		max-width: 13rem;
+	}
+}
+@keyframes gs-tool-tab-out {
+	to {
+		opacity: 0;
+		max-width: 0;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gs-tool-workspace,
+	.gs-tool-tab {
+		transition: none;
+	}
+	.gs-tool-panel .gs-tool-view,
+	.gs-tool-tab {
+		animation: none;
+	}
+}

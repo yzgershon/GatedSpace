@@ -11,6 +11,7 @@ import {
 } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal/schema";
 
 export type RightSidebarTab = V2UserPreferencesRow["rightSidebarTab"];
+export type AppearanceSkin = V2UserPreferencesRow["appearanceSkin"];
 
 export interface V2UserPreferencesApi {
 	preferences: V2UserPreferencesRow;
@@ -22,6 +23,10 @@ export interface V2UserPreferencesApi {
 	setRightSidebarTab: (next: RightSidebarTab) => void;
 	setRightSidebarWidth: (next: number) => void;
 	setDeleteLocalBranch: (next: boolean) => void;
+	setAppearanceSkin: (next: AppearanceSkin) => void;
+	setRightSidebarEnabled: (
+		next: boolean | ((prev: boolean) => boolean),
+	) => void;
 	setShowPresetsBar: (next: boolean | ((prev: boolean) => boolean)) => void;
 	toggleShowPresetsBar: () => void;
 }
@@ -172,6 +177,48 @@ export function useV2UserPreferences(): V2UserPreferencesApi {
 		[collections],
 	);
 
+	const setAppearanceSkin = useCallback(
+		(next: AppearanceSkin) => {
+			const existing = collections.v2UserPreferences.get(
+				V2_USER_PREFERENCES_ID,
+			);
+			if (!existing) {
+				collections.v2UserPreferences.insert({
+					...DEFAULT_V2_USER_PREFERENCES,
+					appearanceSkin: next,
+				});
+				return;
+			}
+			collections.v2UserPreferences.update(V2_USER_PREFERENCES_ID, (draft) => {
+				draft.appearanceSkin = next;
+			});
+		},
+		[collections],
+	);
+
+	const setRightSidebarEnabled = useCallback(
+		(next: boolean | ((prev: boolean) => boolean)) => {
+			const existing = collections.v2UserPreferences.get(
+				V2_USER_PREFERENCES_ID,
+			);
+			const prev =
+				existing?.rightSidebarEnabled ??
+				DEFAULT_V2_USER_PREFERENCES.rightSidebarEnabled;
+			const value = typeof next === "function" ? next(prev) : next;
+			if (!existing) {
+				collections.v2UserPreferences.insert({
+					...DEFAULT_V2_USER_PREFERENCES,
+					rightSidebarEnabled: value,
+				});
+				return;
+			}
+			collections.v2UserPreferences.update(V2_USER_PREFERENCES_ID, (draft) => {
+				draft.rightSidebarEnabled = value;
+			});
+		},
+		[collections],
+	);
+
 	const setShowPresetsBar = useCallback(
 		(next: boolean | ((prev: boolean) => boolean)) => {
 			const existing = collections.v2UserPreferences.get(
@@ -206,6 +253,8 @@ export function useV2UserPreferences(): V2UserPreferencesApi {
 		setUrlLinks,
 		setSidebarFileLinks,
 		setPortOpenAction,
+		setAppearanceSkin,
+		setRightSidebarEnabled,
 		setRightSidebarOpen,
 		setRightSidebarTab,
 		setRightSidebarWidth,

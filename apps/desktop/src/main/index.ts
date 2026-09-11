@@ -33,6 +33,7 @@ import { installBundledCliShim } from "./lib/bundled-cli";
 import { flushCostStore } from "./lib/claude-session/cost-store";
 import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
 import { crashSentinel } from "./lib/crash-sentinel";
+import { applyDevInstanceIsolation } from "./lib/dev-instance-isolation";
 import { resolveDevWorkspaceName } from "./lib/dev-workspace-name";
 import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
@@ -357,6 +358,13 @@ protocol.registerSchemesAsPrivileged([
 		},
 	},
 ]);
+
+/*
+ * Must run BEFORE the lock is requested: the single-instance lock lives inside
+ * `userData`, so moving `userData` is what lets a dev instance start at all.
+ * A no-op unless NODE_ENV is "development".
+ */
+applyDevInstanceIsolation();
 
 const gotTheLock = app.requestSingleInstanceLock();
 

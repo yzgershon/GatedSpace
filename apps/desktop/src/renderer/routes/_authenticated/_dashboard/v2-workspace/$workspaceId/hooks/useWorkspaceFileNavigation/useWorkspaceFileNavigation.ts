@@ -1,7 +1,7 @@
 import type { WorkspaceStore } from "@superset/panes";
 import { workspaceTrpc } from "@superset/workspace-client";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { V2UserPreferencesApi } from "renderer/hooks/useV2UserPreferences";
+import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import {
 	toAbsoluteWorkspacePath,
@@ -22,12 +22,12 @@ interface PendingReveal {
 
 export function useWorkspaceFileNavigation({
 	store,
-	setRightSidebarOpen,
-	setRightSidebarTab,
+	onRevealTools,
+	openInToolPanel,
 }: {
 	store: StoreApi<WorkspaceStore<PaneViewerData>>;
-	setRightSidebarOpen: V2UserPreferencesApi["setRightSidebarOpen"];
-	setRightSidebarTab: V2UserPreferencesApi["setRightSidebarTab"];
+	onRevealTools: () => void;
+	openInToolPanel?: (data: FilePaneData, newTab?: boolean) => void;
 }): {
 	openFilePane: (filePath: string, openInNewTab?: boolean) => void;
 	openFilePaneFromTreeClick: (filePath: string, openInNewTab?: boolean) => void;
@@ -96,6 +96,35 @@ export function useWorkspaceFileNavigation({
 			const absoluteFilePath = worktreePath
 				? toAbsoluteWorkspacePath(worktreePath, filePath)
 				: filePath;
+			/*
+			 * HTML opens in the browser, not in an editor pane.
+			 *
+			 * Everything under `plans/` is a preview built to be LOOKED at, and
+			 * clicking one used to drop you into its source — the one view that is
+			 * useless for deciding whether a design works. The OS default handler
+			 * is used rather than a hardcoded browser path, so this follows
+			 * whatever the user has actually set.
+			 *
+			 * Source is still reachable: the file tree's context menu and any
+			 * explicit "open in editor" path are untouched.
+			 */
+			if (/\.html?$/i.test(absoluteFilePath)) {
+				void electronTrpcClient.external.openLocalFile
+					.mutate(absoluteFilePath)
+					.catch(() => {
+						// Falling back to a pane beats doing nothing visible at all.
+						store.getState().openPane({
+							pane: {
+								kind: "file",
+								data: {
+									filePath: absoluteFilePath,
+									mode: "editor",
+								} as FilePaneData,
+							},
+						});
+					});
+				return;
+			}
 			if (worktreePath) {
 				const relativePath = toRelativeWorkspacePath(
 					worktreePath,
@@ -104,6 +133,13 @@ export function useWorkspaceFileNavigation({
 				if (relativePath && relativePath !== ".") {
 					recordView({ relativePath, absolutePath: absoluteFilePath });
 				}
+			}
+			if (openInToolPanel) {
+				openInToolPanel(
+					{ filePath: absoluteFilePath, mode: "editor" },
+					openInNewTab,
+				);
+				return;
 			}
 			const state = store.getState();
 			if (openInNewTab) {
@@ -148,13 +184,17 @@ export function useWorkspaceFileNavigation({
 				},
 			});
 		},
-		[store, worktreePath, recordView],
+		[store, worktreePath, recordView, openInToolPanel],
 	);
 
 	// User-facing file opens from the workspace sidebar layer the VS-Code-style
 	// "click an already-active row to pin it" pattern on top of openFilePane.
 	const openFilePaneFromTreeClick = useCallback(
 		(filePath: string, openInNewTab?: boolean) => {
+			if (openInToolPanel) {
+				openFilePane(filePath, openInNewTab);
+				return;
+			}
 			if (openInNewTab) {
 				openFilePane(filePath, true);
 				return;
@@ -173,17 +213,16 @@ export function useWorkspaceFileNavigation({
 			}
 			openFilePane(filePath);
 		},
-		[openFilePane, store, worktreePath],
+		[openFilePane, store, worktreePath, openInToolPanel],
 	);
 
 	const revealPath = useCallback(
 		(path: string, options?: { isDirectory?: boolean }) => {
-			setRightSidebarOpen(true);
-			setRightSidebarTab("files");
+			onRevealTools();
 			setSelectedFilePath(path);
 			setPendingReveal({ path, isDirectory: options?.isDirectory === true });
 		},
-		[setRightSidebarOpen, setRightSidebarTab],
+		[onRevealTools],
 	);
 
 	return {

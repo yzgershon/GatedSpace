@@ -12,11 +12,14 @@
  * real conversation instead of opening a blank one.
  */
 import { workspaceTrpc } from "@superset/workspace-client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
 import { useWorkspaceHostTarget } from "renderer/hooks/host-service/useWorkspaceHostUrl";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { SessionPaneSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import { SessionView } from "./SessionView";
+import { getPinnedAccount, subscribePinnedAccount } from "./session-account";
+import { swapSessionAccount } from "./sessionStore";
 import type { UsageLimits } from "./usage-limits";
 import {
 	type ClaudePresetLaunch,
@@ -31,6 +34,8 @@ export interface ClaudeSessionPaneProps {
 	workspaceId: string;
 	/** How many panes share this tab. Above one, the header goes compact. */
 	paneCount?: number;
+	/** Focused pane in its tab. Only that one shows the keyboard hints. */
+	isActive?: boolean;
 	/** Optional model id; omit for the CLI default. */
 	model?: string;
 	/** Session id saved on the pane from a previous run, if any. */
@@ -48,6 +53,7 @@ function ClaudeSessionPaneInner({
 	workspaceId,
 	cwd,
 	paneCount,
+	isActive,
 	model,
 	resumeSessionId,
 	forkSession,
@@ -58,6 +64,8 @@ function ClaudeSessionPaneInner({
 	workspaceId: string;
 	cwd: string;
 	paneCount?: number;
+	/** Focused pane in its tab. Only that one shows the keyboard hints. */
+	isActive?: boolean;
 	model?: string;
 	resumeSessionId?: string;
 	forkSession?: boolean;
@@ -68,6 +76,7 @@ function ClaudeSessionPaneInner({
 		timeline,
 		mode,
 		effort,
+		accountConfigDir,
 		setMode,
 		setEffort,
 		send,
@@ -76,6 +85,7 @@ function ClaudeSessionPaneInner({
 		restoring,
 	} = useClaudeSession({
 		paneKey: paneId,
+		workspaceId,
 		cwd,
 		model,
 		resumeSessionId,
@@ -146,15 +156,31 @@ function ClaudeSessionPaneInner({
 	 */
 	const status = timeline.status;
 	const [limits, setLimits] = useState<UsageLimits | null>(null);
+	/*
+	 * THIS PANE'S account, not the globally active one.
+	 *
+	 * `activeLimits` answers for whatever the switcher currently points at, so a
+	 * pane that had been swapped was warned about a different account's quota —
+	 * the same drift that made the header chip lie. `accountConfigDir` is what
+	 * main actually spawned this process with, so the warning is about the
+	 * account that will actually run out. Null before the first spawn, where
+	 * falling back to the active account is right rather than wrong.
+	 */
 	useEffect(() => {
 		if (status === "streaming") return;
 		let current = true;
 		void electronTrpcClient.usage.refreshLimits
-			.mutate({})
+			.mutate(accountConfigDir ? { configDir: accountConfigDir } : {})
 			// Read back afterwards rather than from the refresh's own return: the
 			// refresh is throttled and returns null when it declines, and a warning
 			// that blanks itself every other turn is worse than a slightly old one.
-			.then(() => electronTrpcClient.usage.activeLimits.query())
+			.then(() =>
+				accountConfigDir
+					? electronTrpcClient.usage.limitsFor.query({
+							configDir: accountConfigDir,
+						})
+					: electronTrpcClient.usage.activeLimits.query(),
+			)
 			.then((next) => {
 				if (current) setLimits(next);
 			})
@@ -164,7 +190,27 @@ function ClaudeSessionPaneInner({
 		return () => {
 			current = false;
 		};
-	}, [status]);
+	}, [status, accountConfigDir]);
+
+	/*
+	 * `/swap`. The pin is read through `useSyncExternalStore` rather than held in
+	 * component state because a session pane unmounts on every tab switch — the
+	 * pin lives outside React for the same reason the timeline does.
+	 */
+	const pinnedAccountId = useSyncExternalStore(
+		(callback) => subscribePinnedAccount(paneId, callback),
+		() => getPinnedAccount(paneId)?.id ?? null,
+	);
+	const swapAccount = useCallback(
+		(account: ClaudeAccount) => {
+			swapSessionAccount(paneId, {
+				id: account.id,
+				label: account.label,
+				configDir: account.configDir,
+			});
+		},
+		[paneId],
+	);
 
 	return (
 		<SessionView
@@ -177,9 +223,13 @@ function ClaudeSessionPaneInner({
 			onEffortChange={setEffort}
 			onSearchFiles={searchFiles}
 			onRunCommand={runCommand}
+			onSwapAccount={swapAccount}
+			pinnedAccountId={pinnedAccountId}
+			accountConfigDir={accountConfigDir}
 			draftKey={paneId}
 			limits={limits}
 			paneCount={paneCount}
+			isActive={isActive}
 			onRestart={restart}
 			restoring={restoring}
 		/>
@@ -190,6 +240,7 @@ export function ClaudeSessionPane({
 	paneId,
 	workspaceId,
 	paneCount,
+	isActive,
 	model,
 	resumeSessionId,
 	forkSession,
@@ -242,6 +293,7 @@ export function ClaudeSessionPane({
 			workspaceId={workspaceId}
 			cwd={cwd}
 			paneCount={paneCount}
+			isActive={isActive}
 			model={model}
 			resumeSessionId={resumeSessionId}
 			forkSession={forkSession}

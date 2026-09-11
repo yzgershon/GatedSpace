@@ -16,6 +16,18 @@
 import { cn } from "@superset/ui/utils";
 import { Check, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
+/*
+ * Imported by FILE, not through the folder's barrel, and the type imports are
+ * `import type` for the same reason: the barrel also exports the swap dialog,
+ * which constructs the electron tRPC client at module load. Pulling that in
+ * here took this file's whole test suite down at import — the palette itself
+ * asks nothing of main.
+ */
+import { AccountSwapList } from "renderer/components/ClaudeAccountSwap/AccountSwapList";
+import type {
+	ClaudeAccount,
+	ClaudeAccountsState,
+} from "renderer/components/ClaudeAccountSwap/useClaudeAccounts";
 import {
 	type ContextReport,
 	MODEL_CHOICES,
@@ -28,9 +40,21 @@ import {
 	type UsageReport,
 } from "shared/claude-session/usage-report";
 
-/** Commands this pane answers itself instead of sending to the conversation. */
-export const PANEL_COMMANDS = ["context", "model", "usage"] as const;
+/**
+ * Commands this pane answers itself instead of sending to the conversation.
+ *
+ * `swap` is the odd one out and deliberately so: the other three ask the LIVE
+ * CLI session and render its reply, while `/swap` is answered entirely by
+ * GatedSpace — the CLI has no idea it is running under a chosen account, and
+ * asking it would produce nothing. It is in this list because it belongs to the
+ * same contract as the others: typing it opens a panel rather than sending a
+ * line the CLI would reject.
+ */
+export const PANEL_COMMANDS = ["context", "model", "usage", "swap"] as const;
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];
+
+/** Panels answered locally, with no round trip to the running session. */
+const LOCAL_PANELS: readonly string[] = ["swap"];
 
 /**
  * Which panel the typed text calls for, if any.
@@ -43,10 +67,22 @@ export function panelFor(text: string): PanelCommand | null {
 	// The slash is required, not optional: "context" is a word someone might be
 	// typing into a prompt, and opening a panel over it would be wrong.
 	if (!trimmed.startsWith("/")) return null;
-	const word = trimmed.slice(1).toLowerCase();
-	return (PANEL_COMMANDS as readonly string[]).includes(word)
-		? (word as PanelCommand)
-		: null;
+	const body = trimmed.slice(1).toLowerCase();
+	if ((PANEL_COMMANDS as readonly string[]).includes(body)) {
+		return body as PanelCommand;
+	}
+	/*
+	 * A LOCAL panel may carry an argument — `/swap amitai` should keep the list
+	 * open with that account findable, not close it because the text no longer
+	 * matches exactly.
+	 *
+	 * The CLI-backed panels stay exact-match, and that is not an oversight: each
+	 * of those RUNS a command in the live session on every match, so accepting a
+	 * prefix or a trailing word would fire `/context` at the session while the
+	 * user is still typing their way somewhere else.
+	 */
+	const word = body.split(/\s/, 1)[0] ?? "";
+	return LOCAL_PANELS.includes(word) ? (word as PanelCommand) : null;
 }
 
 /**
@@ -295,9 +331,12 @@ export interface BuiltinActions {
 	modelLabel?: string;
 	/** Shown beside "Effort", e.g. "Extra high". */
 	effortLabel?: string;
+	/** Which Claude account this pane runs on, e.g. "Amitai". */
+	accountLabel?: string;
 	attachFile: () => void;
 	mentionFile: () => void;
 	switchModel: () => void;
+	swapAccount: () => void;
 	accountUsage: () => void;
 }
 
@@ -339,6 +378,15 @@ function builtinRows(actions: BuiltinActions): BuiltinRow[] {
 			keywords: ["model", "switch", "opus", "sonnet", "haiku"],
 		},
 		{
+			id: "swap",
+			section: "Model",
+			label: "Swap Claude account…",
+			description: "Move this conversation onto another account",
+			value: actions.accountLabel,
+			run: actions.swapAccount,
+			keywords: ["swap", "account", "switch", "profile", "login"],
+		},
+		{
 			id: "usage",
 			section: "Model",
 			label: "Account & usage…",
@@ -355,6 +403,9 @@ export function SlashPalette({
 	onPickCommand,
 	onRunCommand,
 	onPickModel,
+	onSwapAccount,
+	accounts,
+	pinnedAccountId,
 	builtins,
 }: {
 	/** What's in the composer right now, starting with "/". */
@@ -365,6 +416,18 @@ export function SlashPalette({
 	/** Run a local command in the live session and hand back its raw reply. */
 	onRunCommand: (command: string) => Promise<string | null>;
 	onPickModel: (id: string) => void;
+	/** `/swap`: move this conversation onto another Claude account. */
+	onSwapAccount?: (account: ClaudeAccount) => void;
+	/**
+	 * Accounts, fetched by the composer rather than here.
+	 *
+	 * The composer needs the same list to resolve `/swap amitai` when Enter is
+	 * pressed without the list ever being clicked, and two copies of it could
+	 * disagree about which account a name refers to.
+	 */
+	accounts?: ClaudeAccountsState;
+	/** The account this pane is pinned to, if it has been swapped before. */
+	pinnedAccountId?: string | null;
 	/**
 	 * The composer's own controls, surfaced here as menu rows.
 	 *
@@ -383,8 +446,9 @@ export function SlashPalette({
 	// reply that lands after the user has typed on, which would otherwise render
 	// a panel for a command they've already left.
 	useEffect(() => {
-		if (!panel) {
+		if (!panel || LOCAL_PANELS.includes(panel)) {
 			setRaw(null);
+			setLoading(false);
 			return;
 		}
 		let current = true;
@@ -503,7 +567,16 @@ export function SlashPalette({
 				</div>
 			) : null}
 
-			{panel ? (
+			{panel === "swap" && onSwapAccount && accounts ? (
+				<div className="border-border/60 border-t">
+					<AccountSwapList
+						state={accounts}
+						scope="session"
+						pinnedId={pinnedAccountId ?? null}
+						onPick={onSwapAccount}
+					/>
+				</div>
+			) : panel ? (
 				<div className="border-border/60 border-t">
 					{loading ? (
 						<div className="flex items-center gap-2 px-3 py-3 text-[12.5px] text-muted-foreground">

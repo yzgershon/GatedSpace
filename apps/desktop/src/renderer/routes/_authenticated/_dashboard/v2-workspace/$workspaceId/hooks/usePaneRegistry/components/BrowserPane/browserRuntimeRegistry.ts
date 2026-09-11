@@ -180,6 +180,19 @@ class BrowserRuntimeRegistryImpl {
 		const rect = entry.placeholder.getBoundingClientRect();
 		const w = entry.webview;
 		const vp = entry.viewport;
+		// Webviews live in a fixed overlay, outside the React panel's overflow
+		// clipping. Keep that overlay inside its animated workspace area too.
+		const clip = entry.placeholder
+			.closest("[data-browser-clip]")
+			?.getBoundingClientRect();
+		const clipScale = vp ? Math.min(1, rect.width / vp.contentWidth) : 1;
+		if (clip && clipScale > 0) {
+			const top = Math.max(0, clip.top - rect.top) / clipScale;
+			const right = Math.max(0, rect.right - clip.right) / clipScale;
+			const bottom = Math.max(0, rect.bottom - clip.bottom) / clipScale;
+			const left = Math.max(0, clip.left - rect.left) / clipScale;
+			w.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px)`;
+		} else w.style.clipPath = "";
 
 		if (!vp) {
 			// 1:1 with the placeholder — the only path browser panes ever take.
@@ -340,6 +353,14 @@ class BrowserRuntimeRegistryImpl {
 				faviconUrl: entry.state.faviconUrl,
 			});
 		};
+		const handleFocus = () => {
+			// The native guest is outside the pane DOM; forward its focus to the
+			// placeholder so the owning workspace/tool group gets keyboard state.
+			entry.placeholder?.dispatchEvent(
+				new FocusEvent("focusin", { bubbles: true }),
+			);
+		};
+		webview.addEventListener("focus", handleFocus);
 
 		const handleDomReady = () => {
 			const webContentsId = webview.getWebContentsId();
@@ -463,6 +484,7 @@ class BrowserRuntimeRegistryImpl {
 		);
 
 		entry.detachHandlers = () => {
+			webview.removeEventListener("focus", handleFocus);
 			webview.removeEventListener("dom-ready", handleDomReady);
 			webview.removeEventListener("did-start-loading", handleDidStartLoading);
 			webview.removeEventListener("did-stop-loading", handleDidStopLoading);
@@ -519,6 +541,8 @@ class BrowserRuntimeRegistryImpl {
 			if (entry) this.updateLayout(entry);
 		});
 		observer.observe(placeholder);
+		const clipContainer = placeholder.closest("[data-browser-clip]");
+		if (clipContainer) observer.observe(clipContainer);
 		entry.resizeObserver = observer;
 
 		this.updateLayout(entry);

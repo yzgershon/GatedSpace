@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { workspaces, worktrees } from "@superset/local-db";
 import { eq } from "drizzle-orm";
@@ -101,13 +102,46 @@ export async function MainWindow() {
 
 	const isDev = env.NODE_ENV === "development";
 	const workspaceName = isDev ? getEnvWorkspaceName() : undefined;
+	/*
+	 * The dev instance says so, in the taskbar and the window title.
+	 *
+	 * Two identical "GatedSpace" entries in the taskbar, both with Electron's
+	 * default atom logo (the dev window set no icon at all, so Electron used its
+	 * own), is a good way to type into the wrong one. `icon-dev.ico` was already
+	 * in the repo and simply never wired up.
+	 */
 	const windowTitle = workspaceName
 		? `${productName} — ${workspaceName}`
-		: productName;
+		: isDev
+			? `${productName} Dev`
+			: productName;
+
+	/*
+	 * `build/icons` is a PACKAGING input, not a runtime resource — electron
+	 * -builder reads it to stamp the exe, so it is never copied into `dist`. In
+	 * dev the source tree is right there, so read it from there. First candidate
+	 * that exists wins; if none do, the window keeps the default icon rather
+	 * than failing to open.
+	 */
+	const devIcon = isDev
+		? [
+				join(__dirname, "../../src/resources/build/icons/icon-dev.ico"),
+				join(__dirname, "../resources/build/icons/icon-dev.ico"),
+			].find((candidate) => existsSync(candidate))
+		: undefined;
+	if (isDev) {
+		/*
+		 * Windows groups taskbar buttons and labels them by AppUserModelID, not
+		 * by window title. Without its own id the dev instance is grouped under
+		 * the installed app and inherits its name.
+		 */
+		app.setAppUserModelId("sh.superset.gatedspace.dev");
+	}
 
 	const window = createWindow({
 		id: "main",
 		title: windowTitle,
+		...(devIcon ? { icon: devIcon } : {}),
 		width: initialBounds.width,
 		height: initialBounds.height,
 		x: initialBounds.x,
@@ -115,7 +149,13 @@ export async function MainWindow() {
 		minWidth: 400,
 		minHeight: 400,
 		show: false,
-		backgroundColor: nativeTheme.shouldUseDarkColors ? "#252525" : "#ffffff",
+		/*
+		 * The colour behind the app before the renderer paints, and behind it
+		 * during a resize. It was #252525 — a mid grey that is neither the well
+		 * (#0d0a09) nor any card, so every resize flashed a light rim around a
+		 * near-black window and the rounded corners read as grey notches.
+		 */
+		backgroundColor: nativeTheme.shouldUseDarkColors ? "#0d0a09" : "#ffffff",
 		center: initialBounds.center,
 		movable: true,
 		resizable: true,

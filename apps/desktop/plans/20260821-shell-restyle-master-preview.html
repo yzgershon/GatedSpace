@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — the shell, restyled</title>
+<style>
+  /*
+   * Real GatedSpace tokens, read out of renderer/globals.css. No invented colour.
+   *   --bg #151110   --card #201e1c   --border #2a2827   --highlight #e07850
+   *   --sidebar #1a1716
+   * `--well` is the trough the cards float on: --bg 62% toward black.
+   */
+  :root{
+    --bg:#151110; --fg:#eae8e6; --card:#1c1918; --card2:#201e1c;
+    --bd:#2a2827; --mut:#a8a5a3; --hl:#e07850; --sidebar:#1a1716;
+    --well:#0d0a09; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --fx:#d946ef;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 120px;background:#070505;color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:-.015em}
+  h2{font-size:16px;font-weight:600;margin:52px 0 8px;padding-top:22px;border-top:1px solid #241f1e}
+  h3{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+     color:rgba(168,165,163,.5);margin:0 0 10px}
+  p{color:var(--mut);max-width:84ch;margin:8px 0 18px}
+  code{font-family:var(--mono);font-size:12px;background:#1a1716;padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.68);margin:10px 0 0;max-width:84ch}
+  .note{border-left:2px solid var(--hl);padding:10px 0 10px 15px;margin:20px 0;color:var(--mut);max-width:84ch}
+  .note strong{color:var(--fg);font-weight:600}
+  .bad{border-left-color:var(--err)}
+  .row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start}
+  .rec{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#0d0a09;background:var(--hl);border-radius:4px;padding:2px 7px;vertical-align:2px;margin-left:8px}
+
+  /* ============================ THE SHELL ============================ */
+  .app{width:1440px;height:900px;background:var(--well);border-radius:12px;overflow:hidden;
+    box-shadow:0 40px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;
+    font-size:13px}
+
+  /* title bar sits ON the well — no surface of its own */
+  .bar{height:44px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px}
+  .brand{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .brand b{font-size:13.5px;font-weight:600;letter-spacing:-.012em}
+  .vtag{font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.6);
+    border:1px solid rgba(42,40,39,.9);border-radius:5px;padding:1px 5px;line-height:14px}
+  .ico{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:rgba(168,165,163,.55);font-size:13px;flex-shrink:0}
+  .ico:hover{background:rgba(255,255,255,.05);color:var(--fg)}
+  .barmid{position:absolute;left:0;right:0;display:flex;justify-content:center;pointer-events:none}
+  .barwrap{position:relative;flex:1;display:flex;align-items:center}
+  .seg{display:flex;align-items:center;gap:2px;padding:3px;border-radius:10px;
+    background:rgba(8,6,5,.75);border:1px solid rgba(42,40,39,.7);pointer-events:auto}
+  .sg{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:7px;
+    font-size:12.5px;color:var(--mut);white-space:nowrap}
+  .sg:hover{background:rgba(42,40,39,.7);color:var(--fg)}
+  .pic{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+  .barright{display:flex;align-items:center;gap:4px;flex-shrink:0;margin-left:auto}
+  .wc{display:flex;gap:2px;margin-left:8px;color:rgba(168,165,163,.5);font-size:11px}
+  .wc span{width:28px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+  .wc span:hover{background:rgba(255,255,255,.06)}
+  .wc .x:hover{background:#c0392b;color:#fff}
+  .pill{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;
+    font-size:12px;color:var(--mut);background:rgba(255,255,255,.035)}
+
+  /* content: sidebar + grid, both inset by the SAME gutter → level */
+  .body{flex:1;min-height:0;display:flex;gap:18px;padding:0 18px 18px}
+  .side{width:246px;flex-shrink:0;background:var(--sidebar);border-radius:12px;
+    display:flex;flex-direction:column;overflow:hidden;box-shadow:0 8px 26px -12px rgba(0,0,0,.7)}
+  .nav{padding:8px 8px 4px}
+  .nrow{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 10px;
+    border-radius:8px;font-size:13.5px;color:var(--mut)}
+  .nrow.on{background:#252220;color:var(--fg)}
+  .cnt{font-size:11.5px;color:rgba(168,165,163,.4);font-variant-numeric:tabular-nums}
+  .navsep{height:1px;background:rgba(42,40,39,.6);margin:6px 10px}
+  .prow{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;margin:0 8px;border-radius:8px;
+    font-size:13.5px;color:var(--fg)}
+  .prow:hover{background:#252220}
+  .pico{width:18px;height:18px;border-radius:6px;flex-shrink:0}
+  .grp{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px 0 26px;margin:0 8px;border-radius:8px;
+    font-size:12.5px;color:rgba(168,165,163,.8)}
+  .grp.on{background:rgba(224,120,80,.12);color:var(--fg)}
+  .grp .cv{font-size:9px;color:rgba(168,165,163,.4)}
+  .srow{display:flex;align-items:center;gap:9px;height:26px;padding:0 10px 0 42px;margin:0 8px;border-radius:8px;
+    font-size:12.5px;color:rgba(168,165,163,.7)}
+  .srow:hover{background:rgba(255,255,255,.04)}
+  .dot{width:7px;height:7px;border-radius:99px;flex-shrink:0}
+  .dot.ok{background:var(--ok)}.dot.run{background:var(--warn);animation:pulse 1.5s infinite}
+  .dot.err{background:var(--err)}
+  @keyframes pulse{50%{opacity:.3}}
+  .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sfoot{margin-top:auto;padding:8px}
+  .ubar{padding:6px 8px 8px}
+  .ulab{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);font-size:9.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:rgba(168,165,163,.42);margin-bottom:5px}
+  .ulab .who{color:rgba(234,232,230,.82);letter-spacing:.06em}
+  .ulab .pct{margin-left:auto;font-size:11.5px;letter-spacing:0;color:var(--hl)}
+  .cells{display:flex;gap:2px;height:12px;padding:0 11px;position:relative}
+  .cells::before,.cells::after{content:"";position:absolute;top:-3px;bottom:-3px;width:6px;
+    border:1px solid var(--hl);opacity:.55}
+  .cells::before{left:0;border-right:0}.cells::after{right:0;border-left:0}
+  .cells i{flex:1;border-radius:1px;background:rgba(255,255,255,.06)}
+  .cells i.on{background:var(--hl);box-shadow:0 0 6px rgba(224,120,80,.3)}
+  .ureset{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:rgba(168,165,163,.3);margin-top:5px}
+  .acct{display:flex;align-items:center;gap:6px;padding:2px 0 0}
+  .av{width:24px;height:24px;border-radius:7px;background:linear-gradient(140deg,#5b7cc4,#3d5590);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0}
+  .aname{font-size:13px;line-height:1.15;font-weight:500}
+  .aname i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--fx)}
+  .aspend{flex:1;text-align:center;font-size:12.5px;color:rgba(168,165,163,.55);font-variant-numeric:tabular-nums}
+
+  /* the grid: NO borders, NO tab strip */
+  .grid{flex:1;min-width:0;display:grid;gap:18px;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr}
+  .grid.one{grid-template-columns:1fr;grid-template-rows:1fr}
+  .pane{background:var(--card);border-radius:12px;display:flex;flex-direction:column;overflow:hidden;
+    min-width:0;box-shadow:0 8px 26px -12px rgba(0,0,0,.75)}
+  .pane.act{box-shadow:0 8px 26px -12px rgba(0,0,0,.75),inset 0 0 0 1px rgba(224,120,80,.55)}
+  .ph{display:flex;align-items:center;gap:8px;height:34px;padding:0 10px;flex-shrink:0}
+  .agm{width:14px;height:14px;border-radius:4px;flex-shrink:0;background:var(--hl)}
+  .pt{font-size:12.5px;color:rgba(234,232,230,.92);white-space:nowrap}
+  .pfold{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:10px;
+    color:rgba(168,165,163,.42);margin-left:2px}
+  .pacts{margin-left:auto;display:flex;gap:1px;color:rgba(168,165,163,.4);font-size:12px}
+  .pacts span{width:22px;height:22px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+  .pacts span:hover{background:rgba(255,255,255,.07);color:var(--fg)}
+  .tx{flex:1;min-height:0;overflow:hidden;padding:0 12px;display:flex;flex-direction:column;gap:9px}
+  .prompt{position:relative;border-radius:8px;background:rgba(32,30,28,.7);padding:8px 12px 8px 14px;flex-shrink:0}
+  .prompt::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:2px;border-radius:2px;background:var(--hl)}
+  .prompt .t{font-size:13px}
+  .line{position:relative;padding-left:28px;font-size:12.5px;color:rgba(168,165,163,.78)}
+  .line>.d{position:absolute;top:6px;left:7px;width:7px;height:7px;border-radius:99px}
+  .line b{color:var(--fg);font-weight:600;font-size:13px}
+  .comp{margin:6px 12px 0;flex-shrink:0;border-radius:9px;background:rgba(8,6,5,.72);
+    box-shadow:inset 0 0 0 1px rgba(42,40,39,.75)}
+  .compin{display:flex;align-items:flex-start;gap:8px;padding:7px 11px 2px}
+  .compin .c{color:var(--hl);font-family:var(--mono);font-size:12px;line-height:19px}
+  .compin .ph2{font-size:13px;color:rgba(168,165,163,.32)}
+  .compfoot{display:flex;align-items:center;padding:2px 9px 6px;color:rgba(168,165,163,.4);font-size:12px}
+  .compfoot .eng{margin-left:auto;font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.35)}
+  .hint{display:flex;gap:14px;padding:4px 13px 7px;font-family:var(--mono);font-size:10px;
+    color:rgba(168,165,163,.32);flex-shrink:0}
+  .hint.ghost{visibility:hidden}
+
+  /* ======================= detail / option cards ======================= */
+  .card{background:var(--sidebar);border:1px solid var(--bd);border-radius:12px;padding:14px;width:330px}
+  .card h4{margin:0 0 4px;font-size:13.5px;font-weight:600}
+  .card p{font-size:12.5px;margin:4px 0 0;color:rgba(168,165,163,.72)}
+  .mini{background:var(--well);border-radius:10px;padding:10px;margin-top:10px}
+  .zoom{background:var(--well);border-radius:12px;padding:22px;display:inline-block}
+  .menu{width:230px;background:#201e1c;border:1px solid var(--bd);border-radius:10px;padding:5px;
+    box-shadow:0 18px 40px rgba(0,0,0,.6)}
+  .mi{display:flex;align-items:center;gap:9px;height:29px;padding:0 9px;border-radius:6px;font-size:13px;color:var(--fg)}
+  .mi:hover{background:#2a2827}
+  .mi .k{margin-left:auto;font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.35)}
+  .mi.sep{height:1px;background:var(--bd);margin:4px 6px;padding:0;border-radius:0}
+  .swatch{display:flex;gap:10px;align-items:center;margin:6px 0}
+  .sw{width:26px;height:26px;border-radius:6px;border:1px solid rgba(255,255,255,.06)}
+  table{border-collapse:collapse;font-size:13px;margin:10px 0 0}
+  td,th{padding:6px 14px 6px 0;text-align:left;vertical-align:top;color:var(--mut)}
+  th{color:var(--fg);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+</style>
+</head>
+<body>
+
+<h1>GatedSpace — the shell, restyled</h1>
+<p>
+  Everything below is at 1:1 and uses the app's real tokens. Nothing here is built. The shell, the pane header, the group
+  placement (T1+T2) and the ⋯ menu are settled. What is still open is the pane <code>＋</code> and the
+  Tidy slot — both have options below with a recommendation marked.
+</p>
+
+<div class="note">
+  <strong>The text-shift bug is found, and it is mine.</strong> <code>SessionHintBar</code> returns
+  <code>null</code> when a pane is not focused, and a ~20px row when it is — and it sits in normal flow
+  under the composer. So focusing a pane mounts that row, the transcript area shrinks, and everything
+  jumps up. Unfocus and it drops back. The fix is to always render it and only hide it visually on
+  inactive panes, so the space is reserved either way. It is shown that way in the mock below
+  (look at the three inactive panes: the line is there, just invisible).
+</div>
+
+<h2>The shell</h2>
+<p>
+  Title bar on the background with nothing but identity and controls. Sidebar and grid inset by the same
+  18px, so their tops and bottoms line up exactly. No tab strip. <strong>No borders between panes</strong> —
+  the gutter and the card's own lift do the separating, which is what the borders were fighting.
+</p>
+
+<div class="app">
+  <div class="bar">
+    <div class="brand">
+      <b>GatedSpace</b><span class="vtag">v1.17.54</span>
+    </div>
+    <span class="ico">◫</span>
+    <span class="ico">⌕</span>
+    <div class="barwrap">
+      <div class="barmid">
+        <div class="seg">
+          <span class="sg"><span class="pic" style="background:#e07850"></span>Claude</span>
+          <span class="sg"><span class="pic" style="background:#7a828f"></span>Codex</span>
+          <span class="sg"><span class="pic" style="background:#7aa2f7"></span>Gemini</span>
+          <span class="sg"><span class="pic" style="background:#8b8b8b"></span>Copilot</span>
+          <span class="sg" style="border-left:1px solid rgba(42,40,39,.9);margin-left:2px;padding-left:9px">⚙</span>
+        </div>
+      </div>
+      <div class="barright">
+        <span class="pill">▦ Layout</span>
+        <span class="ico">🗀</span>
+        <span class="wc"><span>—</span><span>▢</span><span class="x">✕</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="side">
+      <div class="nav">
+        <div class="nrow on">Workspaces <span class="cnt">11</span></div>
+        <div class="nrow">Recent sessions</div>
+        <div class="nrow">Usage</div>
+        <div class="navsep"></div>
+        <div class="nrow">＋ New Workspace</div>
+      </div>
+      <div class="navsep"></div>
+      <div class="prow"><span class="pico" style="background:#3d5590"></span><span class="nm">SecondBrain</span><span class="cnt">7</span></div>
+      <div class="grp on"><span class="cv">▾</span><span class="nm">GS Edits</span><span class="cnt">3</span></div>
+      <div class="srow"><span class="dot ok"></span><span class="nm">continue</span></div>
+      <div class="srow"><span class="dot run"></span><span class="nm">and ive got some more changes</span></div>
+      <div class="srow"><span class="dot ok"></span><span class="nm">status of the build</span></div>
+      <div class="grp"><span class="cv">▸</span><span class="nm">Side Jobs</span><span class="cnt">4</span></div>
+      <div class="prow"><span class="pico" style="background:#5b7cc4"></span><span class="nm">GatedSpace</span><span class="cnt">2</span></div>
+      <div class="prow"><span class="pico" style="background:#c4783d"></span><span class="nm">YDdetailers</span><span class="cnt">2</span></div>
+      <div class="sfoot">
+        <div class="ubar">
+          <div class="ulab"><span class="who">Yish</span><span>5h</span><span class="pct">62%</span></div>
+          <div class="cells">
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+            <i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i>
+            <i></i><i></i><i></i><i></i><i></i><i></i>
+          </div>
+          <div class="ureset">resets 8am</div>
+        </div>
+        <div class="acct">
+          <span class="av">Y</span>
+          <span class="aname">Yishai<i>Ultra</i></span>
+          <span class="aspend">141k</span>
+          <span class="ico">⚙</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="pane act">
+        <div class="ph">
+          <span class="dot run"></span><span class="agm"></span>
+          <span class="pt">Claude</span>
+          <span class="pfold">🗀 SecondBrain</span>
+          <span class="pacts"><span>⋯</span><span>⤢</span><span>＋</span><span>✕</span></span>
+        </div>
+        <div class="tx">
+          <div class="prompt"><div class="t">continue</div></div>
+          <div class="line"><span class="d" style="background:rgba(168,165,163,.4)"></span>Found it, and it is mine. <b>SessionHintBar</b> returns null when a pane is not focused…</div>
+          <div class="line"><span class="d" style="background:var(--ok)"></span><b>Read</b> SessionView.tsx</div>
+        </div>
+        <div class="comp">
+          <div class="compin"><span class="c">›</span><span class="ph2"></span></div>
+          <div class="compfoot">＋<span class="eng">Extra high · auto</span></div>
+        </div>
+        <div class="hint"><span>Shift+Tab:mode</span><span>Esc:cancel</span><span>Ctrl+X:shortcuts</span></div>
+      </div>
+
+      <div class="pane">
+        <div class="ph">
+          <span class="dot ok"></span><span class="agm"></span>
+          <span class="pt">GatedKey</span>
+          <span class="pfold">🗀 GatedKey</span>
+          <span class="pacts"><span>⋯</span><span>⤢</span><span>＋</span><span>✕</span></span>
+        </div>
+        <div class="tx">
+          <div class="prompt"><div class="t">and ive got some more changes but I want you to commit them…</div></div>
+          <div class="line"><span class="d" style="background:rgba(168,165,163,.4)"></span>Your v0.1.1 CI release failed — that was the BOM in <b>Cargo.toml</b>.</div>
+        </div>
+        <div class="comp">
+          <div class="compin"><span class="c">›</span><span class="ph2"></span></div>
+          <div class="compfoot">＋<span class="eng">Extra high · auto</span></div>
+        </div>
+        <div class="hint ghost"><span>Shift+Tab:mode</span><span>Esc:cancel</span><span>Ctrl+X:shortcuts</span></div>
+      </div>
+
+      <div class="pane">
+        <div class="ph">
+          <span class="dot ok"></span><span class="agm"></span>
+          <span class="pt">Sortie</span>
+          <span class="pfold">🗀 sortie</span>
+          <span class="pacts"><span>⋯</span><span>⤢</span><span>＋</span><span>✕</span></span>
+        </div>
+        <div class="tx">
+          <div class="prompt"><div class="t">just help me with this: I want to put Sortie on my resume…</div></div>
+          <div class="line"><span class="d" style="background:rgba(168,165,163,.4)"></span>The bullet worth talking about in an interview is the carry-forward one.</div>
+        </div>
+        <div class="comp">
+          <div class="compin"><span class="c">›</span><span class="ph2"></span></div>
+          <div class="compfoot">＋<span class="eng">Extra high · auto</span></div>
+        </div>
+        <div class="hint ghost"><span>Shift+Tab:mode</span><span>Esc:cancel</span><span>Ctrl+X:shortcuts</span></div>
+      </div>
+
+      <div class="pane">
+        <div class="ph">
+          <span class="dot err"></span><span class="agm" style="background:#7a828f"></span>
+          <span class="pt">Iotron Medical</span>
+          <span class="pfold">🗀 Iotronmedical</span>
+          <span class="pacts"><span>⋯</span><span>⤢</span><span>＋</span><span>✕</span></span>
+        </div>
+        <div class="tx">
+          <div class="prompt"><div class="t">ok push it so it goes live</div></div>
+          <div class="line"><span class="d" style="background:var(--err)"></span>Failed to authenticate: OAuth session expired</div>
+        </div>
+        <div class="comp">
+          <div class="compin"><span class="c">›</span><span class="ph2"></span></div>
+          <div class="compfoot">＋<span class="eng">Extra high · auto</span></div>
+        </div>
+        <div class="hint ghost"><span>Shift+Tab:mode</span><span>Esc:cancel</span><span>Ctrl+X:shortcuts</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="cap">
+  Top-left is now four things: name, version, collapse, search. Back, forward and history are gone — they
+  navigated a route stack you rarely use, and every pixel there is background you asked to keep clean.
+</p>
+
+<h2>The pane header, before and after</h2>
+<div class="row">
+  <div>
+    <h3>Now (1.17.54)</h3>
+    <div class="zoom">
+      <div class="pane" style="width:420px;height:auto">
+        <div class="ph" style="background:linear-gradient(90deg,rgba(224,120,80,.22),transparent 45%)">
+          <span class="agm"></span>
+          <span class="pt">GatedSpace Edits</span>
+          <span style="color:rgba(168,165,163,.4);font-size:11px">✎</span>
+          <span class="pacts"><span>⤢</span><span>◫</span><span>✕</span></span>
+        </div>
+        <div style="height:26px;display:flex;align-items:center;gap:10px;padding:0 12px;
+                    font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.5)">
+          <span class="dot ok" style="width:6px;height:6px"></span>SecondBrain
+          <span>C:\Dev\SecondBrain</span><span style="margin-left:auto">829k</span>
+        </div>
+      </div>
+    </div>
+    <p class="cap">Orange wash across the left, rename pencil, three actions, and a second row underneath
+      carrying the folder and path.</p>
+  </div>
+  <div>
+    <h3>Proposed</h3>
+    <div class="zoom">
+      <div class="pane act" style="width:420px;height:auto">
+        <div class="ph">
+          <span class="dot run"></span><span class="agm"></span>
+          <span class="pt">GatedSpace Edits</span>
+          <span class="pfold">🗀 SecondBrain</span>
+          <span class="pacts"><span>⋯</span><span>⤢</span><span>＋</span><span>✕</span></span>
+        </div>
+      </div>
+    </div>
+    <p class="cap">One row. Status dot, agent mark, name, folder, then ⋯ ⤢ ＋ ✕. The orange wash goes —
+      the dot and the mark already say whose pane it is, and the wash was the loudest thing on screen.
+      The path moves into the ⋯ menu as “Copy path”, and the token count moves to the composer's right edge
+      beside the engine label.</p>
+  </div>
+</div>
+
+<h2>Where do the tab groups go?</h2>
+<p>
+  This is the real decision. You have <strong>two groups in SecondBrain alone</strong> — “GS Edits” with 3
+  panes and “Side Jobs” with 4 — and that grouping is information. BridgeMind has no equivalent because it
+  has no grouping layer: its sidebar goes workspace → session, flat. So “delete the tabs” has to become
+  “move the grouping somewhere”, or you lose it.
+</p>
+
+<div class="row">
+  <div class="card">
+    <h4>T1 · Groups nest in the sidebar<span class="rec">Pick this</span></h4>
+    <p>Workspace → group → session, three levels. Clicking a group shows its panes in the grid; clicking a
+      session focuses that pane. Exactly the shape of the shell above.</p>
+    <div class="mini">
+      <div class="prow" style="margin:0"><span class="pico" style="background:#3d5590"></span><span class="nm">SecondBrain</span><span class="cnt">7</span></div>
+      <div class="grp on" style="margin:0"><span class="cv">▾</span><span class="nm">GS Edits</span><span class="cnt">3</span></div>
+      <div class="srow" style="margin:0"><span class="dot ok"></span><span class="nm">continue</span></div>
+      <div class="srow" style="margin:0"><span class="dot run"></span><span class="nm">and ive got more changes</span></div>
+      <div class="grp" style="margin:0"><span class="cv">▸</span><span class="nm">Side Jobs</span><span class="cnt">4</span></div>
+    </div>
+    <p style="margin-top:10px">Keeps everything, costs no background space, and the sidebar is already the
+      thing you look at to find a session.</p>
+  </div>
+
+  <div class="card">
+    <h4>T2 · A switcher pill in the title bar</h4>
+    <p>One control next to the version tag: the current group and a caret. Click for the list.</p>
+    <div class="mini" style="display:flex;align-items:center;gap:9px">
+      <b style="font-size:13.5px">GatedSpace</b><span class="vtag">v1.17.54</span>
+      <span class="pill" style="background:rgba(224,120,80,.14);color:var(--fg)">GS Edits <span class="cnt">3</span> ▾</span>
+    </div>
+    <p style="margin-top:10px">Cheapest to build and always visible. But it hides the other group behind a
+      click, and you lose the at-a-glance “what else is running”. Good as a <em>companion</em> to T1, not a
+      replacement.</p>
+  </div>
+
+  <div class="card">
+    <h4>T3 · A vertical group rail</h4>
+    <p>A 44px column between the sidebar and the grid, one chip per group, stacked.</p>
+    <div class="mini" style="display:flex;gap:10px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(224,120,80,.16);
+             box-shadow:inset 0 0 0 1px rgba(224,120,80,.5);display:flex;align-items:center;justify-content:center;font-size:11px">3</div>
+        <div style="width:34px;height:34px;border-radius:9px;background:rgba(255,255,255,.05);
+             display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--mut)">4</div>
+      </div>
+      <div style="flex:1;background:var(--card);border-radius:9px"></div>
+    </div>
+    <p style="margin-top:10px">Always visible and one click. But it is a third column, and you just asked me
+      to remove a column's worth of chrome.</p>
+  </div>
+
+  <div class="card">
+    <h4>T4 · No groups at all</h4>
+    <p>Every session in the workspace is a pane in one grid. Purest copy of BridgeMind.</p>
+    <div class="mini" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+      <div style="height:30px;background:var(--card);border-radius:7px"></div>
+    </div>
+    <p style="margin-top:10px"><strong>Says no to something you already use.</strong> Seven panes in one
+      grid is 7 cards at a quarter the size each. Listed for completeness; I would not ship it.</p>
+  </div>
+</div>
+
+<div class="note">
+  <strong>My recommendation is T1, with T2's pill as a small addition.</strong> The sidebar becomes the one
+  place you navigate from, which is what BridgeMind actually does, and the pill in the title bar means you
+  never have to open the sidebar just to remember which group you are in. Nothing is lost and no new column
+  appears.
+</div>
+
+<h2>What the ⋯ holds</h2>
+<p>
+  The three visible actions stay the ones you use constantly — expand, add a pane, close. ⋯ collects the
+  rest, including the two rows the header is losing.
+</p>
+<div class="row">
+  <div>
+    <div class="menu">
+      <div class="mi">Rename pane<span class="k">F2</span></div>
+      <div class="mi">Copy working directory</div>
+      <div class="mi">Reveal in File Explorer</div>
+      <div class="mi sep"></div>
+      <div class="mi">Split right<span class="k">Ctrl+\</span></div>
+      <div class="mi">Split down</div>
+      <div class="mi">Move to new group</div>
+      <div class="mi sep"></div>
+      <div class="mi">Restart session</div>
+      <div class="mi">Fork session</div>
+      <div class="mi">Open transcript folder</div>
+      <div class="mi sep"></div>
+      <div class="mi">Close others</div>
+      <div class="mi" style="color:#f0a8a8">Close pane<span class="k">Ctrl+W</span></div>
+    </div>
+  </div>
+  <div style="max-width:44ch">
+    <p style="margin-top:0">Everything here exists already — most of it is in the pane's right-click menu,
+      which is fine but undiscoverable. <strong>Copy working directory</strong> and
+      <strong>Reveal in File Explorer</strong> are what the path row was for, so removing that row costs
+      nothing.</p>
+    <p><strong>Fork session</strong> earns its place: it is the safe way to open a conversation that is
+      already live somewhere, and right now it is only reachable from Recent sessions.</p>
+  </div>
+</div>
+
+
+<h2>The ＋ question — where the tab strip's menu goes</h2>
+<p>
+  You are right that this is the important one. The strip's <code>＋</code> is currently the only way to
+  reach a plain terminal, every agent preset, the browser, file search and Recent sessions. Deleting the
+  strip without rehoming that is a straight loss.
+</p>
+<p>
+  The thing to notice is that the old <code>＋</code> was doing <strong>two different jobs</strong> under
+  one button: "make me a new GROUP" and "give me a new SESSION". The tab strip made those look like one
+  action because a new tab was always both. Split apart, each has an obvious home.
+</p>
+
+<div class="row">
+  <div class="card">
+    <h4>P1 · ＋ adds a pane to THIS group<span class="rec">Pick this</span></h4>
+    <p>The pane header's <code>＋</code> splits beside that pane, and the new pane opens as the launcher —
+      the same undecided pane 1.17.54 already builds. Pick an agent and it fills in; change your mind and
+      pick again.</p>
+    <div class="mini">
+      <div style="display:flex;gap:8px">
+        <div style="flex:1;background:var(--card);border-radius:8px;height:104px"></div>
+        <div style="flex:1;background:var(--card);border-radius:8px;height:104px;
+             box-shadow:inset 0 0 0 1px rgba(224,120,80,.5);padding:9px">
+          <div style="font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;
+               text-transform:uppercase;color:rgba(168,165,163,.4);margin-bottom:7px">New pane</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            <div style="height:20px;border-radius:5px;background:rgba(255,255,255,.05);
+                 font-size:9px;display:flex;align-items:center;padding:0 6px;gap:4px">
+              <span style="width:8px;height:8px;border-radius:2px;background:#e07850"></span>Claude</div>
+            <div style="height:20px;border-radius:5px;background:rgba(255,255,255,.05);
+                 font-size:9px;display:flex;align-items:center;padding:0 6px;gap:4px">
+              <span style="width:8px;height:8px;border-radius:2px;background:#7a828f"></span>Codex</div>
+            <div style="height:20px;border-radius:5px;background:rgba(255,255,255,.05);
+                 font-size:9px;display:flex;align-items:center;padding:0 6px;gap:4px">
+              <span style="width:8px;height:8px;border-radius:2px;background:#7aa2f7"></span>Gemini</div>
+            <div style="height:20px;border-radius:5px;background:rgba(255,255,255,.05);
+                 font-size:9px;display:flex;align-items:center;padding:0 6px;gap:4px">
+              <span style="width:8px;height:8px;border-radius:2px;background:#8b8b8b"></span>Copilot</div>
+          </div>
+          <div style="margin-top:6px;font-size:9px;color:rgba(168,165,163,.5)">Terminal · Browser · Files · Sessions</div>
+        </div>
+      </div>
+    </div>
+    <p style="margin-top:10px">Nothing new to learn — it is the pane you already get today from the strip's
+      <code>＋</code>, landing next door instead of in a new tab.</p>
+  </div>
+
+  <div class="card">
+    <h4>P2 · ＋ opens a dropdown</h4>
+    <p>The old <code>AddTabMenu</code>, hung off the pane header instead of the strip.</p>
+    <div class="mini">
+      <div class="menu" style="width:auto;box-shadow:none">
+        <div class="mi"><span style="width:11px;height:11px;border-radius:3px;background:#e07850"></span>Claude</div>
+        <div class="mi"><span style="width:11px;height:11px;border-radius:3px;background:#7a828f"></span>Codex</div>
+        <div class="mi sep"></div>
+        <div class="mi">Open Terminal</div>
+        <div class="mi">Open Browser</div>
+      </div>
+    </div>
+    <p style="margin-top:10px">Fewer clicks to a decision, but you must decide before the pane exists —
+      which is the thing we just removed from the strip. Inconsistent with itself.</p>
+  </div>
+
+  <div class="card">
+    <h4>P3 · ＋ repeats this pane's agent</h4>
+    <p>Click <code>＋</code> on a Claude pane and get a second Claude beside it, no menu.</p>
+    <p style="margin-top:10px">Genuinely the fastest for the common case — but it removes the ability to
+      pick anything else, so it cannot be the only behaviour. Worth having as
+      <code>Alt+click</code> on top of P1.</p>
+  </div>
+</div>
+
+<h3 style="margin-top:26px">Where each of the old ＋'s jobs ends up</h3>
+<table>
+  <tr><th>What the strip's ＋ did</th><th>New home</th></tr>
+  <tr><td>Launch Claude / Codex / Gemini / Copilot</td><td>Pane header <code>＋</code> → launcher</td></tr>
+  <tr><td>Open a plain terminal</td><td>Pane header <code>＋</code> → launcher → Open Terminal</td></tr>
+  <tr><td>Open the browser</td><td>Pane header <code>＋</code> → launcher → Open Browser</td></tr>
+  <tr><td>Search files</td><td>Pane header <code>＋</code>, and the search icon in the title bar</td></tr>
+  <tr><td>Recent sessions</td><td>Pane header <code>＋</code>, and the sidebar nav row</td></tr>
+  <tr><td><strong>Make a new empty tab</strong></td><td><strong>The group pill → New group</strong>, and <code>＋</code> on the workspace row in the sidebar</td></tr>
+</table>
+
+<div class="mini" style="width:420px;margin-top:14px">
+  <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+    <b style="font-size:13.5px">GatedSpace</b><span class="vtag">v1.17.54</span>
+    <span class="pill" style="background:rgba(224,120,80,.14);color:var(--fg)">GS Edits <span class="cnt">3</span> ▾</span>
+  </div>
+  <div class="menu" style="width:190px">
+    <div class="mi">GS Edits <span class="k">3</span></div>
+    <div class="mi">Side Jobs <span class="k">4</span></div>
+    <div class="mi sep"></div>
+    <div class="mi">＋ New group<span class="k">Ctrl+T</span></div>
+  </div>
+</div>
+<p class="cap">
+  The pill earns its keep twice: it is the group switcher AND the only thing that has to make a new group,
+  so <code>Ctrl+T</code> keeps working exactly as it does now.
+</p>
+
+<h2>Tidy — you are right, and the slot has a real occupant</h2>
+<p>
+  I am dropping the layout picker. Checking it against the code rather than defending it: panes are already
+  arranged by <code>buildBalancedTree</code> when they are created, so two panes are side by side and four
+  are a 2×2 <em>without anyone asking</em>. A picker whose options are mostly what already happened is a
+  button you press once, see nothing change, and never press again — which is exactly the complaint you
+  have about Tidy today. Same button, new label.
+</p>
+
+<div class="note">
+  <strong>But removing the tab strip orphans something real.</strong> The chip reading
+  <em>"1 shell running in the background"</em> in your screenshot is
+  <code>BackgroundTerminalsButton</code>, and the tab strip is its <em>only</em> mount point — it is
+  rendered through <code>renderTabBarTrailing</code> and nowhere else. Delete the strip and it silently
+  disappears, taking with it the only signal that a shell is still alive somewhere you cannot see.
+</div>
+
+<div class="row">
+  <div class="card">
+    <h4>K1 · Background shells take the slot<span class="rec">Pick this</span></h4>
+    <p>The homeless chip moves to where Tidy is. It already only appears when there IS something running,
+      so the slot is empty most of the time — which is what you want from that corner.</p>
+    <div class="mini" style="display:flex;justify-content:flex-end;gap:6px;align-items:center">
+      <span class="pill">▤ 1 shell running</span>
+      <span class="ico">🗀</span>
+      <span class="wc"><span>—</span><span>▢</span><span class="x">✕</span></span>
+    </div>
+    <p style="margin-top:10px">Solves a problem the redesign creates instead of inventing one. Click it and
+      you get the list of background shells, same as now.</p>
+  </div>
+
+  <div class="card">
+    <h4>K2 · Launch all agents</h4>
+    <p>One click fills the group with all four presets side by side — the thing the empty state already
+      offers as "Launch all 4 side by side".</p>
+    <div class="mini" style="display:flex;justify-content:flex-end">
+      <span class="pill">✦ Launch all 4</span>
+    </div>
+    <p style="margin-top:10px">A real workflow, but it belongs next to the agents, not next to the window
+      controls. Better placed on the preset bar's right edge.</p>
+  </div>
+
+  <div class="card">
+    <h4>K3 · Leave it empty</h4>
+    <p>Folder button and window controls, nothing else.</p>
+    <div class="mini" style="display:flex;justify-content:flex-end;gap:6px;align-items:center">
+      <span class="ico">🗀</span>
+      <span class="wc"><span>—</span><span>▢</span><span class="x">✕</span></span>
+    </div>
+    <p style="margin-top:10px">Cleanest, and defensible — but only if the background-shells chip goes
+      somewhere else. It cannot just vanish.</p>
+  </div>
+</div>
+
+<p class="cap">
+  If you would rather that corner stay completely empty, the other honest home for background shells is the
+  <strong>sidebar footer</strong>, as a row above the usage bar that only appears when a shell is running.
+  Say the word and I will draw it that way instead.
+</p>
+
+<h2>Why the borders can go</h2>
+<p>
+  The thin lines are each pane's own <code>1px</code> border, plus the sidebar card's right edge. They were
+  added when the cards had no surface of their own and needed <em>something</em> to describe their shape.
+  Now that the card is lighter than the trough it floats on, the border is a second boundary drawn on top
+  of one that already reads — which is exactly the "thin gray lines" you are seeing.
+</p>
+<div class="swatch">
+  <span class="sw" style="background:var(--well)"></span> <code>#0d0a09</code> the trough
+  <span class="sw" style="background:var(--card);margin-left:18px"></span> <code>#1c1918</code> the card
+  <span class="sw" style="background:var(--bd);margin-left:18px"></span> <code>#2a2827</code> the border being removed
+</div>
+<p class="cap">
+  The card sits 11 values above the trough. The border sits 13 above the card. Removing it loses nothing
+  and removes every line you pointed at, including the one down the right of the sidebar.
+</p>
+
+<h2>What this changes, in one list</h2>
+<table>
+  <tr><th>Area</th><th>Change</th></tr>
+  <tr><td>Panes</td><td>Border removed. Gutter and lift do the separating.</td></tr>
+  <tr><td>Sidebar</td><td>Border removed. Inset matches the grid so tops and bottoms line up.</td></tr>
+  <tr><td>Title bar</td><td>GatedSpace + version move out of the sidebar onto the background. Back, forward and history removed. Collapse and search stay.</td></tr>
+  <tr><td>Workspace name</td><td>Leaves the title bar. The folder appears per pane instead.</td></tr>
+  <tr><td>Tab strip</td><td>Removed. Groups move into the sidebar (T1) with a switcher pill (T2).</td></tr>
+  <tr><td>Pane header</td><td>One row: dot, mark, name, folder, ⋯ ⤢ ＋ ✕. Orange wash and path row removed.</td></tr>
+  <tr><td>Meta strip</td><td>Gone. Token count moves next to the engine label in the composer.</td></tr>
+  <tr><td>Tidy</td><td>Removed. The slot takes the background-shells chip, which loses its only home with the tab strip.</td></tr>
+  <tr><td>New pane</td><td>Pane header <code>＋</code> splits beside it and opens the launcher.</td></tr>
+  <tr><td>New group</td><td>The group pill's menu, and <code>＋</code> on the sidebar's workspace row. <code>Ctrl+T</code> unchanged.</td></tr>
+  <tr><td>Hint bar</td><td>Always rendered, hidden on inactive panes — fixes the text jump.</td></tr>
+</table>
+
+<div class="note bad">
+  <strong>One thing I want to flag before building any of it.</strong> Removing the tab strip means the
+  ONLY way to reach a pane in another group is the sidebar. If you ever collapse the sidebar, you would be
+  stuck in the group you are in. So the T2 pill is not decoration — it is the escape hatch that makes
+  collapsing the sidebar safe. If you pick T1 alone, I would keep the sidebar from being fully collapsible,
+  or add the pill anyway.
+</div>
+
+<p class="cap" style="margin-top:22px">
+  Nothing is coded and nothing is committed. Settled: the shell, the pane header, T1+T2 for groups, and the ⋯ menu. Still open: P1/P2/P3 for the
+  pane <code>＋</code>, and K1/K2/K3 for the Tidy slot. Say which and I will build the lot.
+</p>
+
+</body>
+</html>

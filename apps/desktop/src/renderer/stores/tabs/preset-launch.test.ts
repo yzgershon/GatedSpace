@@ -131,6 +131,44 @@ describe("getPresetLaunchPlan", () => {
 		).toBe("new-tab-per-command");
 	});
 
+	/*
+	 * The launcher-pane case. `active-tab` is a preference the preset's mode may
+	 * overrule; `active-pane` is the user pointing at a pane the `+` already made
+	 * room for, and nothing may send that to a different group.
+	 */
+	it("honours active-pane even when the mode says new-tab", () => {
+		expect(
+			getPresetLaunchPlan({
+				mode: "new-tab",
+				target: "active-pane",
+				commandCount: 1,
+				hasActiveTab: true,
+			}),
+		).toBe("active-tab-single");
+	});
+
+	it("splits inside the active tab for active-pane with several commands", () => {
+		expect(
+			getPresetLaunchPlan({
+				mode: "new-tab",
+				target: "active-pane",
+				commandCount: 3,
+				hasActiveTab: true,
+			}),
+		).toBe("active-tab-multi-pane");
+	});
+
+	it("still needs an active tab to honour active-pane", () => {
+		expect(
+			getPresetLaunchPlan({
+				mode: "new-tab",
+				target: "active-pane",
+				commandCount: 1,
+				hasActiveTab: false,
+			}),
+		).toBe("new-tab-single");
+	});
+
 	it("uses new-tab multi-pane path when mode is new-tab-split-pane", () => {
 		expect(
 			getPresetLaunchPlan({

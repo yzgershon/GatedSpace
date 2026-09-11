@@ -1,6 +1,7 @@
 import type { WorkspaceStore } from "@superset/panes";
 import { useCallback } from "react";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
+import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
 import type { StoreApi } from "zustand/vanilla";
 import type {
 	BrowserPaneData,
@@ -25,7 +26,7 @@ export function useWorkspacePaneOpeners({
 	newTabPresets: V2TerminalPresetRow[];
 	executePreset: (
 		preset: V2TerminalPresetRow,
-		options?: { target?: "new-tab" | "active-tab" },
+		options?: { target?: PresetOpenTarget },
 	) => void | Promise<void>;
 }): {
 	openDiffPane: (
@@ -37,7 +38,7 @@ export function useWorkspacePaneOpeners({
 	) => void;
 	addTerminalTab: () => Promise<void>;
 	addBrowserTab: () => void;
-	addSessionTab: () => void;
+	addSessionTab: (options?: { target?: PresetOpenTarget }) => void;
 	openBrowserUrl: (url: string) => void;
 	openClaudeSessions: () => void;
 	openCommentPane: (comment: CommentPaneData) => void;
@@ -154,17 +155,32 @@ export function useWorkspacePaneOpeners({
 		});
 	}, [store]);
 
-	// Open a new VS Code-style Claude Code session pane (kind "session").
-	const addSessionTab = useCallback(() => {
-		store.getState().addTab({
-			panes: [
-				{
-					kind: "session",
-					data: {} as SessionPaneData,
-				},
-			],
-		});
-	}, [store]);
+	/**
+	 * Open a Claude Code session pane (kind "session").
+	 *
+	 * `target: "active-tab"` appends to the tab you are already in, the same as
+	 * every preset opener. It exists for the new-tab launcher, which is itself a
+	 * pane in a tab that was just created: without it, clicking Claude there
+	 * made a SECOND tab and left the first one empty enough to be removed, so
+	 * the tab you had just made vanished under you.
+	 */
+	const addSessionTab = useCallback(
+		(options?: { target?: PresetOpenTarget }) => {
+			const state = store.getState();
+			const pane = {
+				kind: "session",
+				data: {} as SessionPaneData,
+			} as const;
+
+			if (options?.target === "active-tab" && state.activeTabId) {
+				state.addPane({ tabId: state.activeTabId, pane });
+				return;
+			}
+
+			state.addTab({ panes: [pane] });
+		},
+		[store],
+	);
 
 	// Open a specific URL in a browser tab. Reuses an existing browser pane
 	// already showing this URL (focus it) rather than stacking duplicates —

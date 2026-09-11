@@ -1,9 +1,6 @@
 import { useWorkspaceClient } from "@superset/workspace-client";
 import { useCallback, useMemo } from "react";
-import {
-	DEFAULT_COLS,
-	DEFAULT_ROWS,
-} from "renderer/lib/terminal/terminal-runtime";
+import { getInitialDimensions } from "renderer/lib/terminal/terminal-runtime";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import { useTheme } from "renderer/stores/theme";
 import { resolveTerminalThemeType } from "renderer/stores/theme/utils";
@@ -43,6 +40,7 @@ export function useV2TerminalLauncher(): TerminalLauncher {
 	const create = useCallback(
 		async (options?: CreateOptions): Promise<string> => {
 			const terminalId = options?.terminalId ?? crypto.randomUUID();
+			const initial = getInitialDimensions(terminalId);
 			await trpcClient.terminal.createSession.mutate({
 				terminalId,
 				workspaceId,
@@ -57,12 +55,18 @@ export function useV2TerminalLauncher(): TerminalLauncher {
 				// follows is what pushed Codex's welcome box off the top, lost
 				// Claude Code's banner, and left a plain shell looking empty.
 				//
-				// These are the same constants the xterm is created with, so both
+				// `getInitialDimensions` is what the xterm is created with, so both
 				// ends now agree from the first byte. The later fit still resizes
 				// both together, which xterm handles; what it does not handle is
 				// starting from two different geometries.
-				cols: DEFAULT_COLS,
-				rows: DEFAULT_ROWS,
+				//
+				// It must be the FUNCTION, not the DEFAULT_COLS/DEFAULT_ROWS
+				// constants it falls back to. `createRuntime` has always preferred
+				// the saved dims, so passing the bare constants left the two ends
+				// disagreeing in exactly the case this option documents — a
+				// terminal id rehydrated from a persisted pane layout.
+				cols: initial.cols,
+				rows: initial.rows,
 			});
 			return terminalId;
 		},

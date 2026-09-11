@@ -800,3 +800,79 @@ describe("reorderTab", () => {
 		expect(store.getState().tabs.map((t) => t.id)).toEqual(["t2", "t1"]);
 	});
 });
+
+/**
+ * Closing the tab you are looking at should land you on the one you were in
+ * before it, not on whatever happens to sit furthest right.
+ */
+describe("closing a tab picks the most recent one", () => {
+	function threeTabs() {
+		const store = makeStore();
+		store.getState().addTab({ id: "a", panes: [tp("pa")] });
+		store.getState().addTab({ id: "b", panes: [tp("pb")] });
+		store.getState().addTab({ id: "c", panes: [tp("pc")] });
+		return store;
+	}
+
+	it("returns to the previously active tab, not the next one along", () => {
+		const store = threeTabs();
+		store.getState().setActiveTab("a");
+		store.getState().setActiveTab("b");
+		// Positionally, removing "b" would hand focus to "c".
+		store.getState().removeTab("b");
+		expect(store.getState().activeTabId).toBe("a");
+	});
+
+	it("skips tabs that have since been closed", () => {
+		const store = threeTabs();
+		store.getState().setActiveTab("a");
+		store.getState().setActiveTab("c");
+		store.getState().setActiveTab("b");
+		store.getState().removeTab("c");
+		// "c" was the most recent before "b", but it is gone.
+		store.getState().removeTab("b");
+		expect(store.getState().activeTabId).toBe("a");
+	});
+
+	/** Closing a background tab must not move the foreground one. */
+	it("leaves focus alone when the closed tab was not active", () => {
+		const store = threeTabs();
+		store.getState().setActiveTab("b");
+		store.getState().removeTab("a");
+		expect(store.getState().activeTabId).toBe("b");
+	});
+
+	it("falls back to the positional rule with no recency yet", () => {
+		// A store built from persisted state has tabs but no recorded history,
+		// which is what a fresh reload looks like.
+		const store = makeStore({
+			version: 1,
+			activeTabId: "a",
+			tabs: [
+				{
+					id: "a",
+					createdAt: 0,
+					activePaneId: "pa",
+					layout: { type: "pane", paneId: "pa" },
+					panes: { pa: { id: "pa", kind: "test", data: { label: "pa" } } },
+				},
+				{
+					id: "b",
+					createdAt: 0,
+					activePaneId: "pb",
+					layout: { type: "pane", paneId: "pb" },
+					panes: { pb: { id: "pb", kind: "test", data: { label: "pb" } } },
+				},
+			],
+		});
+		store.getState().removeTab("a");
+		expect(store.getState().activeTabId).toBe("b");
+	});
+
+	it("clears the active tab when the last one closes", () => {
+		const store = makeStore();
+		store.getState().addTab({ id: "only", panes: [tp("p1")] });
+		store.getState().removeTab("only");
+		expect(store.getState().activeTabId).toBeNull();
+	});
+});

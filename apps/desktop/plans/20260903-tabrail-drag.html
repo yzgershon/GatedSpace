@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tab rail drag — GatedSpace</title>
+<style>
+  :root {
+    --background: #151110;
+    --well: #0d0a09;
+    --card: #201b1a;
+    --border: #2a2827;
+    --rail-border: #3d3a38;
+    --foreground: #e8e6e3;
+    --muted: #a8a5a3;
+    --highlight: #e07850;
+    --warning: #d4a84b;
+    --success: #6fae6f;
+    --pane-inset: 18px;
+    --pane-radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    background: var(--well);
+    color: var(--foreground);
+    font: 14px/1.4 "Segoe UI", system-ui, sans-serif;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  /* ---- top bar: 48px bar + 18px gutter = a 66px band, midline 33 ---- */
+  .topbar {
+    height: 48px;
+    padding-top: var(--pane-inset);
+    display: flex; align-items: center; gap: 12px;
+    padding-left: 14px; padding-right: 14px;
+  }
+  .wordmark { font-size: 18px; font-weight: 600; letter-spacing: .2px; }
+  .version {
+    font-size: 11px; color: var(--muted);
+    background: #241f1e; border-radius: 6px; padding: 2px 6px;
+  }
+  .spacer { flex: 1; }
+
+  /* ---- the rail ---- */
+  .rail {
+    display: flex; align-items: center; gap: 3px;
+    height: 46px; padding: 3px;
+    border-radius: 13px;
+    border: 1px solid var(--rail-border);
+    background: rgba(13, 10, 9, .72);
+    box-shadow: 0 6px 20px -10px rgba(0,0,0,.9);
+  }
+  .chip {
+    position: relative;
+    display: flex; align-items: center;
+    height: 40px; padding: 0 10px 0 8px;
+    border-radius: 10px;
+    color: var(--muted);
+    flex-shrink: 0;
+    cursor: default;
+    transition-property: transform, background-color, color, box-shadow;
+    transition-duration: 180ms;
+    transition-timing-function: cubic-bezier(.2,.9,.25,1.15);
+  }
+  .chip:hover:not(.active):not(.dragging) { background: rgba(255,255,255,.06); color: var(--foreground); }
+  .chip.active { background: var(--card); color: var(--foreground); box-shadow: inset 0 0 0 1px rgba(224,120,80,.34); }
+  .chip.dragging {
+    z-index: 2; cursor: grabbing;
+    transition-property: box-shadow, opacity;
+    transition-duration: 120ms;
+    box-shadow: 0 10px 24px -8px rgba(0,0,0,.85), 0 0 0 1px rgba(224,120,80,.5);
+  }
+  .chip.dragging.over-pane { opacity: .45; }
+  .mark {
+    width: 20px; height: 20px; border-radius: 5px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; flex-shrink: 0;
+  }
+  .mark.working { box-shadow: 0 0 0 2px var(--warning); animation: pulse 1.6s ease-in-out infinite; }
+  .mark.review  { box-shadow: 0 0 0 2px var(--success); }
+  @keyframes pulse { 50% { opacity: .5; } }
+  .label {
+    font-size: 15px; white-space: nowrap; overflow: hidden;
+    max-width: 0; margin-left: 0;
+    transition: max-width 150ms ease, margin-left 150ms ease;
+  }
+  .chip.active .label, .rail:hover .label { max-width: 160px; margin-left: 8px; }
+  .close {
+    margin-left: 4px; width: 17px; height: 17px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px; color: rgba(168,165,163,.55); font-size: 13px;
+  }
+  .close:hover { background: rgba(255,255,255,.1); color: var(--foreground); }
+  .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; flex-shrink: 0; }
+  .plus {
+    width: 40px; height: 40px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(168,165,163,.6); font-size: 20px;
+  }
+  .plus:hover { background: rgba(255,255,255,.06); color: var(--foreground); }
+
+  /* ---- panes below, so the merge gesture has somewhere to land ---- */
+  .stage { display: flex; gap: var(--pane-inset); padding: 0 var(--pane-inset) var(--pane-inset); height: calc(100% - 66px); }
+  .pane {
+    flex: 1; border-radius: var(--pane-radius);
+    background: var(--background);
+    border: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+  }
+  .pane-head { padding: 8px 12px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }
+  .pane-body { flex: 1; padding: 14px; font: 13px/1.6 ui-monospace, Consolas, monospace; color: #8f8b88; }
+
+  #overlay {
+    position: fixed; pointer-events: none; z-index: 60;
+    border-radius: 10px;
+    background: rgba(224,120,80,.20);
+    box-shadow: inset 0 0 0 2px var(--highlight);
+    display: none; align-items: center; justify-content: center;
+    transition: left 120ms, top 120ms, width 120ms, height 120ms;
+  }
+  #overlay span {
+    background: rgba(21,17,16,.9); color: var(--foreground);
+    padding: 4px 8px; border-radius: 6px; font-size: 12px;
+    box-shadow: 0 8px 20px -8px #000;
+  }
+  .hint { position: fixed; left: 18px; bottom: 12px; font-size: 12px; color: #6e6a67; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span class="wordmark">GatedSpace</span><span class="version">v1.18.4</span>
+  <span class="spacer"></span>
+  <div class="rail" id="rail"></div>
+</div>
+
+<div class="stage">
+  <div class="pane" data-pane-id="p1">
+    <div class="pane-head">Claude — SecondBrain</div>
+    <div class="pane-body">Pull a tab down onto a pane and it lights up.<br />Release to merge the groups.</div>
+  </div>
+  <div class="pane" data-pane-id="p2">
+    <div class="pane-head">Codex — filtrsoft</div>
+    <div class="pane-body">Press Escape mid-drag to cancel.</div>
+  </div>
+</div>
+
+<div id="overlay"><span>Merge group here</span></div>
+<div class="hint">Drag sideways to reorder · drag down onto a pane to merge · Esc cancels</div>
+
+<script>
+/* ---- the same pure helpers as tabRailDrag.ts ---- */
+const PANE_DROP_THRESHOLD_PX = 28;
+const computeTargetIndex = (x, boxes, from) => {
+  let t = from;
+  for (let i = 0; i < boxes.length; i++) {
+    if (i === from) continue;
+    const mid = boxes[i].left + boxes[i].width / 2;
+    if (i < from && x < mid) t = Math.min(t, i);
+    if (i > from && x > mid) t = Math.max(t, i);
+  }
+  return t;
+};
+const computeSlideOffset = (i, from, to, w) => {
+  if (i === from) return 0;
+  if (from < to && i > from && i <= to) return -w;
+  if (from > to && i >= to && i < from) return w;
+  return 0;
+};
+const clampDragOffset = (raw, d, rail) =>
+  Math.min(Math.max(raw, rail.left - d.left), rail.left + rail.width - (d.left + d.width));
+const computeTilt = (v) => Math.min(2.5, Math.max(-2.5, v * 0.09));
+const isPastRail = (y, bottom) => y > bottom + PANE_DROP_THRESHOLD_PX;
+const computeSplitPosition = (x, y, r) => {
+  const dx = x - (r.left + r.width / 2), dy = y - (r.top + r.height / 2);
+  return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? "right" : "left") : (dy > 0 ? "bottom" : "top");
+};
+const overlayRect = (r, p) => ({
+  left:   { left: r.left, top: r.top, width: r.width / 2, height: r.height },
+  right:  { left: r.left + r.width / 2, top: r.top, width: r.width / 2, height: r.height },
+  top:    { left: r.left, top: r.top, width: r.width, height: r.height / 2 },
+  bottom: { left: r.left, top: r.top + r.height / 2, width: r.width, height: r.height / 2 },
+}[p]);
+
+/* ---- state ---- */
+let tabs = [
+  { id: "a", name: "Backend",   glyph: "✳", status: "working" },
+  { id: "b", name: "Filtrsoft", glyph: "◈", status: null },
+  { id: "c", name: "Sortie",    glyph: "✳", status: "review" },
+  { id: "d", name: "GatedKey",  glyph: "◇", status: null },
+  { id: "e", name: "Site",      glyph: "✳", status: null },
+];
+let activeId = "a";
+const rail = document.getElementById("rail");
+const overlay = document.getElementById("overlay");
+
+function render() {
+  rail.innerHTML = "";
+  for (const tab of tabs) {
+    const chip = document.createElement("div");
+    chip.className = "chip" + (tab.id === activeId ? " active" : "");
+    chip.dataset.railTab = tab.id;
+    chip.innerHTML =
+      `<span class="mark ${tab.status ?? ""}">${tab.glyph}</span>` +
+      `<span class="label">${tab.name}</span>` +
+      (tab.id === activeId ? `<span class="close" data-rail-nodrag>✕</span>` : "");
+    chip.addEventListener("pointerdown", (e) => start(e, tab.id));
+    chip.addEventListener("click", () => {
+      if (swallow === tab.id) { swallow = null; return; }
+      activeId = tab.id; render();
+    });
+    rail.appendChild(chip);
+  }
+  const sep = document.createElement("span"); sep.className = "sep"; rail.appendChild(sep);
+  const plus = document.createElement("div"); plus.className = "plus"; plus.textContent = "+";
+  rail.appendChild(plus);
+}
+
+let session = null;
+let swallow = null;
+
+function start(event, tabId) {
+  if (event.button !== 0 || session) return;
+  if (event.target.closest("[data-rail-nodrag]")) return;
+  const chips = [...rail.querySelectorAll("[data-rail-tab]")];
+  const node = event.currentTarget;
+  const fromIndex = chips.indexOf(node);
+  if (fromIndex < 0) return;
+  const railRect = rail.getBoundingClientRect();
+  session = {
+    tabId, fromIndex, node, moved: false, frame: null,
+    startX: event.clientX, startY: event.clientY, lastX: event.clientX,
+    x: event.clientX, y: event.clientY, tilt: 0, tiltTarget: 0,
+    pointerId: event.pointerId,
+    boxes: chips.map((c) => { const r = c.getBoundingClientRect(); return { left: r.left, width: r.width }; }),
+    railBox: { left: railRect.left, width: railRect.width },
+    railBottom: railRect.bottom,
+    toIndex: fromIndex, paneTarget: null,
+  };
+}
+
+function paneAt(x, y, tabId) {
+  const el = document.elementFromPoint(x, y)?.closest("[data-pane-id]");
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  const rect = { left: r.left, top: r.top, width: r.width, height: r.height };
+  return { paneId: el.dataset.paneId, position: computeSplitPosition(x, y, rect), rect };
+}
+
+function tick() {
+  if (!session) return;
+  session.frame = null;
+  session.tiltTarget *= 0.82;
+  session.tilt += (session.tiltTarget - session.tilt) * 0.25;
+  if (Math.abs(session.tilt) < 0.01) session.tilt = 0;
+
+  session.paneTarget = isPastRail(session.y, session.railBottom)
+    ? paneAt(session.x, session.y, session.tabId) : null;
+  session.toIndex = session.paneTarget
+    ? session.fromIndex
+    : computeTargetIndex(session.x, session.boxes, session.fromIndex);
+
+  const dragged = session.boxes[session.fromIndex];
+  const offset = clampDragOffset(session.x - session.startX, dragged, session.railBox);
+  const chips = [...rail.querySelectorAll("[data-rail-tab]")];
+  chips.forEach((chip, i) => {
+    if (i === session.fromIndex) {
+      chip.classList.add("dragging");
+      chip.classList.toggle("over-pane", Boolean(session.paneTarget));
+      const scale = session.paneTarget ? 0.94 : 1.04;
+      const tilt = session.paneTarget ? 0 : session.tilt;
+      chip.style.transform = `translate3d(${offset}px,0,0) rotate(${tilt}deg) scale(${scale})`;
+    } else {
+      const slide = computeSlideOffset(i, session.fromIndex, session.toIndex, dragged.width);
+      chip.style.transform = slide ? `translate3d(${slide}px,0,0)` : "";
+    }
+  });
+
+  if (session.paneTarget) {
+    const b = overlayRect(session.paneTarget.rect, session.paneTarget.position);
+    Object.assign(overlay.style, {
+      display: "flex", left: b.left + "px", top: b.top + "px",
+      width: b.width + "px", height: b.height + "px",
+    });
+  } else overlay.style.display = "none";
+
+  if (session.tilt !== 0) session.frame = requestAnimationFrame(tick);
+}
+const schedule = () => { if (session && session.frame === null) session.frame = requestAnimationFrame(tick); };
+
+function cleanup() {
+  overlay.style.display = "none";
+  for (const chip of rail.querySelectorAll("[data-rail-tab]")) {
+    chip.classList.remove("dragging", "over-pane");
+    chip.style.transform = "";
+  }
+  if (session?.frame != null) cancelAnimationFrame(session.frame);
+  session = null;
+}
+
+addEventListener("pointermove", (e) => {
+  if (!session || e.pointerId !== session.pointerId) return;
+  if (!session.moved &&
+      Math.abs(e.clientX - session.startX) < 5 && Math.abs(e.clientY - session.startY) < 5) return;
+  if (!session.moved) { session.moved = true; try { session.node.setPointerCapture(e.pointerId); } catch {} }
+  session.tiltTarget = computeTilt(e.clientX - session.lastX);
+  session.lastX = e.clientX; session.x = e.clientX; session.y = e.clientY;
+  schedule();
+});
+
+addEventListener("pointerup", (e) => {
+  if (!session || e.pointerId !== session.pointerId) return;
+  if (!session.moved) { cleanup(); return; }
+  swallow = session.tabId;
+  const visualLeft = session.node.getBoundingClientRect().left;
+  const target = isPastRail(e.clientY, session.railBottom) ? paneAt(e.clientX, e.clientY, session.tabId) : null;
+  const from = session.fromIndex;
+  const to = computeTargetIndex(e.clientX, session.boxes, from);
+  const id = session.tabId;
+  cleanup();
+
+  if (target) {
+    tabs = tabs.filter((t) => t.id !== id);
+    if (activeId === id) activeId = tabs[0]?.id;
+    render();
+    return;
+  }
+  if (to !== from) {
+    const [moved] = tabs.splice(from, 1);
+    tabs.splice(to, 0, moved);
+  }
+  render();
+  // FLIP: pin it back to where it was last seen, then let it travel home.
+  const node = rail.querySelector(`[data-rail-tab="${id}"]`);
+  if (!node) return;
+  const delta = visualLeft - node.getBoundingClientRect().left;
+  if (Math.abs(delta) < 0.5) return;
+  node.animate(
+    [{ transform: `translate3d(${delta}px,0,0)` }, { transform: "translate3d(0,0,0)" }],
+    { duration: 260, easing: "cubic-bezier(.2,.9,.25,1.05)" },
+  );
+});
+
+addEventListener("pointercancel", cleanup);
+addEventListener("lostpointercapture", () => { if (session && !session.moved) cleanup(); });
+addEventListener("keydown", (e) => { if (e.key === "Escape" && session) { swallow = session.tabId; cleanup(); } });
+
+render();
+</script>
+</body>
+</html>

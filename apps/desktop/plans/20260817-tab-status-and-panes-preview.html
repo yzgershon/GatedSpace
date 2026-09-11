@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — tab status dots, pane counts, multi-pane names</title>
+<style>
+  /*
+   * Colours copied verbatim from apps/desktop/src/renderer/globals.css (dark).
+   * Sizes copied from the real components:
+   *   TabBar.tsx      h-10 (40px), border-b border-border, bg-background
+   *   utils.ts        TAB_WIDTH = 160  <- fixed, every tab is exactly this wide
+   *   TabItem.tsx     pl-3 pr-1, gap-1.5, text-xs, accessory box w-7 (28px)
+   *   StatusIndicator size-2 (8px) dot, animate-ping when pulsing
+   */
+  :root {
+    --background: #151110;
+    --foreground: #eae8e6;
+    --card: #201e1c;
+    --secondary: #2a2827;
+    --muted-foreground: #a8a5a3;
+    --tertiary: #1a1716;
+    --border: #2a2827;
+    --highlight: #e07850;
+    /* Tailwind palette, as used by StatusIndicator */
+    --amber-400: #fbbf24;
+    --amber-500: #f59e0b;
+    --green-500: #22c55e;
+    --red-400: #f87171;
+    --red-500: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 40px 44px 96px;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  h1 { font-size: 22px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.01em; }
+  h2 {
+    font-size: 15px; font-weight: 600; margin: 52px 0 4px;
+    padding-top: 22px; border-top: 1px solid var(--border);
+  }
+  h3 { font-size: 13px; font-weight: 600; margin: 26px 0 8px; color: var(--foreground); }
+  p  { color: var(--muted-foreground); max-width: 78ch; margin: 6px 0 14px; }
+  .lede { font-size: 14px; margin-bottom: 30px; }
+  code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12px; background: var(--tertiary);
+    padding: 1px 5px; border-radius: 4px; color: #d6d3d1;
+  }
+  .note {
+    border-left: 2px solid var(--highlight);
+    padding: 8px 0 8px 14px; margin: 16px 0;
+    color: var(--muted-foreground); max-width: 78ch;
+  }
+  .note strong { color: var(--foreground); font-weight: 600; }
+  .verdict {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    letter-spacing: .04em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 4px; margin-left: 8px; vertical-align: 2px;
+  }
+  .rec  { background: rgba(34,197,94,.14);  color: #6ee7a8; }
+  .warn { background: rgba(224,120,80,.16); color: var(--highlight); }
+  .no   { background: rgba(239,68,68,.14);  color: #fca5a5; }
+
+  /* ---------- the real tab bar ---------- */
+  .bar {
+    display: flex; height: 40px; align-items: stretch;
+    border-bottom: 1px solid var(--border);
+    background: var(--background);
+    width: 100%; max-width: 720px; overflow: visible;
+  }
+  .tab {
+    position: relative; width: 160px; flex-shrink: 0;
+    display: flex; align-items: center; height: 100%;
+    border-right: 1px solid var(--border);
+    font-size: 12px; cursor: default; user-select: none;
+  }
+  .tab.active   { background: rgba(42,40,39,.3); color: var(--foreground); }
+  .tab.inactive { color: rgba(168,165,163,.7); }
+  .tab.inactive:hover { background: rgba(26,23,22,.2); color: var(--muted-foreground); }
+  .tab-main {
+    display: flex; align-items: center; gap: 6px;
+    height: 100%; min-width: 0; flex: 1;
+    padding-left: 12px; padding-right: 4px; text-align: left;
+  }
+  .tab-title {
+    flex: 1; min-width: 0; white-space: nowrap; overflow: hidden;
+    /* OverflowFadeText: fades rather than ellipsizing */
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent 100%);
+  }
+  .accessory {
+    width: 28px; flex-shrink: 0; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .pane-icon { width: 14px; height: 14px; flex-shrink: 0; position: relative; }
+  .pane-icon svg { display: block; }
+
+  /* ---------- status dots (StatusIndicator) ---------- */
+  .dot { position: relative; display: flex; width: 8px; height: 8px; flex-shrink: 0; }
+  .dot i {
+    position: relative; display: inline-flex;
+    width: 8px; height: 8px; border-radius: 9999px;
+  }
+  .dot b {
+    position: absolute; display: inline-flex;
+    width: 100%; height: 100%; border-radius: 9999px;
+    opacity: .75; animation: ping 1s cubic-bezier(0,0,.2,1) infinite;
+  }
+  @keyframes ping { 75%, 100% { transform: scale(2); opacity: 0; } }
+  .working i { background: var(--amber-500); } .working b { background: var(--amber-400); }
+  .review  i { background: var(--green-500); }
+  .error   i { background: var(--red-500);   }
+  .perm    i { background: var(--red-500);   } .perm b { background: var(--red-400); }
+
+  /* ---------- count badge treatments ---------- */
+  .cnt-chip {
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 15px; height: 15px; padding: 0 4px;
+    border-radius: 4px; background: rgba(168,165,163,.14);
+    font-size: 10px; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+  }
+  .active .cnt-chip { background: rgba(234,232,230,.13); color: var(--foreground); }
+  .cnt-glyph {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px;
+    font-size: 10px; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+  }
+  .active .cnt-glyph { color: var(--foreground); }
+  .cnt-bare {
+    flex-shrink: 0; font-size: 10px; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums; color: rgba(168,165,163,.75);
+  }
+  .cnt-corner {
+    position: absolute; right: -5px; bottom: -4px;
+    min-width: 11px; height: 11px; padding: 0 2px;
+    border-radius: 3px; background: var(--secondary);
+    border: 1px solid var(--background);
+    font-size: 8px; font-weight: 700; line-height: 9px; text-align: center;
+    font-variant-numeric: tabular-nums; color: var(--foreground);
+  }
+  .cnt-outline {
+    flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+    min-width: 14px; height: 14px; padding: 0 3px;
+    border: 1px solid rgba(168,165,163,.32); border-radius: 4px;
+    font-size: 9px; font-weight: 600; line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--muted-foreground);
+  }
+
+  /* ---------- hover dropdown ---------- */
+  .has-pop { position: relative; }
+  .pop {
+    position: absolute; top: 38px; left: 6px; z-index: 40;
+    min-width: 216px; padding: 4px;
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.55);
+    opacity: 0; visibility: hidden; transform: translateY(-3px);
+    transition: opacity .12s ease, transform .12s ease, visibility .12s;
+  }
+  .has-pop:hover .pop { opacity: 1; visibility: visible; transform: translateY(0); }
+  .pop-head {
+    font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+    color: rgba(168,165,163,.65); padding: 5px 8px 4px;
+  }
+  .pop-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 5px; font-size: 12px;
+    color: var(--muted-foreground); cursor: pointer;
+  }
+  .pop-row:hover { background: rgba(168,165,163,.09); color: var(--foreground); }
+  .pop-row.on { background: rgba(224,120,80,.13); color: var(--foreground); }
+  .pop-row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .kbd {
+    font-family: ui-monospace, Consolas, monospace; font-size: 10px;
+    color: rgba(168,165,163,.6); border: 1px solid var(--border);
+    border-radius: 3px; padding: 0 4px; line-height: 15px;
+  }
+
+  .caption { font-size: 12px; color: rgba(168,165,163,.75); margin: 9px 0 0; max-width: 78ch; }
+  .row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; margin-top: 10px; }
+  .stack { margin: 14px 0 0; }
+  .ruler { font-family: ui-monospace, Consolas, monospace; font-size: 11px; color: rgba(168,165,163,.6); margin-top: 6px; }
+  table { border-collapse: collapse; margin: 14px 0 0; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 16px 7px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--muted-foreground); font-weight: 600; font-size: 12px; }
+  td.w { color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+
+<h1>Tab status dots, pane counts, and multi-pane names</h1>
+<p class="lede">
+  Preview only — nothing here is styled by hand. Every colour is copied from
+  <code>globals.css</code> and every size from the real components, so what you see is what
+  the app would render. Part 1 is already built. Parts 2 and 3 are the ones I need you to pick from.
+</p>
+
+<h2>Part 1 — the status dot, now wired to session panes <span class="verdict rec">built</span></h2>
+<p>
+  It was never silenced. <code>getV2NotificationSourcesForPane</code> only knew the pane kinds
+  <code>terminal</code> and <code>chat</code>; a live Claude Code pane is kind
+  <code>session</code>, so it produced no sources at all and there was simply never a status to
+  draw. Terminals were the only kind wired up, which is exactly what you saw.
+</p>
+
+<div class="bar">
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#a8a5a3" stroke-width="2" stroke-linecap="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg></span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"></div>
+  </div>
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#e07850"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg></span>
+      <span class="tab-title">Fix the tab dots</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#a8a5a3"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg></span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#a8a5a3"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg></span>
+      <span class="tab-title">Iotron Medical</span>
+    </div>
+    <div class="accessory"><span class="dot error"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  Left to right: no dot (nothing running), <strong style="color:var(--amber-500)">amber pulsing</strong> = thinking,
+  <strong style="color:var(--green-500)">green</strong> = done, go read it,
+  <strong style="color:var(--red-500)">red</strong> = the turn errored. Green and red both clear the
+  moment you open the tab. Amber isn't cleared by looking — it goes out on its own when the turn ends.
+</p>
+
+<div class="note">
+  <strong>One thing to know about red.</strong> There was already a red dot for "agent is waiting on a
+  permission prompt", and it pulses. The error red is the same colour but static, so the two can't be
+  confused: pulsing red is still waiting on you, steady red is already over. You run
+  <code>bypassPermissions</code>, so in practice you'll only ever see the steady one.
+</div>
+
+<h2>Part 2 — how to show the pane count</h2>
+<p>
+  All five always show a number, including <code>1</code>, so every tab reads the same way.
+  Shown on a two-pane tab and a one-pane tab side by side, since the one-pane case is where a badge
+  is most at risk of looking like noise.
+</p>
+
+<h3>A — Filled chip, before the title <span class="verdict rec">my pick</span></h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="cnt-chip">2</span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-chip">1</span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  Replaces the pane icon rather than crowding in beside it — at 160px there isn't room for both, and
+  the icon was telling you the kind of the active pane, which the dropdown says better. Reads as a
+  count, not a status, because it's grey and square while every status in the app is a coloured circle.
+</p>
+
+<h3>B — Layered-squares glyph + number</h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="cnt-glyph">
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M9 21h10a2 2 0 0 0 2-2V9"/></svg>2
+      </span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-glyph">
+        <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"><rect x="3" y="3" width="12" height="12" rx="2"/><path d="M9 21h10a2 2 0 0 0 2-2V9"/></svg>1
+      </span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  Says "panes" out loud instead of leaving a bare number to be interpreted. Costs about 13px more of
+  title room than A, which at this width is roughly a character and a half.
+</p>
+
+<h3>C — Outlined chip</h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="cnt-outline">2</span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-outline">1</span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">Lighter than A. On the inactive tabs the 1px outline gets thin enough to shimmer a bit.</p>
+
+<h3>D — Corner badge on the pane icon <span class="verdict warn">keeps the icon</span></h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="pane-icon">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#e07850"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg>
+        <span class="cnt-corner">2</span>
+      </span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#a8a5a3"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg>
+        <span class="cnt-corner">1</span>
+      </span>
+      <span class="tab-title">GatedVoice</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  The only option that keeps the agent icon, and it costs no title width at all. The number is 8px
+  though, which is below what the rest of the app asks you to read.
+</p>
+
+<h3>E — Bare number, right of the title</h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#e07850"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg></span>
+      <span class="tab-title">GatedKey</span>
+      <span class="cnt-bare">2</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon"><svg viewBox="0 0 24 24" width="14" height="14" fill="#a8a5a3"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg></span>
+      <span class="tab-title">Sortie</span>
+      <span class="cnt-bare">1</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  Sits between the fading title and the status dot, which is the busiest part of the tab. It also
+  lands right where the close button appears on hover, so it flickers as you move across the bar.
+  <span class="verdict no">not recommended</span>
+</p>
+
+<h2>Part 3 — naming a tab that holds several panes</h2>
+
+<div class="note">
+  <strong>Read this before picking: a tab is exactly 160px, always.</strong>
+  <code>TAB_WIDTH = 160</code> in <code>TabBar/utils/utils.ts</code>. After the 12px left pad, the
+  count badge, the gaps and the 28px box the dot and close button share, the title gets about
+  <strong>96px</strong> — roughly 13 characters at 12px before it starts fading. "GatedKey" alone is
+  8. That single number decides most of what follows.
+</div>
+
+<h3>N1 — Slash-joined pane names <span class="verdict no">doesn't fit</span></h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="cnt-chip">2</span>
+      <span class="tab-title">GatedKey / Iotron Medical</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-chip">3</span>
+      <span class="tab-title">superset / SecondBrain / sortie</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  This is the one you floated first, and the width is what kills it: you get "GatedKey / Io" and the
+  second name — the whole reason for joining them — is the part that fades out. Worse on three panes,
+  where you can't even finish the first name. It would work at double the tab width; it does not work
+  at 160px.
+</p>
+
+<h3>N2 — Active pane's name + count <span class="verdict warn">simplest</span></h3>
+<div class="bar">
+  <div class="tab active">
+    <div class="tab-main">
+      <span class="cnt-chip">2</span>
+      <span class="tab-title">Iotron Medical</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-chip">1</span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  What the app already does, plus the badge — the title follows whichever pane you last focused. Zero
+  new UI. The catch is that the tab renames itself as you click between panes, which is the thing you
+  noticed: the tab said "GatedKey" while Iotron Medical was sitting right there in it.
+</p>
+
+<h3>N3 — Count badge with a hover dropdown <span class="verdict rec">my pick — hover the tab</span></h3>
+<div class="bar">
+  <div class="tab active has-pop">
+    <div class="tab-main">
+      <span class="cnt-chip">2</span>
+      <span class="tab-title">GatedKey</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+    <div class="pop">
+      <div class="pop-head">2 panes in this tab</div>
+      <div class="pop-row on">
+        <span class="dot working"><b></b><i></i></span>
+        <span class="nm">GatedKey</span><span class="kbd">1</span>
+      </div>
+      <div class="pop-row">
+        <span class="dot review"><i></i></span>
+        <span class="nm">Iotron Medical</span><span class="kbd">2</span>
+      </div>
+    </div>
+  </div>
+  <div class="tab inactive has-pop">
+    <div class="tab-main">
+      <span class="cnt-chip">3</span>
+      <span class="tab-title">superset</span>
+    </div>
+    <div class="accessory"><span class="dot error"><i></i></span></div>
+    <div class="pop">
+      <div class="pop-head">3 panes in this tab</div>
+      <div class="pop-row">
+        <span class="dot review"><i></i></span>
+        <span class="nm">Fix the blank terminal</span><span class="kbd">1</span>
+      </div>
+      <div class="pop-row">
+        <span class="dot error"><i></i></span>
+        <span class="nm">SecondBrain</span><span class="kbd">2</span>
+      </div>
+      <div class="pop-row">
+        <span class="dot"><i style="background:rgba(168,165,163,.35)"></i></span>
+        <span class="nm">powershell</span><span class="kbd">3</span>
+      </div>
+    </div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-chip">1</span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"></div>
+  </div>
+</div>
+<p class="caption">
+  Your second idea, and it's the one that beats the width problem instead of fighting it. The tab
+  keeps a short name; hovering lists every pane with <em>its own</em> status dot, so you can see which
+  one of the two is done without opening the tab. Clicking a row focuses that pane. The single-pane
+  tab on the right shows no dropdown, since there's nothing to expand.
+</p>
+
+<h3>N4 — N3, plus your own name for the tab <span class="verdict rec">composes with N3</span></h3>
+<div class="bar">
+  <div class="tab active has-pop">
+    <div class="tab-main">
+      <span class="cnt-chip">2</span>
+      <span class="tab-title">Main work</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+    <div class="pop">
+      <div class="pop-head">Main work · 2 panes</div>
+      <div class="pop-row on">
+        <span class="dot review"><i></i></span>
+        <span class="nm">GatedKey</span><span class="kbd">1</span>
+      </div>
+      <div class="pop-row">
+        <span class="dot"><i style="background:rgba(168,165,163,.35)"></i></span>
+        <span class="nm">Iotron Medical</span><span class="kbd">2</span>
+      </div>
+    </div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="cnt-chip">1</span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+</div>
+<p class="caption">
+  Exactly the "Main work" idea from your message. Nothing new is needed to name it — double-clicking a
+  tab already renames it and that already sticks. So N4 isn't really a separate option: it's what N3
+  looks like once you've named a tab yourself.
+</p>
+
+<h2>Side by side</h2>
+<table>
+  <tr><th>Option</th><th>Tells you what's in the tab</th><th>Survives 160px</th><th>New UI to build</th></tr>
+  <tr><td>N1 slash-joined</td><td class="w">Only the first name</td><td class="w">No</td><td class="w">Small</td></tr>
+  <tr><td>N2 active pane</td><td class="w">One pane, and it changes</td><td class="w">Yes</td><td class="w">None</td></tr>
+  <tr><td>N3 hover dropdown</td><td class="w">All of them, with status each</td><td class="w">Yes</td><td class="w">A popover</td></tr>
+  <tr><td>N4 your name + dropdown</td><td class="w">All of them, under a name you chose</td><td class="w">Yes</td><td class="w">Same as N3</td></tr>
+</table>
+
+<div class="note">
+  <strong>What I'd build:</strong> count badge <strong>A</strong> plus <strong>N3</strong>, with N4
+  falling out of it for free. That gives you a number on every tab, a stable short name instead of one
+  that changes under you, and a per-pane status list on hover — which is the thing the single tab-level
+  dot can't tell you: <em>which</em> of the two panes is the one that finished.
+</div>
+
+<h2>As shipped — D + N3/N4, icon kept</h2>
+<p>
+  He picked <strong>D</strong> ("keep the icon, and always have the icon") and
+  <strong>N4 — N3</strong>. Built on 2026-08-17. What changed from the options above:
+</p>
+<ul style="color:var(--muted-foreground); max-width:78ch">
+  <li>
+    <strong>Tabs had no icon at all before this.</strong> <code>renderTabIcon</code> returned a
+    favicon for single-browser tabs and <code>null</code> for everything else — the registry's
+    <code>getIcon</code> only ever drew the pane header. So "always have the icon" needed a new
+    <code>getTabIcon(pane)</code> on the registry, implemented for all eight pane kinds.
+  </li>
+  <li>
+    It takes a <em>pane</em>, not a <code>RendererContext</code>, because a tab has no rendered pane
+    behind it — no actions, no store binding, no <code>isActive</code>. Every <code>getIcon</code>
+    happens to read only <code>context.pane</code> today, but faking the rest of a context to reuse
+    it would break the first definition that reached for <code>actions</code>, and only in the tab bar.
+  </li>
+  <li>
+    The hover card is <strong>portaled</strong>. The tab strip is
+    <code>overflow-x-auto overflow-y-hidden</code>, so a plain absolutely-positioned popover — which
+    is what the preview above uses — would have been clipped to the 40px bar and shown nothing.
+  </li>
+  <li>
+    Clicking a row calls <code>setActiveTab</code> <em>and</em> <code>setActivePane</code>. Being
+    portaled means a click in the card never reaches the tab's own handler, so without the first call
+    you would focus a pane inside a tab you are not looking at and nothing on screen would move.
+  </li>
+  <li>
+    Rows are listed in <strong>layout order</strong>, not <code>Object.keys(tab.panes)</code> order.
+    The record keeps insertion order, which stops matching the screen as soon as a pane is moved — and
+    a numbered list that disagrees with what you are looking at is worse than one with no numbers.
+  </li>
+  <li>
+    An unknown pane kind still renders a neutral outlined square, so the badge always has something to
+    sit on rather than floating on its own.
+  </li>
+</ul>
+
+<div class="bar">
+  <div class="tab active has-pop">
+    <div class="tab-main">
+      <span class="pane-icon">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#e07850"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg>
+        <span class="cnt-corner">2</span>
+      </span>
+      <span class="tab-title">Main work</span>
+    </div>
+    <div class="accessory"><span class="dot review"><i></i></span></div>
+    <div class="pop">
+      <div class="pop-head">Main work · 2 panes</div>
+      <div class="pop-row on">
+        <span class="dot review"><i></i></span>
+        <span class="nm">GatedKey</span><span class="kbd">1</span>
+      </div>
+      <div class="pop-row">
+        <span class="dot"><i style="background:rgba(168,165,163,.35)"></i></span>
+        <span class="nm">Iotron Medical</span><span class="kbd">2</span>
+      </div>
+    </div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#a8a5a3" stroke-width="2" stroke-linecap="round"><path d="m4 17 6-6-6-6"/><path d="M12 19h8"/></svg>
+        <span class="cnt-corner">1</span>
+      </span>
+      <span class="tab-title">powershell</span>
+    </div>
+    <div class="accessory"><span class="dot working"><b></b><i></i></span></div>
+  </div>
+  <div class="tab inactive">
+    <div class="tab-main">
+      <span class="pane-icon">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="#a8a5a3"><path d="M12 2 3 7v10l9 5 9-5V7z" opacity=".9"/></svg>
+        <span class="cnt-corner">1</span>
+      </span>
+      <span class="tab-title">Sortie</span>
+    </div>
+    <div class="accessory"></div>
+  </div>
+</div>
+<p class="caption">
+  Hover the first tab. Not a screenshot of the app — this is still the HTML mock, redrawn to match
+  what was built. The real thing has not been seen running; it needs an install.
+</p>
+
+</body>
+</html>

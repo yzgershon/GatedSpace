@@ -16,6 +16,11 @@
  * identity that only changes when something actually changed.
  */
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import {
+	clearSessionActivity,
+	publishSessionActivity,
+} from "renderer/stores/session-activity";
+import { useV2NotificationStore } from "renderer/stores/v2-notifications";
 import type {
 	ClaudeStreamEvent,
 	UserImagePayload,
@@ -23,6 +28,7 @@ import type {
 import {
 	applyEvent,
 	emptyTimeline,
+	lastFinishedTurnId,
 	type SessionTimeline,
 	settled,
 } from "shared/claude-session/timeline";
@@ -32,6 +38,12 @@ import {
 	SESSION_MODES,
 	type SessionMode,
 } from "./SessionComposer";
+import {
+	forgetPinnedAccount,
+	getPinnedAccount,
+	type PinnedAccount,
+	setPinnedAccount,
+} from "./session-account";
 import type { SessionRestoreState } from "./session-restore";
 
 export interface SessionSnapshot {
@@ -40,6 +52,18 @@ export interface SessionSnapshot {
 	effort: EffortLevel;
 	/** Progress of the stored-transcript load. See SessionRestoreState. */
 	restore: SessionRestoreState;
+	/**
+	 * The config dir the RUNNING process was actually spawned with.
+	 *
+	 * Reported back by main, which resolves it, rather than guessed here. The
+	 * header chip used to fall back to the current global default whenever a
+	 * pane had no `/swap` pin — true at the instant of spawn and false forever
+	 * after, so changing the default from the profile menu renamed the chip on a
+	 * pane whose process had not moved. This is the fact that replaces that
+	 * guess; null means nothing has spawned yet, and the chip says nothing
+	 * rather than inventing an answer.
+	 */
+	accountConfigDir: string | null;
 }
 
 export interface SessionStartOptions {
@@ -92,6 +116,7 @@ const EMPTY_SNAPSHOT: SessionSnapshot = {
 	mode: DEFAULT_MODE,
 	effort: DEFAULT_EFFORT,
 	restore: null,
+	accountConfigDir: null,
 };
 
 const entries = new Map<string, SessionEntry>();
@@ -121,6 +146,14 @@ function update(
 	const snapshot = next(entry.snapshot);
 	if (snapshot === entry.snapshot) return;
 	entry.snapshot = snapshot;
+	// Mirror the pane's status out to whoever draws the dots. Every snapshot
+	// change funnels through here, so this one call covers streaming, results,
+	// fatal notices and restarts alike; `publishSessionActivity` drops the ones
+	// that changed nothing, so a token-by-token stream doesn't repaint the tabs.
+	publishSessionActivity(key, {
+		status: snapshot.timeline.status,
+		turnKey: lastFinishedTurnId(snapshot.timeline),
+	});
 	for (const listener of entry.listeners) listener();
 }
 
@@ -140,7 +173,30 @@ function setRestore(key: string, restore: SessionRestoreState): void {
  */
 export function ensureSession(key: string, opts: SessionStartOptions): void {
 	const entry = getOrCreateEntry(key);
-	entry.options = opts;
+	const hadCwd = entry.options?.cwd;
+	/*
+	 * A `/swap` pin outranks the caller's account, and it has to be re-applied
+	 * HERE rather than only at swap time.
+	 *
+	 * `ensureSession` runs on every mount and assigns `options` wholesale, so a
+	 * pin written into `options` alone would be overwritten the next time the
+	 * pane remounted — a tab switch would quietly walk the session back onto the
+	 * global account while the header still named the swapped one. Re-reading
+	 * the pin on every call is what makes the swap stick.
+	 */
+	const pinned = getPinnedAccount(key);
+	entry.options = pinned ? { ...opts, configDir: pinned.configDir } : opts;
+	/*
+	 * The cwd is readable the moment it is known, before any event arrives.
+	 *
+	 * `options` is not part of the snapshot, so assigning it notifies nobody.
+	 * That is fine for everything else here, which is only read at spawn time —
+	 * but the header's folder chip subscribes to this store and would otherwise
+	 * sit blank until some unrelated update happened to notify it.
+	 */
+	if (opts.cwd !== hadCwd) {
+		for (const listener of entry.listeners) listener();
+	}
 	if (entry.subscription || entry.starting) return;
 	entry.starting = true;
 
@@ -195,6 +251,35 @@ export function ensureSession(key: string, opts: SessionStartOptions): void {
 	attach(key, opts);
 }
 
+/**
+ * Record which account the process actually came up on.
+ *
+ * Main resolves it — `configDir` is optional at every call site, and when it is
+ * omitted the account is whatever the global setting resolved to AT THAT
+ * INSTANT. Nothing in the renderer can reconstruct that afterwards, which is
+ * exactly why the header chip used to answer with the current default and
+ * drift. Now the spawn hands the answer back and the pane holds onto it.
+ *
+ * Failures are swallowed: a rejected spawn already surfaces as a session error
+ * in the timeline, and an unhandled rejection here would be a second, uglier
+ * report of the same thing.
+ */
+function recordSpawnedAccount(
+	key: string,
+	call: Promise<{ configDir?: string }>,
+): void {
+	void call
+		.then((result) => {
+			if (!result?.configDir) return;
+			update(key, (snapshot) =>
+				snapshot.accountConfigDir === result.configDir
+					? snapshot
+					: { ...snapshot, accountConfigDir: result.configDir ?? null },
+			);
+		})
+		.catch(() => {});
+}
+
 /** Subscribe to the live stream, then spawn. Never call before history loads. */
 function attach(key: string, opts: SessionStartOptions): void {
 	const entry = getOrCreateEntry(key);
@@ -228,18 +313,24 @@ function attach(key: string, opts: SessionStartOptions): void {
 		if (entry.snapshot.effort !== CLI_DEFAULT_EFFORT) {
 			entry.pendingEffort = entry.snapshot.effort;
 		}
-		void electronTrpcClient.claudeSession.start.mutate({
+		recordSpawnedAccount(
 			key,
-			cwd: opts.cwd,
-			model: opts.model,
-			configDir: opts.configDir,
-			resumeSessionId: opts.resumeSessionId,
-			forkSession: opts.forkSession,
-			permissionMode: entry.snapshot.mode,
-			binary: opts.binary,
-			extraArgs: opts.extraArgs,
-			env: opts.env,
-		});
+			electronTrpcClient.claudeSession.start.mutate({
+				key,
+				cwd: opts.cwd,
+				model: opts.model,
+				// `entry.options` carries the `/swap` pin; `opts` is what the pane
+				// asked for. Spawning from the former is what binds a restored pane
+				// to the account it was swapped onto.
+				configDir: entry.options?.configDir ?? opts.configDir,
+				resumeSessionId: opts.resumeSessionId,
+				forkSession: opts.forkSession,
+				permissionMode: entry.snapshot.mode,
+				binary: opts.binary,
+				extraArgs: opts.extraArgs,
+				env: opts.env,
+			}),
+		);
 	}
 }
 
@@ -256,6 +347,21 @@ export function subscribeSession(
 
 export function getSessionSnapshot(key: string): SessionSnapshot {
 	return entries.get(key)?.snapshot ?? EMPTY_SNAPSHOT;
+}
+
+/**
+ * Where this session is running.
+ *
+ * The SPAWN option first, the CLI's `system:init` header second — deliberately
+ * that order. The header only exists once a live process has said hello, so a
+ * session that is still starting, or one whose transcript was replayed from
+ * disk without an init, has no header and reported no directory at all. That is
+ * why the pane header showed a name and no folder. The spawn cwd is known
+ * before the process is, and is the same value the CLI reports back.
+ */
+export function getSessionCwd(key: string): string | undefined {
+	const entry = entries.get(key);
+	return entry?.options?.cwd ?? entry?.snapshot.timeline.header?.cwd;
 }
 
 /** Longest tab title worth showing before it stops being readable. */
@@ -277,6 +383,45 @@ export function getSessionTitle(key: string): string | undefined {
 	return line.length > TITLE_MAX_LENGTH
 		? `${line.slice(0, TITLE_MAX_LENGTH - 1).trimEnd()}…`
 		: line;
+}
+
+/**
+ * The LAST thing you asked this pane, one line, clipped.
+ *
+ * `getSessionTitle` deliberately takes the FIRST prompt, because a tab's label
+ * should not change under you mid-session. The sidebar wants the opposite: the
+ * question is "what is this pane doing right now", and the answer is whatever
+ * you asked it most recently.
+ *
+ * A primitive return on purpose — this feeds `useSyncExternalStore`, and an
+ * object rebuilt per call would re-render forever.
+ */
+export function getSessionLastPrompt(key: string): string | undefined {
+	const items = entries.get(key)?.snapshot.timeline.items;
+	if (!items) return undefined;
+	for (let index = items.length - 1; index >= 0; index--) {
+		const item = items[index];
+		if (item?.kind !== "user") continue;
+		const line = item.text.trim().split("\n")[0]?.trim();
+		if (!line) continue;
+		return line.length > TITLE_MAX_LENGTH
+			? `${line.slice(0, TITLE_MAX_LENGTH - 1).trimEnd()}…`
+			: line;
+	}
+	return undefined;
+}
+
+/**
+ * Whether this session is blocked on a rate limit.
+ *
+ * `rateLimit.status` is a raw string from the CLI, so this matches the one
+ * value that means "stopped" and treats everything else — including values
+ * added later — as fine. Guessing the other way would paint a red dot on a
+ * healthy session every time the CLI grew a new status.
+ */
+export function isSessionRateLimited(key: string): boolean {
+	const status = entries.get(key)?.snapshot.timeline.rateLimit?.status;
+	return typeof status === "string" && status.toLowerCase().includes("reject");
 }
 
 export function sendSessionMessage(
@@ -321,17 +466,117 @@ export function setSessionMode(key: string, mode: SessionMode): void {
 	if (entry.snapshot.effort !== CLI_DEFAULT_EFFORT) {
 		entry.pendingEffort = entry.snapshot.effort;
 	}
-	void electronTrpcClient.claudeSession.restart.mutate({
+	recordSpawnedAccount(
 		key,
-		cwd: options.cwd,
-		model: options.model,
-		configDir: options.configDir,
-		permissionMode: mode,
-		resumeSessionId: sessionId,
-		binary: options.binary,
-		extraArgs: options.extraArgs,
-		env: options.env,
-	});
+		electronTrpcClient.claudeSession.restart.mutate({
+			key,
+			cwd: options.cwd,
+			model: options.model,
+			configDir: options.configDir,
+			permissionMode: mode,
+			resumeSessionId: sessionId,
+			binary: options.binary,
+			extraArgs: options.extraArgs,
+			env: options.env,
+		}),
+	);
+}
+
+/**
+ * Which Claude account this pane is running on, if it has been swapped.
+ *
+ * Null means "whatever the global setting resolves to", which is what a pane
+ * that has never been swapped is doing. The header chip renders the global
+ * account's name in that case, so the answer on screen is always a concrete
+ * account rather than the word "auto".
+ */
+export function getSessionAccount(key: string): PinnedAccount | null {
+	return getPinnedAccount(key);
+}
+
+/**
+ * `/swap` — move THIS conversation onto another Claude account.
+ *
+ * The mechanism is the one a permission-mode change already uses: the account
+ * is bound at spawn via CLAUDE_CONFIG_DIR, so the process has to come back up,
+ * and `--resume <session_id>` carries the conversation across silently rather
+ * than replaying it into the timeline.
+ *
+ * **Resuming across accounts needs the transcript to be reachable from the new
+ * account's config dir.** Claude Code stores transcripts under
+ * `<configDir>/projects`, so this works when those directories are shared (a
+ * junction, which is the standard multi-account setup) and does not when they
+ * are separate — the CLI then starts a fresh session instead of failing, which
+ * would be silent. Hence the marker below states which account it moved to and
+ * the caller is told to expect a new session id if the stores are separate:
+ * a swap that quietly loses your history would be worse than no swap at all.
+ *
+ * Before the session is up there is nothing to restart, so the pin alone is
+ * enough — the pending spawn reads it.
+ */
+export function swapSessionAccount(key: string, account: PinnedAccount): void {
+	const entry = getOrCreateEntry(key);
+	const current = getPinnedAccount(key);
+	if (current?.configDir === account.configDir) return;
+
+	/*
+	 * Already RUNNING on it, just not pinned to it.
+	 *
+	 * A pane with no pin follows the global default, so picking the account it
+	 * happens to be on is a real request — it stops the pane drifting when the
+	 * default next changes — but it is not a reason to kill and respawn the
+	 * process, and a "switched to X" marker under a conversation that did not
+	 * move would be a lie. Pin it and leave it alone.
+	 */
+	if (!current && entry.snapshot.accountConfigDir === account.configDir) {
+		setPinnedAccount(key, account);
+		const opts = entry.options;
+		if (opts) entry.options = { ...opts, configDir: account.configDir };
+		return;
+	}
+
+	setPinnedAccount(key, account);
+	const options = entry.options;
+	if (options) entry.options = { ...options, configDir: account.configDir };
+
+	/*
+	 * Say it if a reply died for this.
+	 *
+	 * The account is bound at spawn, so the process has to come back up, and a
+	 * turn in flight does not survive that. It is NOT a reason to refuse the
+	 * swap — hitting a limit mid-answer is the commonest reason to want one —
+	 * but the partial reply left on screen looks like the model stopping for its
+	 * own reasons unless the marker under it says otherwise.
+	 */
+	const wasStreaming = entry.snapshot.timeline.status === "streaming";
+	addSwitchMarker(
+		key,
+		wasStreaming
+			? `Switched to the ${account.label} account — the reply in progress was cut off`
+			: `Switched to the ${account.label} account`,
+	);
+
+	const sessionId = entry.snapshot.timeline.header?.sessionId;
+	if (!entry.started || !options) return;
+	// A fresh process comes up at the CLI's default effort — re-apply the
+	// slider once the session says hello, the same as a mode change does.
+	if (entry.snapshot.effort !== CLI_DEFAULT_EFFORT) {
+		entry.pendingEffort = entry.snapshot.effort;
+	}
+	recordSpawnedAccount(
+		key,
+		electronTrpcClient.claudeSession.restart.mutate({
+			key,
+			cwd: options.cwd,
+			model: options.model,
+			configDir: account.configDir,
+			permissionMode: entry.snapshot.mode,
+			resumeSessionId: sessionId ?? options.resumeSessionId,
+			binary: options.binary,
+			extraArgs: options.extraArgs,
+			env: options.env,
+		}),
+	);
 }
 
 /**
@@ -412,108 +657,49 @@ export function restartSession(key: string): void {
 	const options = entry?.options;
 	if (!entry || !options) return;
 	const sessionId = entry.snapshot.timeline.header?.sessionId;
-	void electronTrpcClient.claudeSession.restart.mutate({
+	recordSpawnedAccount(
 		key,
-		cwd: options.cwd,
-		model: options.model,
-		configDir: options.configDir,
-		permissionMode: entry.snapshot.mode,
-		resumeSessionId: sessionId ?? options.resumeSessionId,
-		binary: options.binary,
-		extraArgs: options.extraArgs,
-		env: options.env,
-	});
+		electronTrpcClient.claudeSession.restart.mutate({
+			key,
+			cwd: options.cwd,
+			model: options.model,
+			configDir: options.configDir,
+			permissionMode: entry.snapshot.mode,
+			resumeSessionId: sessionId ?? options.resumeSessionId,
+			binary: options.binary,
+			extraArgs: options.extraArgs,
+			env: options.env,
+		}),
+	);
 }
 
-/**
- * What's been typed but not sent, per pane.
- *
- * This lives OUTSIDE React for the same reason the timeline does: the pane
- * unmounts on a tab switch, opening another session, or navigating anywhere
- * else in the app, and component state goes with it. Losing a half-written
- * timeline was a bug worth fixing; losing a half-written PROMPT is worse,
- * because the user typed it and nothing else has a copy.
- *
- * Attachments ride along, since re-picking a screenshot is the same loss.
- */
-export interface ComposerDraft {
-	text: string;
-	images: UserImagePayload[];
-}
+import { deleteSessionDraft } from "./composer-draft";
 
-const EMPTY_DRAFT: ComposerDraft = { text: "", images: [] };
-const drafts = new Map<string, ComposerDraft>();
-const draftListeners = new Map<string, Set<() => void>>();
-
-export function getSessionDraft(key: string): ComposerDraft {
-	return drafts.get(key) ?? EMPTY_DRAFT;
-}
-
-export function setSessionDraft(key: string, draft: ComposerDraft): void {
-	// Don't hold an entry for an empty box — it'd keep a key alive for every
-	// pane that was ever focused and then cleared.
-	if (!draft.text && draft.images.length === 0) drafts.delete(key);
-	else drafts.set(key, draft);
-}
-
-/**
- * Watch a draft for changes made from OUTSIDE the composer.
- *
- * The composer owns its own state and mirrors it out here, so it does not need
- * this for its own edits — only for something else writing into its box, which
- * today means a browser-pane capture being attached to it.
- */
-export function subscribeSessionDraft(
-	key: string,
-	listener: () => void,
-): () => void {
-	const listeners = draftListeners.get(key) ?? new Set();
-	listeners.add(listener);
-	draftListeners.set(key, listeners);
-	return () => {
-		listeners.delete(listener);
-		if (listeners.size === 0) draftListeners.delete(key);
-	};
-}
-
-/**
- * Attach an image to a session's composer from elsewhere in the app.
- *
- * Goes through the draft store rather than a live component, so it works
- * whether or not that pane is currently mounted: capture a page, switch to the
- * session tab, and the screenshot is already waiting. A pane that has never
- * been opened gets a draft it will pick up the first time it is.
- */
-export function attachSessionDraftImage(
-	key: string,
-	image: UserImagePayload,
-): void {
-	const current = getSessionDraft(key);
-	setSessionDraft(key, { ...current, images: [...current.images, image] });
-	for (const listener of draftListeners.get(key) ?? []) listener();
-}
-
-/**
- * Append text to a session's composer from elsewhere in the app.
- *
- * The text sibling of `attachSessionDraftImage`, and appends rather than
- * replaces for the same reason dictation does: whatever is already in the box
- * was typed on purpose. Used by the browser pane's element picker.
- *
- * Separated by a blank line when there is something to separate from, so a
- * picked element does not run into the end of a half-written sentence.
- */
-export function appendSessionDraftText(key: string, text: string): void {
-	if (!text) return;
-	const current = getSessionDraft(key);
-	const separator = current.text.trim() ? "\n\n" : "";
-	setSessionDraft(key, { ...current, text: current.text + separator + text });
-	for (const listener of draftListeners.get(key) ?? []) listener();
-}
+export {
+	appendSessionDraftText,
+	attachSessionDraftImage,
+	type ComposerDraft,
+	deleteSessionDraft,
+	getSessionDraft,
+	setSessionDraft,
+	subscribeSessionDraft,
+} from "./composer-draft";
 
 /** Called when a pane is closed for good: kill the process, drop the state. */
 export function disposeSession(key: string): void {
-	drafts.delete(key);
+	// The pane is gone for good, so its persisted draft goes with it — otherwise
+	// `localStorage` accumulates a key per pane ever opened.
+	deleteSessionDraft(key);
+	// Ahead of the early return below, and unconditional: a pane can carry a
+	// published status and a seen mark without still holding a live entry, and
+	// leaving either behind means a closed pane's dot is counted forever by the
+	// workspace and dock badges.
+	clearSessionActivity(key);
+	// The account pin is stored per pane id and outlives the window on purpose,
+	// so a closed pane has to drop it or `localStorage` keeps a row for every
+	// pane ever swapped — the same reason the draft is deleted above.
+	forgetPinnedAccount(key);
+	useV2NotificationStore.getState().pruneSessionSeen(key);
 	const entry = entries.get(key);
 	if (!entry) return;
 	entry.subscription?.unsubscribe();

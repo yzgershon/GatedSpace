@@ -14,6 +14,12 @@ interface WorkspaceTabLike {
 export interface BackgroundTerminalSessionLike {
 	terminalId: string;
 	createdAt?: number;
+	/**
+	 * Whether the shell has a live child, i.e. is RUNNING something. `undefined`
+	 * from a caller that does not report it counts as busy, so a missing field
+	 * never silently hides a real background job.
+	 */
+	busy?: boolean;
 }
 
 function getTerminalIdFromPaneData(data: unknown): string | null {
@@ -49,12 +55,23 @@ export function parseAttachedTerminalIdsKey(key: string): string[] {
 	}
 }
 
+/**
+ * The shells worth telling someone about: unattached AND actually running
+ * something.
+ *
+ * The busy filter is the reason this list matches the collapsed count.
+ * `countTerminalSessions` on the host has always skipped idle shells, but this
+ * list did not, so opening the dropdown revealed shells that had finished an
+ * hour ago and were sitting at a prompt. Backgrounding a terminal is not the
+ * same as having a background job, and only the second one is news.
+ */
 export function getBackgroundTerminalSessions<
 	T extends BackgroundTerminalSessionLike,
 >(sessions: readonly T[], attachedTerminalIds: Iterable<string>): T[] {
 	const attached = new Set(attachedTerminalIds);
 	return sessions
 		.filter((session) => !attached.has(session.terminalId))
+		.filter((session) => session.busy !== false)
 		.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 }
 

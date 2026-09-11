@@ -1,10 +1,23 @@
 import { readdir, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, normalize, resolve } from "node:path";
+import {
+	basename,
+	dirname,
+	isAbsolute,
+	join,
+	normalize,
+	relative,
+	resolve,
+} from "node:path";
+import {
+	type FsSearchMatch,
+	searchFiles as searchFilesInRoot,
+} from "@superset/workspace-fs/host";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { HostServiceContext } from "../../../types";
 import { protectedProcedure, queryProcedure, router } from "../../index";
+import { readExtraSearchRoots, resolveTypedPath } from "./search-roots";
 
 function expandTildeAbsolute(input: string): string {
 	const trimmed = input.trim();
@@ -39,6 +52,41 @@ function getFilesystemService(ctx: HostServiceContext, workspaceId: string) {
 		}
 		throw error;
 	}
+}
+
+/**
+ * Merge results from several roots, exact typed path first.
+ *
+ * Deduped on absolute path because a file can be reached through both the
+ * workspace root and a configured extra root that contains it. The typed path
+ * is re-inserted at the front even when the fuzzy search already found it —
+ * "I typed this exact path" outranks any score.
+ */
+function withTypedPathFirst(
+	typedPath: string | null,
+	matches: FsSearchMatch[],
+): FsSearchMatch[] {
+	const seen = new Set<string>();
+	const out: FsSearchMatch[] = [];
+
+	if (typedPath) {
+		seen.add(typedPath.toLowerCase());
+		out.push({
+			absolutePath: typedPath,
+			relativePath: typedPath,
+			name: basename(typedPath),
+			kind: "file",
+			score: Number.MAX_SAFE_INTEGER,
+		});
+	}
+
+	for (const match of matches) {
+		const key = match.absolutePath.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(match);
+	}
+	return out;
 }
 
 function getProjectFilesystemService(
@@ -377,14 +425,68 @@ export const filesystemRouter = router({
 			const service = workspaceId
 				? getFilesystemService(ctx, workspaceId)
 				: getProjectFilesystemService(ctx, projectId as string);
-			if (!service) {
-				return { matches: [] };
+
+			/*
+			 * Quick-open is rooted at one workspace, so a file in a sibling project
+			 * is unreachable no matter what you type. Everything below widens that
+			 * WITHOUT touching the security boundary: `readFile` already permits
+			 * absolute paths outside the root by design (writes do not, and escaping
+			 * symlinks are still rejected), so surfacing an out-of-root file here
+			 * only makes reachable what was already readable.
+			 */
+			const extraRoots = await readExtraSearchRoots();
+			let workspaceRoot: string | undefined;
+			try {
+				workspaceRoot = workspaceId
+					? ctx.runtime.filesystem.resolveWorkspaceRoot(workspaceId)
+					: ctx.runtime.filesystem.resolveProjectRoot(projectId as string);
+			} catch {
+				// No root to resolve — extra roots can still answer.
 			}
 
-			return await service.searchFiles({
+			// A query with a separator is a path, not a name. Fuzzy-scoring
+			// `Dev\superset\HANDOFF.md` against file names ranks it nowhere.
+			const typedPath = await resolveTypedPath(
+				trimmedQuery,
+				workspaceRoot,
+				extraRoots,
+			);
+
+			const extraMatches: FsSearchMatch[] = [];
+			for (const root of extraRoots) {
+				// Skip a root that already contains the workspace, or its files
+				// would appear twice under two different relative paths.
+				if (workspaceRoot && !relative(root, workspaceRoot).startsWith("..")) {
+					continue;
+				}
+				try {
+					extraMatches.push(
+						...(await searchFilesInRoot({
+							...serviceInput,
+							rootPath: root,
+							query: trimmedQuery,
+						})),
+					);
+				} catch {
+					// A root that vanished mid-session must not fail the whole search.
+				}
+			}
+
+			if (!service) {
+				return { matches: withTypedPathFirst(typedPath, extraMatches) };
+			}
+
+			const workspaceResult = await service.searchFiles({
 				...serviceInput,
 				query: trimmedQuery,
 			});
+
+			return {
+				matches: withTypedPathFirst(typedPath, [
+					...workspaceResult.matches,
+					...extraMatches,
+				]),
+			};
 		}),
 
 	searchContent: queryProcedure

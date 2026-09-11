@@ -192,6 +192,27 @@ export interface CreateWorkspaceStoreOptions<TData> {
 export function createWorkspaceStore<TData>(
 	options?: CreateWorkspaceStoreOptions<TData>,
 ): StoreApi<WorkspaceStore<TData>> {
+	/*
+	 * Tabs in most-recently-active order, newest first.
+	 *
+	 * Closing a tab used to hand focus to the NEXT tab along, which on the
+	 * right-hand end of the strip means the far right — so opening a session,
+	 * closing it, and being dropped into whatever happens to sit last is the
+	 * common case rather than the edge one. This picks the tab you were in
+	 * before instead.
+	 *
+	 * A closure variable rather than store state on purpose. `WorkspaceState` is
+	 * persisted verbatim and diffed to decide when to write the layout back, so
+	 * putting recency in there would add a migration and make every tab switch
+	 * look like a layout change. Losing it on reload is fine: the list rebuilds
+	 * from the first switch, and until then removal falls back to the positional
+	 * rule it always used.
+	 */
+	let tabRecency: string[] = [];
+	const touchTab = (tabId: string) => {
+		tabRecency = [tabId, ...tabRecency.filter((id) => id !== tabId)];
+	};
+
 	return createStore<WorkspaceStore<TData>>((set, get) => ({
 		version: 1,
 		tabs: options?.initialState?.tabs ?? [],
@@ -203,6 +224,7 @@ export function createWorkspaceStore<TData>(
 				...Pane<TData>[],
 			];
 			const tab = buildTab({ ...args, panes: builtPanes });
+			touchTab(tab.id);
 			set((s) => ({
 				tabs: [...s.tabs, tab],
 				activeTabId: tab.id,
@@ -212,13 +234,27 @@ export function createWorkspaceStore<TData>(
 		removeTab: (tabId) => {
 			set((s) => {
 				const nextTabs = s.tabs.filter((t) => t.id !== tabId);
+				tabRecency = tabRecency.filter((id) => id !== tabId);
+
+				// Only the tab you are LOOKING at moves focus. Closing a background
+				// tab must leave the foreground one alone.
+				if (s.activeTabId !== tabId) {
+					return { tabs: nextTabs, activeTabId: s.activeTabId };
+				}
+
+				const surviving = new Set(nextTabs.map((tab) => tab.id));
+				const mostRecent = tabRecency.find((id) => surviving.has(id));
 				return {
 					tabs: nextTabs,
-					activeTabId: getActiveIdAfterRemoval(
-						s.tabs.map((tab) => tab.id),
-						s.activeTabId,
-						tabId,
-					),
+					activeTabId:
+						mostRecent ??
+						// No recency yet (fresh reload), so fall back to the
+						// positional rule rather than to nothing.
+						getActiveIdAfterRemoval(
+							s.tabs.map((tab) => tab.id),
+							s.activeTabId,
+							tabId,
+						),
 				};
 			});
 		},
@@ -226,6 +262,7 @@ export function createWorkspaceStore<TData>(
 		setActiveTab: (tabId) => {
 			set((s) => {
 				if (!s.tabs.some((t) => t.id === tabId)) return s;
+				touchTab(tabId);
 				return { activeTabId: tabId };
 			});
 		},

@@ -23,7 +23,18 @@ export type {
 	WorkspaceInteractionState,
 	WorkspaceProps,
 } from "./react";
-export { resolveTabTitle, useTabTitle, Workspace } from "./react";
+export {
+	getEmptyDragImage,
+	PANE_DRAG_TYPE,
+	PANE_RENAME_EVENT,
+	PaneTitleEditor,
+	requestPaneRename,
+	resolveTabTitle,
+	TAB_DRAG_TYPE,
+	usePaneTitle,
+	useTabTitle,
+	Workspace,
+} from "./react";
 export type {
 	LayoutNode,
 	Pane,

@@ -24,6 +24,16 @@ const STATUS_CONFIG = {
 		pulse: false,
 		tooltip: "Ready for review",
 	},
+	// Same red as `permission`, deliberately WITHOUT the ping. Both mean "this
+	// one needs you", and inventing a second alarm colour would only make the
+	// palette harder to read at a glance. The pulse is what separates them: a
+	// permission prompt is live and waiting, an errored turn is already over.
+	error: {
+		pingColor: "",
+		dotColor: "bg-red-500",
+		pulse: false,
+		tooltip: "Session error",
+	},
 } as const satisfies Record<
 	ActivePaneStatus,
 	{ pingColor: string; dotColor: string; pulse: boolean; tooltip: string }
@@ -37,6 +47,7 @@ interface StatusIndicatorProps {
 /**
  * Visual indicator for pane/workspace status.
  * - Red pulsing: needs user input (permission)
+ * - Red static: the turn errored
  * - Amber pulsing: agent working
  * - Green static: ready for review
  */

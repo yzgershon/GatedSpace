@@ -33,8 +33,10 @@ interface TabBarProps<TData> {
 	onMovePaneToNewTab: (paneId: string, toIndex: number) => void;
 	renderTabIcon?: (tab: Tab<TData>) => ReactNode;
 	renderAddTabMenu?: () => ReactNode;
+	onAddTab?: () => void;
 	renderTabBarTrailing?: () => ReactNode;
 	renderTabAccessory?: (tab: Tab<TData>) => ReactNode;
+	renderTabPaneList?: (tab: Tab<TData>) => ReactNode;
 }
 
 type TabDragItem = { tabId: string };
@@ -42,8 +44,17 @@ type PaneDragItem = { paneId: string };
 
 function AddTabButton<_TData>({
 	renderAddTabMenu,
+	onAddTab,
 }: {
 	renderAddTabMenu?: () => ReactNode;
+	/**
+	 * Make a tab immediately, instead of asking what kind first.
+	 *
+	 * Takes precedence over the menu when both are given: a host that can
+	 * produce an undecided tab does not need a dropdown, because the tab itself
+	 * asks the question and can be answered more than once.
+	 */
+	onAddTab?: () => void;
 }) {
 	const button = (
 		<Button
@@ -51,10 +62,13 @@ function AddTabButton<_TData>({
 			size="icon"
 			type="button"
 			variant="ghost"
+			onClick={onAddTab}
 		>
 			<PlusIcon className="size-3.5" />
 		</Button>
 	);
+
+	if (onAddTab) return button;
 
 	if (renderAddTabMenu) {
 		return (
@@ -83,8 +97,10 @@ export function TabBar<TData>({
 	onMovePaneToNewTab,
 	renderTabIcon,
 	renderAddTabMenu,
+	onAddTab,
 	renderTabBarTrailing,
 	renderTabAccessory,
+	renderTabPaneList,
 }: TabBarProps<TData>) {
 	const tabsTrackRef = useRef<HTMLDivElement>(null);
 	const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false);
@@ -169,10 +185,13 @@ export function TabBar<TData>({
 		return (
 			<div
 				ref={setRootRef}
-				className="group/root-tabs flex h-10 min-w-0 shrink-0 items-stretch border-b border-border bg-background"
+				className="group/root-tabs flex h-10 min-w-0 shrink-0 items-stretch border-border border-b-[length:var(--gs-tabbar-border-width,1px)] bg-background"
 			>
 				<div className="flex h-full w-10 shrink-0 items-center justify-center bg-background">
-					<AddTabButton renderAddTabMenu={renderAddTabMenu} />
+					<AddTabButton
+						renderAddTabMenu={renderAddTabMenu}
+						onAddTab={onAddTab}
+					/>
 				</div>
 				<div className="flex min-w-0 flex-1 items-stretch" />
 				{renderTabBarTrailing && (
@@ -187,7 +206,7 @@ export function TabBar<TData>({
 	return (
 		<div
 			ref={setRootRef}
-			className="group/root-tabs flex h-10 min-w-0 shrink-0 items-stretch border-b border-border bg-background"
+			className="group/root-tabs flex h-10 min-w-0 shrink-0 items-stretch border-border border-b-[length:var(--gs-tabbar-border-width,1px)] bg-background"
 		>
 			<OverflowFadeContainer
 				observeChildren
@@ -214,6 +233,7 @@ export function TabBar<TData>({
 								onRename={(title) => onRenameTab(tab.id, title)}
 								icon={renderTabIcon?.(tab)}
 								accessory={renderTabAccessory?.(tab)}
+								paneList={renderTabPaneList?.(tab)}
 							/>
 						</div>
 					))}
@@ -225,14 +245,20 @@ export function TabBar<TData>({
 					)}
 					{!hasHorizontalOverflow && (
 						<div className="flex h-full w-10 shrink-0 items-center justify-center">
-							<AddTabButton renderAddTabMenu={renderAddTabMenu} />
+							<AddTabButton
+								renderAddTabMenu={renderAddTabMenu}
+								onAddTab={onAddTab}
+							/>
 						</div>
 					)}
 				</div>
 			</OverflowFadeContainer>
 			{hasHorizontalOverflow && (
 				<div className="flex h-full w-10 shrink-0 items-center justify-center bg-background">
-					<AddTabButton renderAddTabMenu={renderAddTabMenu} />
+					<AddTabButton
+						renderAddTabMenu={renderAddTabMenu}
+						onAddTab={onAddTab}
+					/>
 				</div>
 			)}
 			{renderTabBarTrailing && (

@@ -7,6 +7,7 @@ import {
 	buildTimeline,
 	emptyTimeline,
 	groupSubagents,
+	lastFinishedTurnId,
 	readAssistantContext,
 	settled,
 	type ToolItem,
@@ -515,5 +516,68 @@ describe("cost across CLI processes", () => {
 		state = applyEvent(state, result(Number.NaN, "r2"));
 		state = applyEvent(state, result(-1, "r3"));
 		expect(state.costUsd).toBeCloseTo(0.4, 6);
+	});
+});
+
+describe("lastFinishedTurnId", () => {
+	function resultEvent(uuid: string, isError = false): ClaudeStreamEvent {
+		return {
+			type: "result",
+			subtype: isError ? "error" : "success",
+			uuid,
+			session_id: "s",
+			result: "ok",
+			is_error: isError,
+			total_cost_usd: 0.1,
+			duration_ms: 10,
+			num_turns: 1,
+		} as unknown as ClaudeStreamEvent;
+	}
+
+	function notice(id: string, fatal: boolean): ClaudeStreamEvent {
+		return {
+			type: "local_notice",
+			id,
+			text: "something happened",
+			fatal,
+		} as unknown as ClaudeStreamEvent;
+	}
+
+	it("is undefined before anything has finished", () => {
+		expect(lastFinishedTurnId(emptyTimeline())).toBeUndefined();
+		expect(
+			lastFinishedTurnId(withUserMessage(emptyTimeline(), "u1", "hi")),
+		).toBeUndefined();
+	});
+
+	it("reports the id of the result that ended the turn", () => {
+		let state = withUserMessage(emptyTimeline(), "u1", "hi");
+		state = applyEvent(state, resultEvent("r1"));
+		expect(lastFinishedTurnId(state)).toBe("r1");
+	});
+
+	it("advances to the newest finished turn", () => {
+		let state = applyEvent(emptyTimeline(), resultEvent("r1"));
+		state = withUserMessage(state, "u2", "again");
+		state = applyEvent(state, resultEvent("r2"));
+		expect(lastFinishedTurnId(state)).toBe("r2");
+	});
+
+	it("counts a fatal notice, which is how a died turn ends", () => {
+		const state = applyEvent(emptyTimeline(), notice("n1", true));
+		expect(state.status).toBe("error");
+		expect(lastFinishedTurnId(state)).toBe("n1");
+	});
+
+	/**
+	 * The reason this scans for the ending item rather than taking the tail:
+	 * a model or effort change appends a non-fatal notice AFTER the turn is
+	 * over, and keying off the last item would read that as a fresh completion
+	 * and relight a dot the user had already cleared.
+	 */
+	it("ignores a non-fatal notice landing after the turn ended", () => {
+		let state = applyEvent(emptyTimeline(), resultEvent("r1"));
+		state = applyEvent(state, notice("n1", false));
+		expect(lastFinishedTurnId(state)).toBe("r1");
 	});
 });

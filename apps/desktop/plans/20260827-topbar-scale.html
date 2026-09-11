@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — top bar scale</title>
+<style>
+  /* Real palette, read out of apps/desktop/src/shared/themes/built-in/ember.ts */
+  :root {
+    --background: #151110;
+    --foreground: #eae8e6;
+    --card: #201E1C;
+    --muted: #2a2827;
+    --accent: #2a2827;
+    --border: #2a2827;
+    --muted-foreground: #a8a5a3;
+    --highlight: #e07a4f;
+
+    /* Derived exactly as the app derives them */
+    --well: color-mix(in oklab, var(--background) 62%, black);      /* #060404, measured */
+    --pane-surface: color-mix(in oklab, var(--background) 42%, var(--card)); /* #1c1917, measured */
+    --surface-fill: color-mix(in oklab, var(--background) 72%, black);
+    --surface-edge: color-mix(in oklab, var(--border) 100%, white 14%);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0a0908;
+    color: var(--foreground);
+    font: 14px/1.5 ui-sans-serif, "Segoe UI", system-ui, sans-serif;
+    padding: 26px 24px 50px;
+  }
+  h1 { font-size: 19px; font-weight: 600; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted-foreground); font-size: 13px; margin: 0 0 26px; max-width: 78ch; }
+
+  .case { margin-bottom: 34px; }
+  .case > .label {
+    display: flex; align-items: baseline; gap: 10px;
+    font-size: 12px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted-foreground); margin-bottom: 9px;
+  }
+  .label .tag {
+    text-transform: none; letter-spacing: 0; font-size: 12px;
+    padding: 1px 7px; border-radius: 999px; border: 1px solid var(--surface-edge);
+  }
+  .tag.bad  { color: #e0705a; border-color: #5a2f26; background: #2a1512; }
+  .tag.good { color: #7fc99a; border-color: #2c4f3a; background: #12211a; }
+
+  /* The window: the well is the ground everything floats on. */
+  .window {
+    background: var(--well);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid #191614;
+    /* Fixed, so the absolutely-centred launcher has a real centre to sit on
+       and the right-hand cluster is not pushed out of view. Roughly the width
+       his window runs at. */
+    width: 1240px;
+  }
+
+  /* The bar itself — h-12, flex items-center, no fill, no rule. */
+  .bar {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    padding: 0 16px;
+    gap: 8px;
+  }
+  /*
+   * The ruler marks the BAND — window top down to the top edge of the cards —
+   * because that is the space a person actually sees above the panes. It is
+   * 48px of bar plus the 18px gutter, so 66px, and its midline is 33px.
+   * Ruling the bar's own 48px box is what produced a row that measured centred
+   * and looked nine pixels high.
+   */
+  .window.ruled { position: relative; }
+  .window.ruled::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0; height: 66px;
+    border-bottom: 1px dashed rgba(224,122,79,.34);
+    pointer-events: none; z-index: 5;
+  }
+  .window.ruled::after {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 33px;
+    border-top: 1px dashed rgba(127,201,154,.42);
+    pointer-events: none; z-index: 5;
+  }
+
+  .left  { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .right { display: flex; align-items: center; gap: 12px; margin-left: auto; flex-shrink: 0; }
+  .centre {
+    position: absolute; left: 0; right: 0; margin: 0 auto;
+    width: fit-content; display: flex; align-items: center;
+  }
+
+  .brand { font-weight: 500; letter-spacing: -0.01em; }
+  .ver {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    color: color-mix(in oklab, var(--muted-foreground) 80%, transparent);
+    border: 1px solid color-mix(in oklab, var(--border) 70%, transparent);
+    background: color-mix(in oklab, var(--muted) 40%, transparent);
+    border-radius: 6px;
+    display: inline-flex; align-items: center;
+  }
+
+  .iconbtn {
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 8px; color: var(--muted-foreground);
+    background: none; border: 0; cursor: default;
+  }
+
+  /* The two surfaces that sit directly in the bar. */
+  .surface {
+    display: flex; align-items: center;
+    background: var(--surface-fill);
+    border: 1px solid var(--surface-edge);
+  }
+  .chip {
+    display: flex; align-items: center; flex-shrink: 0;
+    border-radius: 8px; color: var(--muted-foreground); white-space: nowrap;
+  }
+  .chip.on { background: color-mix(in oklab, var(--accent) 65%, transparent); color: var(--foreground); }
+  .dot { width: 7px; height: 7px; border-radius: 999px; background: #d99a3f; flex-shrink: 0; }
+
+  .wincontrols { display: flex; align-items: center; gap: 2px; color: var(--muted-foreground); margin-left: 4px; }
+  .wincontrols span { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+
+  /* Pane cards below, so the bar is judged against what it sits above. */
+  .body { display: flex; gap: 0; padding: 9px; }
+  .card {
+    background: var(--pane-surface); border-radius: 11px; height: 74px; margin: 9px;
+  }
+  .card.sidebar { width: 210px; }
+  .card.pane { flex: 1; border: 1px solid var(--highlight); }
+
+  /* ---- CURRENT: measured off the running 1.18.1 window ---- */
+  .cur .ver        { font-size: 12px; padding: 1px 8px; }
+  .cur .brand      { font-size: 17px; }
+  .cur .toggle     { width: 40px; height: 40px; }
+  .cur .toggle svg { width: 18px; height: 18px; }
+  .cur .search     { width: 36px; height: 36px; }
+  .cur .search svg { width: 20px; height: 20px; }
+  .cur .agents     { height: 48px; border-radius: 14px; padding: 0 4px; gap: 4px; }
+  .cur .agents .chip     { height: 40px; padding: 0 14px; gap: 8px; font-size: 15px; border-radius: 8px; }
+  .cur .agents .chip svg { width: 20px; height: 20px; }
+  .cur .rail       { border-radius: 12px; padding: 3px; gap: 4px; background: rgba(13,10,9,.72); }
+  .cur .rail .chip     { height: 36px; padding: 0 8px 0 6px; gap: 6px; font-size: 13.5px; }
+  .cur .rail .chip svg { width: 17px; height: 17px; }
+  .cur .rail .plus     { width: 30px; height: 30px; }
+  .cur .rail .plus svg { width: 16px; height: 16px; }
+
+  /* ---- PROPOSED: centred in the 66px BAND, one 46px row, 15px, 20px ---- */
+  /* One full gutter of padding moves the content box to 18..48, centre 33. */
+  .new .bar        { padding-top: 18px; }
+  .new .centre     { top: 0; bottom: 0; padding-top: 18px; }
+  .new .ver        { font-size: 12.5px; padding: 4px 8px; }
+  .new .brand      { font-size: 18px; }
+  .new .toggle     { width: 40px; height: 40px; }
+  .new .toggle svg { width: 20px; height: 20px; }
+  .new .search     { width: 40px; height: 40px; }
+  .new .search svg { width: 20px; height: 20px; }
+  .new .agents     { height: 46px; border-radius: 13px; padding: 3px; gap: 3px; }
+  .new .agents .chip     { height: 40px; padding: 0 14px; gap: 8px; font-size: 15px; border-radius: 10px; }
+  .new .agents .chip svg { width: 20px; height: 20px; }
+  .new .rail       { height: 46px; border-radius: 13px; padding: 3px; gap: 3px; background: rgba(13,10,9,.72); }
+  .new .rail .chip     { height: 40px; padding: 0 10px 0 8px; gap: 8px; font-size: 15px; border-radius: 10px; }
+  .new .rail .chip svg { width: 20px; height: 20px; }
+  .new .rail .plus     { width: 40px; height: 40px; }
+  .new .rail .plus svg { width: 20px; height: 20px; }
+  .new .wincontrols span { width: 36px; height: 36px; font-size: 12px; }
+
+  .notes { margin-top: 30px; border-top: 1px solid #1d1a18; padding-top: 18px; }
+  .notes h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .09em; color: var(--muted-foreground); margin: 0 0 10px; font-weight: 600; }
+  .notes ul { margin: 0; padding-left: 18px; color: #cfcbc8; font-size: 13.5px; }
+  .notes li { margin-bottom: 7px; }
+  .notes b { color: var(--foreground); font-weight: 600; }
+  code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: #e0b48f; }
+
+  table { border-collapse: collapse; margin-top: 14px; font-size: 13px; }
+  th, td { text-align: left; padding: 5px 16px 5px 0; border-bottom: 1px solid #1d1a18; }
+  th { color: var(--muted-foreground); font-weight: 500; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  td.was { color: #cf7d68; }
+  td.now { color: #86c99a; }
+</style>
+</head>
+<body>
+
+<h1>Top bar — centred in the band above the cards</h1>
+<p class="sub">
+  Measured off the running window (48px bar, main zoom 0.85, DPR 2). The <b>orange</b> rule is the
+  bottom of the band — the top edge of the pane and sidebar cards, 66px down. The <b>green</b> rule is
+  the band's midline at 33px. Centring in the bar's own 48px box puts the midline at 24px: measurably
+  centred, and nine pixels high in the space it actually occupies.
+</p>
+
+<div class="case cur">
+  <div class="label">Now <span class="tag bad">1.18.2 — centred in the 48px BAR, so it sits 9px high in the band</span></div>
+  <div class="window ruled">
+    <div class="bar">
+      <div class="left">
+        <span class="brand">GatedSpace</span>
+        <span class="ver">v1.18.1</span>
+        <button class="iconbtn toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+        <button class="iconbtn search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      </div>
+      <div class="centre">
+        <div class="surface agents">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>Codex</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>Claude</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="#6b8ee0" stroke="none"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></svg>Gemini</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="11" r="1.4" fill="currentColor"/><circle cx="15" cy="11" r="1.4" fill="currentColor"/></svg>Copilot</span>
+          <button class="iconbtn" style="width:32px;height:32px"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        </div>
+      </div>
+      <div class="right">
+        <div class="surface rail">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/></svg></span>
+          <span class="chip on"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>GS Edits <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;opacity:.55"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+          <button class="iconbtn plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+        <div class="wincontrols"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+    </div>
+    <div class="body"><div class="card sidebar"></div><div class="card pane"></div></div>
+  </div>
+</div>
+
+<div class="case new">
+  <div class="label">Proposed <span class="tag good">centred in the 66px BAND · 46px row · 10px clear each end</span></div>
+  <div class="window ruled">
+    <div class="bar">
+      <div class="left">
+        <span class="brand">GatedSpace</span>
+        <span class="ver">v1.18.1</span>
+        <button class="iconbtn toggle"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/></svg></button>
+        <button class="iconbtn search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></button>
+      </div>
+      <div class="centre">
+        <div class="surface agents">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/></svg>Codex</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>Claude</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="#6b8ee0" stroke="none"><path d="M12 2l2.6 7.4L22 12l-7.4 2.6L12 22l-2.6-7.4L2 12l7.4-2.6z"/></svg>Gemini</span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><circle cx="9" cy="11" r="1.4" fill="currentColor"/><circle cx="15" cy="11" r="1.4" fill="currentColor"/></svg>Copilot</span>
+          <button class="iconbtn" style="width:32px;height:32px"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+        </div>
+      </div>
+      <div class="right">
+        <div class="surface rail">
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg></span>
+          <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="16" rx="2"/></svg></span>
+          <span class="chip on"><svg viewBox="0 0 24 24" fill="none" stroke="#e07a4f" stroke-width="1.5"><path d="M12 2v20M2 12h20M5 5l14 14M19 5L5 19"/></svg>GS Edits <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px;opacity:.55"><path d="M6 6l12 12M18 6L6 18"/></svg></span>
+          <button class="iconbtn plus"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg></button>
+        </div>
+        <div class="wincontrols"><span>—</span><span>▢</span><span>✕</span></div>
+      </div>
+    </div>
+    <div class="body"><div class="card sidebar"></div><div class="card pane"></div></div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>What changes, and why</h2>
+  <ul>
+    <li>
+      <b>The band, not the bar.</b> Under a floating shell there is no line between the bar and the
+      trough beneath it — both paint the same well colour — so the space above the cards is 48px of
+      bar <i>plus</i> the 18px gutter. Its midline is 33px. Centring in the bar's own box was
+      measurably centred and visibly high, which is exactly how it was reported.
+    </li>
+    <li>
+      <b>One full gutter of padding-top on the bar</b> moves its content box to 18..48, whose centre
+      is 33. The bar's OUTER height is untouched, so the cards below do not move.
+    </li>
+    <li>
+      <b>Derived from <code>--gs-pane-inset</code>, not gated on the skin.</b> VS Code Style sets
+      <code>paneGap: 0</code>, so the padding evaluates to 0 and that skin's toolbar keeps centring
+      in its own box — right for a bar that has a fill, a rule under it, and no trough at all.
+    </li>
+    <li>
+      <b>A taller band affords a taller row.</b> 46px surfaces with 40px controls inside, 15px labels
+      and 20px glyphs, leaving 10px clear at each end of the band.
+    </li>
+    <li>
+      <b>The wordmark goes to 18px</b> and stays the largest thing in the bar. It is a name, not a
+      control; matching it to the buttons removes the only hierarchy the row has.
+    </li>
+  </ul>
+
+  <table>
+    <tr><th></th><th>1.18.2</th><th>Proposed</th></tr>
+    <tr><td>vertical centre</td><td class="was">24px (bar box)</td><td class="now">33px (band)</td></tr>
+    <tr><td>agents surface</td><td class="was">40px</td><td class="now">46px</td></tr>
+    <tr><td>agent pill</td><td class="was">32px · 14px · 18px icon</td><td class="now">40px · 15px · 20px icon</td></tr>
+    <tr><td>tab rail surface</td><td class="was">40px</td><td class="now">46px</td></tr>
+    <tr><td>rail tab</td><td class="was">32px · 14px · 18px icon</td><td class="now">40px · 15px · 20px icon</td></tr>
+    <tr><td>rail "+"</td><td class="was">32px · 18px icon</td><td class="now">40px · 20px icon</td></tr>
+    <tr><td>sidebar toggle / search</td><td class="was">40px · 18px icon</td><td class="now">40px · 20px icon</td></tr>
+    <tr><td>wordmark / version</td><td class="was">17px / 12px</td><td class="now">18px / 12.5px</td></tr>
+    <tr><td>window controls</td><td class="was">32px</td><td class="now">36px</td></tr>
+  </table>
+</div>
+
+</body>
+</html>

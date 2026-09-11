@@ -9,11 +9,13 @@ import {
 	PanelLeftIcon,
 	PanelRightIcon,
 	RefreshCwIcon,
+	SparklesIcon,
 	TriangleAlertIcon,
 } from "lucide-react";
 import { env } from "renderer/env.renderer";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { electronQueryClient } from "renderer/providers/ElectronTRPCProvider";
+import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { useRightSidebarToggleIntent } from "renderer/stores/right-sidebar-toggle-intent";
 import { SYSTEM_THEME_ID, useThemeStore } from "renderer/stores/theme/store";
 import { useWorkspaceSidebarStore } from "renderer/stores/workspace-sidebar-state";
@@ -77,6 +79,16 @@ export const actionsProvider: CommandProvider = {
 		}
 
 		commands.push(
+			{
+				id: "actions.swapClaudeAccount",
+				title: "Swap Claude account",
+				section: "actions",
+				icon: SparklesIcon,
+				// The same command that works in a pane and in a terminal, reachable
+				// from anywhere. One verb, wherever you are.
+				keywords: ["swap", "account", "claude", "switch", "profile", "login"],
+				run: () => requestAccountSwap({ kind: "default", from: "palette" }),
+			},
 			{
 				id: "actions.toggleNotificationSounds",
 				title: context.notificationSoundsMuted

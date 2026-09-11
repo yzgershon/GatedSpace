@@ -32,6 +32,8 @@ export interface UserTextItem {
 	kind: "user";
 	id: string;
 	text: string;
+	/** Wall-clock ms the prompt was sent, when the event carried one. */
+	at?: number;
 	/** Images sent with the prompt, shown as chips above it. */
 	attachments?: UserAttachment[];
 }
@@ -40,6 +42,16 @@ export interface AssistantTextItem {
 	id: string;
 	text: string;
 	parentToolUseId: string | null;
+	/**
+	 * Wall-clock ms the reply arrived, when the event carried one.
+	 *
+	 * Read off the CLI's own `timestamp` field, NOT stamped with `Date.now()`
+	 * at fold time. The transcript is re-folded from disk on every window
+	 * reload, so a fold-time stamp would relabel the entire conversation as
+	 * having happened just now — the same replay trap that made the tab status
+	 * dots key on a turn id rather than a time.
+	 */
+	at?: number;
 }
 export interface ThinkingItem {
 	kind: "thinking";
@@ -268,6 +280,7 @@ export function withUserMessage(
 	id: string,
 	text: string,
 	attachments?: UserAttachment[],
+	at?: number,
 ): SessionTimeline {
 	return {
 		...state,
@@ -282,6 +295,10 @@ export function withUserMessage(
 				kind: "user",
 				id,
 				text,
+				// Spread rather than assigned, so an event without a time produces
+				// an item without the key at all — `at: undefined` would survive
+				// structural comparison in the tests as a real difference.
+				...(at === undefined ? {} : { at }),
 				...(attachments?.length ? { attachments } : {}),
 			},
 		],
@@ -326,14 +343,38 @@ function transcriptAttachment(block: unknown, index: number): UserAttachment {
 	};
 }
 
+/**
+ * The CLI's ISO timestamp as epoch ms, or undefined.
+ *
+ * Undefined rather than a fallback on every failure path: absent has to mean
+ * "no time to show", because any default here is a lie about when something was
+ * said, and a wrong clock time is worse than none.
+ */
+export function parseEventTime(
+	timestamp: string | undefined,
+): number | undefined {
+	if (!timestamp) return undefined;
+	const ms = Date.parse(timestamp);
+	return Number.isNaN(ms) ? undefined : ms;
+}
+
 /** The settled form of one assistant content block. */
 function finalizeBlock(
 	block: AssistantContentBlock,
 	id: string,
 	parentToolUseId: string | null,
+	at?: number,
 ): TimelineItem | null {
 	if (block.type === "text") {
-		return { kind: "text", id, text: block.text, parentToolUseId };
+		// Spread rather than assigned: `at: undefined` is a real key, and the
+		// timeline tests compare items structurally.
+		return {
+			kind: "text",
+			id,
+			text: block.text,
+			parentToolUseId,
+			...(at === undefined ? {} : { at }),
+		};
 	}
 	if (block.type === "thinking") {
 		return { kind: "thinking", id, text: block.thinking, parentToolUseId };
@@ -544,7 +585,13 @@ export function applyEvent(
 		// GatedSpace's own echo of the prompt we wrote to stdin (the CLI doesn't
 		// send one back), recorded in main so it survives a pane remount.
 		case "local_user_message":
-			return withUserMessage(state, event.id, event.text, event.attachments);
+			return withUserMessage(
+				state,
+				event.id,
+				event.text,
+				event.attachments,
+				event.at,
+			);
 
 		case "local_notice":
 			return {
@@ -595,6 +642,7 @@ export function applyEvent(
 			// doesn't jump to the bottom); append when there was no draft, which is
 			// what happens without --include-partial-messages.
 			const parentToolUseId = event.parent_tool_use_id;
+			const at = parseEventTime(event.timestamp);
 			let items = state.items;
 			let drafts = state.drafts;
 			let changed = false;
@@ -604,6 +652,7 @@ export function applyEvent(
 					block,
 					`${event.uuid}:${index++}`,
 					parentToolUseId,
+					at,
 				);
 				if (!final) continue;
 				const draftIndex = drafts.findIndex((d) =>
@@ -781,6 +830,28 @@ export function buildTimeline(events: ClaudeStreamEvent[]): SessionTimeline {
 export function settled(state: SessionTimeline): SessionTimeline {
 	if (state.status === "idle" && state.drafts.length === 0) return state;
 	return { ...state, status: "idle", drafts: [] };
+}
+
+/**
+ * A stable id for the turn that most recently FINISHED, or undefined while
+ * nothing has finished yet. Used to pin "the user has seen this completion" to
+ * one specific turn, so the tab's status dot clears on sight and comes back
+ * when the next turn ends.
+ *
+ * Deliberately scans for the item that ENDED the turn — a result, or the fatal
+ * notice that stood in for one — rather than taking the last item in the list.
+ * A non-fatal notice can land after a turn is over (the model changed, the
+ * effort changed), and keying off the tail would read that as a fresh
+ * completion and light the dot again on a session nothing had happened in.
+ */
+export function lastFinishedTurnId(state: SessionTimeline): string | undefined {
+	for (let index = state.items.length - 1; index >= 0; index--) {
+		const item = state.items[index];
+		if (!item) continue;
+		if (item.kind === "result") return item.id;
+		if (item.kind === "notice" && item.fatal) return item.id;
+	}
+	return undefined;
 }
 
 /**

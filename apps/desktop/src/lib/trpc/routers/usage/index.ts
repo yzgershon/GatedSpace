@@ -1,6 +1,7 @@
 import {
 	addClaudeProfile,
 	getClaudeProfile,
+	listClaudeProfiles,
 	removeClaudeProfile,
 	setClaudeProfileMode,
 } from "main/lib/claude-profile";
@@ -74,6 +75,43 @@ export const createUsageRouter = () => {
 				if (!active) return null;
 				return refreshProfileUsage(active.configDir, { force: input?.force });
 			}),
+		/**
+		 * One named account's limits, for a pane that is not on the default.
+		 *
+		 * `activeLimits` answers for whichever account is globally active, which
+		 * is the wrong question for a pane that has been swapped: it would warn a
+		 * pane running on Yish about how much of Amitai is left. The pane knows
+		 * the config dir its own process was spawned with, so it asks about that.
+		 */
+		limitsFor: publicProcedure
+			.input(z.object({ configDir: z.string().min(1) }))
+			.query(({ input }) => {
+				const profile = listClaudeProfiles().find(
+					(candidate) => candidate.configDir === input.configDir,
+				);
+				return {
+					label: profile?.label ?? "Claude",
+					...readProfileLimits(input.configDir),
+				};
+			}),
+
+		/**
+		 * Every account's limits at once, so a picker can show what each one has
+		 * left BEFORE you commit to it.
+		 *
+		 * `activeLimits` answers for one account, which is all a status bar needs
+		 * and exactly the wrong shape for choosing between them: picking the
+		 * account to move onto was a guess you discovered one prompt later.
+		 *
+		 * Reads the same cached JSON per account — no process, no request — so it
+		 * costs a few small file reads and can be asked for on every open.
+		 */
+		allLimits: publicProcedure.query(() =>
+			listClaudeProfiles().map((profile) => ({
+				id: profile.id,
+				...readProfileLimits(profile.configDir),
+			})),
+		),
 		getClaudeProfile: publicProcedure.query(() => getClaudeProfile()),
 		setClaudeProfileMode: publicProcedure
 			// "auto" or a profile id; setClaudeProfileMode ignores unknown ids.

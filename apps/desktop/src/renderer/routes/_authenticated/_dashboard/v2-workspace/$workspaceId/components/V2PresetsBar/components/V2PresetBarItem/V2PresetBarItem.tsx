@@ -9,16 +9,13 @@ import {
 } from "@superset/ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import { useEffect, useRef } from "react";
-import { useDrag, useDrop } from "react-dnd";
+import { useRef, useState } from "react";
 import { HiMiniCommandLine } from "react-icons/hi2";
 import type { HotkeyId } from "renderer/hotkeys";
 import { HotkeyLabel } from "renderer/hotkeys";
 import { resolveV2PresetIcon } from "renderer/lib/preset-icon";
 import { resolveV2PresetIconKey } from "renderer/lib/preset-icon-key";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
-
-const V2_PRESET_BAR_ITEM_TYPE = "V2_PRESET_BAR_ITEM";
 
 interface V2PresetBarItemProps {
 	preset: V2TerminalPresetRow;
@@ -48,58 +45,129 @@ export function V2PresetBarItem({
 	// Codex's mark carries more internal padding than the others, so at a shared
 	// size it reads noticeably smaller. Size it up to match optically rather than
 	// numerically — matching the box is not the same as matching the logo.
+	// Both bumped a step on 2026-08-18: these are the most-used controls in the
+	// window and were the smallest thing in it. The codex/others gap is kept —
+	// it is an optical correction, not a rounding error.
 	const iconSize =
-		resolveV2PresetIconKey(preset, agents) === "codex" ? "size-4" : "size-3.5";
+		resolveV2PresetIconKey(preset, agents) === "codex"
+			? "size-[21px]"
+			: "size-5";
 	const label = preset.description || preset.name || "default";
 
-	const [{ isDragging }, drag] = useDrag(
-		() => ({
-			type: V2_PRESET_BAR_ITEM_TYPE,
-			item: {
-				id: preset.id,
-				index: visibleIndex,
-				originalIndex: visibleIndex,
-			},
-			collect: (monitor) => ({
-				isDragging: monitor.isDragging(),
-			}),
-		}),
-		[preset.id, visibleIndex],
-	);
+	/*
+	 * Reorder with POINTER events, not react-dnd's HTML5 backend.
+	 *
+	 * These pills are portaled into the TOP BAR, which is an Electron window-drag
+	 * surface (`-webkit-app-region`). HTML5 drag-and-drop is unreliable inside
+	 * one even with `no-drag` on the wrapper, which is why dragging an agent
+	 * here did nothing while the same code worked when the presets were their
+	 * own row below the bar. Pointer events are not subject to app-region at
+	 * all.
+	 *
+	 * Persistence is unchanged: this still calls `onLocalReorder` while moving
+	 * and `onPersistReorder` on release, so the tabOrder write is the same one
+	 * the drag backend used to do.
+	 */
+	const [isDragging, setIsDragging] = useState(false);
+	const dragStateRef = useRef<{
+		startX: number;
+		index: number;
+		moved: boolean;
+	} | null>(null);
 
-	const [, drop] = useDrop({
-		accept: V2_PRESET_BAR_ITEM_TYPE,
-		hover: (item: { id: string; index: number; originalIndex: number }) => {
-			if (item.index !== visibleIndex) {
-				onLocalReorder(item.index, visibleIndex);
-				item.index = visibleIndex;
-			}
-		},
-		drop: (item: { id: string; index: number; originalIndex: number }) => {
-			if (item.originalIndex !== item.index) {
-				onPersistReorder(item.id, item.index);
-			}
-		},
-	});
+	const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+		// Left button only, and do NOT preventDefault — a plain click must still
+		// launch the agent.
+		if (event.button !== 0) return;
+		dragStateRef.current = {
+			startX: event.clientX,
+			index: visibleIndex,
+			moved: false,
+		};
 
-	useEffect(() => {
-		drag(drop(containerRef));
-	}, [drag, drop]);
+		const onMove = (moveEvent: PointerEvent) => {
+			const state = dragStateRef.current;
+			const node = containerRef.current;
+			if (!state || !node) return;
+
+			// A few pixels of slop, so a click with a shaky hand is still a click.
+			if (!state.moved && Math.abs(moveEvent.clientX - state.startX) < 5) {
+				return;
+			}
+			if (!state.moved) {
+				state.moved = true;
+				setIsDragging(true);
+			}
+
+			const row = node.parentElement;
+			if (!row) return;
+			const pills = Array.from(
+				row.querySelectorAll<HTMLElement>("[data-preset-index]"),
+			);
+			const targetIndex = pills.findIndex((pill) => {
+				const rect = pill.getBoundingClientRect();
+				return (
+					moveEvent.clientX >= rect.left && moveEvent.clientX <= rect.right
+				);
+			});
+			if (targetIndex < 0 || targetIndex === state.index) return;
+
+			onLocalReorder(state.index, targetIndex);
+			state.index = targetIndex;
+		};
+
+		const onUp = () => {
+			const state = dragStateRef.current;
+			dragStateRef.current = null;
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			if (!state?.moved) return;
+			setIsDragging(false);
+			if (state.index !== visibleIndex) {
+				onPersistReorder(preset.id, state.index);
+			}
+		};
+
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+	};
 
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
 				<div
 					ref={containerRef}
+					data-preset-index={visibleIndex}
+					data-preset-id={preset.id}
 					className={isDragging ? "opacity-40" : undefined}
 					style={{ cursor: isDragging ? "grabbing" : "grab" }}
+					onPointerDown={handlePointerDown}
+					onClickCapture={(event) => {
+						// The click that ends a drag must not also launch the agent.
+						if (isDragging) {
+							event.preventDefault();
+							event.stopPropagation();
+						}
+					}}
 				>
 					<Tooltip>
 						<TooltipTrigger asChild>
 							<Button
 								variant="ghost"
 								size="sm"
-								className="h-6 max-w-32 min-w-0 shrink-0 gap-1.5 rounded-md px-1.5 text-xs font-normal text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+								/*
+								 * 40px inside the surface's 3px padding = the 46px row every
+								 * other surface in the bar is on. One label size (15px) and
+								 * one glyph size (20px) with the tab rail, which used to run
+								 * 13.5px and 17px — close enough to read as a mistake rather
+								 * than a hierarchy.
+								 *
+								 * `duration-100`, not the 150ms default: this is hover
+								 * feedback on the most-clicked control in the window, and
+								 * anything past about 120ms stops reading as a response to
+								 * the pointer and starts reading as the app catching up.
+								 */
+								className="h-10 max-w-44 min-w-0 shrink-0 gap-2 rounded-[10px] px-3.5 font-normal text-[15px] text-muted-foreground transition-colors duration-100 hover:bg-muted/60 hover:text-foreground"
 								onClick={() => onExecutePreset(preset)}
 							>
 								{icon ? (
@@ -112,7 +180,7 @@ export function V2PresetBarItem({
 										)}
 									/>
 								) : (
-									<HiMiniCommandLine className="size-3.5 shrink-0" />
+									<HiMiniCommandLine className="size-5 shrink-0" />
 								)}
 								<span className="min-w-0 truncate">
 									{preset.name || "default"}

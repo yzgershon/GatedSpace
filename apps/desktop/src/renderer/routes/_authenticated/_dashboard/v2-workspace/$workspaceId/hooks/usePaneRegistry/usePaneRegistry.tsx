@@ -9,6 +9,7 @@ import { toast } from "@superset/ui/sonner";
 import { cn } from "@superset/ui/utils";
 import { workspaceTrpc } from "@superset/workspace-client";
 import {
+	Bug,
 	Circle,
 	GitCompareArrows,
 	Globe,
@@ -16,13 +17,7 @@ import {
 	MessageSquare,
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
-import {
-	LuArrowDownToLine,
-	LuClipboard,
-	LuClipboardCopy,
-	LuEraser,
-	LuPower,
-} from "react-icons/lu";
+import { LuClipboard, LuClipboardCopy, LuEraser, LuPlus } from "react-icons/lu";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { agentAccent } from "renderer/lib/agent-accent";
 import { FileIcon } from "renderer/lib/fileIcons";
@@ -53,7 +48,11 @@ import {
 	ClaudeSessionPane,
 	disposeSession,
 	getSessionTitle,
+	SessionAccountChip,
+	SessionContextChip,
+	SessionFolderChip,
 	SessionPaneIcon,
+	SessionStatusDot,
 	subscribeSession,
 } from "./components/ClaudeSessionPane";
 import {
@@ -67,8 +66,11 @@ import { DiffPane } from "./components/DiffPane";
 import { DiffPaneHeaderExtras } from "./components/DiffPane/components/DiffPaneHeaderExtras";
 import { FilePane } from "./components/FilePane";
 import { FilePaneHeaderExtras } from "./components/FilePane/components/FilePaneHeaderExtras";
+import {
+	LauncherPane,
+	type NewTabPaneActions,
+} from "./components/LauncherPane";
 import { TerminalPane } from "./components/TerminalPane";
-import { TerminalPaneHeaderExtras } from "./components/TerminalPane/components/TerminalPaneHeaderExtras";
 import { TerminalPaneIcon } from "./components/TerminalPane/components/TerminalPaneIcon";
 import { TerminalSessionDropdown } from "./components/TerminalPane/components/TerminalSessionDropdown";
 
@@ -120,6 +122,15 @@ interface UsePaneRegistryOptions {
 	onRevealPath: (path: string) => void;
 	launcher: TerminalLauncher;
 	store: StoreApi<WorkspaceStore<PaneViewerData>>;
+	/**
+	 * What an undecided tab can turn into.
+	 *
+	 * A REF because the page builds this registry before it builds the openers,
+	 * so there is nothing to pass by value at that point. Read inside
+	 * `renderPane`, which runs long after the page body has finished.
+	 */
+	workspaceCwd?: string;
+	newTabActionsRef?: React.RefObject<NewTabPaneActions | null>;
 }
 
 export function usePaneRegistry({
@@ -127,6 +138,8 @@ export function usePaneRegistry({
 	onRevealPath,
 	launcher,
 	store,
+	newTabActionsRef,
+	workspaceCwd,
 }: UsePaneRegistryOptions): PaneRegistry<PaneViewerData> {
 	const { workspace } = useWorkspace();
 	const workspaceId = workspace.id;
@@ -134,22 +147,7 @@ export function usePaneRegistry({
 	const resumeAgent = workspaceTrpc.agents.resume.useMutation();
 	const collections = useCollections();
 	const clearShortcut = useHotkeyDisplay("CLEAR_TERMINAL").text;
-	const scrollToBottomShortcut = useHotkeyDisplay("SCROLL_TO_BOTTOM").text;
 	const workspaceTrpcUtils = workspaceTrpc.useUtils();
-	const { mutate: killTerminalSession, isPending: isKillingTerminalSession } =
-		workspaceTrpc.terminal.killSession.useMutation({
-			onSuccess: () => {
-				toast.success("Terminal session killed");
-				void workspaceTrpcUtils.terminal.listSessions.invalidate({
-					workspaceId,
-				});
-			},
-			onError: (error) => {
-				toast.error("Failed to kill terminal session", {
-					description: error.message,
-				});
-			},
-		});
 	// onAfterClose-driven kill: silent on both success and failure, since
 	// the user's intent was already expressed by closing the pane.
 	const { mutate: killTerminalSessionSilently } =
@@ -286,17 +284,102 @@ export function usePaneRegistry({
 		[resumeAgent, store, workspaceId],
 	);
 
+	/*
+	 * Reading `newTabActionsRef.current` is the POINT of the ref.
+	 *
+	 * Listing it as a dependency would rebuild the whole registry — and so
+	 * remount every pane in the workspace — each time one of the openers changed
+	 * identity, which is the exact cost the ref exists to avoid. The read
+	 * happens inside `renderPane`, long after this memo has run.
+	 */
+	// biome-ignore lint/correctness/useExhaustiveDependencies: the ref is read at render time, on purpose
 	return useMemo<PaneRegistry<PaneViewerData>>(
 		() => ({
+			/*
+			 * A tab that has not chosen yet. `+` creates one of these, and picking
+			 * anything from it runs the ordinary opener against the ACTIVE tab and
+			 * then closes this pane — so the tab ends up holding the thing you
+			 * picked rather than a second tab appearing beside it.
+			 */
+			"new-tab": {
+				getIcon: () => <LuPlus className="size-3.5" />,
+				getTabIcon: () => <LuPlus className="size-3.5" />,
+				getTitle: () => "New tab",
+				renderPane: (ctx: RendererContext<PaneViewerData>) => {
+					const actions = newTabActionsRef?.current;
+					if (!actions) return null;
+					return (
+						<LauncherPane
+							{...actions}
+							onDone={() => {
+								void ctx.actions.close();
+							}}
+						/>
+					);
+				},
+			},
 			"claude-sessions": {
 				getIcon: () => <History className="size-3.5" />,
+				getTabIcon: () => <History className="size-3.5" />,
 				getTitle: () => "Sessions",
 				renderPane: () => <ClaudeSessionsPane onResume={resumeAgentSession} />,
 			},
+			/*
+			 * The working directory, in the pane's own header.
+			 *
+			 * It used to live in a second row under the header along with the
+			 * account, two usage meters, a reset time and a cost — a strip that
+			 * repeated over every pane. The folder is the one part of it that is
+			 * per-pane and worth a glance, so it comes up into the title row and
+			 * the rest is gone.
+			 */
 			// Live VS Code-style Claude Code session (pane kind "session").
 			session: {
-				getIcon: () => <SessionPaneIcon />,
+				/*
+				 * Status dot, THEN the agent mark — the reference's order, and the
+				 * order that survives a four-up grid: the dot is what you scan, so
+				 * it goes at the edge where every pane's dot lines up.
+				 *
+				 * Ridden in on `getIcon` rather than as a new registry hook. The
+				 * leading slot already exists and is already `shrink-0`; a
+				 * `renderHeaderLead` would be a second way to say the same thing,
+				 * for one caller.
+				 */
+				getIcon: (ctx: RendererContext<PaneViewerData>) => (
+					// A flex wrapper, because the header drops `icon` into a single
+					// `shrink-0` span with no gap of its own — two children in a
+					// fragment would render touching.
+					<span className="flex items-center gap-1.5">
+						<SessionStatusDot paneId={ctx.pane.id} />
+						<SessionPaneIcon />
+					</span>
+				),
+				getTabIcon: () => <SessionPaneIcon />,
 				getTitle: () => "Claude",
+				/*
+				 * Where the session is, and how full it is — the two things the
+				 * deleted meta strip carried that are per-pane and worth a glance
+				 * with four agents running at once.
+				 */
+				renderHeaderLead: (ctx) => (
+					<SessionFolderChip
+						paneId={ctx.pane.id}
+						fallbackCwd={(ctx.pane.data as SessionPaneData).cwd ?? workspaceCwd}
+					/>
+				),
+				renderMenuHeader: (ctx) => <SessionAccountChip paneId={ctx.pane.id} />,
+				hideMaximizeControl: true,
+				/*
+				 * The context readout is CENTRED rather than tucked at the right.
+				 *
+				 * It is the one number in the header you scan across several panes
+				 * at once — "which of these is nearly full" — and a value that moves
+				 * with the length of the title beside it cannot be scanned. Centred,
+				 * the four readings line up.
+				 */
+				renderHeaderCenter: (ctx: RendererContext<PaneViewerData>) => (
+					<SessionContextChip paneId={ctx.pane.id} />
+				),
 				// A session pane runs the claude binary by definition, so unlike a
 				// terminal there is nothing to record at launch or look up.
 				getAccent: () => agentAccent("claude"),
@@ -316,6 +399,8 @@ export function usePaneRegistry({
 							// there is no room for reset times and cost, and crowding them
 							// is what made the strip overlap the folder name.
 							paneCount={Object.keys(ctx.tab.panes).length}
+							// Only the focused pane shows the keyboard hint strip.
+							isActive={ctx.isActive}
 							model={data.model}
 							resumeSessionId={data.resumeSessionId}
 							forkSession={data.forkSession}
@@ -336,7 +421,11 @@ export function usePaneRegistry({
 				},
 				contextMenuActions: (_ctx, defaults) =>
 					defaults.map((d) =>
-						d.key === "close-pane" ? { ...d, label: "Close Session" } : d,
+						d.key === "close-pane"
+							? { ...d, label: "Close Session" }
+							: d.key === "rename-pane"
+								? { ...d, label: "Rename Session" }
+								: d,
 					),
 				// A session deliberately outlives an unmount (tab switches keep the
 				// process alive); closing the pane is the one thing that kills it.
@@ -348,6 +437,14 @@ export function usePaneRegistry({
 					const name = getFileName(data.filePath);
 					return <FileIcon fileName={name} className="size-4" />;
 				},
+				// size-3.5 rather than the header's size-4: the tab badge sits on the
+				// icon's corner, and every other tab icon is 3.5.
+				getTabIcon: (pane) => (
+					<FileIcon
+						className="size-3.5"
+						fileName={getFileName((pane.data as FilePaneData).filePath)}
+					/>
+				),
 				getTitle: (pane) => getFileName((pane.data as FilePaneData).filePath),
 				renderTitle: (ctx: RendererContext<PaneViewerData>) => {
 					const data = ctx.pane.data as FilePaneData;
@@ -418,6 +515,7 @@ export function usePaneRegistry({
 			},
 			diff: {
 				getIcon: () => <GitCompareArrows className="size-3.5" />,
+				getTabIcon: () => <GitCompareArrows className="size-3.5" />,
 				getTitle: () => "Changes",
 				renderPane: (ctx: RendererContext<PaneViewerData>) => (
 					<DiffPane
@@ -443,6 +541,12 @@ export function usePaneRegistry({
 						/>
 					);
 				},
+				getTabIcon: (pane) => (
+					<TerminalPaneIcon
+						terminalId={(pane.data as TerminalPaneData).terminalId}
+						workspaceId={workspaceId}
+					/>
+				),
 				getTitle: () => "Terminal",
 				getAccent: (ctx) =>
 					agentAccent((ctx.pane.data as TerminalPaneData).agentId),
@@ -472,8 +576,11 @@ export function usePaneRegistry({
 					terminalRuntimeRegistry.dispose(terminalId);
 					killTerminalSessionSilently({ terminalId, workspaceId });
 				},
+				renderHeaderLead: (ctx) => (
+					<SessionFolderChip paneId={ctx.pane.id} fallbackCwd={workspaceCwd} />
+				),
 				renderTitle: (ctx: RendererContext<PaneViewerData>) => (
-					<div className="flex min-w-0 flex-1 items-center gap-1.5">
+					<div className="flex min-w-0 items-center gap-1.5">
 						<TerminalSessionDropdown
 							context={ctx}
 							launcher={launcher}
@@ -484,7 +591,6 @@ export function usePaneRegistry({
 						/>
 					</div>
 				),
-				renderHeaderExtras: () => <TerminalPaneHeaderExtras />,
 				renderPane: (ctx: RendererContext<PaneViewerData>) => (
 					<TerminalPane
 						ctx={ctx}
@@ -549,19 +655,6 @@ export function usePaneRegistry({
 								terminalRuntimeRegistry.clear(terminalId, ctx.pane.id);
 							},
 						},
-						{
-							key: "scroll-to-bottom",
-							label: "Scroll to Bottom",
-							icon: <LuArrowDownToLine />,
-							shortcut:
-								scrollToBottomShortcut !== "Unassigned"
-									? scrollToBottomShortcut
-									: undefined,
-							onSelect: (ctx) => {
-								const { terminalId } = ctx.pane.data as TerminalPaneData;
-								terminalRuntimeRegistry.scrollToBottom(terminalId, ctx.pane.id);
-							},
-						},
 						{ key: "sep-terminal-defaults", type: "separator" },
 					];
 
@@ -569,31 +662,12 @@ export function usePaneRegistry({
 						d.key === "close-pane" ? { ...d, label: "Close Terminal" } : d,
 					);
 
-					const killAction: ContextMenuActionConfig<PaneViewerData> = {
-						key: "kill-terminal-session",
-						label: "Kill Terminal Session",
-						icon: <LuPower />,
-						variant: "destructive",
-						disabled: isKillingTerminalSession,
-						onSelect: (ctx) => {
-							const { terminalId } = ctx.pane.data as TerminalPaneData;
-							killTerminalSession({
-								terminalId,
-								workspaceId,
-							});
-						},
-					};
-
-					return [
-						...terminalActions,
-						...modifiedDefaults,
-						{ key: "sep-terminal-kill", type: "separator" },
-						killAction,
-					];
+					return [...terminalActions, ...modifiedDefaults];
 				},
 			},
 			browser: {
 				getIcon: () => <Globe className="size-3.5" />,
+				getTabIcon: () => <Globe className="size-3.5" />,
 				getTitle: (pane) => {
 					const data = pane.data as BrowserPaneData;
 					if (data.pageTitle) return data.pageTitle;
@@ -630,6 +704,17 @@ export function usePaneRegistry({
 						/>
 					);
 				},
+				getTabIcon: (pane) => {
+					const data = pane.data as CommentPaneData;
+					if (!data.avatarUrl) return <MessageSquare className="size-3.5" />;
+					return (
+						<img
+							alt=""
+							className="size-3.5 rounded-full"
+							src={data.avatarUrl}
+						/>
+					);
+				},
 				getTitle: (pane) => {
 					const data = pane.data as CommentPaneData;
 					return data.authorLogin;
@@ -649,6 +734,7 @@ export function usePaneRegistry({
 					),
 			},
 			devtools: {
+				getTabIcon: () => <Bug className="size-3.5" />,
 				getTitle: () => "DevTools",
 				renderPane: (ctx: RendererContext<PaneViewerData>) => {
 					const data = ctx.pane.data as DevtoolsPaneData;
@@ -661,13 +747,11 @@ export function usePaneRegistry({
 			},
 		}),
 		[
+			workspaceCwd,
 			workspaceId,
 			clearWorkspaceRunTerminal,
 			clearShortcut,
-			scrollToBottomShortcut,
-			killTerminalSession,
 			killTerminalSessionSilently,
-			isKillingTerminalSession,
 			launcher,
 			onOpenFile,
 			onRevealPath,

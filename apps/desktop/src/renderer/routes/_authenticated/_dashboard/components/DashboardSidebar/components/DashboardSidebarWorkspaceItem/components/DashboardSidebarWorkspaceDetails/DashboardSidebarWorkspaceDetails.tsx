@@ -29,13 +29,28 @@ interface DashboardSidebarWorkspaceDetailsProps {
  */
 const UNFOLD_WRAPPER = cn(
 	"invisible max-w-0 shrink-0 overflow-hidden opacity-0",
-	"transition-[max-width,margin,opacity,visibility] duration-500 ease-out motion-reduce:transition-none",
-	"details-expanded:visible details-expanded:ml-1.5 details-expanded:opacity-100 details-expanded:duration-200",
+	/*
+	 * 260ms retracting, not 500ms.
+	 *
+	 * `max-width` and `margin` are layout-animating, so every frame of this
+	 * reflows the sidebar row — half a second of that on every pointer-out is
+	 * both the slowest-feeling thing in the sidebar and the most expensive. The
+	 * retract still wants to be slower than the unfold so the cluster does not
+	 * snap shut under a pointer that is only passing through, which is what the
+	 * asymmetry was for; it did not need to be this slow to get that.
+	 */
+	"transition-[max-width,margin,opacity,visibility] duration-[260ms] ease-out motion-reduce:transition-none",
+	"details-expanded:visible details-expanded:ml-1.5 details-expanded:opacity-100 details-expanded:duration-150",
 );
 
 /** Cap the port-pill stagger so long lists don't drag the animation out. */
 const MAX_STAGGERED_PORTS = 8;
-const STAGGER_STEP_MS = 25;
+/*
+ * 16ms rather than 25ms — roughly a frame apart. Eight pills used to add 200ms
+ * on top of the unfold before the last one moved, which is longer than the
+ * unfold itself. The stagger should read as the row opening, not as a queue.
+ */
+const STAGGER_STEP_MS = 16;
 
 /**
  * Single activity line rendered beneath a workspace row, left-aligned with
@@ -119,7 +134,7 @@ export function DashboardSidebarWorkspaceDetails({
 						"text-[9px] font-medium tabular-nums text-muted-foreground",
 						"max-w-14 px-1.5 opacity-100",
 						agents.length > 0 && "ml-2",
-						"transition-[max-width,margin,padding,opacity] duration-500 ease-out motion-reduce:transition-none",
+						"transition-[max-width,margin,padding,opacity] duration-[260ms] ease-out motion-reduce:transition-none",
 						"details-expanded:ml-0 details-expanded:max-w-0 details-expanded:px-0 details-expanded:opacity-0 details-expanded:duration-200",
 					)}
 				>
@@ -138,7 +153,7 @@ export function DashboardSidebarWorkspaceDetails({
 						"text-[9px] font-medium tabular-nums text-muted-foreground",
 						"max-w-14 px-1.5 opacity-100",
 						agents.length > 0 && "ml-2",
-						"transition-[max-width,margin,padding,opacity] duration-500 ease-out motion-reduce:transition-none",
+						"transition-[max-width,margin,padding,opacity] duration-[260ms] ease-out motion-reduce:transition-none",
 						"details-expanded:ml-0 details-expanded:max-w-0 details-expanded:px-0 details-expanded:opacity-0 details-expanded:duration-200",
 					)}
 				>

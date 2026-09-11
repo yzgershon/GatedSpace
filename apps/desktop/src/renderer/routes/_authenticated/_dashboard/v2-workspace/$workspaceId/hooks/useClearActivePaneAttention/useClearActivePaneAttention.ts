@@ -2,6 +2,7 @@ import type { WorkspaceStore } from "@superset/panes";
 import { useEffect } from "react";
 import { useTerminalAgentBindings } from "renderer/hooks/host-service/useTerminalAgentBindings";
 import { useV2PaneNotificationStatus } from "renderer/hooks/host-service/useV2NotificationStatus";
+import { useMarkSessionSeen } from "renderer/hooks/useSessionPaneStatuses";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import {
 	getV2NotificationSourcesForPane,
@@ -30,11 +31,19 @@ export function useClearActivePaneAttention({
 	const markTerminalSeen = useV2NotificationStore(
 		(state) => state.markTerminalSeen,
 	);
+	const markSessionSeen = useMarkSessionSeen();
 	const bindings = useTerminalAgentBindings(workspace.id);
 
 	useEffect(() => {
-		if (activePaneStatus !== "review") return;
+		// Only statuses describing a turn that has ALREADY ENDED get cleared.
+		// `working` and `permission` are live, and clearing them would put the
+		// dot out while the thing it reports is still happening.
+		if (activePaneStatus !== "review" && activePaneStatus !== "error") return;
 		for (const source of getV2NotificationSourcesForPane(activePane)) {
+			if (source.type === "session") {
+				markSessionSeen(source.id);
+				continue;
+			}
 			if (source.type !== "terminal") continue;
 			// Seen marks are host-clock only: mark "seen through the binding's
 			// last event". Mixing in the renderer clock would poison the
@@ -43,5 +52,11 @@ export function useClearActivePaneAttention({
 			if (!binding) continue;
 			markTerminalSeen(source.id, binding.lastEventAt);
 		}
-	}, [activePane, activePaneStatus, bindings, markTerminalSeen]);
+	}, [
+		activePane,
+		activePaneStatus,
+		bindings,
+		markTerminalSeen,
+		markSessionSeen,
+	]);
 }

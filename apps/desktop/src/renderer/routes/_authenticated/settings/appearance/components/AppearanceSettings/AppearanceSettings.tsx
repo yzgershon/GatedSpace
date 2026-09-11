@@ -4,10 +4,13 @@ import {
 	SETTING_ITEM_ID,
 	type SettingItemId,
 } from "../../../utils/settings-search";
+import { AgentToolbarSection } from "./components/AgentToolbarSection";
 import { FontSettingSection } from "./components/FontSettingSection";
 import { MarkdownStyleSection } from "./components/MarkdownStyleSection";
 import { ScaleSection } from "./components/ScaleSection";
+import { SkinSection } from "./components/SkinSection";
 import { ThemeSection } from "./components/ThemeSection";
+import { WorkspaceToolsSection } from "./components/WorkspaceToolsSection";
 
 /**
  * Renders a list of visible sections with automatic border separators.
@@ -66,8 +69,11 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 			</div>
 
 			<SectionList>
+				<SkinSection key="skin" />
 				{showThemeSection && <ThemeSection key="theme" />}
 				{showScale && <ScaleSection key="scale" />}
+				<AgentToolbarSection key="agent-toolbar" />
+				<WorkspaceToolsSection key="workspace-tools" />
 				{showMarkdown && <MarkdownStyleSection key="markdown" />}
 				{showEditorFont && (
 					<FontSettingSection key="editor-font" variant="editor" />

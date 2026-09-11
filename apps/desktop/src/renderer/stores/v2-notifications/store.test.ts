@@ -21,6 +21,15 @@ const chatPane = {
 	kind: "chat",
 	data: { sessionId: "session-1" },
 };
+/**
+ * The live Claude Code pane. Its data carries no id of its own until the CLI
+ * says hello, which is exactly why the source is keyed on the pane id.
+ */
+const sessionPane = {
+	id: "pane-4",
+	kind: "session",
+	data: {},
+};
 const tab = {
 	id: "tab-1",
 	createdAt: 0,
@@ -30,12 +39,17 @@ const tab = {
 		"pane-1": terminalPane,
 		"pane-2": secondTerminalPane,
 		"pane-3": chatPane,
+		"pane-4": sessionPane,
 	},
 };
 
 describe("v2 notification store", () => {
 	beforeEach(() => {
-		useV2NotificationStore.setState({ manualUnread: {}, terminalSeenAt: {} });
+		useV2NotificationStore.setState({
+			manualUnread: {},
+			terminalSeenAt: {},
+			sessionSeenTurn: {},
+		});
 	});
 
 	it("marks terminal seen monotonically and prunes entries", () => {
@@ -97,6 +111,20 @@ describe("v2 notification store", () => {
 		);
 		expect(migrated.manualUnread).toEqual({ "workspace-1": true });
 		expect(migrated.terminalSeenAt).toEqual({ "terminal-1": 100 });
+		// v2 predates session dots, so it carries no seen turns.
+		expect(migrated.sessionSeenTurn).toEqual({});
+	});
+
+	it("keeps version-3 session seen turns intact", () => {
+		const migrated = migrateV2NotificationState(
+			{
+				manualUnread: {},
+				terminalSeenAt: {},
+				sessionSeenTurn: { "pane-4": "turn-1" },
+			},
+			3,
+		);
+		expect(migrated.sessionSeenTurn).toEqual({ "pane-4": "turn-1" });
 	});
 
 	it("maps panes and tabs to typed notification sources", () => {
@@ -110,6 +138,37 @@ describe("v2 notification store", () => {
 			{ type: "terminal", id: "terminal-1" },
 			{ type: "terminal", id: "terminal-2" },
 			{ type: "chat", id: "session-1" },
+			{ type: "session", id: "pane-4" },
 		]);
+	});
+
+	/**
+	 * The regression this whole feature exists for. A session pane used to map
+	 * to NO sources at all — it is kind "session", which this function only
+	 * knew as neither "terminal" nor "chat" — so its tab could never show a
+	 * status dot, and the indicator looked silenced rather than unwired.
+	 */
+	it("maps a live session pane to a source keyed on the pane id", () => {
+		expect(getV2NotificationSourcesForPane(sessionPane)).toEqual([
+			{ type: "session", id: "pane-4" },
+		]);
+	});
+
+	it("tracks and prunes the seen turn for a session pane", () => {
+		const store = useV2NotificationStore.getState();
+		store.markSessionSeen("pane-4", "turn-1");
+		expect(useV2NotificationStore.getState().sessionSeenTurn["pane-4"]).toBe(
+			"turn-1",
+		);
+		// Not monotonic like terminals: turn ids have no order, and the latest
+		// mark is by definition the one the user just looked at.
+		store.markSessionSeen("pane-4", "turn-2");
+		expect(useV2NotificationStore.getState().sessionSeenTurn["pane-4"]).toBe(
+			"turn-2",
+		);
+		store.pruneSessionSeen("pane-4");
+		expect(
+			useV2NotificationStore.getState().sessionSeenTurn["pane-4"],
+		).toBeUndefined();
 	});
 });

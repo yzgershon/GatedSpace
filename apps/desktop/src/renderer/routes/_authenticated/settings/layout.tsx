@@ -7,6 +7,7 @@ import {
 import { useEffect } from "react";
 import { useHotkeys } from "react-hotkeys-hook";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { rememberSettingsRoute } from "renderer/stores/last-settings-route";
 import {
 	type SettingsSection,
 	useSetSettingsSearchQuery,
@@ -114,6 +115,19 @@ function SettingsLayout() {
 	const location = useLocation();
 	const navigate = useNavigate();
 	const normalizedSearchQuery = searchQuery.trim();
+
+	/*
+	 * Remember which section is open, so the gear reopens here next time.
+	 *
+	 * Recorded from the LAYOUT rather than from each entry point: every way in
+	 * (the gear, the hotkey, the account menu, the rail) navigated to
+	 * `/settings/account` independently, and teaching four call sites to
+	 * remember would have been four places to forget. The layout sees every
+	 * settings route by definition.
+	 */
+	useEffect(() => {
+		rememberSettingsRoute(location.pathname);
+	}, [location.pathname]);
 	const isSearchActive = normalizedSearchQuery.length > 0;
 	const totalMatches = isSearchActive
 		? searchSettings(normalizedSearchQuery).length

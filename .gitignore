@@ -112,3 +112,5 @@ HANDOFF.md
 # open (single-instance lock), so UI is previewed by hand from a scratch file.
 # Local by nature, and biome shouldn't be parsing hand-written preview markup.
 apps/desktop/preview/
+
+apps/desktop/release-pane-topics/

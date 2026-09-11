@@ -18,14 +18,17 @@ import {
 	verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { getHostTrpcClient } from "renderer/lib/host-trpc-client";
 import {
 	DEFAULT_COLS,
 	DEFAULT_ROWS,
 } from "renderer/lib/terminal/terminal-runtime";
+import { OrganizationDropdown } from "renderer/routes/_authenticated/_dashboard/components/TopBar/components/OrganizationDropdown";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
@@ -33,14 +36,18 @@ import { useInlineWorkspacePortsEnabled } from "renderer/stores/inline-workspace
 import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
 import { openSessionInWorkspace } from "renderer/stores/workspace-creates/openSessionInWorkspace";
 import { openTerminalInWorkspace } from "renderer/stores/workspace-creates/openTerminalInWorkspace";
+import { DashboardSidebarAccountRow } from "./components/DashboardSidebarAccountRow";
+import { DashboardSidebarBrand } from "./components/DashboardSidebarBrand";
 import { DashboardSidebarHeader } from "./components/DashboardSidebarHeader";
 import { DashboardSidebarHoverCardOverlay } from "./components/DashboardSidebarHoverCardOverlay";
+import { DashboardSidebarNav } from "./components/DashboardSidebarNav";
 import { SidebarSessionsPanel } from "./components/DashboardSidebarPanels";
 import { DashboardSidebarPortsList } from "./components/DashboardSidebarPortsList";
 import { DashboardSidebarProjectSection } from "./components/DashboardSidebarProjectSection";
 import { DashboardSidebarRail } from "./components/DashboardSidebarRail";
 import { DashboardSidebarSectionRenameProvider } from "./components/DashboardSidebarSectionRenameContext";
 import { DashboardSidebarSkeleton } from "./components/DashboardSidebarSkeleton";
+import { DashboardSidebarUsageBar } from "./components/DashboardSidebarUsageBar";
 import { V2SetupScriptCard } from "./components/V2SetupScriptCard";
 import { useDashboardSidebarData } from "./hooks/useDashboardSidebarData";
 import { useDashboardSidebarShortcuts } from "./hooks/useDashboardSidebarShortcuts";
@@ -90,7 +97,15 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 		// section itself it was always an only child, so last:border-b-0 always
 		// matched and the border never rendered.
 		<div
-			className="border-b border-border/45 last:border-b-0"
+			/*
+			 * Breathing room between projects.
+			 *
+			 * The rule alone was carrying the whole separation, so with six
+			 * projects the tree was one unbroken column of 32px rows and the
+			 * groups were only findable by reading them. Padding does the
+			 * grouping and the rule just marks the seam.
+			 */
+			className="border-b border-border/45 py-1.5 last:border-b-0"
 			ref={setNodeRef}
 			style={{
 				transform: CSS.Translate.toString(transform),
@@ -124,6 +139,15 @@ export function DashboardSidebar({
 	} = useDashboardSidebarData();
 	const { reorderProjects } = useDashboardSidebarState();
 	const navigate = useNavigate();
+	const {
+		accountPlacement,
+		sidebarRail,
+		sidebarCollapse,
+		sidebarNav,
+		sidebarFooterRows,
+		sidebarSurface,
+		shellChrome,
+	} = useSkinTokens();
 	const matchRoute = useMatchRoute();
 	const { activeHostUrl } = useLocalHostService();
 	const inlineWorkspacePortsEnabled = useInlineWorkspacePortsEnabled();
@@ -252,6 +276,31 @@ export function DashboardSidebar({
 
 	const workspaceShortcutLabels = useDashboardSidebarShortcuts(orderedGroups);
 
+	/*
+	 * Workspaces, counted across every project — what the brand row and the
+	 * "Workspaces" nav row put on their right. Sections hold workspaces too, so
+	 * a count of `project.children` would report the number of ROWS in the tree
+	 * rather than the number of workspaces, and read low on any project that
+	 * groups them.
+	 */
+	const workspaceCount = useMemo(
+		() =>
+			groups.reduce(
+				(total, project) =>
+					total +
+					project.children.reduce(
+						(count, child) =>
+							count +
+							(child.type === "workspace"
+								? 1
+								: child.section.workspaces.length),
+						0,
+					),
+				0,
+			),
+		[groups],
+	);
+
 	// Only when there is genuinely nothing to show yet. A sidebar that already
 	// has rows must keep them while a refetch is in flight, or every background
 	// refresh would blink the tree away — the cache-first rule the workspace
@@ -299,15 +348,114 @@ export function DashboardSidebar({
 			<DashboardSidebarHoverProvider>
 				<DashboardSidebarPortsProvider enabled={!isCollapsed}>
 					<DashboardSidebarHoverCardOverlay>
-						<div className="flex h-full" style={style}>
+						<div
+							className={cn(
+								"flex h-full",
+								/*
+								 * A card, not a wall. A rounded pane sitting against a
+								 * square-cornered sidebar reads as two unrelated systems
+								 * sharing a window, which is exactly what he reported. The
+								 * inset is HALF the pane gutter so the trough between the
+								 * sidebar and the first pane comes out the same width as
+								 * the trough between two panes — the pane side already
+								 * contributes the other half.
+								 */
+								/*
+								 * DOUBLE the inset vertically, to line up with the panes.
+								 *
+								 * `--gs-pane-inset` is HALF the gutter, because `Tab.tsx`
+								 * pads the split root AND the leaf wrapper — so two panes
+								 * get half from each and the outer edge gets both, landing
+								 * at a full gutter. The sidebar has only one box, so a
+								 * single half-inset put its top edge 9px above the pane's
+								 * and its bottom 9px below. Reported as "the top and
+								 * bottom edges of the pane should match the sidebar".
+								 *
+								 * The value comes from the layout rather than being spelled
+								 * `calc(var(--gs-pane-inset)*2)` here, and that is the
+								 * second half of the same bug. This element carries the
+								 * sidebar's CSS `zoom`, which scales padding — so the
+								 * doubled inset rendered at 18 × sidebarScale while the
+								 * identical gutter around the panes rendered at
+								 * 18 × mainScale. With the sidebar zoomed up (measured at
+								 * 1.4 against a main of 1.0) its card sat 7px lower and 7px
+								 * shorter than the pane beside it, which reads as exactly
+								 * what it is: two grids that do not line up.
+								 * `--gs-sidebar-gutter-*` is pre-divided by this element's
+								 * own zoom, so the trough lands on the panes' at any pair
+								 * of scales.
+								 */
+								sidebarSurface === "card" &&
+									"py-[var(--gs-sidebar-gutter-y,0px)] pl-[var(--gs-sidebar-gutter-x,0px)]",
+							)}
+							style={style}
+						>
 							{/*
 							 * Collapsed means "the rail IS the sidebar". Previously only
 							 * the width changed, so the panel kept rendering into whatever
 							 * pixels were left and got squeezed into an unreadable strip.
+							 *
+							 * Under Liquid Glass there is no rail at all: its three
+							 * destinations are text rows at the top of the one sidebar, so
+							 * a second 48px column would be the same list twice.
+							 *
+							 * It used to render whenever COLLAPSED regardless of skin, on
+							 * the reasoning that collapsing had to leave something behind
+							 * to click. That reasoning does not hold under
+							 * `shellChrome: "topbar"`, where the toggle sits in the title
+							 * bar and is never hidden — and the cost was that collapsing
+							 * resurrected the removed rail, cropped to 48px, which reads
+							 * exactly like a rendering glitch dragging the old sidebar
+							 * back into a skin that deleted it. `sidebarCollapse` is what
+							 * decides now, so a skin with no rail cannot grow one.
 							 */}
-							<DashboardSidebarRail showDivider={panelOpen && !isCollapsed} />
+							{(sidebarRail || (isCollapsed && sidebarCollapse === "rail")) && (
+								<DashboardSidebarRail showDivider={panelOpen && !isCollapsed} />
+							)}
 							{panelOpen && !isCollapsed ? (
-								<div className="flex h-full min-w-0 flex-1 flex-col border-r border-border bg-muted/45 dark:bg-muted/35">
+								<div
+									className={cn(
+										"flex h-full min-w-0 flex-1 flex-col",
+										/*
+										 * The SAME surface the pane cards paint. It used to be
+										 * `bg-muted/35` over the well, which is a few values
+										 * darker — enough to read as an accident rather than a
+										 * choice.
+										 */
+										sidebarSurface === "card"
+											? "bg-[var(--gs-pane-surface,var(--muted))]"
+											: "bg-muted/45 dark:bg-muted/35",
+										/*
+										 * The right border goes with the card treatment. It was
+										 * one of the "light grey lines": with a recessed trough
+										 * beside it, a 1px rule is a second boundary drawn over
+										 * the one the trough already makes.
+										 */
+										/*
+										 * No border on the card. The trough beside it already
+										 * marks the edge, and a hairline on top of that is the
+										 * "vertical line down the right of the sidebar" that
+										 * broke the rounded corner.
+										 */
+										sidebarSurface === "card"
+											? "overflow-hidden rounded-[var(--gs-pane-radius,0px)] shadow-[var(--gs-pane-shadow,none)]"
+											: "border-r border-border",
+									)}
+								>
+									{sidebarNav === "text" ? (
+										<>
+											{/*
+											 * The brand row is the sidebar's only under
+											 * `shellChrome: "sidebar"`. The other skin has it in
+											 * the title bar, and drawing it in both places would
+											 * print the version twice, twelve pixels apart.
+											 */}
+											{shellChrome === "sidebar" ? (
+												<DashboardSidebarBrand />
+											) : null}
+											<DashboardSidebarNav workspaceCount={workspaceCount} />
+										</>
+									) : null}
 									<DashboardSidebarHeader
 										isCollapsed={isCollapsed}
 										panel={
@@ -319,7 +467,6 @@ export function DashboardSidebar({
 										<SidebarSessionsPanel
 											onOpenSession={openSessionFromSidebar}
 											onResumeInTerminal={resumeInTerminalFromSidebar}
-											onNewSession={() => navigate({ to: "/v2-workspaces" })}
 										/>
 									) : (
 										<>
@@ -392,6 +539,25 @@ export function DashboardSidebar({
 											)}
 										</>
 									)}
+									{/*
+									 * Pinned footer. `mt-auto` rather than a fixed height, so
+									 * it stays at the bottom whatever the tree above does —
+									 * including an empty workspace list, where a
+									 * bottom-anchored account would otherwise float
+									 * mid-sidebar.
+									 */}
+									{accountPlacement === "sidebar-footer" && !isCollapsed ? (
+										<div className="mt-auto shrink-0 border-border border-t p-2">
+											{sidebarFooterRows ? (
+												<>
+													<DashboardSidebarUsageBar />
+													<DashboardSidebarAccountRow />
+												</>
+											) : (
+												<OrganizationDropdown variant="expanded" />
+											)}
+										</div>
+									) : null}
 								</div>
 							) : null}
 						</div>

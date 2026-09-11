@@ -26,6 +26,13 @@ export interface TerminalPaneData {
 // state (the list is fetched live via the claudeSessions tRPC endpoint).
 export type ClaudeSessionsPaneData = Record<string, never>;
 
+/**
+ * A tab that has not chosen what it is yet. Carries no state: the launcher
+ * reads the workspace's presets from the page and fills itself in by running
+ * the ordinary openers, so there is nothing per-instance to remember.
+ */
+export type LauncherPaneData = Record<string, never>;
+
 // A live VS Code-style Claude Code session (pane kind "session"). Distinct from
 // the read-only ClaudeSessionsPaneData list above. Minimal per-instance state —
 // the timeline streams from the main-process transport keyed by pane id.
@@ -109,4 +116,5 @@ export type PaneViewerData =
 	| DiffPaneData
 	| CommentPaneData
 	| ClaudeSessionsPaneData
+	| LauncherPaneData
 	| SessionPaneData;

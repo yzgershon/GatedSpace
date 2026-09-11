@@ -1,5 +1,5 @@
 import { cn } from "@superset/ui/utils";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useDrop } from "react-dnd";
 import type { StoreApi } from "zustand/vanilla";
 import type { WorkspaceStore } from "../../../../../../../core/store";
@@ -15,12 +15,15 @@ import type {
 	RendererContext,
 } from "../../../../../../types";
 import { PaneHeaderActions } from "../../../../../PaneHeaderActions";
+import { usePaneTitle } from "../../../../utils/useTabTitle";
+import { WorkspaceFocusContext } from "../../../../WorkspaceFocusContext";
 import { TAB_DRAG_TYPE } from "../../../TabBar/components/TabItem";
 import { PANE_MIN_SIZE_CLASS_NAME } from "../../constants";
 import { DropZoneOverlay } from "./components/DropZoneOverlay";
 import { PaneContent } from "./components/PaneContent";
 import { PaneContextMenu } from "./components/PaneContextMenu";
 import { PANE_DRAG_TYPE, PaneHeader } from "./components/PaneHeader";
+import { PaneOverflowMenu } from "./components/PaneHeader/components/PaneOverflowMenu";
 
 type PaneDropItem = { paneId: string } | { tabId: string; index: number };
 
@@ -71,13 +74,15 @@ export function Pane<TData>({
 	store,
 	tab,
 	pane,
-	isActive,
+	isActive: paneIsActive,
 	registry,
 	parentDirection = null,
 	paneActions,
 	contextMenuActions,
 }: PaneComponentProps<TData>) {
 	const definition = registry[pane.kind];
+	const workspaceIsActive = useContext(WorkspaceFocusContext);
+	const isActive = paneIsActive && workspaceIsActive;
 
 	const tabs = store.getState().tabs;
 	const tabPosition = tabs.findIndex((t) => t.id === tab.id);
@@ -135,8 +140,13 @@ export function Pane<TData>({
 			workspaceResolved,
 		);
 
-		ctx.components.PaneHeaderActions = () => (
-			<PaneHeaderActions actions={finalActions} context={ctx} />
+		ctx.components.PaneHeaderActions = (placement = "trailing") => (
+			<PaneHeaderActions
+				actions={finalActions.filter(
+					(action) => (action.placement ?? "trailing") === placement,
+				)}
+				context={ctx}
+			/>
 		);
 
 		return ctx;
@@ -176,9 +186,17 @@ export function Pane<TData>({
 			canDrop: (item: PaneDropItem, monitor) => {
 				// Can't drop a tab onto a pane it already owns, or a pane onto itself.
 				if (monitor.getItemType() === TAB_DRAG_TYPE) {
-					return "tabId" in item && item.tabId !== tab.id;
+					return (
+						"tabId" in item &&
+						item.tabId !== tab.id &&
+						!!store.getState().getTab(item.tabId)
+					);
 				}
-				return "paneId" in item && item.paneId !== pane.id;
+				return (
+					"paneId" in item &&
+					item.paneId !== pane.id &&
+					!!store.getState().getPane(item.paneId)
+				);
 			},
 			hover: (_item, monitor) => {
 				const offset = monitor.getClientOffset();
@@ -279,12 +297,14 @@ export function Pane<TData>({
 		[definition, context, pane.kind],
 	);
 
-	const title = definition
-		? (pane.titleOverride ?? definition.getTitle?.(pane) ?? pane.id)
-		: `Unknown: ${pane.kind}`;
+	const title = usePaneTitle(pane, registry);
 	const icon = definition?.getIcon?.(context);
+	const headerLead = definition?.renderHeaderLead?.(context);
+	const menuHeader = definition?.renderMenuHeader?.(context);
 	const titleContent = definition?.renderTitle?.(context);
 	const headerExtras = definition?.renderHeaderExtras?.(context);
+	const titleTrailing = definition?.renderTitleTrailing?.(context);
+	const headerCenter = definition?.renderHeaderCenter?.(context);
 	const toolbar = definition?.renderToolbar?.(context);
 
 	const isDropTarget = isOver && canDrop;
@@ -298,13 +318,28 @@ export function Pane<TData>({
 	// the ring was hardcoded to `--highlight` (#e07850) while Claude's header
 	// painted #d97757, a near-miss that reads as a rendering fault.
 	const accent = definition?.getAccent?.(context);
+	/*
+	 * The same menu the right-click gives, on a button.
+	 *
+	 * Discoverability: every item in it was reachable only by right-clicking a
+	 * pane header, which is not a gesture anyone tries on a thing that already
+	 * has visible buttons. Built from the resolved list rather than its own, so
+	 * the two can never disagree.
+	 */
+	const overflowControl = (
+		<PaneOverflowMenu
+			actions={resolvedContextMenuActions}
+			context={context}
+			header={menuHeader}
+		/>
+	);
 	const maximizeControl =
-		paneCount > 1 ? (
+		paneCount > 1 && !definition?.hideMaximizeControl ? (
 			<button
 				type="button"
 				title={isMaximized ? "Restore" : "Expand"}
 				aria-label={isMaximized ? "Restore pane" : "Expand pane"}
-				className="rounded p-0.5 text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+				className="flex size-[var(--gs-pane-action-size,20px)] items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 				onMouseDown={(e) => e.stopPropagation()}
 				onClick={(e) => {
 					e.stopPropagation();
@@ -352,12 +387,55 @@ export function Pane<TData>({
 		) : null;
 
 	return (
-		<PaneContextMenu actions={resolvedContextMenuActions} context={context}>
+		<PaneContextMenu
+			actions={resolvedContextMenuActions}
+			context={context}
+			header={menuHeader}
+		>
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: clicking anywhere in a pane focuses it (standard IDE behavior) */}
 			<div
 				ref={setRefs}
+				/*
+				 * The pane's identity, in the DOM.
+				 *
+				 * A drag driven by POINTER events rather than react-dnd has no
+				 * monitor to ask what is under the cursor, so it hit-tests with
+				 * `elementFromPoint` and needs something to recognise. The host app's
+				 * tab rail is that drag; see `tabRailDrag.ts`.
+				 */
+				data-pane-id={pane.id}
+				/*
+				 * Radius, border, surface and shadow come from CSS variables the host
+				 * app sets, not from a prop. This package has no idea what a "skin" is
+				 * and should not learn — variables defaulting to 0/transparent mean the
+				 * edge-to-edge layout is still the behaviour when nobody sets anything.
+				 *
+				 * The surface is applied by REDEFINING `--background` for this subtree
+				 * rather than by setting `background` here and hoping. Every pane body
+				 * paints its own `bg-background` over the container, so a background on
+				 * this element alone would never be seen — the same trap that made the
+				 * old `ring-inset` invisible. Redefining the variable moves the whole
+				 * subtree onto the card surface in one line, and leaves `--card` a step
+				 * further up for the insets that sit ON the card.
+				 *
+				 * The fallback is `revert`, NOT `var(--background)`. A custom property
+				 * whose fallback names itself is a cycle, which resolves to the
+				 * guaranteed-invalid value and would take every `bg-background`
+				 * descendant down with it. `revert` rolls this element's declaration
+				 * back out of the cascade instead, leaving the value inherited from
+				 * `:root` — so a host that sets no surface gets exactly what it had.
+				 */
+				style={
+					{
+						borderRadius: "var(--gs-pane-radius, 0px)",
+						borderWidth: "var(--gs-pane-border-width, 0px)",
+						boxShadow: "var(--gs-pane-shadow, none)",
+						background: "var(--gs-pane-surface, transparent)",
+						"--background": "var(--gs-pane-surface, revert)",
+					} as React.CSSProperties
+				}
 				className={cn(
-					"relative flex h-full w-full flex-col overflow-hidden",
+					"relative flex h-full w-full flex-col overflow-hidden border-border",
 					PANE_MIN_SIZE_CLASS_NAME,
 					// The active-pane ring is painted by an overlay further down,
 					// NOT by a class here. `ring-inset` renders as an inset
@@ -368,16 +446,22 @@ export function Pane<TData>({
 					// edges and had never actually been visible.
 				)}
 				onMouseDown={context.actions.focus}
+				onFocusCapture={context.actions.focus}
 			>
 				<PaneHeader
 					title={title}
 					icon={icon}
+					headerLead={headerLead}
 					isActive={isActive}
 					titleContent={titleContent}
 					headerExtras={headerExtras}
+					titleTrailing={titleTrailing}
+					headerCenter={headerCenter}
 					toolbar={toolbar}
 					maximizeControl={maximizeControl}
-					actionsContent={<context.components.PaneHeaderActions />}
+					overflowControl={overflowControl}
+					titleActions={context.components.PaneHeaderActions("title")}
+					actionsContent={context.components.PaneHeaderActions()}
 					paneId={pane.id}
 					onClick={
 						definition?.onHeaderClick
@@ -415,9 +499,17 @@ export function Pane<TData>({
 						aria-hidden="true"
 						className="pointer-events-none absolute inset-0 z-30 rounded-[inherit]"
 						style={{
-							boxShadow: `inset 0 0 0 2px ${
+							/*
+							 * Width and bloom come from CSS variables, defaulting to the
+							 * edge-to-edge values. With cards the pane already has a
+							 * border of its own, so a 2px ring plus a 5px bloom reads as
+							 * a thick glowing frame rather than "this one has focus" —
+							 * the card layout dials both down to brighten the existing
+							 * border instead of drawing a second one over it.
+							 */
+							boxShadow: `inset 0 0 0 var(--gs-pane-ring-width, 2px) ${
 								accent ?? "var(--highlight)"
-							}, inset 0 0 0 5px ${
+							}, inset 0 0 0 var(--gs-pane-ring-glow, 5px) ${
 								accent
 									? `color-mix(in oklab, ${accent} 22%, transparent)`
 									: "transparent"

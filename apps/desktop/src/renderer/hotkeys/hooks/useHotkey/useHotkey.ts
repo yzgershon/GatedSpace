@@ -6,6 +6,7 @@ import { PLATFORM } from "../../registry";
 import { useEffectiveLayoutMap } from "../../stores/keyboardPreferencesStore";
 import type { HotkeyDisplay } from "../../types";
 import { bindingToDispatchChord } from "../../utils/binding";
+import { eventToChord } from "../../utils/resolveHotkeyFromEvent";
 import { useBinding } from "../useBinding";
 
 // react-hotkeys-hook doesn't check AltGraph or IME composition. Use its
@@ -13,6 +14,7 @@ import { useBinding } from "../useBinding";
 // suppress those events so AltGr-typed printables and IME keystrokes pass
 // through to the focused element.
 function shouldIgnoreEvent(e: KeyboardEvent): boolean {
+	if (!eventToChord(e)) return true;
 	if (e.isComposing || e.keyCode === 229) return true;
 	if (e.getModifierState?.("AltGraph") === true) return true;
 	return false;
@@ -41,6 +43,9 @@ export function useHotkey(
 			enableOnFormTags: true,
 			enableOnContentEditable: true,
 			...options,
+			// An empty binding matches media keys whose Windows event.code is empty.
+			// Never register unassigned shortcuts, even if the caller enabled them.
+			enabled: chord?.trim() ? (options?.enabled ?? true) : false,
 			ignoreEventWhen: callerIgnore
 				? (e) => shouldIgnoreEvent(e) || callerIgnore(e)
 				: shouldIgnoreEvent,

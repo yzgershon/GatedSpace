@@ -9,6 +9,25 @@ import {
 } from "./BackgroundTerminalsButton.utils";
 
 describe("BackgroundTerminalsButton utils", () => {
+	/*
+	 * The chip reports "1 shell running", so a shell that finished an hour ago
+	 * and is sitting at a prompt must not be in it. This list used to be
+	 * unattached-only while the host's COUNT was already busy-only, so opening
+	 * the dropdown revealed sessions the collapsed chip had never counted.
+	 */
+	test("drops shells that are not running anything", () => {
+		expect(
+			getBackgroundTerminalSessions(
+				[
+					{ terminalId: "building", createdAt: 3, busy: true },
+					{ terminalId: "idle", createdAt: 2, busy: false },
+					{ terminalId: "unknown", createdAt: 1 },
+				],
+				[],
+			).map((session) => session.terminalId),
+		).toEqual(["building", "unknown"]);
+	});
+
 	test("keeps the attached terminal key stable across tab object churn", () => {
 		type WorkspaceTabs = Parameters<typeof getAttachedTerminalIdsKey>[0];
 		const makeTabs = (): WorkspaceTabs => [

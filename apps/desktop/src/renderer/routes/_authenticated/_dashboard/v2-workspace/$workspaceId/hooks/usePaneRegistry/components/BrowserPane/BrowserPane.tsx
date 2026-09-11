@@ -108,7 +108,6 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 	);
 
 	const isBlankPage = !state.currentUrl || state.currentUrl === "about:blank";
-	const PaneHeaderActions = ctx.components.PaneHeaderActions;
 
 	return (
 		<div className="flex h-full w-full min-w-0 items-center justify-between">
@@ -139,13 +138,14 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 						Open DevTools
 					</TooltipContent>
 				</Tooltip>
+				{ctx.components.PaneHeaderActions("title")}
 				<BrowserOverflowMenu
 					paneId={paneId}
 					currentUrl={state.currentUrl}
 					hasPage={!isBlankPage}
 				/>
 				<div className="mx-1 h-3.5 w-px bg-muted-foreground/30" />
-				<PaneHeaderActions />
+				{ctx.components.PaneHeaderActions()}
 			</div>
 		</div>
 	);

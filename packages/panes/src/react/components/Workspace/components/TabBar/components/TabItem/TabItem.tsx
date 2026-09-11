@@ -6,6 +6,11 @@ import {
 	ContextMenuSeparator,
 	ContextMenuTrigger,
 } from "@superset/ui/context-menu";
+import {
+	HoverCard,
+	HoverCardContent,
+	HoverCardTrigger,
+} from "@superset/ui/hover-card";
 import { OverflowFadeText } from "@superset/ui/overflow-fade-text";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
@@ -40,6 +45,8 @@ interface TabItemProps<TData> {
 	onRename: (title: string | undefined) => void;
 	icon?: ReactNode;
 	accessory?: ReactNode;
+	/** Rows for the multi-pane hover card. Absent for single-pane tabs. */
+	paneList?: ReactNode;
 }
 
 export function TabItem<TData>({
@@ -55,10 +62,22 @@ export function TabItem<TData>({
 	onRename,
 	icon,
 	accessory,
+	paneList,
 }: TabItemProps<TData>) {
 	const [isEditing, setIsEditing] = useState(false);
 	const [editValue, setEditValue] = useState("");
 	const title = useTabTitle(tab, tabs, registry);
+	const paneCount = Object.keys(tab.panes).length;
+	/*
+	 * Only the caller's icon — the browser favicon — is drawn on the tab now.
+	 * The registry's per-kind `getTabIcon` moved to the hover card's rows, where
+	 * there is room for it: a tab is a fixed 160px and the agent mark was
+	 * competing with the pane count, the title and the status dot for about 96
+	 * pixels. A favicon still earns its place because it identifies a browser
+	 * tab better than its title does.
+	 */
+	// A single-pane tab has nothing to expand, so it keeps the plain tooltip.
+	const showPaneList = paneCount > 1 && Boolean(paneList);
 
 	const startEditing = () => {
 		setEditValue(title);
@@ -124,6 +143,61 @@ export function TabItem<TData>({
 		[connectDrag, connectPaneDrop],
 	);
 
+	/*
+	 * Pulled out of the JSX because it is the trigger for BOTH the plain title
+	 * tooltip and the multi-pane hover card, and duplicating it inline was how
+	 * the two branches would drift.
+	 */
+	const titleElement = (
+		/* biome-ignore lint/a11y/noStaticElementInteractions: tab selection is handled by the wrapper's mousedown; this title element is intentionally a non-focusable div so clicking a tab never steals focus from the active pane (issue #4967) */
+		<div
+			className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-3 pr-1 text-left text-xs transition-colors"
+			onAuxClick={(event) => {
+				if (event.button === 1) {
+					event.preventDefault();
+					onClose();
+				}
+			}}
+			onDoubleClick={startEditing}
+		>
+			{icon && <span className="shrink-0">{icon}</span>}
+			{/*
+			 * Pane count as a glyph plus a number, in the tab's own text colour.
+			 *
+			 * The first attempt put an 8px number in a filled chip on the corner of
+			 * the pane icon. Two things were wrong with it: at 8px the digit was
+			 * below what the rest of the app asks anyone to read, and a coloured
+			 * chip sitting a few pixels from the amber status dot read as one
+			 * smeared blob rather than two separate signals. So the count is now
+			 * monochrome and inherits `currentColor` — the status dot is the only
+			 * thing in a tab allowed to use colour, which is what makes it carry.
+			 *
+			 * The glyph is two overlapping rectangles, the same shape the split
+			 * actions use, so it says "panes" instead of leaving a bare number to
+			 * be guessed at.
+			 */}
+			<span className="flex shrink-0 items-center gap-[3px] opacity-70">
+				<svg
+					aria-hidden="true"
+					fill="none"
+					height="11"
+					stroke="currentColor"
+					strokeLinejoin="round"
+					strokeWidth="2.2"
+					viewBox="0 0 24 24"
+					width="11"
+				>
+					<rect height="12" rx="2" width="12" x="3" y="3" />
+					<path d="M9 21h10a2 2 0 0 0 2-2V9" />
+				</svg>
+				<span className="font-medium text-[10px] leading-none tabular-nums">
+					{paneCount}
+				</span>
+			</span>
+			<OverflowFadeText className="flex-1">{title}</OverflowFadeText>
+		</div>
+	);
+
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>
@@ -131,10 +205,51 @@ export function TabItem<TData>({
 				{/* biome-ignore lint/a11y/useKeyWithClickEvents: tabs are pointer-driven; keyboard nav is out of scope here */}
 				<div
 					ref={setRef}
+					/*
+					 * Shape comes from CSS variables the host sets, the same contract
+					 * the panes use. Defaults reproduce the full-height slab with a
+					 * divider on its right, so a host that sets nothing is unchanged.
+					 *
+					 * `--gs-tab-margin` insets the chip from the bar rather than
+					 * shortening it with a fixed height: the bar's height is the host's
+					 * business, and a hardcoded height here would fight it.
+					 */
+					style={{
+						borderRadius: "var(--gs-tab-radius, 0px)",
+						marginTop: "var(--gs-tab-margin, 0px)",
+						marginBottom: "var(--gs-tab-margin, 0px)",
+						marginInline: "var(--gs-tab-margin-x, 0px)",
+						/*
+						 * A chip needs an EDGE, not just a fill. Without one the rounded
+						 * corners had nothing to describe them and the strip read as flat
+						 * text — "you can barely tell they are rounded tabs".
+						 *
+						 * `borderWidth` is set BEFORE `borderRightWidth` on purpose: the
+						 * later key wins, so the slab layout keeps its right-hand divider
+						 * after the all-sides width has been applied. The other order
+						 * silently deleted the divider from VS Code Style.
+						 */
+						borderWidth: "var(--gs-tab-border-width, 0px)",
+						borderColor: isActive
+							? "var(--gs-tab-active-border, transparent)"
+							: "transparent",
+						borderRightWidth: "var(--gs-tab-divider-width, 1px)",
+						/*
+						 * The active fill is inline rather than a class BECAUSE it has to
+						 * beat the class, and its default is written out longhand as the
+						 * exact equivalent of the `bg-border/30` it replaces. Defaulting
+						 * it to `transparent` would have silently un-highlighted the
+						 * active tab for any host that sets no variables — which is the
+						 * whole VS Code Style path.
+						 */
+						backgroundColor: isActive
+							? "var(--gs-tab-active-bg, color-mix(in oklab, var(--border) 30%, transparent))"
+							: "var(--gs-tab-idle-bg, transparent)",
+					}}
 					className={cn(
-						"group relative flex h-full w-full items-center border-r border-border transition-colors",
+						"group relative flex h-full w-full items-center border-border transition-colors",
 						isActive
-							? "bg-border/30 text-foreground"
+							? "text-foreground"
 							: "text-muted-foreground/70 hover:bg-tertiary/20 hover:text-muted-foreground",
 						isPaneOver && "bg-primary/5",
 						isDragging && "opacity-30",
@@ -157,32 +272,33 @@ export function TabItem<TData>({
 						</div>
 					) : (
 						<>
-							<Tooltip
-								delayDuration={500}
-								open={isDragging ? false : undefined}
-							>
-								<TooltipTrigger asChild>
-									{/* biome-ignore lint/a11y/noStaticElementInteractions: tab selection is handled by the wrapper's mousedown; this title element is intentionally a non-focusable div so clicking a tab never steals focus from the active pane (issue #4967) */}
-									<div
-										className="flex h-full min-w-0 flex-1 items-center gap-1.5 pl-3 pr-1 text-left text-xs transition-colors"
-										onAuxClick={(event) => {
-											if (event.button === 1) {
-												event.preventDefault();
-												onClose();
-											}
-										}}
-										onDoubleClick={startEditing}
+							{showPaneList ? (
+								<HoverCard
+									closeDelay={100}
+									open={isDragging ? false : undefined}
+									openDelay={350}
+								>
+									<HoverCardTrigger asChild>{titleElement}</HoverCardTrigger>
+									<HoverCardContent
+										align="start"
+										className="w-auto min-w-56 max-w-80 p-1"
+										side="bottom"
+										sideOffset={2}
 									>
-										{icon && <span className="shrink-0">{icon}</span>}
-										<OverflowFadeText className="flex-1">
-											{title}
-										</OverflowFadeText>
-									</div>
-								</TooltipTrigger>
-								<TooltipContent side="bottom" showArrow={false}>
-									{title}
-								</TooltipContent>
-							</Tooltip>
+										{paneList}
+									</HoverCardContent>
+								</HoverCard>
+							) : (
+								<Tooltip
+									delayDuration={500}
+									open={isDragging ? false : undefined}
+								>
+									<TooltipTrigger asChild>{titleElement}</TooltipTrigger>
+									<TooltipContent side="bottom" showArrow={false}>
+										{title}
+									</TooltipContent>
+								</Tooltip>
+							)}
 							<div className="relative flex h-full w-7 shrink-0 items-center justify-center">
 								{accessory && (
 									<span className="pointer-events-none absolute inset-0 flex items-center justify-center leading-none opacity-100 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0">

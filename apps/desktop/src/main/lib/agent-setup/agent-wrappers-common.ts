@@ -106,9 +106,30 @@ export function reconcileManagedEntries<T>({
 	return { entries, replacedManagedEntries };
 }
 
+/**
+ * Find the REAL binary on PATH, skipping our own wrappers.
+ *
+ * The string comparison below is not enough on Windows, and the failure is a
+ * fork bomb rather than a missing binary. `BIN_DIR` is baked in by Node, so it
+ * reads `C:\Users\you\.superset\bin`, while `$PATH` inside Git Bash arrives
+ * as `/c/Users/you/.superset/bin`. Those never match, so a wrapper that cannot
+ * recognise its own directory finds ITSELF, execs itself, and forks until bash
+ * gives up — observed as `shell level (1000) too high`.
+ *
+ * It is masked on a default install only because the `"$HOME"/.superset/bin`
+ * pattern happens to match in POSIX form. It is NOT masked when
+ * `SUPERSET_HOME_DIR` points somewhere else, which is exactly what dev mode
+ * does (`superset-dev-data`), and it became reachable at all once the `.cmd`
+ * shims made these wrappers executable on Windows.
+ *
+ * So the real guard is `-ef`, which compares the FILE rather than the spelling
+ * of the path and is immune to every form difference. The string cases stay as
+ * a cheap first pass on POSIX.
+ */
 function buildRealBinaryResolver(): string {
 	return `find_real_binary() {
   local name="$1"
+  local candidate
   local IFS=:
   for dir in $PATH; do
     [ -z "$dir" ] && continue
@@ -116,10 +137,14 @@ function buildRealBinaryResolver(): string {
     case "$dir" in
       "${BIN_DIR}"|"$HOME"/.superset/bin|"$HOME"/.superset-*/bin) continue ;;
     esac
-    if [ -x "$dir/$name" ] && [ ! -d "$dir/$name" ]; then
-      printf "%s\\n" "$dir/$name"
-      return 0
+    candidate="$dir/$name"
+    [ -x "$candidate" ] || continue
+    [ -d "$candidate" ] && continue
+    if [ -n "$SUPERSET_WRAPPER_SELF" ] && [ "$candidate" -ef "$SUPERSET_WRAPPER_SELF" ]; then
+      continue
     fi
+    printf "%s\\n" "$candidate"
+    return 0
   done
   return 1
 }
@@ -156,6 +181,21 @@ export function buildWrapperScript(
 ${WRAPPER_MARKER}
 # Superset wrapper for ${binaryName}
 
+# Our own path, for the self-check in find_real_binary. BASH_SOURCE rather than
+# $0 because the .cmd shim invokes us by an absolute path that $0 does not
+# always carry intact.
+SUPERSET_WRAPPER_SELF="\${BASH_SOURCE[0]}"
+
+# A backstop, not the fix. If the self-check above ever misses, this turns an
+# unbounded fork into one legible error — the failure it replaces filled the
+# process table and printed "shell level (1000) too high".
+SUPERSET_WRAPPER_DEPTH="\${SUPERSET_WRAPPER_DEPTH:-0}"
+if [ "$SUPERSET_WRAPPER_DEPTH" -ge 3 ]; then
+  echo "Superset: the ${binaryName} wrapper resolved to itself. Check that ${binaryName} is installed outside $SUPERSET_HOME_DIR/bin." >&2
+  exit 127
+fi
+export SUPERSET_WRAPPER_DEPTH=$((SUPERSET_WRAPPER_DEPTH + 1))
+
 ${buildRealBinaryResolver()}
 REAL_BIN="$(find_real_binary "${binaryName}")"
 if [ -z "$REAL_BIN" ]; then
@@ -167,9 +207,52 @@ ${exportAgentId}${execLine}
 `;
 }
 
+/**
+ * The Windows half of a wrapper: a `.cmd` that runs the bash one.
+ *
+ * The wrapper itself is a `#!/bin/bash` script with NO FILE EXTENSION, and
+ * Windows cannot execute one of those. It does not fail either — it hands the
+ * file to the shell, and the user gets the "Select an app to open 'codex'"
+ * picker offering Notepad and Visual Studio. `BIN_DIR` is on PATH, so this
+ * happens for whichever agent the wrapper wins the PATH race for.
+ *
+ * It stayed hidden on this machine because an npm-installed `codex.cmd` in
+ * `AppData\Roaming\npm` resolved ahead of the wrapper. Anyone WITHOUT that npm
+ * shim — a fresh install of the public build, for instance — gets the picker
+ * instead of their agent. `PATHEXT` is not the problem and adding to it is not
+ * the fix; a `.cmd` beside the script is, because `PATHEXT` already contains
+ * `.CMD` so `codex` now resolves to `codex.cmd` and runs.
+ *
+ * The bash path mirrors `getManagedNotifyHookCommand` above, with a fallback to
+ * whatever `bash` is on PATH so a non-default Git install still works.
+ */
+function buildWindowsCmdShim(binaryName: string): string {
+	return [
+		"@echo off",
+		`rem ${WRAPPER_MARKER}`,
+		`rem Windows shim for the ${binaryName} wrapper beside this file.`,
+		"setlocal",
+		'set "SUPERSET_BASH=C:\\Program Files\\Git\\bin\\bash.exe"',
+		'if not exist "%SUPERSET_BASH%" set "SUPERSET_BASH=bash"',
+		`"%SUPERSET_BASH%" "%~dp0${binaryName}" %*`,
+		"exit /b %ERRORLEVEL%",
+		"",
+	].join("\r\n");
+}
+
 export function createWrapper(binaryName: string, script: string): void {
 	const changed = writeFileIfChanged(getWrapperPath(binaryName), script, 0o755);
 	console.log(
 		`[agent-setup] ${changed ? "Updated" : "Verified"} ${binaryName} wrapper`,
+	);
+
+	if (process.platform !== "win32") return;
+	const cmdChanged = writeFileIfChanged(
+		`${getWrapperPath(binaryName)}.cmd`,
+		buildWindowsCmdShim(binaryName),
+		0o755,
+	);
+	console.log(
+		`[agent-setup] ${cmdChanged ? "Updated" : "Verified"} ${binaryName}.cmd shim`,
 	);
 }

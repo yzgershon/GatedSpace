@@ -12,6 +12,7 @@ import { observable } from "@trpc/server/observable";
 import { getSessionCost } from "main/lib/claude-session/cost-store";
 import { claudeSessionManager } from "main/lib/claude-session/session-manager";
 import { loadSessionTranscript } from "main/lib/claude-session/transcript";
+import { resolveActiveConfigDir } from "main/lib/claude-session/transport";
 import type { ClaudeStreamEvent } from "shared/claude-session/events";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
@@ -36,18 +37,34 @@ const startInput = z.object({
 export const createClaudeSessionRouter = () => {
 	return router({
 		start: publicProcedure.input(startInput).mutation(({ input }) => {
+			/*
+			 * RESOLVE THE ACCOUNT HERE, AND HAND IT BACK.
+			 *
+			 * The transport used to do `configDir ?? resolveActiveConfigDir()`
+			 * internally, so a pane that had never been swapped never learned which
+			 * account it actually got. The renderer filled that gap by displaying
+			 * the CURRENT global default — which is right at spawn and drifts the
+			 * moment the default changes, so changing accounts from the profile
+			 * menu renamed the chip on a pane whose process had not moved at all.
+			 * That is the whole "the front end switched but the back end didn't"
+			 * complaint.
+			 *
+			 * Resolving in one place and returning it means the pane can record
+			 * what it is really running on, instead of inferring it.
+			 */
+			const configDir = input.configDir ?? resolveActiveConfigDir();
 			claudeSessionManager.start(input.key, {
 				cwd: input.cwd,
 				model: input.model,
 				permissionMode: input.permissionMode,
 				resumeSessionId: input.resumeSessionId,
 				forkSession: input.forkSession,
-				configDir: input.configDir,
+				configDir,
 				binary: input.binary,
 				extraArgs: input.extraArgs,
 				env: input.env,
 			});
-			return { started: true };
+			return { started: true, configDir };
 		}),
 
 		/**
@@ -56,18 +73,21 @@ export const createClaudeSessionRouter = () => {
 		 * `resumeSessionId` so the conversation carries over.
 		 */
 		restart: publicProcedure.input(startInput).mutation(({ input }) => {
+			// Same resolution as `start`, for the same reason: a restart that falls
+			// back to the default has to say which account that turned out to be.
+			const configDir = input.configDir ?? resolveActiveConfigDir();
 			claudeSessionManager.restart(input.key, {
 				cwd: input.cwd,
 				model: input.model,
 				permissionMode: input.permissionMode,
 				resumeSessionId: input.resumeSessionId,
 				forkSession: input.forkSession,
-				configDir: input.configDir,
+				configDir,
 				binary: input.binary,
 				extraArgs: input.extraArgs,
 				env: input.env,
 			});
-			return { restarted: true };
+			return { restarted: true, configDir };
 		}),
 
 		send: publicProcedure

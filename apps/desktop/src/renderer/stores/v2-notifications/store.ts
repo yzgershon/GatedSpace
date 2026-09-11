@@ -2,11 +2,21 @@ import type { Pane, Tab } from "@superset/panes";
 import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
-export type V2NotificationPaneLike = Pick<Pane<unknown>, "kind" | "data">;
+export type V2NotificationPaneLike = Pick<
+	Pane<unknown>,
+	"id" | "kind" | "data"
+>;
 export type V2NotificationTabLike = Pick<Tab<unknown>, "panes">;
 
 export type V2NotificationSource =
 	| { type: "terminal"; id: string }
+	/**
+	 * A live Claude Code session pane. Keyed on the PANE id, because that is
+	 * what the session store is keyed on — the conversation's own session id
+	 * isn't known until the CLI says hello, and it changes under a fork, so a
+	 * dot keyed on it would go missing exactly when a session is starting up.
+	 */
+	| { type: "session"; id: string }
 	| { type: "chat"; id: string };
 
 export type V2NotificationSourceKey =
@@ -33,10 +43,22 @@ export interface V2NotificationState {
 	 * and, with the monotonic guard, poison the comparison.
 	 */
 	terminalSeenAt: Record<string, number>;
+	/**
+	 * Session pane id → the id of the finished turn the user has already seen.
+	 *
+	 * An id rather than a timestamp, unlike `terminalSeenAt`: a session pane's
+	 * completions arrive as timeline items with their own ids and no host clock
+	 * to compare against, and matching on the id means "seen" survives a replay
+	 * of the buffered transcript — which happens on every window reload, and
+	 * would otherwise relight every dot in the workspace.
+	 */
+	sessionSeenTurn: Record<string, string>;
 	setManualUnread: (workspaceId: string) => void;
 	clearManualUnread: (workspaceId: string) => void;
 	markTerminalSeen: (terminalId: string, at: number) => void;
 	pruneTerminalSeen: (terminalId: string) => void;
+	markSessionSeen: (paneId: string, turnKey: string) => void;
+	pruneSessionSeen: (paneId: string) => void;
 }
 
 export const useV2NotificationStore = create<V2NotificationState>()(
@@ -45,6 +67,7 @@ export const useV2NotificationStore = create<V2NotificationState>()(
 			(set) => ({
 				manualUnread: {},
 				terminalSeenAt: {},
+				sessionSeenTurn: {},
 				setManualUnread: (workspaceId) => {
 					set((state) => ({
 						manualUnread: { ...state.manualUnread, [workspaceId]: true },
@@ -76,13 +99,30 @@ export const useV2NotificationStore = create<V2NotificationState>()(
 						return { terminalSeenAt };
 					});
 				},
+				markSessionSeen: (paneId, turnKey) => {
+					set((state) => {
+						if (state.sessionSeenTurn[paneId] === turnKey) return state;
+						return {
+							sessionSeenTurn: { ...state.sessionSeenTurn, [paneId]: turnKey },
+						};
+					});
+				},
+				pruneSessionSeen: (paneId) => {
+					set((state) => {
+						if (!(paneId in state.sessionSeenTurn)) return state;
+						const { [paneId]: _removed, ...sessionSeenTurn } =
+							state.sessionSeenTurn;
+						return { sessionSeenTurn };
+					});
+				},
 			}),
 			{
 				name: "v2-notifications-v1",
-				version: 2,
+				version: 3,
 				partialize: (state) => ({
 					manualUnread: state.manualUnread,
 					terminalSeenAt: state.terminalSeenAt,
+					sessionSeenTurn: state.sessionSeenTurn,
 				}),
 				migrate: migrateV2NotificationState,
 			},
@@ -93,7 +133,7 @@ export const useV2NotificationStore = create<V2NotificationState>()(
 
 type PersistedV2NotificationState = Pick<
 	V2NotificationState,
-	"manualUnread" | "terminalSeenAt"
+	"manualUnread" | "terminalSeenAt" | "sessionSeenTurn"
 >;
 
 /**
@@ -112,6 +152,9 @@ export function migrateV2NotificationState(
 		return {
 			manualUnread: state?.manualUnread ?? {},
 			terminalSeenAt: state?.terminalSeenAt ?? {},
+			// v2 predates session dots; an empty map means every open session
+			// starts unseen, which is the safe direction to be wrong in.
+			sessionSeenTurn: state?.sessionSeenTurn ?? {},
 		};
 	}
 	const legacy = persisted as
@@ -129,7 +172,7 @@ export function migrateV2NotificationState(
 			manualUnread[entry.workspaceId] = true;
 		}
 	}
-	return { manualUnread, terminalSeenAt: {} };
+	return { manualUnread, terminalSeenAt: {}, sessionSeenTurn: {} };
 }
 
 export function getV2NotificationSourceKey(
@@ -150,6 +193,13 @@ export function getV2NotificationSourcesForPane(
 ): V2NotificationSource[] {
 	const terminalId = getTerminalIdForPane(pane);
 	if (terminalId) return [getV2TerminalNotificationSource(terminalId)];
+	// The Claude Code session pane. Its kind is "session" — NOT "chat", which
+	// is a v1 kind the v2 pane registry never registered. Missing this case is
+	// why the tab dot silently worked for terminals only: a session pane
+	// produced no sources at all, so there was never a status to show.
+	if (pane?.kind === "session" && pane.id) {
+		return [{ type: "session", id: pane.id }];
+	}
 	const chatId = getChatIdForPane(pane);
 	if (chatId) return [{ type: "chat", id: chatId }];
 	return [];

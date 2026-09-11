@@ -5,12 +5,13 @@ import {
 	type PaneRegistry,
 	type WorkspaceStore,
 } from "@superset/panes";
+import { toast } from "@superset/ui/sonner";
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useV2UserPreferences } from "renderer/hooks/useV2UserPreferences";
 import { useHotkey } from "renderer/hotkeys";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
 import { useRightSidebarToggleIntent } from "renderer/stores/right-sidebar-toggle-intent";
 import type { StoreApi } from "zustand";
+import type { ToolPanels } from "../../components/WorkspaceToolPanels/tool-panel-store";
 import type {
 	BrowserPaneData,
 	DiffPaneData,
@@ -21,6 +22,7 @@ import type {
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
 
 export function useWorkspaceHotkeys({
+	tools,
 	store,
 	matchedPresets,
 	executePreset,
@@ -29,28 +31,37 @@ export function useWorkspaceHotkeys({
 	launcher,
 }: {
 	store: StoreApi<WorkspaceStore<PaneViewerData>>;
+	tools: ToolPanels;
 	matchedPresets: V2TerminalPresetRow[];
 	executePreset: (preset: V2TerminalPresetRow) => void | Promise<void>;
 	addTerminalTab: () => Promise<void>;
 	paneRegistry: PaneRegistry<PaneViewerData>;
 	launcher: TerminalLauncher;
 }) {
-	const { setRightSidebarOpen, setRightSidebarTab } = useV2UserPreferences();
+	const toggleTools = useCallback(() => {
+		void tools
+			.toggle("right")
+			.catch((error) =>
+				toast.error(
+					error instanceof Error ? error.message : "Could not open tools",
+				),
+			);
+	}, [tools]);
 	const visiblePresets = useMemo(
 		() => matchedPresets.filter((preset) => preset.pinnedToBar !== false),
 		[matchedPresets],
 	);
 
 	useHotkey("TOGGLE_SIDEBAR", () => {
-		setRightSidebarOpen((prev) => !prev);
+		toggleTools();
 	});
 
 	useEffect(
 		() =>
 			useRightSidebarToggleIntent.subscribe((state, prev) => {
-				if (state.tick !== prev.tick) setRightSidebarOpen((open) => !open);
+				if (state.tick !== prev.tick) toggleTools();
 			}),
-		[setRightSidebarOpen],
+		[toggleTools],
 	);
 
 	// --- Tab creation ---
@@ -81,8 +92,7 @@ export function useWorkspaceHotkeys({
 	});
 
 	useHotkey("OPEN_DIFF_VIEWER", () => {
-		setRightSidebarOpen(true);
-		setRightSidebarTab("changes");
+		void tools.open("right", "changes");
 
 		const state = store.getState();
 		for (const tab of state.tabs) {
@@ -124,11 +134,15 @@ export function useWorkspaceHotkeys({
 		}
 	});
 
-	useHotkey("CLOSE_TAB", () => {
+	useHotkey("CLOSE_TAB", async () => {
 		const state = store.getState();
-		if (state.activeTabId) {
-			state.removeTab(state.activeTabId);
+		const tab = state.getActiveTab();
+		if (!tab) return;
+		for (const pane of Object.values(tab.panes)) {
+			const guard = paneRegistry[pane.kind]?.onBeforeClose;
+			if (guard && !(await guard(pane))) return;
 		}
+		store.getState().removeTab(tab.id);
 	});
 
 	useHotkey("PREV_TAB", () => {

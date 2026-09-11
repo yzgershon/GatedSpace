@@ -7,12 +7,17 @@ import { DefaultHeaderContent } from "./components/DefaultHeaderContent";
 interface PaneHeaderProps {
 	title: ReactNode;
 	icon?: ReactNode;
+	headerLead?: ReactNode;
 	isActive: boolean;
 	titleContent?: ReactNode;
 	headerExtras?: ReactNode;
+	titleTrailing?: ReactNode;
+	headerCenter?: ReactNode;
 	actionsContent: ReactNode;
+	titleActions?: ReactNode;
 	toolbar?: ReactNode;
 	maximizeControl?: ReactNode;
+	overflowControl?: ReactNode;
 	paneId?: string;
 	onClick?: () => void;
 	onMiddleClick?: () => void;
@@ -27,12 +32,17 @@ export const PANE_DRAG_TYPE = "pane";
 export function PaneHeader({
 	title,
 	icon,
+	headerLead,
 	isActive,
 	titleContent,
 	headerExtras,
+	titleTrailing,
+	headerCenter,
 	actionsContent,
+	titleActions,
 	toolbar,
 	maximizeControl,
+	overflowControl,
 	paneId,
 	onClick,
 	onMiddleClick,
@@ -72,7 +82,7 @@ export function PaneHeader({
 		<div
 			ref={setRef}
 			className={cn(
-				"relative flex h-7 shrink-0 items-center transition-[background-color] duration-150",
+				"relative flex h-[var(--gs-pane-header-height,40px)] shrink-0 items-center transition-[background-color] duration-150",
 				isActive ? "bg-muted" : "bg-transparent",
 				isDragging && "opacity-30",
 			)}
@@ -83,9 +93,16 @@ export function PaneHeader({
 				// terminal output directly beneath it, and the header stops reading as
 				// chrome. `color-mix` so the result tracks the active theme instead of
 				// being two hardcoded colours.
+				/*
+				 * The tint STRENGTH is a variable so the host can switch it off.
+				 * With a status dot and an agent mark at the head of the row, the
+				 * wash is a third thing saying the same thing — and it was the
+				 * loudest object on screen. Defaults to the 17% it always used, so
+				 * a host that sets nothing is unchanged.
+				 */
 				accent && isActive
 					? {
-							backgroundColor: `color-mix(in oklab, ${accent} 17%, var(--muted))`,
+							backgroundColor: `color-mix(in oklab, ${accent} var(--gs-pane-header-tint, 17%), var(--muted))`,
 						}
 					: undefined
 			}
@@ -117,7 +134,12 @@ export function PaneHeader({
 				<span
 					aria-hidden
 					className="pointer-events-none absolute inset-y-0 left-0 w-0.5 transition-opacity duration-150"
-					style={{ backgroundColor: accent, opacity: 0.45 }}
+					style={{
+						backgroundColor: accent,
+						// Same reasoning as the tint: a variable so the host can drop
+						// it once the header carries a dot instead.
+						opacity: "var(--gs-pane-header-bar, 0.45)",
+					}}
 				/>
 			)}
 			{toolbar ? (
@@ -137,10 +159,16 @@ export function PaneHeader({
 				<DefaultHeaderContent
 					title={title}
 					icon={icon}
+					headerLead={headerLead}
 					isActive={isActive}
 					titleContent={titleContent}
 					headerExtras={headerExtras}
+					titleTrailing={titleTrailing}
+					headerCenter={headerCenter}
+					overflowControl={overflowControl}
+					paneId={paneId}
 					actionsContent={actionsContent}
+					titleActions={titleActions}
 					maximizeControl={maximizeControl}
 					onRename={onRename}
 				/>

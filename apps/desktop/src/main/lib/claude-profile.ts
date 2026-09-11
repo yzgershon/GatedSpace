@@ -40,6 +40,16 @@ export interface ClaudeAccountProfile {
 	configDir: string;
 	/** Whether this profile has completed its one-time CLI login. */
 	ready: boolean;
+	/**
+	 * Whether this account is out of quota right now, per the rate-limit
+	 * snapshot the status line writes.
+	 *
+	 * Surfaced so the account picker can say so BEFORE you switch onto a burnt
+	 * account. "auto" has always known this — it is what failover resolves on —
+	 * but it kept it to itself, so choosing an account by hand was a guess and
+	 * the first prompt after the switch was how you found out.
+	 */
+	exhausted: boolean;
 }
 
 export interface ClaudeProfileState {
@@ -127,6 +137,7 @@ export function listClaudeProfiles(): ClaudeAccountProfile[] {
 			...(typeof entry.email === "string" ? { email: entry.email } : {}),
 			configDir,
 			ready: hasCreds(configDir),
+			exhausted: exhausted(configDir),
 		});
 	}
 
@@ -137,6 +148,7 @@ export function listClaudeProfiles(): ClaudeAccountProfile[] {
 			label: "Claude",
 			configDir,
 			ready: hasCreds(configDir),
+			exhausted: exhausted(configDir),
 		});
 	}
 	return profiles;
@@ -154,7 +166,7 @@ export function getClaudeProfile(): ClaudeProfileState {
 	if (mode !== "auto") {
 		activeProfileId = mode;
 	} else {
-		const available = profiles.find((p) => p.ready && !exhausted(p.configDir));
+		const available = profiles.find((p) => p.ready && !p.exhausted);
 		if (available) activeProfileId = available.id;
 	}
 	return { mode, activeProfileId, profiles };
@@ -224,7 +236,13 @@ export function addClaudeProfile(label: string): ClaudeAccountProfile {
 	state.profiles = profiles;
 	writeProfileState(state);
 
-	return { id, label: trimmed, configDir, ready: hasCreds(configDir) };
+	return {
+		id,
+		label: trimmed,
+		configDir,
+		ready: hasCreds(configDir),
+		exhausted: exhausted(configDir),
+	};
 }
 
 /**

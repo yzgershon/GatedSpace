@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — restyled, session panes</title>
+<style>
+  /*
+   * GatedSpace at 1:1. Every size below is copied from the real components so
+   * this is measurable, not impressionistic:
+   *
+   *   SessionTimelineView  PinnedPrompt  rounded-lg border-border/50 bg-card px-4 py-2.5 text-[13.5px]
+   *                        Row           relative pl-8, dot size-[7px] at top-[7px] left-2
+   *                        tool name     font-semibold text-[13.5px]
+   *                        tool arg      font-mono text-[12px] text-muted-foreground/60
+   *                        tool output   rounded-lg border-border/70, pre font-mono text-[11.5px]
+   *                        thinking      trigger text-[13px], body italic text-xs
+   *                        result        text-xs text-muted-foreground/70
+   *                        subagent      rounded-lg border-border/60 bg-card/30
+   *   working-indicator    frames · ✢ ✳ ∗ ✻ ✽, gerunds, elapsed + formatTokens
+   *   globals.css (dark)   every colour
+   *
+   * Dot states match Row exactly: success green, error red, running amber
+   * pulsing, prose muted/40.
+   */
+  :root{
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --secondary:#2a2827; --muted-foreground:#a8a5a3; --tertiary:#1a1716;
+    --border:#2a2827; --highlight:#e07850; --sidebar:#1a1716; --sidebar-accent:#252220;
+    --success:#22c55e; --warning:#f59e0b; --destructive:#ef4444; --fuchsia:#d946ef;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 120px;background:#0c0908;color:var(--foreground);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+  h2{font-size:15px;font-weight:600;margin:52px 0 4px;padding-top:22px;border-top:1px solid #241f1e}
+  p{color:var(--muted-foreground);max-width:82ch;margin:6px 0 16px}
+  .lede{margin-bottom:24px}
+  code{font-family:var(--mono);font-size:12px;background:var(--tertiary);padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.72);margin:12px 0 0;max-width:82ch}
+  .note{border-left:2px solid var(--highlight);padding:8px 0 8px 14px;margin:18px 0;color:var(--muted-foreground);max-width:82ch}
+  .note strong{color:var(--foreground);font-weight:600}
+  .btns{margin:16px 0 12px}
+  button.go{background:var(--secondary);color:var(--foreground);border:1px solid var(--border);
+    border-radius:8px;padding:6px 13px;font-size:12.5px;cursor:pointer;margin-right:8px}
+  button.go:hover{background:#343130}
+  button.go.on{border-color:var(--highlight)}
+
+  /* ================= app shell — realistic 1440x900 window ================= */
+  .app{width:1440px;height:900px;display:flex;border:1px solid #2a2422;border-radius:12px;
+    overflow:hidden;background:var(--background);box-shadow:0 30px 70px rgba(0,0,0,.6)}
+  .app.sm{height:560px}
+
+  /* ---- sidebar (212px, BridgeMind rhythm, GatedSpace content) ---- */
+  .side{width:212px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:9px 0}
+  .brand{display:flex;align-items:center;gap:8px;padding:3px 12px 13px}
+  .mark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--highlight),#a8492a);flex-shrink:0}
+  .brand b{font-size:13px;font-weight:600;letter-spacing:-.01em}
+  .nav{padding:0 8px}
+  .nrow{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;border-radius:7px;
+    font-size:13px;color:var(--muted-foreground)}
+  .nrow.on{background:var(--sidebar-accent);color:var(--foreground)}
+  .cnt{font-size:11px;color:rgba(168,165,163,.45);font-variant-numeric:tabular-nums}
+  .sect{display:flex;align-items:center;justify-content:space-between;padding:17px 17px 6px;
+    font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:rgba(168,165,163,.4)}
+  .wrow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:7px;font-size:13px;color:var(--muted-foreground)}
+  .wrow.on{background:var(--sidebar-accent);color:var(--foreground);font-weight:500}
+  .caret{width:9px;font-size:9px;color:rgba(168,165,163,.38);flex-shrink:0}
+  .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srow{display:flex;align-items:center;gap:7px;padding:4px 9px 4px 25px;border-radius:7px;
+    font-size:12px;color:rgba(168,165,163,.72)}
+  .srow.on{background:rgba(224,120,80,.1);color:var(--foreground)}
+  .foot{margin-top:auto;padding:9px 8px 0;border-top:1px solid var(--border)}
+  .acct{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;font-size:13px}
+  .av{width:20px;height:20px;border-radius:6px;background:#6b5b54;flex-shrink:0;display:flex;
+    align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+  .ultra{height:14px;padding:0 4px;border-radius:4px;background:var(--fuchsia);color:#fff;
+    font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;line-height:14px}
+  .gear{margin-left:auto;color:rgba(168,165,163,.45);font-size:13px}
+
+  /* ---- main ---- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .top{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;flex-shrink:0;
+    border-bottom:1px solid var(--border);font-size:13px}
+  .wsn{font-weight:500;letter-spacing:-.01em}
+  .vchip{font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.7);
+    border:1px solid var(--border);border-radius:4px;padding:1px 5px;line-height:14px}
+  .chev{color:rgba(168,165,163,.33)}
+  .brn{color:var(--muted-foreground);font-size:12.5px}
+  .sp{flex:1}
+  .tb{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:var(--muted-foreground);position:relative}
+  .updot{position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:99px;
+    background:var(--success);border:1.5px solid var(--background)}
+  .updot::after{content:"";position:absolute;inset:-1.5px;border-radius:99px;background:var(--success);
+    opacity:.7;animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+  @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+  .tidy{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:7px;
+    border:1px solid var(--border);background:var(--secondary);font-size:12px;color:var(--muted-foreground)}
+
+  .pbar{display:flex;align-items:center;height:36px;padding:0 10px;flex-shrink:0;border-bottom:1px solid rgba(42,40,39,.7)}
+  .pseg{display:flex;align-items:center;gap:3px;min-width:0}
+  .pseg.g{flex:1}.pseg.e{flex:1;justify-content:flex-end}.pseg.m{justify-content:center}
+  .pst{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:8px;
+    font-size:13px;color:var(--muted-foreground);white-space:nowrap}
+  .pico{width:16px;height:16px;flex-shrink:0;border-radius:4px}
+
+  /* ================= session pane cards ================= */
+  .grid{flex:1;min-height:0;display:grid;gap:10px;padding:10px;grid-template-columns:1fr 1fr;grid-auto-rows:1fr}
+  .grid.c1{grid-template-columns:1fr;grid-auto-rows:1fr}
+  .grid.c3{grid-template-columns:repeat(3,1fr)}
+
+  .pane{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative}
+  .pane.act{border-color:rgba(224,120,80,.5)}
+  .pane.act::after{content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(224,120,80,.3)}
+
+  /* pane header — accent tint from getAccent(agentAccent("claude")) */
+  .ph{display:flex;align-items:center;gap:7px;height:32px;padding:0 10px;flex-shrink:0;
+    border-bottom:1px solid rgba(42,40,39,.7);
+    background:linear-gradient(to bottom,rgba(224,120,80,.09),rgba(224,120,80,0))}
+  .ph.codex{background:linear-gradient(to bottom,rgba(120,130,150,.09),rgba(120,130,150,0))}
+  .pt{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:rgba(234,232,230,.92)}
+  .pacts{display:flex;gap:4px;color:rgba(168,165,163,.42);font-size:11px;flex-shrink:0}
+
+  /* usage strip */
+  .strip{display:flex;align-items:center;gap:10px;padding:5px 10px;flex-shrink:0;font-size:11px;
+    color:var(--muted-foreground);border-bottom:1px solid rgba(42,40,39,.45)}
+  .strip .lab{font-weight:500;color:rgba(234,232,230,.7)}
+  .bar{display:inline-flex;height:8px;width:56px;overflow:hidden;border-radius:2px;background:rgba(234,232,230,.1);vertical-align:middle}
+  .bar i{display:block;height:100%;border-radius:2px}
+  .strip .rt{margin-left:auto;font-variant-numeric:tabular-nums;color:rgba(234,232,230,.55)}
+
+  /* transcript */
+  .tx{flex:1;min-height:0;overflow:hidden;padding:10px 12px 4px;display:flex;flex-direction:column;gap:9px}
+  .prompt{border:1px solid rgba(42,40,39,.75);background:var(--card);border-radius:8px;
+    padding:9px 14px;font-size:13.5px;color:var(--foreground);flex-shrink:0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 6px 16px -8px rgba(0,0,0,.55)}
+  .row{position:relative;padding-left:32px}
+  .row>.d{position:absolute;top:7px;left:8px;width:7px;height:7px;border-radius:99px}
+  .d.ok{background:var(--success)}
+  .d.err{background:var(--destructive)}
+  .d.run{background:var(--warning);animation:pulse 1.6s ease-in-out infinite}
+  .d.prose{background:rgba(168,165,163,.4)}
+  @keyframes pulse{50%{opacity:.35}}
+  .think{font-size:13px;color:rgba(168,165,163,.8)}
+  .think .body{padding-top:4px;font-size:12px;font-style:italic;color:rgba(168,165,163,.8);white-space:pre-wrap}
+  .tool{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .tool b{font-weight:600;font-size:13.5px;color:var(--foreground);flex-shrink:0}
+  .tool .arg{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-family:var(--mono);font-size:12px;color:rgba(168,165,163,.6)}
+  .out{margin-top:4px;border:1px solid rgba(42,40,39,.85);border-radius:8px;overflow:hidden}
+  .out pre{margin:0;padding:5px 12px;font-family:var(--mono);font-size:11.5px;line-height:1.65;
+    color:var(--muted-foreground);white-space:pre-wrap}
+  .prose-t{font-size:13.5px;color:var(--foreground);line-height:1.6}
+  .prose-t .m{font-family:var(--mono);font-size:12.5px;background:var(--tertiary);padding:0 4px;border-radius:3px}
+  .caret{display:inline-block;width:6px;height:14px;background:rgba(234,232,230,.7);border-radius:1px;
+    transform:translateY(2px);margin-left:2px;animation:pulse 1.1s ease-in-out infinite}
+  .result{font-size:12px;color:rgba(168,165,163,.7)}
+  .divider{display:flex;align-items:center;gap:12px;color:rgba(168,165,163,.5);font-size:11px}
+  .divider .sq{flex:1;height:1px;background:repeating-linear-gradient(90deg,rgba(168,165,163,.25) 0 3px,transparent 3px 6px)}
+  .sub{margin-top:6px;border:1px solid rgba(42,40,39,.7);background:rgba(32,30,28,.35);border-radius:8px;
+    padding:6px 10px;font-size:12px;color:var(--muted-foreground)}
+  .working{display:flex;align-items:center;gap:8px;font-size:13px;color:rgba(168,165,163,.9);padding-left:32px}
+  .working .gl{font-family:var(--mono);color:var(--highlight);width:12px;display:inline-block}
+  .working .el{font-family:var(--mono);font-size:11px;color:rgba(168,165,163,.5)}
+
+  /* composer */
+  .comp{margin:6px 10px 10px;flex-shrink:0;border:1px solid rgba(42,40,39,.95);border-radius:10px;
+    background:rgba(21,17,16,.55);overflow:hidden}
+  .comp .in{display:flex;align-items:center;gap:8px;padding:8px 11px;font-size:13px;color:rgba(168,165,163,.5)}
+  .comp .in .c{color:var(--highlight);font-family:var(--mono)}
+  .comp .bar2{display:flex;align-items:center;gap:6px;padding:5px 9px;border-top:1px solid rgba(42,40,39,.7);
+    font-size:11px;color:rgba(168,165,163,.6)}
+  .chip{display:inline-flex;align-items:center;gap:4px;height:19px;padding:0 7px;border-radius:6px;
+    background:rgba(42,40,39,.7)}
+  .comp .send{margin-left:auto;width:20px;height:20px;border-radius:6px;background:var(--secondary);
+    display:flex;align-items:center;justify-content:center;color:rgba(168,165,163,.7);font-size:11px}
+
+  /* empty state */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  .empty h3{font-size:18px;font-weight:600;margin:12px 0 3px}
+  .empty p{margin:0 0 20px;font-size:13px}
+  .launch{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:440px}
+  .lb{display:flex;align-items:center;gap:9px;height:40px;padding:0 13px;border-radius:9px;
+    border:1px solid var(--border);background:var(--card);font-size:13px}
+  .more{margin-top:15px;font-size:12px;color:rgba(168,165,163,.55)}
+  .multi{margin-top:9px;font-size:13px;color:var(--highlight)}
+  table{border-collapse:collapse;margin:14px 0 0;font-size:13px;width:100%;max-width:920px}
+  th,td{text-align:left;padding:8px 16px 8px 0;border-bottom:1px solid #241f1e;vertical-align:top}
+  th{color:var(--muted-foreground);font-weight:600;font-size:12px}
+  td.w2{color:var(--muted-foreground)}
+  .tag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 7px;border-radius:4px}
+  .keep{background:rgba(34,197,94,.14);color:#6ee7a8}
+  .skip{background:rgba(239,68,68,.13);color:#fca5a5}
+  .have{background:rgba(168,165,163,.14);color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+
+<h1>GatedSpace, restyled — session panes</h1>
+<p class="lede">
+  Corrected: your panes are the VS-Code-style session view that folds
+  <code>stream-json</code> into a transcript, not terminals. So these are pinned prompt panels, gutter
+  dots, tool rows with output, thinking blocks and the working indicator — at the exact sizes
+  <code>SessionTimelineView</code> uses. Window is 1440×900 at 1:1, so what you see is the real scale.
+</p>
+
+<div class="btns">
+  <button class="go" onclick="cols(1,this)">1 pane</button>
+  <button class="go on" id="d2" onclick="cols(2,this)">2×2</button>
+  <button class="go" onclick="cols(3,this)">3 across</button>
+</div>
+
+<div class="app">
+  <div class="side">
+    <div class="brand"><span class="mark"></span><b>GatedSpace</b><span class="vchip">1.17.48</span></div>
+    <div class="nav">
+      <div class="nrow on">Dashboard <span class="cnt">3</span></div>
+      <div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs <span class="cnt">2</span></div>
+      <div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <span style="font-size:14px">+</span></div>
+    <div class="nav">
+      <div class="wrow on"><span class="caret">▾</span><span class="nm">superset</span><span class="cnt">4</span></div>
+      <div class="srow on"><span class="d run" style="position:static"></span><span class="nm">Blank terminal</span></div>
+      <div class="srow"><span class="d ok" style="position:static"></span><span class="nm">Tab status dots</span></div>
+      <div class="srow"><span class="d run" style="position:static"></span><span class="nm">Restyle preview</span></div>
+      <div class="srow"><span class="d prose" style="position:static"></span><span class="nm">powershell</span></div>
+      <div class="wrow"><span class="caret">▾</span><span class="nm">SecondBrain</span><span class="cnt">1</span></div>
+      <div class="srow"><span class="d ok" style="position:static"></span><span class="nm">College sheet</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">GatedKey</span><span class="cnt">1</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">sortie</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">yddetailers-site</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">Iotronmedical</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">AIOS</span></div>
+    </div>
+    <div class="foot"><div class="acct"><span class="av">Y</span>Yishai<span class="ultra">Ultra</span><span class="gear">⚙</span></div></div>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      <span class="wsn">superset</span><span class="vchip">v1.17.48</span>
+      <span class="chev">›</span><span class="brn">⑂ windows-port</span>
+      <span class="sp"></span>
+      <span class="tb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg><span class="updot"></span></span>
+      <span class="tb">🗀</span>
+      <span class="tidy">▦ Tidy</span>
+    </div>
+    <div class="pbar">
+      <span class="pseg g"><span class="tb" style="width:24px;height:24px">⚙</span></span>
+      <span class="pseg m">
+        <span class="pst"><span class="pico" style="background:#e07850"></span>Claude</span>
+        <span class="pst"><span class="pico" style="background:#6b7280"></span>Codex</span>
+        <span class="pst"><span class="pico" style="background:#7aa2f7"></span>Gemini</span>
+        <span class="pst"><span class="pico" style="background:#8b8b8b"></span>Copilot</span>
+      </span>
+      <span class="pseg e"></span>
+    </div>
+
+    <div class="grid" id="grid">
+
+      <!-- pane 1 — streaming -->
+      <div class="pane act">
+        <div class="ph"><span class="d run" style="position:static"></span><span class="pt">Blank terminal — re-measure the cell</span><span class="pacts">⋯ ⤢ ✕</span></div>
+        <div class="strip">
+          <span class="lab">Context</span><span class="bar"><i style="width:34%;background:var(--highlight)"></i></span><span>34%</span>
+          <span class="rt">$1.42 · 2m14s</span>
+        </div>
+        <div class="tx">
+          <div class="prompt">The plain PowerShell pane is still blank in 1.17.45. Dragging it into a split fixes it.</div>
+          <div class="row"><span class="d ok"></span>
+            <div class="think">Thought for 4s</div>
+            <div class="think body">Split-fixes-it means the cell is non-zero but wrong. If it were 0×0, fit() would bail forever and resizing could not help either.</div>
+          </div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Read</b><span class="arg">packages/xterm/src/CharSizeService.ts</span></div>
+            <div class="out"><pre>measure() is called once from open().
+proposeDimensions() reads the CACHED value.</pre></div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t">xterm measures its character cell <span class="m">exactly once</span>, in <span class="m">open()</span> — and <span class="m">fit()</span> is not a re-measure. Re-measuring before every fit now.<span class="caret"></span></div>
+          </div>
+          <div class="working"><span class="gl">✻</span><span>Reticulating</span><span class="el">18s · 3.4k tokens</span></div>
+        </div>
+        <div class="comp">
+          <div class="in"><span class="c">›</span>Reply to Claude…</div>
+          <div class="bar2"><span class="chip">Opus 4.6</span><span class="chip">xhigh</span><span class="chip">bypassPermissions</span><span class="send">↑</span></div>
+        </div>
+      </div>
+
+      <!-- pane 2 — done -->
+      <div class="pane">
+        <div class="ph"><span class="d ok" style="position:static"></span><span class="pt">Tab status dots + pane counts</span><span class="pacts">⋯ ⤢ ✕</span></div>
+        <div class="strip">
+          <span class="lab">Context</span><span class="bar"><i style="width:61%;background:var(--highlight)"></i></span><span>61%</span>
+          <span class="rt">$3.08 · 12m</span>
+        </div>
+        <div class="tx">
+          <div class="prompt">Make it so yellow means processing, green means done, red if it hit an error.</div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Grep</b><span class="arg">getV2NotificationSourcesForPane</span></div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t">It was never blocked. That function mapped only pane kinds <span class="m">terminal</span> and <span class="m">chat</span> — a live pane is kind <span class="m">session</span>, so it produced an empty source list.</div>
+          </div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Bash</b><span class="arg">bun test apps/desktop</span></div>
+            <div class="out"><pre>2401 pass · 55 fail · 6 skip
+lint clean across 4,305 files</pre></div>
+          </div>
+          <div class="divider"><span class="sq"></span><span>model changed to Opus 4.6</span><span class="sq"></span></div>
+          <div class="result">Done · 14 turns · $3.0812 · 12m04s</div>
+        </div>
+        <div class="comp">
+          <div class="in"><span class="c">›</span>Reply to Claude…</div>
+          <div class="bar2"><span class="chip">Opus 4.6</span><span class="chip">xhigh</span><span class="chip">bypassPermissions</span><span class="send">↑</span></div>
+        </div>
+      </div>
+
+      <!-- pane 3 — codex, error -->
+      <div class="pane">
+        <div class="ph codex"><span class="d err" style="position:static"></span><span class="pt">Iotron contact form — Codex</span><span class="pacts">⋯ ⤢ ✕</span></div>
+        <div class="strip">
+          <span class="lab">Context</span><span class="bar"><i style="width:12%;background:#7aa2f7"></i></span><span>12%</span>
+          <span class="rt">$0.09 · 38s</span>
+        </div>
+        <div class="tx">
+          <div class="prompt">Wire the contact form to a Cloudflare Worker.</div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Bash</b><span class="arg">npm i -g wrangler</span></div>
+            <div class="out"><pre>npm ERR! Unsupported platform
+npm ERR! wanted {"os":"win32","cpu":"x64"}
+npm ERR! current {"os":"win32","cpu":"arm64"}</pre></div>
+          </div>
+          <div class="row"><span class="d err"></span>
+            <div class="prose-t">Wrangler will not install on ARM64. This needs a different host, or the form stays a placeholder — your call before I retry.</div>
+          </div>
+          <div class="result" style="color:#fca5a5">Failed · 3 turns · $0.0912 · 38s</div>
+        </div>
+        <div class="comp">
+          <div class="in"><span class="c">›</span>Reply to Codex…</div>
+          <div class="bar2"><span class="chip">GPT-5.6</span><span class="chip">medium</span><span class="chip">auto</span><span class="send">↑</span></div>
+        </div>
+      </div>
+
+      <!-- pane 4 — subagents -->
+      <div class="pane">
+        <div class="ph"><span class="d run" style="position:static"></span><span class="pt">Restyle preview</span><span class="pacts">⋯ ⤢ ✕</span></div>
+        <div class="strip">
+          <span class="lab">Context</span><span class="bar"><i style="width:48%;background:var(--highlight)"></i></span><span>48%</span>
+          <span class="rt">$0.61 · 41s</span>
+        </div>
+        <div class="tx">
+          <div class="prompt">Make a master preview of what GatedSpace can look like.</div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Task</b><span class="arg">read SessionTimelineView sizes</span></div>
+            <div class="sub">▾ 3 steps · Read ×2, Grep ×1</div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t">Pulled the real values: prompt <span class="m">13.5px</span>, gutter dot <span class="m">7px</span>, tool output <span class="m">11.5px</span> mono.</div>
+          </div>
+          <div class="working"><span class="gl">✳</span><span>Manifesting</span><span class="el">41s · 12.8k tokens</span></div>
+        </div>
+        <div class="comp">
+          <div class="in"><span class="c">›</span>Reply to Claude…</div>
+          <div class="bar2"><span class="chip">Opus 4.6</span><span class="chip">xhigh</span><span class="chip">bypassPermissions</span><span class="send">↑</span></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<p class="cap">
+  Try <strong>1 pane</strong> and <strong>3 across</strong>. Chat transcripts need width in a way terminal
+  output does not — this is why his four-across grid does not transfer to your app, and it is the main
+  thing this version corrects.
+</p>
+
+<h2>Empty state</h2>
+<div class="app sm">
+  <div class="side">
+    <div class="brand"><span class="mark"></span><b>GatedSpace</b><span class="vchip">1.17.48</span></div>
+    <div class="nav">
+      <div class="nrow">Dashboard</div><div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs</div><div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <span style="font-size:14px">+</span></div>
+    <div class="nav">
+      <div class="wrow on"><span class="caret">▸</span><span class="nm">superset</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">SecondBrain</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="nm">GatedKey</span></div>
+    </div>
+    <div class="foot"><div class="acct"><span class="av">Y</span>Yishai<span class="ultra">Ultra</span><span class="gear">⚙</span></div></div>
+  </div>
+  <div class="main">
+    <div class="top"><span class="wsn">superset</span><span class="vchip">v1.17.48</span><span class="chev">›</span><span class="brn">⑂ windows-port</span><span class="sp"></span><span class="tb">🗀</span></div>
+    <div class="empty">
+      <h3>Start building in superset</h3>
+      <p>Launch an agent — it runs in its own session pane.</p>
+      <div class="launch">
+        <div class="lb"><span class="pico" style="background:#e07850"></span>Claude Code</div>
+        <div class="lb"><span class="pico" style="background:#6b7280"></span>Codex</div>
+        <div class="lb"><span class="pico" style="background:#7aa2f7"></span>Gemini CLI</div>
+        <div class="lb"><span class="pico" style="background:#8b8b8b"></span>Copilot</div>
+        <div class="lb"><span class="pico" style="background:#5a5a5a"></span>Kimi K2</div>
+        <div class="lb"><span class="pico" style="background:#4a4a4a"></span>Terminal</div>
+      </div>
+      <div class="more">⌄ 4 more not installed</div>
+      <div class="multi">Launch more than one…</div>
+    </div>
+  </div>
+</div>
+
+<h2>Verdict</h2>
+<table>
+  <tr><th>Element</th><th>Take it?</th><th>Why</th></tr>
+  <tr><td>Cards + gutters + 12px radius</td><td><span class="tag keep">yes</span></td><td class="w2">The look you asked for, and it suits a chat transcript better than a terminal — a card is already how you read a conversation.</td></tr>
+  <tr><td>Sidebar nesting + live dots</td><td><span class="tag keep">yes</span></td><td class="w2">Session status per workspace at a glance. The data exists after the status-dot work.</td></tr>
+  <tr><td>Text-only nav rows</td><td><span class="tag keep">yes</span></td><td class="w2">Most of why his reads calm, and the cheapest change here.</td></tr>
+  <tr><td>Tidy</td><td><span class="tag keep">yes</span></td><td class="w2">Your mosaic accumulates lopsided splits with no reset.</td></tr>
+  <tr><td>Context % in the pane strip</td><td><span class="tag have">have it</span></td><td class="w2">SessionUsageStrip already renders this. Only the placement moves.</td></tr>
+  <tr><td>Launcher empty state</td><td><span class="tag keep">yes</span></td><td class="w2">Especially "launch more than one".</td></tr>
+  <tr><td>4-across density</td><td><span class="tag skip">no</span></td><td class="w2">His panes are terminal output — short lines. A transcript at 4-across is unreadable. 2 is your number.</td></tr>
+  <tr><td>Agent / Code / Chat</td><td><span class="tag skip">no</span></td><td class="w2">His Code tab is your whole app.</td></tr>
+</table>
+
+<div class="note">
+  <strong>The terminal risk is smaller than I said, but not zero.</strong> Session panes are DOM, so gutters
+  and a radius cost them nothing. Terminal panes still exist though — the fourth workspace row above is a
+  <code>powershell</code> pane — and those are xterm, which measures its character cell once and paints
+  nothing if it gets the wrong number. So still confirm a plain PowerShell pane paints in 1.17.48 before
+  changing pane geometry; you just do not have to hold the whole restyle hostage to it.
+</div>
+
+<p class="cap" style="margin-top:20px">
+  Nothing is coded. Tell me which rows you want and I will build them against the live components.
+</p>
+
+<script>
+function cols(n, el){
+  var g = document.getElementById('grid');
+  g.className = n === 2 ? 'grid' : 'grid c' + n;
+  document.querySelectorAll('button.go').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

@@ -6,15 +6,21 @@ import type { WorkspaceProps } from "../../types";
 import { Tab } from "./components/Tab";
 import { TabBar } from "./components/TabBar";
 import { useWorkspaceInteractionState } from "./hooks/useWorkspaceInteractionState";
+import { WorkspaceFocusContext } from "./WorkspaceFocusContext";
 
 export function Workspace<TData>({
 	store,
 	registry,
 	className,
+	isActive = true,
+	renderContent,
 	renderTabAccessory,
+	renderTabPaneList,
 	renderTabIcon,
 	renderEmptyState,
 	renderAddTabMenu,
+	onAddTab,
+	showTabBar = true,
 	renderTabBarTrailing,
 	renderBelowTabBar,
 	onBeforeCloseTab,
@@ -102,51 +108,72 @@ export function Workspace<TData>({
 				className,
 			)}
 		>
-			<TabBar
-				tabs={tabs}
-				registry={registry}
-				activeTabId={activeTabId}
-				onSelectTab={(tabId) => store.getState().setActiveTab(tabId)}
-				onCloseTab={closeTab}
-				onCloseOtherTabs={async (tabId) => {
-					for (const tab of tabs) {
-						if (tab.id !== tabId) await closeTab(tab.id);
-					}
-				}}
-				onCloseAllTabs={async () => {
-					for (const tab of tabs) {
-						await closeTab(tab.id);
-					}
-				}}
-				onRenameTab={(tabId, title) =>
-					store.getState().setTabTitleOverride({ tabId, titleOverride: title })
-				}
-				onReorderTab={(tabId, toIndex) =>
-					store.getState().reorderTab({ tabId, toIndex })
-				}
-				onMovePaneToNewTab={(paneId, toIndex) =>
-					store.getState().movePaneToNewTab({ paneId, toIndex })
-				}
-				renderTabIcon={renderTabIcon}
-				renderAddTabMenu={renderAddTabMenu}
-				renderTabBarTrailing={renderTabBarTrailing}
-				renderTabAccessory={renderTabAccessory}
-			/>
-			{renderBelowTabBar?.()}
-			{activeTab ? (
-				<Tab
-					store={store}
-					tab={activeTab}
+			{showTabBar && (
+				<TabBar
+					tabs={tabs}
 					registry={registry}
-					paneActions={paneActions}
-					contextMenuActions={contextMenuActions}
-					onSplitResizeDragging={onSplitResizeDragging}
+					activeTabId={activeTabId}
+					onSelectTab={(tabId) => store.getState().setActiveTab(tabId)}
+					onCloseTab={closeTab}
+					onCloseOtherTabs={async (tabId) => {
+						for (const tab of tabs) {
+							if (tab.id !== tabId) await closeTab(tab.id);
+						}
+					}}
+					onCloseAllTabs={async () => {
+						for (const tab of tabs) {
+							await closeTab(tab.id);
+						}
+					}}
+					onRenameTab={(tabId, title) =>
+						store
+							.getState()
+							.setTabTitleOverride({ tabId, titleOverride: title })
+					}
+					onReorderTab={(tabId, toIndex) =>
+						store.getState().reorderTab({ tabId, toIndex })
+					}
+					onMovePaneToNewTab={(paneId, toIndex) =>
+						store.getState().movePaneToNewTab({ paneId, toIndex })
+					}
+					renderTabIcon={renderTabIcon}
+					renderAddTabMenu={renderAddTabMenu}
+					onAddTab={onAddTab}
+					renderTabBarTrailing={renderTabBarTrailing}
+					renderTabAccessory={renderTabAccessory}
+					renderTabPaneList={renderTabPaneList}
 				/>
-			) : (
-				<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-					{renderEmptyState?.() ?? "No tabs open"}
-				</div>
 			)}
+			{renderBelowTabBar?.()}
+			<WorkspaceFocusContext.Provider value={isActive}>
+				{renderContent ? (
+					renderContent((tab, focused) => (
+						<WorkspaceFocusContext.Provider key={tab.id} value={focused}>
+							<Tab
+								store={store}
+								tab={tab}
+								registry={registry}
+								paneActions={paneActions}
+								contextMenuActions={contextMenuActions}
+								onSplitResizeDragging={onSplitResizeDragging}
+							/>
+						</WorkspaceFocusContext.Provider>
+					))
+				) : activeTab ? (
+					<Tab
+						store={store}
+						tab={activeTab}
+						registry={registry}
+						paneActions={paneActions}
+						contextMenuActions={contextMenuActions}
+						onSplitResizeDragging={onSplitResizeDragging}
+					/>
+				) : (
+					<div className="flex min-h-0 min-w-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+						{renderEmptyState?.() ?? "No tabs open"}
+					</div>
+				)}
+			</WorkspaceFocusContext.Provider>
 		</div>
 	);
 }

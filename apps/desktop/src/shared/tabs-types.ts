@@ -22,8 +22,9 @@ export type PaneType =
  * - working: Agent actively processing (amber)
  * - permission: Agent blocked, needs user action (red)
  * - review: Agent completed, ready for review (green)
+ * - error: The turn died (red)
  */
-export type PaneStatus = "idle" | "working" | "permission" | "review";
+export type PaneStatus = "idle" | "working" | "permission" | "review" | "error";
 
 /** Non-idle status for UI indicators */
 export type ActivePaneStatus = Exclude<PaneStatus, "idle">;
@@ -37,6 +38,10 @@ export const STATUS_PRIORITY = {
 	review: 1,
 	working: 2,
 	permission: 3,
+	// Above permission: a permission prompt is waiting for you and will carry
+	// on once answered, while an errored turn is already over. Across a tab's
+	// panes the dead one is the thing worth surfacing first.
+	error: 4,
 } as const satisfies Record<PaneStatus, number>;
 
 /**
@@ -67,7 +72,7 @@ export function getHighestPriorityStatus(
 		if (STATUS_PRIORITY[status] > STATUS_PRIORITY[highest]) {
 			highest = status;
 			// Early exit for max priority
-			if (highest === "permission") break;
+			if (highest === "error") break;
 		}
 	}
 
@@ -79,12 +84,17 @@ export function getHighestPriorityStatus(
  * (e.g. clicking a tab, focusing a pane, selecting a workspace).
  *
  * - "review"     → "idle"    (user saw the completion)
+ * - "error"      → "idle"    (user saw the failure)
  * - "permission" → unchanged (persists until agent resumes)
  * - "working"    → unchanged (persists until agent stops)
  * - "idle"       → unchanged
+ *
+ * `error` clears on sight for the same reason `review` does: both describe a
+ * turn that has already finished, so the dot is telling you to go look. A red
+ * dot that outlives the reading of it just becomes furniture.
  */
 export function acknowledgedStatus(status: PaneStatus | undefined): PaneStatus {
-	if (status === "review") return "idle";
+	if (status === "review" || status === "error") return "idle";
 	return status ?? "idle";
 }
 

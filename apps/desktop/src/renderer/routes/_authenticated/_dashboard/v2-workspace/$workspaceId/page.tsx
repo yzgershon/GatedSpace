@@ -1,27 +1,35 @@
-import { Workspace } from "@superset/panes";
+import { type PaneRegistry, Workspace } from "@superset/panes";
 import { workspaceTrpc } from "@superset/workspace-client";
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useState } from "react";
+import { Folder, GitCompareArrows, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuickOpenStore } from "renderer/commandPalette/ui/QuickOpen/quickOpenStore";
 import { CommandPalette } from "renderer/components/CommandPalette";
-import { ResizablePanel } from "renderer/components/ResizablePanel";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useV2AgentConfigs } from "renderer/hooks/useV2AgentConfigs";
 import { useV2UserPreferences } from "renderer/hooks/useV2UserPreferences";
 import { useHotkey } from "renderer/hotkeys";
 import { resolveV2PresetIconKey } from "renderer/lib/preset-icon-key";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
+import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
+import { useStore } from "zustand";
 import { useWorkspace } from "../providers/WorkspaceProvider";
-import { AddTabMenu } from "./components/AddTabMenu";
 import { BackgroundTerminalsButton } from "./components/BackgroundTerminalsButton";
+import { TabPaneList } from "./components/TabPaneList";
+import { TabRail } from "./components/TabRail";
 import { V2NotificationStatusIndicator } from "./components/V2NotificationStatusIndicator";
 import { V2PresetsBar } from "./components/V2PresetsBar";
 import { V2WorkspaceRunButton } from "./components/V2WorkspaceRunButton";
 import { WorkspaceEmptyState } from "./components/WorkspaceEmptyState";
 import { WorkspaceMissingWorktreeState } from "./components/WorkspaceMissingWorktreeState";
-import { WorkspaceSidebar } from "./components/WorkspaceSidebar";
+import { WorkspaceToolPanels } from "./components/WorkspaceToolPanels";
+import { ChangesTool } from "./components/WorkspaceToolPanels/components/ChangesTool/ChangesTool";
+import { FilesTool } from "./components/WorkspaceToolPanels/components/FilesTool/FilesTool";
+import { mainPaneMinimum } from "./components/WorkspaceToolPanels/tool-panel-store";
+import { useToolPanels } from "./components/WorkspaceToolPanels/useToolPanels";
 import { useBrowserShellInteractionPassthrough } from "./hooks/useBrowserShellInteractionPassthrough";
 import { useClearActivePaneAttention } from "./hooks/useClearActivePaneAttention";
 import { useConsumeAutomationRunLink } from "./hooks/useConsumeAutomationRunLink";
@@ -29,9 +37,12 @@ import { useConsumeOpenUrlRequest } from "./hooks/useConsumeOpenUrlRequest";
 import { useDefaultContextMenuActions } from "./hooks/useDefaultContextMenuActions";
 import { useDefaultPaneActions } from "./hooks/useDefaultPaneActions";
 import { useDirtyTabCloseGuard } from "./hooks/useDirtyTabCloseGuard";
+import { useFocusPaneIntentConsumer } from "./hooks/useFocusPaneIntentConsumer";
 import { usePaneRegistry } from "./hooks/usePaneRegistry";
 import { renderBrowserTabIcon } from "./hooks/usePaneRegistry/components/BrowserPane";
+import type { NewTabPaneActions } from "./hooks/usePaneRegistry/components/LauncherPane";
 import { usePickElementConsumer } from "./hooks/usePickElementConsumer";
+import { usePublishWorkspaceGroups } from "./hooks/usePublishWorkspaceGroups";
 import { useRunCommandIntentConsumer } from "./hooks/useRunCommandIntentConsumer";
 import { useSendPageToSessionConsumer } from "./hooks/useSendPageToSessionConsumer";
 import { useSlotElement } from "./hooks/useSlotElement";
@@ -44,7 +55,7 @@ import { useWorkspaceHotkeys } from "./hooks/useWorkspaceHotkeys";
 import { useWorkspacePaneOpeners } from "./hooks/useWorkspacePaneOpeners";
 import { WorkspaceGitStatusProvider } from "./providers/WorkspaceGitStatusProvider";
 import { FileDocumentStoreProvider } from "./state/fileDocumentStore";
-import type { PaneViewerData } from "./types";
+import type { FilePaneData, PaneViewerData } from "./types";
 import type { V2WorkspaceUrlOpenTarget } from "./utils/openUrlInV2Workspace";
 
 interface WorkspaceSearch {
@@ -120,23 +131,188 @@ function V2WorkspaceContent() {
 	} = Route.useSearch();
 	const { workspace } = useWorkspace();
 	const workspaceId = workspace.id;
+	const workspaceCwdQuery = workspaceTrpc.workspace.get.useQuery(
+		{ id: workspace.id },
+		{ staleTime: 30_000 },
+	);
 
-	const {
-		preferences: v2UserPreferences,
-		setRightSidebarOpen,
-		setRightSidebarTab,
-		setRightSidebarWidth,
-		setShowPresetsBar,
-	} = useV2UserPreferences();
+	const { preferences: v2UserPreferences, setShowPresetsBar } =
+		useV2UserPreferences();
 	const showPresetsBar = v2UserPreferences.showPresetsBar;
-	const sidebarOpen = v2UserPreferences.rightSidebarOpen;
+	const {
+		presetsPlacement,
+		paneGap,
+		paneRadius,
+		paneElevated,
+		paneBorder,
+		paneSurface,
+		paneRingWidth,
+		paneRingGlow,
+		paneHeaderStatus,
+		tabStrip,
+	} = useSkinTokens();
+	/*
+	 * The panes package reads these and knows nothing else about the
+	 * appearance. Defaults are 0/transparent, so an unset variable is the
+	 * edge-to-edge layout — which is what makes "VS Code Style" a genuine no-op
+	 * rather than a second code path.
+	 */
+	const paneChromeVars = {
+		"--gs-pane-header-height": "58px",
+		"--gs-pane-title-size": "17px",
+		"--gs-pane-action-size": "32px",
+		"--gs-pane-inset": `${paneGap / 2}px`,
+		"--gs-pane-radius": `${paneRadius}px`,
+		"--gs-pane-border-width": paneBorder ? "1px" : "0px",
+		/*
+		 * The header's orange wash and its 2px edge bar, both off under the card
+		 * layout: the status dot and the agent mark at the head of the row say
+		 * whose pane it is, and the wash was the loudest thing in the window.
+		 */
+		"--gs-pane-header-tint": paneHeaderStatus ? "0%" : "17%",
+		"--gs-pane-header-bar": paneHeaderStatus ? "0" : "0.45",
+		"--gs-pane-ring-width": `${paneRingWidth}px`,
+		"--gs-pane-ring-glow": `${paneRingGlow}px`,
+		/*
+		 * The card's own surface, and the single most load-bearing value in the
+		 * skin.
+		 *
+		 * 1.17.50 shipped the gutter and the radius but left the card painting
+		 * `--background`, the same colour as the app behind it, and tried to buy
+		 * the separation by darkening the WELL 18% instead. On a #151110 ground
+		 * that is a four-value step, which is invisible — so the panes read as
+		 * rounded regions rather than raised cards, and the whole look collapsed.
+		 *
+		 * Lifting the CARD is what "raised" means, so that is what this does:
+		 * a step from `--background` toward `--card`, landing near the #1c1918 the
+		 * preview used. The well goes back to plain `--background`, because with
+		 * the card lifted it no longer has to do the work.
+		 *
+		 * `--gs-pane-surface` is consumed by REDEFINING `--background` inside the
+		 * pane (see Pane.tsx), so every `bg-background` descendant follows without
+		 * being touched, and `--card` keeps its own value one step further up for
+		 * the insets that sit on top of the card.
+		 *
+		 * Set for BOTH skins, and `var(--background)` when flush, so the variable
+		 * is always present and the flush case resolves to exactly the colour the
+		 * pane painted before. Custom properties are substituted where they are
+		 * DECLARED, so both branches resolve against this element's `--background`
+		 * — the app's — and are inherited down as literal colours.
+		 */
+		"--gs-pane-surface":
+			paneSurface === "raised"
+				? "color-mix(in oklab, var(--background) 42%, var(--card))"
+				: "var(--background)",
+		"--gs-pane-shadow": paneElevated
+			? "0 8px 26px -12px rgb(0 0 0 / 0.7)"
+			: "none",
+		/*
+		 * The well the cards float on, and it has to be DARKER than the app.
+		 *
+		 * .51 lifted the card and left the well at plain `--background`, on the
+		 * reasoning that only one of the two needed to move. That was wrong in
+		 * practice: the tab bar, the top bar and the gutter were then all the
+		 * same colour, so the 14px gap between two panes had nothing to read
+		 * against and the cards still looked tiled. A recessed trough is what
+		 * makes a card look lifted off something rather than cut into it.
+		 */
+		"--gs-pane-well": paneElevated
+			? "color-mix(in oklab, var(--background) 62%, black)"
+			: "transparent",
+		/*
+		 * Tabs, on the same contract. "slab" is the full-height rectangle with a
+		 * divider on its right; "chip" insets it from the bar, rounds it, drops
+		 * the divider and gives the active one a fill you can actually see.
+		 *
+		 * The divider is what made the strip read as a row of slabs: with eight
+		 * of them the bar is a picket fence, and the active tab — differing only
+		 * by a 30%-opacity border colour — was the least visible thing in it.
+		 */
+		/*
+		 * The tab strip is the VS Code layout's only, so these are its values
+		 * outright rather than a branch.
+		 *
+		 * They were a `tabShape === "chip"` ternary while Liquid Glass had a
+		 * strip of rounded chips. It has a group switcher in the top bar now and
+		 * no strip at all, so the chip half described something that cannot
+		 * render. Git has it if the strip ever comes back.
+		 */
+		"--gs-tab-radius": "0px",
+		"--gs-tab-margin": "0px",
+		"--gs-tab-margin-x": "0px",
+		/*
+		 * `borderRightWidth` is applied AFTER the all-sides `borderWidth` in
+		 * TabItem, so it is the last word on the right edge: a slab wants a
+		 * divider and nothing else (all-sides 0 + right 1).
+		 */
+		"--gs-tab-divider-width": "1px",
+		"--gs-tab-active-bg": "color-mix(in oklab, var(--border) 30%, transparent)",
+		"--gs-tab-idle-bg": "transparent",
+		"--gs-tab-border-width": "0px",
+		"--gs-tab-active-border": "transparent",
+		"--gs-tabbar-border-width": "1px",
+	} as React.CSSProperties;
+	// Only one home at a time, or the presets would render twice.
+	const presetsInHeader = presetsPlacement === "header";
 	const { store } = useV2WorkspacePaneLayout();
+	const mainLayout = useStore(
+		store,
+		(state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.layout,
+	);
 	useClearActivePaneAttention({ store });
 	useRunCommandIntentConsumer({ store, workspaceId });
 	useSendPageToSessionConsumer({ store });
+	useFocusPaneIntentConsumer({ store });
 	usePickElementConsumer({ store });
 	const launcher = useV2TerminalLauncher();
 	const { activeHostUrl } = useLocalHostService();
+	const tools = useToolPanels(workspaceId, activeHostUrl, launcher);
+	const toolState = useStore(tools.state);
+	useEffect(
+		() =>
+			store.subscribe((next, previous) => {
+				const active = next.getActivePane()?.pane.id;
+				const previousTab = previous.tabs.find(
+					(tab) => tab.id === previous.activeTabId,
+				);
+				if (
+					next.activeTabId !== previous.activeTabId ||
+					active !== previousTab?.activePaneId
+				)
+					tools.focus("main");
+			}),
+		[store, tools],
+	);
+	const sidebarOpen = toolState.right.open || toolState.bottom.open;
+	const openFilesTool = useCallback(() => {
+		void tools.open("right", "files");
+	}, [tools]);
+	const openFileInTools = useCallback(
+		(data: FilePaneData, newTab?: boolean) => {
+			if (!newTab) {
+				for (const tab of tools.store.getState().tabs) {
+					const pane = Object.values(tab.panes).find(
+						(p) =>
+							p.kind === "file" &&
+							(p.data as FilePaneData).filePath === data.filePath,
+					);
+					if (pane) {
+						tools.select(tab.id);
+						tools.store
+							.getState()
+							.setActivePane({ tabId: tab.id, paneId: pane.id });
+						return;
+					}
+				}
+			}
+			tools.add("right", { kind: "file", data });
+		},
+		[tools],
+	);
+	useClearActivePaneAttention({ store: tools.store });
+	useSendPageToSessionConsumer({ store: tools.store });
+	useFocusPaneIntentConsumer({ store: tools.store });
+	usePickElementConsumer({ store: tools.store });
 	const { data: agentConfigs } = useV2AgentConfigs(activeHostUrl);
 	const {
 		matchedPresets,
@@ -175,27 +351,52 @@ function V2WorkspaceContent() {
 		recentFiles,
 		openFilePaths,
 	} = useWorkspaceFileNavigation({
-		store,
-		setRightSidebarOpen,
-		setRightSidebarTab,
+		store: tools.store,
+		onRevealTools: openFilesTool,
+		openInToolPanel: openFileInTools,
 	});
 
-	const paneRegistry = usePaneRegistry({
+	/*
+	 * The new-tab pane's actions, handed over by REF rather than by value.
+	 *
+	 * `usePaneRegistry` is built here, above `useWorkspacePaneOpeners` and above
+	 * the preset list, so those callbacks do not exist yet at this line. The ref
+	 * is filled further down on every render and read by `renderPane`, which
+	 * runs after the whole component body — so the pane always sees the current
+	 * openers without the registry having to be rebuilt when one of them
+	 * changes.
+	 */
+	const newTabActionsRef = useRef<NewTabPaneActions | null>(null);
+	const basePaneRegistry = usePaneRegistry({
 		onOpenFile: openFilePaneFromTreeClick,
 		onRevealPath: revealPath,
 		launcher,
 		store,
+		newTabActionsRef,
+		workspaceCwd: workspaceCwdQuery.data?.worktreePath,
 	});
+	const paneRegistry = useMemo<PaneRegistry<PaneViewerData>>(
+		() =>
+			Object.fromEntries(
+				Object.entries(basePaneRegistry).map(([kind, definition]) => [
+					kind,
+					definition,
+				]),
+			),
+		[basePaneRegistry],
+	);
 	const defaultContextMenuActions = useDefaultContextMenuActions({
 		paneRegistry,
 		launcher,
+		// Same query key as the page's own status query, so React Query serves
+		// this from cache rather than issuing a second request.
+		workspaceCwd: workspaceCwdQuery.data?.worktreePath,
 	});
 	const {
 		openDiffPane,
 		addTerminalTab,
 		addBrowserTab,
 		addSessionTab,
-		openBrowserUrl,
 		openClaudeSessions,
 		openCommentPane,
 	} = useWorkspacePaneOpeners({
@@ -224,18 +425,48 @@ function V2WorkspaceContent() {
 	 * why this is safe — but a Claude preset edited into several commands would
 	 * quietly lose the rest. If that ever happens, this is the line that did it.
 	 */
+	/**
+	 * Whether a preset has a session pane as well as a terminal.
+	 *
+	 * Only Claude does: the session pane renders `claude`'s stream-json as a
+	 * transcript, and no other agent emits it. Everything else is a terminal
+	 * either way, so offering the choice for those would be offering the same
+	 * thing twice.
+	 */
+	const canOpenAsPane = useCallback(
+		(preset: V2TerminalPresetRow) =>
+			resolveV2PresetIconKey(preset, agentConfigs ?? []) === "claude",
+		[agentConfigs],
+	);
+
 	const runPresetOrSession = useCallback(
-		(
-			preset: V2TerminalPresetRow,
-			options?: { target?: "new-tab" | "active-tab" },
-		) => {
-			if (resolveV2PresetIconKey(preset, agentConfigs ?? []) === "claude") {
-				addSessionTab();
+		(preset: V2TerminalPresetRow, options?: { target?: PresetOpenTarget }) => {
+			if (canOpenAsPane(preset)) {
+				addSessionTab(options);
 				return;
 			}
 			return executePreset(preset, options);
 		},
-		[addSessionTab, agentConfigs, executePreset],
+		[addSessionTab, canOpenAsPane, executePreset],
+	);
+
+	/**
+	 * The same launch, with the shape named instead of assumed. The new-tab
+	 * launcher asks first for any preset `canOpenAsPane` covers.
+	 */
+	const launchAgentAs = useCallback(
+		(
+			preset: V2TerminalPresetRow,
+			mode: "pane" | "terminal",
+			options?: { target?: PresetOpenTarget },
+		) => {
+			if (mode === "pane") {
+				addSessionTab(options);
+				return;
+			}
+			return executePreset(preset, options);
+		},
+		[addSessionTab, executePreset],
 	);
 
 	const handleQuickOpen = useCallback(
@@ -248,50 +479,62 @@ function V2WorkspaceContent() {
 		},
 		[closeQuickOpen],
 	);
-	// Picking a file from Quick Open should surface the sidebar/Files tab so
-	// the reveal (expand + highlight + scroll) is actually visible.
+	/*
+	 * Quick Open just opens the file. It used to also force the sidebar open on
+	 * the Files tab, so that the reveal (expand + highlight + scroll) would be
+	 * visible — but Ctrl+T is a way to get straight to a file WITHOUT touching
+	 * the tree, and hijacking the sidebar every time made a keyboard shortcut
+	 * rearrange the window. Reveal-in-tree is still available on its own, via
+	 * `revealPath`, which is what the terminal's directory links use.
+	 */
 	const handleQuickOpenSelectFile = useCallback(
 		(filePath: string, openInNewTab?: boolean) => {
-			setRightSidebarOpen(true);
-			setRightSidebarTab("files");
 			openFilePaneFromTreeClick(filePath, openInNewTab);
 		},
-		[openFilePaneFromTreeClick, setRightSidebarOpen, setRightSidebarTab],
+		[openFilePaneFromTreeClick],
 	);
-	const defaultPaneActions = useDefaultPaneActions({ launcher });
+	const defaultPaneActions = useDefaultPaneActions({ tools });
+	// Mirrors the group tree out to the sidebar, which cannot read this store.
+	usePublishWorkspaceGroups({ workspaceId, store, registry: paneRegistry });
 	const onBeforeCloseTab = useDirtyTabCloseGuard();
-
-	// Fallback for rows persisted before the rightSidebarWidth field existed —
-	// the live collection skips zod defaults, so an older row reads undefined
-	// here and would render the ResizablePanel without a width (full-bleed).
-	const sidebarWidth = v2UserPreferences.rightSidebarWidth ?? 340;
-	// Transient "wide mode" for the Browser tab: overrides the persisted width
-	// without clobbering the user's saved preference. A manual drag clears it.
-	const [wideSidebarOverride, setWideSidebarOverride] = useState<number | null>(
-		null,
+	/**
+	 * Close a group from the switcher.
+	 *
+	 * Goes through `onBeforeCloseTab` rather than calling `removeTab` directly,
+	 * because that guard is what stops a group holding a half-written prompt
+	 * from closing silently. The strip's × went through the same check inside
+	 * `Workspace`; the switcher is outside it, so it has to ask for itself.
+	 */
+	const closeGroup = useCallback(
+		async (tabId: string) => {
+			const tab = store.getState().getTab(tabId);
+			if (!tab) return;
+			if (!(await onBeforeCloseTab(tab))) return;
+			// Re-check after the await: it may have gone while the dialog was up.
+			if (!store.getState().getTab(tabId)) return;
+			store.getState().removeTab(tabId);
+		},
+		[onBeforeCloseTab, store],
 	);
-	const effectiveSidebarWidth = wideSidebarOverride ?? sidebarWidth;
-	const [isSidebarResizing, setIsSidebarResizing] = useState(false);
+
 	const { onSidebarResizeDragging, onWorkspaceInteractionStateChange } =
 		useBrowserShellInteractionPassthrough({ sidebarOpen });
-	const handleSidebarResizingChange = useCallback(
-		(resizing: boolean) => {
-			setIsSidebarResizing(resizing);
-			onSidebarResizeDragging(resizing);
-		},
-		[onSidebarResizeDragging],
-	);
 
-	// The sidebar slot lives at the dashboard layout level (next to TopBar) so
-	// the sidebar runs full-height.
-	const sidebarSlotEl = useSlotElement("workspace-right-sidebar-slot");
-	// TopBar slot for the run button when the presets bar (its usual home) is
-	// hidden. The button renders here via portal so it keeps this page's
-	// context (pane store, workspace providers) while appearing in the TopBar.
-	const runButtonSlotEl = useSlotElement("workspace-topbar-run-slot");
+	// TopBar slot for the background-shells chip. It renders here via portal so
+	// it keeps this page's context (pane store, workspace providers) while
+	// appearing up in the TopBar beside the open-in button.
+	const shellsSlotEl = useSlotElement("workspace-topbar-shells-slot");
+	// TopBar slot for the group switcher, which IS the whole tab strip when
+	// `tabStrip` is "switcher". Portaled for the same reason as the rest: it
+	// needs this page's pane store.
+	const tabsSlotEl = useSlotElement("workspace-topbar-tabs-slot");
+	// TopBar centre slot. Under Liquid Glass the presets live up there instead
+	// of on a row of their own, which reclaims ~36px of vertical space.
+	const presetsSlotEl = useSlotElement("workspace-topbar-presets-slot");
 
 	useWorkspaceHotkeys({
-		store,
+		store: toolState.focus === "main" ? store : tools.store,
+		tools,
 		matchedPresets,
 		executePreset,
 		addTerminalTab,
@@ -302,6 +545,75 @@ function V2WorkspaceContent() {
 	useHotkey("RUN_WORKSPACE_COMMAND", () => {
 		void workspaceRun.toggleWorkspaceRun();
 	});
+
+	/*
+	 * The agents offered on an empty workspace: the same ones the presets bar
+	 * shows, in the same order. `pinnedToBar !== false` is the bar's own rule —
+	 * the field is legacy "pinned" wording that the v2 UI reads as visibility,
+	 * and undefined means visible.
+	 */
+	const emptyStateAgents = useMemo(
+		() => matchedPresets.filter((preset) => preset.pinnedToBar !== false),
+		[matchedPresets],
+	);
+
+	/*
+	 * One click to the parallel grid. Each agent opens into the SAME tab, so
+	 * they land side by side rather than as a row of tabs you then have to
+	 * arrange — which is the whole point of asking for more than one.
+	 */
+	/*
+	 * A tab with nothing in it but the question.
+	 *
+	 * One `launcher` pane, no data — the pane reads the workspace's presets from
+	 * this page and fills the tab in by running the ordinary openers, so there
+	 * is nothing per-instance to persist and a reloaded launcher is still a
+	 * launcher.
+	 */
+	const addLauncherTab = useCallback(() => {
+		store.getState().addTab({
+			panes: [{ kind: "new-tab", data: {} as PaneViewerData }],
+		});
+	}, [store]);
+
+	const launchAllAgents = useCallback(() => {
+		for (const preset of emptyStateAgents) {
+			void runPresetOrSession(preset, { target: "active-tab" });
+		}
+	}, [emptyStateAgents, runPresetOrSession]);
+
+	/*
+	 * Filled on every render, deliberately without `useMemo`: these callbacks
+	 * change identity as their own dependencies change, and a stale entry here
+	 * would launch the wrong preset. Writing during render is safe because
+	 * nothing reads it until a pane renders.
+	 */
+	newTabActionsRef.current = {
+		agents: emptyStateAgents,
+		/*
+		 * `active-pane`, not `active-tab`.
+		 *
+		 * The launcher is opened by the pane header's `+`, which has already split
+		 * the layout to make room for it. `active-tab` is only a preference and
+		 * the agent presets ship `executionMode: "new-tab"`, which overruled it —
+		 * so picking Codex opened Codex in a NEW GROUP and left the freshly split
+		 * pane empty, undoing the split that was the point of the gesture.
+		 */
+		onLaunchAgent: (preset) => {
+			void runPresetOrSession(preset, { target: "active-pane" });
+		},
+		onLaunchAgentAs: (preset, mode) => {
+			void launchAgentAs(preset, mode, { target: "active-pane" });
+		},
+		canOpenAsPane,
+		onLaunchAll: launchAllAgents,
+		onOpenTerminal: () => {
+			void addTerminalTab();
+		},
+		onOpenBrowser: addBrowserTab,
+		onOpenQuickOpen: handleQuickOpen,
+		onOpenSessions: openClaudeSessions,
+	};
 
 	const workspaceRunButton = (
 		<V2WorkspaceRunButton
@@ -315,6 +627,64 @@ function V2WorkspaceContent() {
 		/>
 	);
 
+	const toolRegistry = useMemo<PaneRegistry<PaneViewerData>>(
+		() => ({
+			...paneRegistry,
+			files: {
+				getTitle: () => "Files",
+				getTabIcon: () => <Folder className="size-4" />,
+				hideMaximizeControl: true,
+				renderPane: () => (
+					<FilesTool
+						workspaceId={workspaceId}
+						onSelectFile={openFilePaneFromTreeClick}
+						selectedFilePath={selectedFilePath}
+						pendingReveal={pendingReveal}
+						onSearch={handleQuickOpen}
+					/>
+				),
+			},
+			changes: {
+				getTitle: () => "Changes",
+				getTabIcon: () => <GitCompareArrows className="size-4" />,
+				hideMaximizeControl: true,
+				renderPane: () => (
+					<ChangesTool
+						workspaceId={workspaceId}
+						selectedFilePath={selectedFilePath}
+						onOpenFile={openFilePaneFromTreeClick}
+						onSelectDiff={openDiffPane}
+						onOpenComment={openCommentPane}
+					/>
+				),
+			},
+		}),
+		[
+			paneRegistry,
+			workspaceId,
+			openFilePaneFromTreeClick,
+			selectedFilePath,
+			pendingReveal,
+			handleQuickOpen,
+			openDiffPane,
+			openCommentPane,
+		],
+	);
+	const toolPaneActions = useMemo(
+		() => [
+			{
+				key: "close",
+				label: "Close tool pane",
+				tooltip: "Close tool pane",
+				icon: <X className="size-4" />,
+				onClick: (
+					ctx: import("@superset/panes").RendererContext<PaneViewerData>,
+				) => ctx.actions.close(),
+			},
+		],
+		[],
+	);
+
 	return (
 		<FileDocumentStoreProvider>
 			<WorkspaceGitStatusProvider
@@ -322,102 +692,129 @@ function V2WorkspaceContent() {
 				store={store}
 				sidebarOpen={sidebarOpen}
 			>
-				<div className="flex min-h-0 min-w-0 flex-1">
-					<div
-						className="flex min-h-0 min-w-[320px] flex-1 flex-col overflow-hidden"
-						data-workspace-id={workspaceId}
+				<div className="flex min-h-0 min-w-0 flex-1" style={paneChromeVars}>
+					<WorkspaceToolPanels
+						key={`${activeHostUrl ?? "local"}:${workspaceId}`}
+						tools={tools}
+						mainMinimum={mainPaneMinimum(mainLayout, paneGap / 2)}
+						registry={toolRegistry}
+						paneActions={toolPaneActions}
+						contextMenuActions={defaultContextMenuActions}
+						onResizing={onSidebarResizeDragging}
 					>
-						<Workspace<PaneViewerData>
-							key={workspaceId}
-							registry={paneRegistry}
-							paneActions={defaultPaneActions}
-							contextMenuActions={defaultContextMenuActions}
-							renderTabIcon={renderBrowserTabIcon}
-							renderTabAccessory={(tab) => (
-								<V2NotificationStatusIndicator
-									sources={getV2NotificationSourcesForTab(tab)}
-								/>
-							)}
-							renderBelowTabBar={() =>
-								showPresetsBar ? (
-									<V2PresetsBar
-										matchedPresets={matchedPresets}
-										executePreset={runPresetOrSession}
-										showPresetsBar={showPresetsBar}
-										onToggleShowPresetsBar={setShowPresetsBar}
-										trailing={workspaceRunButton}
-									/>
-								) : null
-							}
-							renderAddTabMenu={() => (
-								<AddTabMenu
-									onAddTerminal={addTerminalTab}
-									onAddBrowser={addBrowserTab}
-									onOpenSessions={openClaudeSessions}
-									agentPresets={matchedPresets}
-									onRunPreset={executePreset}
-									showPresetsBar={showPresetsBar}
-									onToggleShowPresetsBar={setShowPresetsBar}
-								/>
-							)}
-							renderTabBarTrailing={() => (
-								<BackgroundTerminalsButton
-									workspaceId={workspaceId}
-									store={store}
-								/>
-							)}
-							renderEmptyState={() => (
-								<WorkspaceEmptyState
-									onOpenBrowser={addBrowserTab}
-									onOpenQuickOpen={handleQuickOpen}
-									onOpenTerminal={addTerminalTab}
-								/>
-							)}
-							onBeforeCloseTab={onBeforeCloseTab}
-							onInteractionStateChange={onWorkspaceInteractionStateChange}
-							store={store}
-						/>
-					</div>
-				</div>
-				{!showPresetsBar &&
-					runButtonSlotEl &&
-					createPortal(workspaceRunButton, runButtonSlotEl)}
-				{sidebarOpen &&
-					sidebarSlotEl &&
-					createPortal(
-						<ResizablePanel
-							width={effectiveSidebarWidth}
-							onWidthChange={(w) => {
-								// A manual drag exits wide mode and updates the saved width.
-								setWideSidebarOverride(null);
-								setRightSidebarWidth(w);
-							}}
-							isResizing={isSidebarResizing}
-							onResizingChange={handleSidebarResizingChange}
-							minWidth={240}
-							maxWidth={640}
-							handleSide="left"
-							onDoubleClickHandle={() => {
-								setWideSidebarOverride(null);
-								setRightSidebarWidth(340);
-							}}
+						<div
+							className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+							data-workspace-id={workspaceId}
+							style={paneChromeVars}
 						>
-							<WorkspaceSidebar
-								workspaceId={workspaceId}
-								onSelectFile={openFilePaneFromTreeClick}
-								onSelectDiffFile={openDiffPane}
-								onOpenComment={openCommentPane}
-								onSearch={handleQuickOpen}
-								onOpenBrowserUrl={openBrowserUrl}
-								isWide={wideSidebarOverride != null}
-								onToggleWide={() =>
-									setWideSidebarOverride((v) => (v == null ? 640 : null))
+							<Workspace<PaneViewerData>
+								isActive={toolState.focus === "main"}
+								key={workspaceId}
+								registry={paneRegistry}
+								paneActions={defaultPaneActions}
+								contextMenuActions={defaultContextMenuActions}
+								renderTabIcon={renderBrowserTabIcon}
+								renderTabAccessory={(tab) => (
+									<V2NotificationStatusIndicator
+										sources={getV2NotificationSourcesForTab(tab)}
+									/>
+								)}
+								renderTabPaneList={(tab) => (
+									<TabPaneList
+										registry={paneRegistry}
+										store={store}
+										tab={tab}
+									/>
+								)}
+								renderBelowTabBar={() =>
+									showPresetsBar && !presetsInHeader ? (
+										<V2PresetsBar
+											matchedPresets={matchedPresets}
+											executePreset={runPresetOrSession}
+											showPresetsBar={showPresetsBar}
+											onToggleShowPresetsBar={setShowPresetsBar}
+											trailing={workspaceRunButton}
+										/>
+									) : null
 								}
-								selectedFilePath={selectedFilePath}
-								pendingReveal={pendingReveal}
+								/*
+								 * `+` makes the tab NOW and lets the tab ask what it is.
+								 *
+								 * It used to open a dropdown, so creating a tab meant deciding
+								 * what it would be before you had one, and changing your mind
+								 * meant closing it and starting over.
+								 *
+								 * `AddTabMenu` is gone with it. Everything it offered is on the
+								 * launcher — including Recent sessions, which lived nowhere
+								 * else on the tab strip.
+								 */
+								onAddTab={addLauncherTab}
+								renderEmptyState={() => (
+									<WorkspaceEmptyState
+										agents={emptyStateAgents}
+										canOpenAsPane={canOpenAsPane}
+										onLaunchAgent={(preset) => {
+											void runPresetOrSession(preset);
+										}}
+										onLaunchAgentAs={(preset, mode) => {
+											void launchAgentAs(preset, mode);
+										}}
+										onLaunchAll={launchAllAgents}
+										onOpenBrowser={addBrowserTab}
+										onOpenQuickOpen={handleQuickOpen}
+										onOpenTerminal={addTerminalTab}
+									/>
+								)}
+								showTabBar={tabStrip === "bar"}
+								onBeforeCloseTab={onBeforeCloseTab}
+								onInteractionStateChange={onWorkspaceInteractionStateChange}
+								store={store}
 							/>
-						</ResizablePanel>,
-						sidebarSlotEl,
+						</div>
+					</WorkspaceToolPanels>
+				</div>
+				{tabsSlotEl &&
+					createPortal(
+						<div
+							className="contents"
+							onPointerDownCapture={() => tools.focus("main")}
+							onFocusCapture={() => tools.focus("main")}
+						>
+							<TabRail
+								onCloseGroup={(tabId) => {
+									void closeGroup(tabId);
+								}}
+								onNewGroup={addLauncherTab}
+								registry={paneRegistry}
+								store={store}
+							/>
+						</div>,
+						tabsSlotEl,
+					)}
+				{shellsSlotEl &&
+					createPortal(
+						<BackgroundTerminalsButton
+							store={store}
+							workspaceId={workspaceId}
+						/>,
+						shellsSlotEl,
+					)}
+				{/*
+				 * The run button needs the top bar whenever the presets row is not
+				 * on screen — either hidden by preference, or moved into the header.
+				 */}
+				{showPresetsBar &&
+					presetsInHeader &&
+					presetsSlotEl &&
+					createPortal(
+						<V2PresetsBar
+							executePreset={runPresetOrSession}
+							matchedPresets={matchedPresets}
+							onToggleShowPresetsBar={setShowPresetsBar}
+							showPresetsBar={showPresetsBar}
+							variant="header"
+						/>,
+						presetsSlotEl,
 					)}
 			</WorkspaceGitStatusProvider>
 			<CommandPalette

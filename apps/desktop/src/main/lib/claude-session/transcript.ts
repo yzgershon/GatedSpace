@@ -49,6 +49,41 @@ function findTranscript(sessionId: string): string | null {
 	return null;
 }
 
+/**
+ * Can the Claude CLI, running under THIS account, find this session?
+ *
+ * Transcripts live under `<configDir>/projects`, so `--resume <id>` only works
+ * for an account whose store holds that file. Multi-account setups usually
+ * junction the stores together and every account can see every session; where
+ * they are separate, resuming under the wrong one makes the CLI exit rather
+ * than continue, and the pane would report a crash for what is really a
+ * missing file.
+ *
+ * Used by `/swap` to decide between carrying the conversation over and starting
+ * fresh, so the pane can say which one happened instead of dying.
+ */
+export function canResumeUnderConfigDir(
+	configDir: string,
+	sessionId: string,
+): boolean {
+	const file = `${sessionId}.jsonl`;
+	const root = join(configDir, "projects");
+	let projectDirs: string[];
+	try {
+		projectDirs = readdirSync(root);
+	} catch {
+		return false;
+	}
+	for (const dir of projectDirs) {
+		try {
+			if (statSync(join(root, dir, file)).isFile()) return true;
+		} catch {
+			// Not in this project dir; keep looking.
+		}
+	}
+	return false;
+}
+
 /** Read the last `TAIL_BYTES`, dropping the partial line at the cut. */
 function readTailLines(filePath: string): string[] {
 	const { size } = statSync(filePath);

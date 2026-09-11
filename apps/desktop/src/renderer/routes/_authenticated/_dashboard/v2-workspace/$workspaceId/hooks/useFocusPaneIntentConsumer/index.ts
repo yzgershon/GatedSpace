@@ -1,0 +1,1 @@
+export { useFocusPaneIntentConsumer } from "./useFocusPaneIntentConsumer";

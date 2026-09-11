@@ -5,30 +5,13 @@ import {
 	DropdownMenuItem,
 	DropdownMenuLabel,
 	DropdownMenuSeparator,
-	DropdownMenuTrigger,
 } from "@superset/ui/dropdown-menu";
 import { toast } from "@superset/ui/sonner";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { workspaceTrpc } from "@superset/workspace-client";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
-import {
-	Check,
-	ChevronDown,
-	LoaderCircle,
-	PencilLine,
-	Plus,
-	ShieldAlert,
-	Trash2,
-} from "lucide-react";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-	useSyncExternalStore,
-} from "react";
+import { Check, LoaderCircle, Plus, ShieldAlert, Trash2 } from "lucide-react";
+import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
 import { getRelativeTime } from "renderer/components/WorkspacesListView/utils";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useRenderStressInstrumentation } from "renderer/lib/performance/stress-instrumentation";
@@ -40,7 +23,7 @@ import type {
 	TerminalPaneData,
 } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
-import { TerminalPaneIcon } from "../TerminalPaneIcon";
+import { TerminalSessionTitle } from "../TerminalSessionTitle";
 import {
 	getTerminalDisplayTitle,
 	getTerminalSessionListRefetchInterval,
@@ -107,11 +90,6 @@ export function TerminalSessionDropdown({
 }: TerminalSessionDropdownProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [isCreatingTerminal, setIsCreatingTerminal] = useState(false);
-	const [isEditingTopic, setIsEditingTopic] = useState(false);
-	const [topicDraft, setTopicDraft] = useState("");
-	const topicInputRef = useRef<HTMLInputElement>(null);
-	const editTopicButtonRef = useRef<HTMLButtonElement>(null);
-	const restoreTopicButtonFocusRef = useRef(false);
 	const collections = useCollections();
 	const { terminalId } = context.pane.data as TerminalPaneData;
 	const terminalInstanceId = context.pane.id;
@@ -148,7 +126,6 @@ export function TerminalSessionDropdown({
 	);
 	const workspaceRunTerminals =
 		localWorkspaceRows[0]?.workspaceRunTerminals ?? {};
-	const workspaceRunState = workspaceRunTerminals[terminalId]?.state ?? null;
 
 	const sessions = useMemo<VisibleTerminalSession[]>(() => {
 		const liveSessions = sessionsQuery.data?.sessions ?? [];
@@ -193,17 +170,6 @@ export function TerminalSessionDropdown({
 		? getTerminalPaneLocations(context)
 		: EMPTY_TERMINAL_PANE_LOCATIONS;
 
-	useEffect(() => {
-		if (isEditingTopic) {
-			topicInputRef.current?.focus();
-			topicInputRef.current?.select();
-			return;
-		}
-		if (!restoreTopicButtonFocusRef.current) return;
-		restoreTopicButtonFocusRef.current = false;
-		editTopicButtonRef.current?.focus();
-	}, [isEditingTopic]);
-
 	const handleSelectSession = (session: VisibleTerminalSession) => {
 		const nextTerminalId = session.terminalId;
 		if (nextTerminalId === terminalId) {
@@ -225,7 +191,11 @@ export function TerminalSessionDropdown({
 		}
 
 		if ((terminalPaneLocations.get(terminalId)?.length ?? 0) === 0) {
-			markTerminalForBackground(terminalId, workspaceId);
+			markTerminalForBackground(
+				terminalId,
+				workspaceId,
+				context.tab.titleOverride ?? context.pane.titleOverride,
+			);
 		}
 
 		state.setPaneData({
@@ -284,7 +254,11 @@ export function TerminalSessionDropdown({
 			const state = context.store.getState();
 			const terminalPaneLocations = getTerminalPaneLocations(context);
 			if ((terminalPaneLocations.get(terminalId)?.length ?? 0) === 0) {
-				markTerminalForBackground(terminalId, workspaceId);
+				markTerminalForBackground(
+					terminalId,
+					workspaceId,
+					context.tab.titleOverride ?? context.pane.titleOverride,
+				);
 			}
 			state.setPaneData({
 				paneId: context.pane.id,
@@ -340,116 +314,16 @@ export function TerminalSessionDropdown({
 		titleOverride,
 		runtimeTitle: hostTitle,
 	});
-	const editTopicLabel = titleOverride?.trim()
-		? "Rename panel topic"
-		: "Add panel topic";
-
-	const startEditingTopic = () => {
-		setIsOpen(false);
-		restoreTopicButtonFocusRef.current = false;
-		setTopicDraft(triggerTitle);
-		setIsEditingTopic(true);
-	};
-
-	const saveTopic = (restoreButtonFocus = false) => {
-		const nextTitle = topicDraft.trim();
-		if (nextTitle !== triggerTitle) {
-			context.actions.setTitle(nextTitle || undefined);
-		}
-		if (restoreButtonFocus) {
-			restoreTopicButtonFocusRef.current = true;
-		}
-		setIsEditingTopic(false);
-	};
 
 	return (
 		<DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
-			<div className="flex min-w-0 max-w-96 flex-1 items-center gap-0.5">
-				{isEditingTopic ? (
-					<input
-						ref={topicInputRef}
-						type="text"
-						aria-label="Panel topic"
-						value={topicDraft}
-						maxLength={64}
-						placeholder="Panel topic"
-						className="h-5 min-w-0 flex-1 rounded border border-ring/60 bg-background px-1.5 text-xs text-foreground outline-none ring-1 ring-ring/20 placeholder:text-muted-foreground focus-visible:ring-ring"
-						onChange={(event) => setTopicDraft(event.target.value)}
-						onBlur={() => saveTopic()}
-						onClick={(event) => event.stopPropagation()}
-						onMouseDown={(event) => event.stopPropagation()}
-						onKeyDown={(event) => {
-							event.stopPropagation();
-							if (event.key === "Enter") {
-								event.preventDefault();
-								saveTopic(true);
-							} else if (event.key === "Escape") {
-								event.preventDefault();
-								restoreTopicButtonFocusRef.current = true;
-								setIsEditingTopic(false);
-							}
-						}}
-					/>
-				) : (
-					<>
-						<DropdownMenuTrigger asChild>
-							<button
-								type="button"
-								aria-label="Terminal sessions"
-								title={triggerTitle}
-								className="flex min-w-0 flex-1 items-center gap-1.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-								onMouseDown={(event) => event.stopPropagation()}
-								onClick={(event) => event.stopPropagation()}
-							>
-								<TerminalPaneIcon
-									workspaceId={workspaceId}
-									terminalId={terminalId}
-								/>
-								{workspaceRunState && (
-									<span
-										className={
-											workspaceRunState === "running"
-												? "size-1.5 shrink-0 rounded-full bg-emerald-500"
-												: workspaceRunState === "stopped-by-user"
-													? "size-1.5 shrink-0 rounded-full bg-amber-500"
-													: "size-1.5 shrink-0 rounded-full bg-red-500"
-										}
-										title={`Workspace run: ${workspaceRunState}`}
-									/>
-								)}
-								<span className="min-w-0 flex-1 truncate text-left">
-									{triggerTitle}
-								</span>
-								{sessionsQuery.isFetching && isOpen ? (
-									<LoaderCircle className="size-3 shrink-0 animate-spin" />
-								) : (
-									<ChevronDown className="size-3 shrink-0" />
-								)}
-							</button>
-						</DropdownMenuTrigger>
-						<Tooltip>
-							<TooltipTrigger asChild>
-								<button
-									ref={editTopicButtonRef}
-									type="button"
-									aria-label={editTopicLabel}
-									className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-									onMouseDown={(event) => event.stopPropagation()}
-									onClick={(event) => {
-										event.stopPropagation();
-										startEditingTopic();
-									}}
-								>
-									<PencilLine className="size-3" />
-								</button>
-							</TooltipTrigger>
-							<TooltipContent side="bottom" showArrow={false}>
-								{editTopicLabel}
-							</TooltipContent>
-						</Tooltip>
-					</>
-				)}
-			</div>
+			<TerminalSessionTitle
+				title={triggerTitle}
+				paneId={context.pane.id}
+				isActive={context.isActive}
+				isLoading={sessionsQuery.isFetching && isOpen}
+				onRename={context.actions.setTitle}
+			/>
 			<DropdownMenuContent align="start" className="w-96">
 				<DropdownMenuLabel className="flex items-center gap-2 text-xs">
 					<span className="min-w-0 flex-1 truncate">Terminal Sessions</span>

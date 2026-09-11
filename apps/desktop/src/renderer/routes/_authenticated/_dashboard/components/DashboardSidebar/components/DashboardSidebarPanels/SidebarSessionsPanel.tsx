@@ -73,11 +73,9 @@ const PROVIDERS: { id: AgentSessionProvider; label: string }[] = [
 
 export function SidebarSessionsPanel({
 	onOpenSession,
-	onNewSession,
 	onResumeInTerminal,
 }: {
 	onOpenSession: (request: SidebarSessionOpenRequest) => void;
-	onNewSession?: () => void;
 	/**
 	 * Runs the resume command in a real terminal pane. Optional so the panel
 	 * still renders anywhere it is mounted without a workspace to put one in;
@@ -292,25 +290,21 @@ export function SidebarSessionsPanel({
 				Recent sessions
 			</div>
 
-			{onNewSession ? (
-				<button
-					type="button"
-					onClick={onNewSession}
-					className="mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-				>
-					<span className="text-muted-foreground">+</span>
-					New session
-				</button>
-			) : null}
+			{/*
+			 * The "+ New session" button was removed on 2026-08-18. It routed to
+			 * the workspaces interface — a list of workspaces, hosts, branches and
+			 * creation dates — which is not what "new session" reads as, and is not
+			 * how sessions actually get started here. The prop went with it.
+			 */}
 
-			<div className="mx-2 mt-2 flex rounded-md bg-muted/60 p-0.5">
+			<div className="mx-2 mt-2 flex rounded-[8px] bg-muted/60 p-0.5">
 				{PROVIDERS.map((entry) => (
 					<button
 						key={entry.id}
 						type="button"
 						onClick={() => setProvider(entry.id)}
 						className={cn(
-							"flex-1 rounded px-2 py-1 text-xs transition-colors focus-visible:outline-none",
+							"flex-1 rounded-[6px] px-2 py-1 text-xs transition-colors focus-visible:outline-none",
 							provider === entry.id
 								? "bg-background text-foreground shadow-sm"
 								: "text-muted-foreground hover:text-foreground",
@@ -351,7 +345,18 @@ export function SidebarSessionsPanel({
 									 * translucent header over 13px text reads as a rendering
 									 * fault.
 									 */
-									className="sticky top-0 z-10 bg-sidebar px-3 pt-3 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/60 first:pt-1"
+									/*
+									 * NOT sticky.
+									 *
+									 * It was `sticky top-0 z-10 bg-sidebar`, and the panel it
+									 * scrolls in is not `bg-sidebar` — so the pinned header
+									 * painted a differently-coloured band straight over the
+									 * rows passing under it. Even matched, a date group is a
+									 * separator rather than a column header: there is nothing
+									 * to keep in view, so it should scroll away with the rows
+									 * it introduces.
+									 */
+									className="px-4 pt-3 pb-1 font-mono text-[9.5px] uppercase tracking-[0.12em] text-muted-foreground/40 first:pt-1"
 								>
 									{row.label}
 								</div>
@@ -441,7 +446,16 @@ export function SidebarSessionsPanel({
 									 * and nesting one inside another is invalid. */}
 									{/* biome-ignore lint/a11y/noStaticElementInteractions: onMouseLeave only disarms the delete confirmation; every action in the row is a real button */}
 									<div
-										className="group relative flex items-center transition-colors hover:bg-accent focus-within:bg-accent"
+										/*
+										 * Rounded and inset, on `sidebar-accent`.
+										 *
+										 * Square edge-to-edge rows on the generic `accent` were
+										 * the main reason this panel and the Workspaces tree
+										 * read as two different apps: one had rounded inset rows
+										 * and the other had full-bleed bands in a different
+										 * hover colour. Same radius, same inset, same token.
+										 */
+										className="group relative mx-2 flex items-center rounded-[8px] transition-colors hover:bg-sidebar-accent/60 focus-within:bg-sidebar-accent/60"
 										onMouseLeave={() =>
 											// Leaving the row withdraws the confirmation. A trash sitting
 											// armed after the pointer has gone is a trap for the next
@@ -467,7 +481,7 @@ export function SidebarSessionsPanel({
 													? "Already open, or its state can't be confirmed — this opens a forked copy under a new session id."
 													: (session.cwd ?? undefined)
 											}
-											className="flex min-w-0 flex-1 flex-col gap-0.5 px-3 py-1.5 text-left focus-visible:outline-none"
+											className="flex min-w-0 flex-1 flex-col gap-0.5 rounded-[8px] px-2.5 py-1.5 text-left focus-visible:outline-none"
 										>
 											{/*
 											 * Two lines, because one was not telling them apart.

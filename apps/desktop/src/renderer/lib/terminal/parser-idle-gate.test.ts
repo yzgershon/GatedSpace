@@ -171,3 +171,103 @@ describe("runWhenParserIdle", () => {
 		expect(called).toBe(true);
 	});
 });
+
+describe("the idle deadline", () => {
+	const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+	test("runs a parked job even if the parser never drains", async () => {
+		const gate = createParserIdleGate();
+		const fake = fakeWrite();
+		const write = wrapWrite(gate, fake.raw);
+		write("a busy agent, streaming");
+
+		let ran = false;
+		runWhenParserIdle(
+			gate,
+			() => {
+				ran = true;
+			},
+			20,
+		);
+
+		expect(ran).toBe(false);
+		await sleep(40);
+		// Without this, the fit is lost and the grid stays wider than the box.
+		expect(ran).toBe(true);
+		expect(fake.hasPending()).toBe(true);
+	});
+
+	test("a later call cannot postpone a deadline already in flight", async () => {
+		const gate = createParserIdleGate();
+		const fake = fakeWrite();
+		const write = wrapWrite(gate, fake.raw);
+		write("busy");
+
+		let ran = 0;
+		runWhenParserIdle(
+			gate,
+			() => {
+				ran++;
+			},
+			40,
+		);
+		await sleep(25);
+		// Re-parking mid-flight is what a resizing, busy terminal does.
+		runWhenParserIdle(
+			gate,
+			() => {
+				ran++;
+			},
+			40,
+		);
+
+		await sleep(30);
+		// 55ms in: the FIRST deadline (40ms) has fired. Had the second call
+		// re-armed it, nothing would have run until 65ms — which is the
+		// starvation this is here to prevent.
+		expect(ran).toBe(1);
+	});
+
+	test("draining normally cancels the deadline instead of running twice", async () => {
+		const gate = createParserIdleGate();
+		const fake = fakeWrite();
+		const write = wrapWrite(gate, fake.raw);
+		write("busy");
+
+		let ran = 0;
+		runWhenParserIdle(
+			gate,
+			() => {
+				ran++;
+			},
+			20,
+		);
+
+		fake.drain();
+		await flushMicrotasks();
+		await flushMicrotasks();
+		expect(ran).toBe(1);
+		await sleep(40);
+		expect(ran).toBe(1);
+	});
+
+	test("cancelling clears the deadline too", async () => {
+		const gate = createParserIdleGate();
+		const fake = fakeWrite();
+		const write = wrapWrite(gate, fake.raw);
+		write("busy");
+
+		let ran = false;
+		runWhenParserIdle(
+			gate,
+			() => {
+				ran = true;
+			},
+			20,
+		);
+		cancelParserIdleWork(gate);
+
+		await sleep(40);
+		expect(ran).toBe(false);
+	});
+});

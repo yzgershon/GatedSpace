@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — the Workspaces sidebar, after the rail</title>
+<style>
+  /*
+   * Target: none. This is our own layout question, not a copy of anyone's.
+   *
+   * From GatedSpace, read this session:
+   *   globals.css :root (dark)   every colour. --success #4bb377, --warning
+   *                              #d4a84b, --destructive #cc4444, --card #201e1c
+   *   workspace-sidebar-state.ts DEFAULT_WORKSPACE_SIDEBAR_WIDTH = 280
+   *   DashboardSidebarWorkspaceSessions.tsx
+   *                              session row  h-7, gap-2.5, pr-2.5,
+   *                                           rounded-[8px], text-[12.5px],
+   *                                           text-muted-foreground/70
+   *                              group header h-6, pl-[30px], text-[11px],
+   *                                           text-muted-foreground/45
+   *                              count        text-[10px] muted/40
+   *   layout.tsx                 --gs-pane-inset 18px, --gs-pane-radius 8px
+   *   PaneHeader.tsx             h-7 header, text-xs title
+   *   TabRail.tsx                h-7 tabs, 17px mark, ring-2 status
+   *   package.json               version 1.17.57
+   *
+   * Data is real: projects, workspaces, groups and session names are read off
+   * the running dev instance and the host database under ~/.superset/host/.
+   *
+   * Icon glyphs are HTML entities standing in for lucide icons — there is no
+   * icon package in a single file. They are not what ships.
+   */
+  :root{
+    --bg:#151110; --fg:#eae8e6; --card:#201e1c; --card2:#252220;
+    --sec:#2a2827; --mut:#a8a5a3; --ter:#1a1716; --bd:#2a2827;
+    --hl:#e07850; --side:#1a1716; --sideacc:#252220;
+    --ok:#4bb377; --warn:#d4a84b; --err:#cc4444; --well:#0d0a09;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 120px;background:#070505;color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+  h2{font-size:15px;font-weight:600;margin:52px 0 6px;padding-top:22px;border-top:1px solid #241f1e}
+  h3{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+     color:rgba(168,165,163,.5);margin:24px 0 10px}
+  p{color:var(--mut);max-width:84ch;margin:8px 0 18px}
+  code{font-family:var(--mono);font-size:12px;background:var(--ter);padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.72);margin:12px 0 0;max-width:84ch}
+  .note{border-left:2px solid var(--hl);padding:9px 0 9px 15px;margin:20px 0;color:var(--mut);max-width:84ch}
+  .note strong{color:var(--fg);font-weight:600}
+  .note.bad{border-left-color:var(--err)}
+  .rec{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#151110;background:var(--hl);border-radius:4px;padding:2px 7px;vertical-align:2px;margin-left:8px}
+  table{border-collapse:collapse;margin:16px 0;font-size:13px}
+  th,td{text-align:left;padding:8px 16px 8px 0;border-bottom:1px solid #241f1e;vertical-align:top}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(168,165,163,.5);font-weight:600}
+  td{color:var(--mut)} td:first-child{color:var(--fg)}
+  ul,ol{color:var(--mut);max-width:84ch} li{margin:6px 0}
+  .btns{margin:18px 0 12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  button.go{background:var(--sec);color:var(--fg);border:1px solid var(--bd);border-radius:8px;
+    padding:6px 13px;font-size:12.5px;cursor:pointer}
+  button.go.on{border-color:var(--hl);color:#fff}
+
+  /* ===================== the window: fixed 1440x900 ===================== */
+  .app{width:1440px;height:900px;background:var(--well);border-radius:12px;overflow:hidden;
+    box-shadow:0 34px 80px rgba(0,0,0,.62);display:flex;flex-direction:column;font-size:13px;position:relative}
+
+  .bar{height:46px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;position:relative}
+  .brand{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .mark{width:18px;height:18px;border-radius:5px;flex-shrink:0;
+    background:linear-gradient(140deg,var(--hl),#9c3f22);box-shadow:0 1px 6px rgba(224,120,80,.35)}
+  .brand b{font-size:13.5px;font-weight:600;letter-spacing:-.012em}
+  .vtag{font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.6);
+    border:1px solid var(--bd);border-radius:5px;padding:1px 5px;line-height:14px}
+  .ico{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:rgba(168,165,163,.55);font-size:13px;flex-shrink:0}
+  .barmid{position:absolute;left:0;right:0;display:flex;justify-content:center;pointer-events:none}
+  .seg{display:flex;align-items:center;gap:2px;padding:3px;border-radius:10px;
+    background:rgba(13,10,9,.55);border:1px solid rgba(42,40,39,.9);pointer-events:auto}
+  .sg{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:7px;
+    font-size:12.5px;color:var(--mut);white-space:nowrap}
+  .pic{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+  .barright{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:auto;z-index:2}
+  .chip{display:inline-flex;align-items:center;height:26px;padding:0 10px;border-radius:7px;
+    font-size:12px;color:var(--mut);background:rgba(255,255,255,.035);white-space:nowrap}
+  .wc{display:flex;gap:2px;margin-left:6px;color:rgba(168,165,163,.5);font-size:11px}
+  .wc span{width:28px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+
+  /* the rail, as built */
+  .rail{display:flex;align-items:center;gap:4px;padding:3px;border-radius:11px;
+    background:rgba(13,10,9,.72);border:1px solid rgba(42,40,39,.65);
+    box-shadow:0 6px 20px -10px rgba(0,0,0,.9)}
+  .rtab{display:flex;align-items:center;height:28px;padding:0 6px 0 4px;border-radius:8px;
+    color:var(--mut);white-space:nowrap;font-size:12.5px}
+  .rtab.on{background:var(--card);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(224,120,80,.34)}
+  .rmark{width:17px;height:17px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;
+    justify-content:center;font-size:10px}
+  .rtab.run .rmark{box-shadow:0 0 0 2px var(--warn)}
+  .rtab.ok .rmark{box-shadow:0 0 0 2px var(--ok)}
+  .rlab{display:none;align-items:center;gap:6px;margin-left:7px}
+  .rtab.on .rlab{display:flex}
+  .rx{width:15px;height:15px;display:flex;align-items:center;justify-content:center;border-radius:4px;
+    color:rgba(168,165,163,.55);margin-left:4px}
+  .rcnt{font-size:10.5px;color:rgba(168,165,163,.6);font-variant-numeric:tabular-nums}
+
+  /* ===================== body ===================== */
+  .body{flex:1;min-height:0;display:flex;gap:18px;padding:0 18px 18px}
+  .side{width:280px;flex-shrink:0;background:var(--side);border-radius:12px;overflow:hidden;
+    display:flex;flex-direction:column;box-shadow:0 8px 26px -12px rgba(0,0,0,.7)}
+  .nav{padding:8px 8px 2px}
+  .nrow{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 10px;
+    border-radius:8px;font-size:13.5px;color:var(--mut)}
+  .nrow.on{background:var(--sideacc);color:var(--fg)}
+  .cnt{font-size:11.5px;color:rgba(168,165,163,.4);font-variant-numeric:tabular-nums}
+  .rule{height:1px;background:rgba(42,40,39,.6);margin:6px 10px}
+  .prow{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;margin:0 8px;border-radius:8px;
+    font-size:13.5px;color:var(--fg)}
+  .pico{width:18px;height:18px;border-radius:6px;flex-shrink:0}
+  .wrow{display:flex;align-items:center;gap:7px;height:28px;padding:0 10px 0 24px;margin:0 8px;
+    border-radius:8px;font-size:12.5px;color:var(--mut)}
+  .wrow.on{background:var(--sideacc);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(224,120,80,.3)}
+  .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .diff{font-size:10px;font-variant-numeric:tabular-nums;flex-shrink:0}
+  .diff i{font-style:normal;color:var(--ok)} .diff b{font-weight:400;color:var(--err)}
+  .dot{width:7px;height:7px;border-radius:99px;flex-shrink:0}
+  .dot.ok{background:var(--ok)} .dot.run{background:var(--warn)} .dot.err{background:var(--err)}
+  .grp{display:flex;align-items:center;gap:6px;height:24px;padding:0 10px 0 30px;margin:0 8px;
+    font-size:11px;color:rgba(168,165,163,.45)}
+  .srow{display:flex;align-items:center;gap:10px;height:28px;padding:0 10px 0 30px;margin:0 8px;
+    border-radius:8px;font-size:12.5px;color:rgba(168,165,163,.7)}
+  .srow.deep{padding-left:44px}
+  .empty{padding:2px 10px 6px 30px;margin:0 8px;font-size:11.5px;color:rgba(168,165,163,.35)}
+  .sfoot{margin-top:auto;padding:8px;border-top:1px solid var(--bd)}
+  .meter{height:9px;border-radius:2px;background:rgba(255,255,255,.05);display:flex;gap:2px;padding:1px}
+  .meter i{flex:1;background:var(--err);border-radius:1px}
+  .meter i.off{background:rgba(255,255,255,.06)}
+  .acct{display:flex;align-items:center;gap:9px;padding:7px 4px 0}
+  .av{width:24px;height:24px;border-radius:7px;background:linear-gradient(140deg,var(--hl),#9c3f22);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#151110}
+  .aname{font-size:13px;line-height:1.15} .aname i{display:block;font-style:normal;font-size:9px;
+    font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#d946ef}
+
+  /* panes */
+  .grid{flex:1;min-width:0;display:flex;gap:18px}
+  .pane{flex:1;background:var(--card);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;
+    box-shadow:0 8px 26px -12px rgba(0,0,0,.75);min-width:0}
+  .pane.act{box-shadow:inset 2px 0 0 var(--hl),0 8px 26px -12px rgba(0,0,0,.75)}
+  .ph{height:28px;display:flex;align-items:center;gap:8px;padding:0 11px;background:var(--card2);
+    font-size:12px;position:relative}
+  .fold{font-size:11.5px;color:rgba(168,165,163,.45)}
+  .ctx{position:absolute;left:0;right:0;margin:0 auto;width:fit-content;font-size:11.5px;
+    color:rgba(168,165,163,.45);font-variant-numeric:tabular-nums;pointer-events:none}
+  .pacts{margin-left:auto;display:flex;gap:6px;color:rgba(168,165,163,.4);font-size:12px}
+  .tx{flex:1;padding:14px;font-size:12.5px;color:rgba(168,165,163,.6);line-height:1.85}
+
+  /* A/B */
+  .side .after{display:none}
+  .app.after .side .before{display:none}
+  .app.after .side .after{display:block}
+
+  .vgrid{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+  .vcard{background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:16px 18px;min-width:300px;flex:1}
+  .vcard h4{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--fg)}
+  .vcard p{font-size:12.5px;margin:6px 0 14px;color:rgba(168,165,163,.75)}
+  .vstage{background:var(--side);border-radius:9px;padding:10px 0}
+</style>
+</head>
+<body>
+
+<h1>The Workspaces sidebar, now that groups live in the rail</h1>
+<p style="margin-bottom:18px">
+  1440&times;900 at 1:1, real palette, real project and session names off your dev instance.
+  <strong>Nothing here is built.</strong> The <b>Before / After</b> button swaps the sidebar in
+  place so the two land on the same pixels.
+</p>
+
+<div class="btns">
+  <button class="go on" onclick="ab(0,this)">Before (today)</button>
+  <button class="go" onclick="ab(1,this)">After</button>
+</div>
+
+<div class="app" id="app">
+  <div class="bar">
+    <div class="brand"><span class="mark"></span><b>GatedSpace</b><span class="vtag">v1.17.57 dev</span></div>
+    <div class="ico">&#9707;</div><div class="ico">&#9906;</div>
+    <div class="barmid">
+      <div class="seg">
+        <span class="sg"><span class="pic" style="background:var(--hl)"></span>Claude</span>
+        <span class="sg"><span class="pic" style="background:#7a828f"></span>Codex</span>
+        <span class="sg"><span class="pic" style="background:#8b8b8b"></span>OpenCode</span>
+        <span class="sg"><span class="pic" style="background:#7aa2f7"></span>Copilot</span>
+      </div>
+    </div>
+    <div class="barright">
+      <span class="chip">2 shells running</span>
+      <div class="rail">
+        <span class="rtab run"><span class="rmark" style="background:var(--hl)">&#10033;</span></span>
+        <span class="rtab ok"><span class="rmark" style="background:#5a5652">&#9635;</span></span>
+        <span class="rtab on run">
+          <span class="rmark" style="background:var(--hl)">&#10033;</span>
+          <span class="rlab">Testing<span class="rcnt">2</span><span class="rx">&#10005;</span></span>
+        </span>
+        <span style="width:1px;height:16px;background:var(--bd);margin:0 2px"></span>
+        <span class="ico" style="width:26px;height:26px">+</span>
+      </div>
+      <div class="ico">&#9707;</div>
+      <div class="wc"><span>&#8211;</span><span>&#9633;</span><span>&#10005;</span></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="side">
+      <div class="nav">
+        <div class="nrow on">Workspaces <span class="cnt">11</span></div>
+        <div class="nrow">Recent sessions</div>
+        <div class="nrow">Usage</div>
+      </div>
+      <div class="rule"></div>
+
+      <!-- ================= BEFORE ================= -->
+      <div class="before">
+        <div class="prow"><span class="pico" style="background:#6b6bd6"></span><span class="nm">GatedSpace</span><span class="cnt">2</span></div>
+        <div class="wrow on"><span class="nm">local</span><span class="diff"><i>+72329</i> <b>&#8722;114601</b></span></div>
+        <div class="grp">Gated 1</div>
+        <div class="srow deep"><span class="dot ok"></span><span class="nm">Claude</span></div>
+        <div class="grp">2</div>
+        <div class="srow deep"><span class="dot ok"></span><span class="nm">Claude</span></div>
+        <div class="grp">Testing</div>
+        <div class="srow deep"><span class="dot run"></span><span class="nm">Claude</span></div>
+        <div class="wrow"><span class="nm">OPUS 5</span></div>
+        <div class="prow"><span class="pico" style="background:#3b7ddd"></span><span class="nm">Microsoft Business Mo&hellip;</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span></div>
+        <div class="wrow"><span class="nm">Microsoft Audits</span></div>
+        <div class="prow"><span class="pico" style="background:#8a5cf6"></span><span class="nm">Web Development</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span></div>
+        <div class="wrow"><span class="nm">Website Testing</span></div>
+        <div class="prow"><span class="pico" style="background:#d64f8f"></span><span class="nm">GatedVoice</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span><span class="diff"><i>+46229</i> <b>&#8722;13</b></span></div>
+      </div>
+
+      <!-- ================= AFTER ================= -->
+      <div class="after">
+        <div class="prow"><span class="pico" style="background:#6b6bd6"></span><span class="nm">GatedSpace</span><span class="cnt">2</span></div>
+        <div class="wrow on"><span class="nm">local</span><span class="diff"><i>+72329</i> <b>&#8722;114601</b></span></div>
+        <div class="srow"><span class="dot run"></span><span class="nm">audit the restyle batch against the packaged asar</span></div>
+        <div class="srow"><span class="dot ok"></span><span class="nm">why is the codex launcher not opening a pane</span></div>
+        <div class="srow"><span class="dot ok"></span><span class="nm">Claude</span></div>
+        <div class="wrow"><span class="nm">OPUS 5</span></div>
+        <div class="prow"><span class="pico" style="background:#3b7ddd"></span><span class="nm">Microsoft Business Mo&hellip;</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span></div>
+        <div class="empty">not opened yet</div>
+        <div class="wrow"><span class="nm">Microsoft Audits</span></div>
+        <div class="prow"><span class="pico" style="background:#8a5cf6"></span><span class="nm">Web Development</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span></div>
+        <div class="wrow"><span class="nm">Website Testing</span></div>
+        <div class="prow"><span class="pico" style="background:#d64f8f"></span><span class="nm">GatedVoice</span><span class="cnt">2</span></div>
+        <div class="wrow"><span class="nm">local</span><span class="diff"><i>+46229</i> <b>&#8722;13</b></span></div>
+      </div>
+
+      <div class="sfoot">
+        <div style="display:flex;justify-content:space-between;font-family:var(--mono);font-size:9px;
+          letter-spacing:.1em;color:rgba(168,165,163,.5)"><span>AMITAI 5H</span><span style="color:var(--err)">96%</span></div>
+        <div class="meter"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i class="off"></i></div>
+        <div class="acct"><span class="av">Y</span><span class="aname">Yishai<i>Ultra</i></span>
+          <span style="margin-left:auto;color:rgba(168,165,163,.4)">&#9881;</span></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="pane act">
+        <div class="ph"><span class="dot run"></span><span style="color:var(--hl)">&#10033;</span> Claude
+          <span class="fold">&hellip;&#92;Dev&#92;superset</span>
+          <span class="ctx">128k / 1.0M</span>
+          <span class="pacts">&#8943; &#10530; + &#9707; &#10005;</span></div>
+        <div class="tx">&gt; audit the restyle batch against the packaged asar<br>&nbsp;&nbsp;12 items checked, 2 absent</div>
+      </div>
+      <div class="pane">
+        <div class="ph"><span style="color:var(--hl)">&#9635;</span> pwsh
+          <span class="fold">&hellip;&#92;Dev&#92;superset</span>
+          <span class="pacts">&#8943; &#10530; + &#9707; &#10005;</span></div>
+        <div class="tx" style="font-family:var(--mono);font-size:11.5px">PS C:&#92;Dev&#92;superset&gt; bun run dev</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="cap">
+  Press <b>After</b> and watch the left column only. Three group headers and a 44px indent go; the
+  session rows come out one level and say what each agent is actually doing. The rail on the right is
+  unchanged, because it is now the thing that answers "which groups exist".
+</p>
+
+<h2>Why the group level can go</h2>
+<p>
+  It was added for a specific reason, and the reason expired. From
+  <code>DashboardSidebarWorkspaceSessions.tsx</code>, its own doc comment:
+</p>
+<div class="note">
+  <strong>"The group level matters more now than it did, because the tab strip is gone under this
+  skin"</strong> &mdash; the sidebar became the only place you could see the shape of what was open.
+</div>
+<p>
+  The rail brings that back, and better than the strip did: every group, its status, its pane count,
+  in the title bar. Keeping the same information nested in the sidebar is saying it twice and paying
+  a level of indentation for it.
+</p>
+
+<div class="note"><strong>The duplication is exact, not approximate.</strong> A pane only registers in
+<code>session-activity</code> once it has MOUNTED, so the sidebar's session tree only ever fills in for
+the workspace you are already in. That is the same one workspace the rail is describing. Every other
+workspace shows nothing under it either way.</div>
+
+<h2>Three ways to go</h2>
+<div class="vgrid">
+  <div class="vcard">
+    <h4>A &middot; Sessions, flat <span class="rec">recommended</span></h4>
+    <p>Group headers go, sessions come out one level, each row says its last prompt. The sidebar
+      answers "what is running and where do I go". The rail answers "what is in front of me".</p>
+    <div class="vstage">
+      <div class="wrow on"><span class="nm">local</span></div>
+      <div class="srow"><span class="dot run"></span><span class="nm">audit the restyle batch</span></div>
+      <div class="srow"><span class="dot ok"></span><span class="nm">why is codex not opening</span></div>
+    </div>
+  </div>
+  <div class="vcard">
+    <h4>B &middot; Keep the groups</h4>
+    <p>Today. Honest about which sessions share a screen, and the only place that says so &mdash; but
+      it repeats the rail and costs 44px of indent on the deepest row.</p>
+    <div class="vstage">
+      <div class="wrow on"><span class="nm">local</span></div>
+      <div class="grp">Testing</div>
+      <div class="srow deep"><span class="dot run"></span><span class="nm">Claude</span></div>
+      <div class="grp">Gated 1</div>
+      <div class="srow deep"><span class="dot ok"></span><span class="nm">Claude</span></div>
+    </div>
+  </div>
+  <div class="vcard">
+    <h4>C &middot; Workspaces only</h4>
+    <p>Drop sessions from the sidebar entirely and let the rail carry all of it. Quietest, and it
+      loses the only always-visible list of what is running across projects.</p>
+    <div class="vstage">
+      <div class="wrow on"><span class="nm">local</span><span class="dot run" style="margin-left:auto"></span></div>
+      <div class="wrow"><span class="nm">OPUS 5</span></div>
+      <div class="wrow"><span class="nm">Microsoft Audits</span></div>
+    </div>
+  </div>
+</div>
+
+<h2>What A costs, and how to pay it</h2>
+<div class="note bad"><strong>The failure mode to design against.</strong> Flattening loses the one
+thing the nesting was good at: which three sessions share a screen. With six sessions under a
+workspace you can no longer tell that three of them are one group.
+<br><br>
+That answer belongs on the rail, not the sidebar &mdash; and it is already half built. The strip had a
+hover card listing each pane in a tab, and <code>getTabIcon</code> was written for those rows across
+all eight pane kinds. It has been unreachable since the strip was deleted. Hovering a rail tab should
+list its panes, and then the question is answered where the groups actually live.</div>
+
+<h2>One thing to weigh before I build it</h2>
+<div class="note"><strong>Session rows say the LAST PROMPT, and prompts are long.</strong> At 280px
+with a 30px indent there are about 30 characters before the truncation. "audit the restyle batch
+against the packaged asar" becomes "audit the restyle batch aga&hellip;", which is enough to tell two
+sessions apart and not enough to read.
+<br><br>
+Flattening buys back 14px of that. If you find yourself widening the sidebar to read them, the answer
+is not a wider sidebar &mdash; it is going back to the derived title on the row and putting the prompt in
+the tooltip. Say so and I will switch it.</div>
+
+<h2>What gets deleted</h2>
+<table>
+  <tr><th>Goes</th><th>Where its job lands</th></tr>
+  <tr><td>Group headers in the sidebar</td><td>The rail names every group, with status and pane count.</td></tr>
+  <tr><td>The <code>pl-[44px]</code> session indent</td><td>Rows come out to <code>pl-[30px]</code>, level with the workspace tree.</td></tr>
+  <tr><td><code>workspace-groups</code> store</td><td>Still needed &mdash; the rail reads group titles. Only the sidebar stops consuming it.</td></tr>
+  <tr><td>Nothing else</td><td><code>session-activity</code>, the status dots and the focus-pane intent all stay exactly as they are.</td></tr>
+</table>
+
+<h2>Order I would build it</h2>
+<ol>
+  <li><strong>Flatten the sidebar.</strong> One component, no store changes, reversible in a line. This
+    is the half you can judge by looking.</li>
+  <li><strong>Pane rows on the rail hover.</strong> Restores what flattening removes, and brings
+    <code>getTabIcon</code> back from the dead.</li>
+</ol>
+
+<h2>What this preview cannot show you</h2>
+<p>
+  Status dots here are static. In the app they change as turns start and finish, and the amber
+  <code>--warning</code> (#d4a84b) sits close to the orange <code>--highlight</code> (#e07850) &mdash; on a
+  7px dot beside an orange project icon that is genuinely hard to separate, which is why the rail
+  pairs colour with a pulse rather than relying on hue. The same question applies to these rows and I
+  have not solved it here.
+</p>
+
+<p class="cap" style="margin-top:22px">
+  Nothing is coded. Tell me A, B or C, and whether to do the rail hover card at the same time.
+</p>
+
+<script>
+function ab(after, el){
+  document.getElementById('app').classList.toggle('after', !!after);
+  el.parentNode.querySelectorAll('button.go').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

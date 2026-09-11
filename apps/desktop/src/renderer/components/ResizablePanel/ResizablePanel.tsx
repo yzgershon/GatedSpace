@@ -18,6 +18,12 @@ interface ResizablePanelProps {
 	maxWidth: number;
 	/** Which side the resize handle should be on */
 	handleSide: "left" | "right";
+	/**
+	 * Draw the panel's own edge rule. Off when the content is a floating card:
+	 * a full-height hairline crosses the card's corner radius and reads as a
+	 * seam. Defaults to true so every existing caller is unchanged.
+	 */
+	bordered?: boolean;
 	/** Additional className for the container */
 	className?: string;
 	/**
@@ -40,6 +46,7 @@ export function ResizablePanel({
 	minWidth,
 	maxWidth,
 	handleSide,
+	bordered = true,
 	className,
 	clampWidth = true,
 	onDoubleClickHandle,
@@ -125,7 +132,16 @@ export function ResizablePanel({
 		<div
 			className={cn(
 				"relative h-full shrink-0 overflow-hidden border-border",
-				handleSide === "right" ? "border-r" : "border-l",
+				/*
+				 * The panel's own edge rule, off when the thing inside it is a card.
+				 *
+				 * This hairline runs the full height down the right of the sidebar.
+				 * Against a floating, rounded sidebar it crosses the corner radius
+				 * and reads as a seam the card is stuck to — "the line on the right
+				 * of the sidebar that ruins the look". The trough beside it already
+				 * marks the edge.
+				 */
+				bordered && (handleSide === "right" ? "border-r" : "border-l"),
 				// Animate width changes, but NEVER while dragging: a transition
 				// during a resize makes the edge chase the cursor instead of
 				// tracking it, which feels broken in a way snapping does not.

@@ -2,58 +2,77 @@ import {
 	type ContextMenuActionConfig,
 	type PaneRegistry,
 	type RendererContext,
-	resolveTabTitle,
+	requestPaneRename,
 } from "@superset/panes";
-import { useMemo } from "react";
-import {
-	LuColumns2,
-	LuEqual,
-	LuGlobe,
-	LuMessageSquare,
-	LuMoveRight,
-	LuPlus,
-	LuRows2,
-	LuX,
-} from "react-icons/lu";
+import { toast } from "@superset/ui/sonner";
+import { useCallback, useMemo } from "react";
+import { LuClipboard, LuColumns2, LuPencil, LuX } from "react-icons/lu";
+import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import type {
-	BrowserPaneData,
 	PaneViewerData,
 	SessionPaneData,
 	TerminalPaneData,
 } from "../../types";
+import { getSessionCwd } from "../usePaneRegistry/components/ClaudeSessionPane/sessionStore";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
 
 export function useDefaultContextMenuActions({
-	paneRegistry,
 	launcher,
+	workspaceCwd,
 }: {
 	paneRegistry: PaneRegistry<PaneViewerData>;
 	launcher: TerminalLauncher;
+	/**
+	 * The workspace worktree, used for panes that do not carry their own
+	 * directory. A terminal's cwd is resolved host-side and never sent back, and
+	 * `resolveTerminalCwd` defaults it to exactly this, so it is the right answer
+	 * for every pane that is not a session with an override.
+	 */
+	workspaceCwd?: string;
 }): ContextMenuActionConfig<PaneViewerData>[] {
-	const splitDownShortcut = useHotkeyDisplay("SPLIT_DOWN").text;
+	const { copyToClipboard } = useCopyToClipboard();
 	const splitRightShortcut = useHotkeyDisplay("SPLIT_RIGHT").text;
-	const splitWithChatShortcut = useHotkeyDisplay("SPLIT_WITH_CHAT").text;
-	const splitWithBrowserShortcut = useHotkeyDisplay("SPLIT_WITH_BROWSER").text;
-	const equalizePaneSplitsShortcut = useHotkeyDisplay(
-		"EQUALIZE_PANE_SPLITS",
-	).text;
 	const closePaneShortcut = useHotkeyDisplay("CLOSE_PANE").text;
+
+	/**
+	 * Where this pane is, for the two folder actions.
+	 *
+	 * A session pane knows its own directory — it was spawned with one, and a
+	 * session resumed from the recent list carries the project it came from
+	 * rather than this workspace's worktree, which is why `cwd` exists on
+	 * `SessionPaneData` at all. Everything else falls back to the worktree,
+	 * which is what `resolveTerminalCwd` gives a terminal anyway.
+	 */
+	const paneCwd = useCallback(
+		(ctx: RendererContext<PaneViewerData>): string | undefined => {
+			const sessionCwd = getSessionCwd(ctx.pane.id);
+			if (sessionCwd) return sessionCwd;
+			const data = ctx.pane.data as Partial<SessionPaneData> | undefined;
+			return data?.cwd ?? workspaceCwd;
+		},
+		[workspaceCwd],
+	);
 
 	return useMemo<ContextMenuActionConfig<PaneViewerData>[]>(
 		() => [
 			{
-				key: "split-horizontal",
-				label: "Split Horizontally",
-				icon: <LuRows2 />,
-				shortcut:
-					splitDownShortcut !== "Unassigned" ? splitDownShortcut : undefined,
+				key: "rename-pane",
+				label: "Rename Pane",
+				icon: <LuPencil />,
+				shortcut: "F2",
+				onSelect: (ctx) => requestPaneRename(ctx.pane.id),
+			},
+			{
+				key: "split-auto",
+				label: "Split Pane",
+				icon: <LuColumns2 />,
 				onSelect: async (ctx) => {
 					const terminalId = await launcher.create();
-					ctx.actions.split("down", {
-						kind: "terminal",
-						data: { terminalId } as TerminalPaneData,
-					});
+					ctx.actions.split(
+						ctx.pane.parentDirection === "horizontal" ? "down" : "right",
+						{ kind: "terminal", data: { terminalId } },
+					);
 				},
 			},
 			{
@@ -70,85 +89,19 @@ export function useDefaultContextMenuActions({
 					});
 				},
 			},
+			{ key: "sep-folder", type: "separator" },
 			{
-				key: "split-with-session",
-				label: "Split with New Session",
-				icon: <LuMessageSquare />,
-				shortcut:
-					splitWithChatShortcut !== "Unassigned"
-						? splitWithChatShortcut
-						: undefined,
+				key: "copy-cwd",
+				label: "Copy Working Directory",
+				icon: <LuClipboard />,
+				disabled: (ctx) => !paneCwd(ctx),
 				onSelect: (ctx) => {
-					// Was `kind: "chat"`, which v2's pane registry does not register —
-					// so this rendered a pane reading "Unknown pane kind: chat". The
-					// SPLIT_WITH_CHAT hotkey shown beside this item already opened a
-					// session pane, so the menu and its own shortcut disagreed, and
-					// only the menu was broken.
-					ctx.actions.split("right", {
-						kind: "session",
-						data: {} as SessionPaneData,
+					const cwd = paneCwd(ctx);
+					if (!cwd) return;
+					toast.promise(copyToClipboard(cwd), {
+						success: "Working directory copied",
+						error: "Could not copy the working directory",
 					});
-				},
-			},
-			{
-				key: "split-with-browser",
-				label: "Split with New Browser",
-				icon: <LuGlobe />,
-				shortcut:
-					splitWithBrowserShortcut !== "Unassigned"
-						? splitWithBrowserShortcut
-						: undefined,
-				onSelect: (ctx) => {
-					ctx.actions.split("right", {
-						kind: "browser",
-						data: {
-							url: "about:blank",
-						} as BrowserPaneData,
-					});
-				},
-			},
-			{
-				key: "equalize-splits",
-				label: "Equalize Pane Splits",
-				icon: <LuEqual />,
-				shortcut:
-					equalizePaneSplitsShortcut !== "Unassigned"
-						? equalizePaneSplitsShortcut
-						: undefined,
-				onSelect: (ctx) => {
-					ctx.store.getState().equalizeTab({ tabId: ctx.tab.id });
-				},
-			},
-			{ key: "sep-move", type: "separator" },
-			{
-				key: "move-to-tab",
-				label: "Move to Tab",
-				icon: <LuMoveRight />,
-				children: (ctx: RendererContext<PaneViewerData>) => {
-					const tabs = ctx.store.getState().tabs;
-					const otherTabs = tabs.filter((t) => t.id !== ctx.tab.id);
-					const items: ContextMenuActionConfig<PaneViewerData>[] =
-						otherTabs.map((tab) => ({
-							key: `move-to-${tab.id}`,
-							label: resolveTabTitle(tab, tabs, paneRegistry),
-							onSelect: () => {
-								ctx.store
-									.getState()
-									.movePaneToTab({ paneId: ctx.pane.id, targetTabId: tab.id });
-							},
-						}));
-					if (otherTabs.length > 0) {
-						items.push({ key: "sep-new-tab", type: "separator" });
-					}
-					items.push({
-						key: "move-to-new-tab",
-						label: "New Tab",
-						icon: <LuPlus />,
-						onSelect: () => {
-							ctx.store.getState().movePaneToNewTab({ paneId: ctx.pane.id });
-						},
-					});
-					return items;
 				},
 			},
 			{ key: "sep-close", type: "separator" },
@@ -162,15 +115,6 @@ export function useDefaultContextMenuActions({
 				onSelect: (ctx) => ctx.actions.close(),
 			},
 		],
-		[
-			splitDownShortcut,
-			splitRightShortcut,
-			splitWithChatShortcut,
-			splitWithBrowserShortcut,
-			equalizePaneSplitsShortcut,
-			closePaneShortcut,
-			paneRegistry,
-			launcher,
-		],
+		[splitRightShortcut, closePaneShortcut, launcher, paneCwd, copyToClipboard],
 	);
 }

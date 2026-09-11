@@ -1,0 +1,53 @@
+html,
+body,
+#app {
+	margin: 0;
+	height: 100%;
+	overflow: hidden;
+}
+:root {
+	--background: #151110;
+	--foreground: #f0e9e4;
+	--card: #27201d;
+	--muted: #302823;
+	--muted-foreground: #ab9a8f;
+	--border: #493b32;
+	--ring: #da8052;
+	--highlight: #da8052;
+	--popover: #28201b;
+	--popover-foreground: #f0e9e4;
+}
+#shell {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	zoom: 0.85;
+}
+#app {
+	display: flex;
+}
+#topbar {
+	height: 78px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 22px;
+	background: #151110;
+}
+#topbar strong {
+	font-size: 25px;
+}
+#floating-tabs {
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	padding: 14px 24px;
+}
+.xterm,
+.xterm .xterm-scrollable-element,
+.xterm .xterm-viewport,
+.xterm .xterm-screen {
+	width: 100%;
+	height: 100%;
+}

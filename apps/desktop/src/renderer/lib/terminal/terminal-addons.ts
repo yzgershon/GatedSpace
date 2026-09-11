@@ -9,10 +9,14 @@ import type { Terminal as XTerm } from "@xterm/xterm";
 import { Utf8Base64 } from "./clipboard-base64";
 import { WriteOnlyClipboardProvider } from "./clipboard-provider";
 import { attachRepaintWatchdog } from "./terminal-repaint-watchdog";
+import { installSharedWebglAtlasSync } from "./webgl-atlas";
+import { installWebglViewportSync } from "./webgl-viewport";
 
 export interface LoadAddonsResult {
 	searchAddon: SearchAddon;
 	progressAddon: ProgressAddon;
+	/** Clear cached glyphs and redraw without writing to the terminal stream. */
+	forceRepaint: () => void;
 	dispose: () => void;
 }
 
@@ -26,9 +30,22 @@ let suggestedRendererType: "webgl" | "dom" | undefined;
  * function and addon instances. WebGL is deferred to rAF to avoid
  * racing with xterm's post-open viewport sync.
  */
-export function loadAddons(terminal: XTerm): LoadAddonsResult {
+export function loadAddons(
+	terminal: XTerm,
+	onRendererChange?: () => void,
+): LoadAddonsResult {
 	let disposed = false;
 	let webglAddon: WebglAddon | null = null;
+	let disposeViewportSync: (() => void) | null = null;
+	let disposeAtlasSync: (() => void) | null = null;
+	const disposeWebgl = () => {
+		disposeAtlasSync?.();
+		disposeAtlasSync = null;
+		disposeViewportSync?.();
+		disposeViewportSync = null;
+		webglAddon?.dispose();
+		webglAddon = null;
+	};
 
 	// Utf8Base64 replaces the addon's UTF-8-unsafe default codec (#4839).
 	// WriteOnlyClipboardProvider refuses OSC 52 reads — see clipboard-provider.
@@ -65,15 +82,21 @@ export function loadAddons(terminal: XTerm): LoadAddonsResult {
 				// current and future terminal onto the slow renderer. That cascade
 				// is what makes the "thinking" spinners stutter once multiple agents
 				// are running.
-				webglAddon?.dispose();
-				webglAddon = null;
+				disposeWebgl();
+				onRendererChange?.();
 				terminal.refresh(0, terminal.rows - 1);
 			});
 			terminal.loadAddon(webglAddon);
-		} catch {
+			disposeViewportSync = installWebglViewportSync(webglAddon);
+			disposeAtlasSync = installSharedWebglAtlasSync(webglAddon);
+		} catch (error) {
+			console.warn("[terminal] WebGL unavailable; using DOM renderer", error);
+			disposeWebgl();
 			suggestedRendererType = "dom";
-			webglAddon = null;
 		}
+		// WebGL and DOM round cell widths differently. Refit and report the new
+		// grid to the PTY even when the container itself has not been resized.
+		onRendererChange?.();
 	});
 
 	// Wake, re-focus and DPR changes all leave the drawing surface stale without
@@ -88,12 +111,21 @@ export function loadAddons(terminal: XTerm): LoadAddonsResult {
 	return {
 		searchAddon,
 		progressAddon,
+		forceRepaint: () => {
+			try {
+				webglAddon?.clearTextureAtlas?.();
+				terminal.refresh(0, Math.max(0, terminal.rows - 1));
+			} catch {
+				// A terminal disposed mid-flight is the common case, and a failed
+				// repaint must never take down the pane it was fixing.
+			}
+		},
 		dispose: () => {
 			disposed = true;
 			cancelAnimationFrame(rafId);
 			detachRepaintWatchdog();
 			try {
-				webglAddon?.dispose();
+				disposeWebgl();
 			} catch {}
 			webglAddon = null;
 		},

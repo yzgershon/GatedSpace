@@ -20,6 +20,7 @@ import type { IconType } from "react-icons";
 import { HiOutlineCog6Tooth } from "react-icons/hi2";
 import { LuGauge, LuHistory, LuLayers } from "react-icons/lu";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
+import { getLastSettingsRoute } from "renderer/stores/last-settings-route";
 import {
 	type SidebarPanel,
 	useSidebarPanelStore,
@@ -206,7 +207,7 @@ export function DashboardSidebarRail({
 							<button
 								type="button"
 								aria-label="Settings"
-								onClick={() => navigate({ to: "/settings/account" })}
+								onClick={() => navigate({ to: getLastSettingsRoute() })}
 								className="flex size-11 items-center justify-center text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 							>
 								<HiOutlineCog6Tooth className="size-[22px]" />

@@ -10,15 +10,15 @@ export function SidebarToggle() {
 	const getToggleIcon = (isHovering: boolean) => {
 		if (collapsed) {
 			return isHovering ? (
-				<LuPanelLeftOpen className="size-4" strokeWidth={1.5} />
+				<LuPanelLeftOpen className="size-5" strokeWidth={1.5} />
 			) : (
-				<LuPanelLeft className="size-4" strokeWidth={1.5} />
+				<LuPanelLeft className="size-5" strokeWidth={1.5} />
 			);
 		}
 		return isHovering ? (
-			<LuPanelLeftClose className="size-4" strokeWidth={1.5} />
+			<LuPanelLeftClose className="size-5" strokeWidth={1.5} />
 		) : (
-			<LuPanelLeft className="size-4" strokeWidth={1.5} />
+			<LuPanelLeft className="size-5" strokeWidth={1.5} />
 		);
 	};
 
@@ -28,7 +28,7 @@ export function SidebarToggle() {
 				<button
 					type="button"
 					onClick={toggleCollapsed}
-					className="no-drag group flex items-center justify-center size-8 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
+					className="no-drag group flex items-center justify-center size-10 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors duration-100"
 				>
 					<span className="group-hover:hidden">{getToggleIcon(false)}</span>
 					<span className="hidden group-hover:block">

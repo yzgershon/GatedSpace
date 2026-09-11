@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — usage indicator + unified sidebar rows</title>
+<style>
+  /*
+   * Real GatedSpace tokens, read out of renderer/globals.css.
+   * Nothing here is invented colour.
+   */
+  :root{
+    --bg:#151110; --fg:#eae8e6; --card:#201e1c; --mut:#a8a5a3; --bd:#2a2827;
+    --hl:#e07850; --sidebar:#1a1716; --sidebar-accent:#252220;
+    --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --fx:#d946ef;
+    --well:#0d0a09;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 90px;background:#080606;color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+  h2{font-size:15px;font-weight:600;margin:44px 0 10px;padding-top:20px;border-top:1px solid #241f1e}
+  p{color:var(--mut);max-width:80ch;margin:6px 0 16px}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.7);margin:10px 0 0;max-width:80ch}
+  .row{display:flex;gap:26px;flex-wrap:wrap;align-items:flex-start}
+
+  .demo{background:var(--sidebar);border:1px solid var(--bd);border-radius:12px;padding:10px;width:288px}
+  .demo h3{margin:2px 0 10px;padding:0 4px;font-size:11px;font-weight:600;letter-spacing:.07em;
+    text-transform:uppercase;color:rgba(168,165,163,.5)}
+
+  /* ---------- shared footer row ---------- */
+  .frow{display:flex;align-items:center;gap:9px;height:34px;padding:0 8px;border-radius:8px;
+    font-size:13px;color:var(--mut);cursor:default}
+  .frow:hover{background:rgba(255,255,255,.03)}
+  .fname{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .fval{flex-shrink:0;font-variant-numeric:tabular-nums;font-size:12.5px}
+
+  /* avatar for the account-aware variants */
+  .av{width:19px;height:19px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;
+    justify-content:center;font-size:9.5px;font-weight:700;color:#fff}
+  .av.y{background:linear-gradient(140deg,#7a655c,#5a4a43)}
+  .av.a{background:linear-gradient(140deg,#4f6d8f,#33475c)}
+  .av.r{background:linear-gradient(140deg,#6b5a86,#463a58)}
+
+  /* ============ A. segmented capsule ============ */
+  .segbar{display:flex;gap:2px;height:9px;width:78px;flex-shrink:0}
+  .segbar i{flex:1;border-radius:2px;background:rgba(255,255,255,.07)}
+  .segbar i.on{background:var(--ok)}
+  .segbar.warn i.on{background:var(--warn)}
+  .segbar.dang i.on{background:var(--err)}
+
+  /* ============ B. the one he screenshotted (current) ============ */
+  .oldbar{height:14px;width:96px;flex-shrink:0;border-radius:2px;overflow:hidden;
+    background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1px);
+    background-size:3px 3px;background-color:rgba(255,255,255,.02)}
+  .oldbar i{display:block;height:100%;background:#e8c88a}
+
+  /* ============ C. arc / dial ============ */
+  .dial{width:26px;height:26px;flex-shrink:0;position:relative}
+  .dial svg{transform:rotate(-90deg)}
+  .dial .track{stroke:rgba(255,255,255,.09)}
+  .dial .fill{stroke:var(--ok);stroke-linecap:round;transition:stroke-dashoffset .4s}
+  .dial.warn .fill{stroke:var(--warn)}
+  .dial.dang .fill{stroke:var(--err)}
+  .dial b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:8.5px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--fg)}
+
+  /* ============ D. hairline underline ============ */
+  .under{display:flex;flex-direction:column;gap:5px;flex:1;min-width:0}
+  .under .lbl{display:flex;align-items:baseline;gap:8px}
+  .under .lbl .n{margin-left:auto;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
+  .under .track{height:2px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden}
+  .under .track i{display:block;height:100%;border-radius:2px;background:var(--ok)}
+  .under.warn .track i{background:var(--warn)}
+  .under.dang .track i{background:var(--err)}
+  .sub{font-size:11px;color:rgba(168,165,163,.45)}
+
+  /* ============ sidebar rows ============ */
+  .panel{background:var(--sidebar);border:1px solid var(--bd);border-radius:12px;width:300px;padding:8px 6px}
+  .sect{display:flex;align-items:center;justify-content:space-between;padding:10px 10px 6px;
+    font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:rgba(168,165,163,.42)}
+  .item{display:flex;align-items:center;gap:9px;height:32px;padding:0 10px;border-radius:8px;
+    font-size:13.5px;color:var(--fg)}
+  .item:hover{background:var(--sidebar-accent)}
+  .item.on{background:var(--sidebar-accent)}
+  .item .ico{width:18px;height:18px;border-radius:6px;flex-shrink:0;display:flex;align-items:center;
+    justify-content:center;font-size:10px;background:rgba(255,255,255,.06);color:rgba(234,232,230,.7)}
+  .item .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .item .cnt{flex-shrink:0;font-size:11.5px;color:rgba(168,165,163,.4);font-variant-numeric:tabular-nums}
+  .item .diff{flex-shrink:0;font-family:var(--mono);font-size:10.5px}
+  .item .diff .a{color:#5ec27a}.item .diff .d{color:#e07070}
+
+  /* child rows: last prompt per pane */
+  .child{display:flex;align-items:center;gap:8px;height:28px;padding:0 10px 0 30px;border-radius:8px;
+    font-size:12.5px;color:rgba(168,165,163,.72)}
+  .child:hover{background:rgba(255,255,255,.035);color:var(--fg)}
+  .dot{width:7px;height:7px;border-radius:99px;flex-shrink:0}
+  .dot.ok{background:var(--ok)}
+  .dot.run{background:var(--warn);animation:pulse 1.5s ease-in-out infinite}
+  .dot.err{background:var(--err)}
+  @keyframes pulse{50%{opacity:.3}}
+  .child .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .child .when{flex-shrink:0;font-size:10.5px;color:rgba(168,165,163,.32);font-variant-numeric:tabular-nums}
+
+
+  /* ============ B-family: the textured-remainder bar ============ */
+  .b{display:flex;align-items:center;gap:9px;height:38px;padding:0 8px;border-radius:8px}
+  .b:hover{background:rgba(255,255,255,.03)}
+  .bmeta{min-width:0;flex:1;display:flex;flex-direction:column;gap:3px}
+  .btop{display:flex;align-items:baseline;gap:8px}
+  .btop .who{font-size:13px;color:var(--fg)}
+  .btop .pct{margin-left:auto;font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--fg)}
+  .breset{font-size:10.5px;color:rgba(168,165,163,.42)}
+
+  /* the shared bar shell */
+  .bar{position:relative;height:11px;border-radius:3px;overflow:hidden}
+  .bar>i{position:absolute;inset:0 auto 0 0;border-radius:3px}
+
+  /* B1 refined dots */
+  .b1 .bar{background-color:rgba(255,255,255,.025);
+    background-image:radial-gradient(rgba(255,255,255,.20) 1px,transparent 1px);
+    background-size:3px 3px}
+  .b1 .bar>i{background:#e8c88a}
+  .b1.dang .bar>i{background:var(--err)}
+
+  /* B2 gradient sweep */
+  .b2 .bar{background-color:rgba(255,255,255,.025);
+    background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1px);background-size:3px 3px}
+  .b2 .bar>i{background:linear-gradient(90deg,#c98b52,#f0d3a0)}
+  .b2.dang .bar>i{background:linear-gradient(90deg,#8f2f2f,#ef4444)}
+
+  /* B3 discrete blocks */
+  .b3 .blocks{display:flex;gap:2px;height:11px}
+  .b3 .blocks span{flex:1;border-radius:2px;background:rgba(255,255,255,.06)}
+  .b3 .blocks span.on{background:#e8c88a}
+  .b3.dang .blocks span.on{background:var(--err)}
+
+  /* B4 diagonal hatch remainder */
+  .b4 .bar{background-color:rgba(255,255,255,.02);
+    background-image:repeating-linear-gradient(-45deg,rgba(255,255,255,.13) 0 1px,transparent 1px 5px)}
+  .b4 .bar>i{background:#e8c88a}
+  .b4.dang .bar>i{background:var(--err)}
+
+  /* B5 leading-edge glow */
+  .b5 .bar{background-color:rgba(255,255,255,.025);
+    background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:3px 3px}
+  .b5 .bar>i{background:linear-gradient(90deg,rgba(232,200,138,.55),#e8c88a);
+    box-shadow:2px 0 7px rgba(232,200,138,.65),1px 0 0 #fff3dc}
+  .b5.dang .bar>i{background:linear-gradient(90deg,rgba(239,68,68,.5),var(--err));
+    box-shadow:2px 0 7px rgba(239,68,68,.7),1px 0 0 #ffd7d7}
+
+  /* B6 recessed groove */
+  .b6 .bar{height:12px;background-color:#0c0908;
+    background-image:radial-gradient(rgba(255,255,255,.13) 1px,transparent 1px);background-size:3px 3px;
+    box-shadow:inset 0 1px 2px rgba(0,0,0,.85),inset 0 -1px 0 rgba(255,255,255,.04)}
+  .b6 .bar>i{background:linear-gradient(180deg,#f2d7a6,#d9ae72);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.5)}
+  .b6.dang .bar>i{background:linear-gradient(180deg,#f87171,#dc2626);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.35)}
+
+  /* B7 twin track */
+  .b7 .bar{height:6px;border-radius:2px}
+  .b7 .bar.wk{margin-top:3px;opacity:.65}
+  .b7 .bar{background-color:rgba(255,255,255,.025);
+    background-image:radial-gradient(rgba(255,255,255,.16) 1px,transparent 1px);background-size:3px 3px}
+  .b7 .bar>i{border-radius:2px;background:#e8c88a}
+  .b7 .bar.wk>i{background:#8fb3d9}
+
+  /* B8 notched */
+  .b8 .bar{background-color:rgba(255,255,255,.025);
+    background-image:radial-gradient(rgba(255,255,255,.18) 1px,transparent 1px);background-size:3px 3px}
+  .b8 .bar>i{background:#e8c88a}
+  .b8 .bar>u{position:absolute;inset:0;
+    background-image:repeating-linear-gradient(90deg,transparent 0 calc(10% - 1px),rgba(13,10,9,.85) calc(10% - 1px) 10%)}
+  .b8.dang .bar>i{background:var(--err)}
+
+
+  /* ================= FUTURISTIC SET ================= */
+  .f{--f:#57e2d5;--fdim:rgba(87,226,213,.16);
+     display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:9px}
+  .f.amber{--f:#e07850;--fdim:rgba(224,120,80,.16)}
+  .f.red{--f:#ff5a5a;--fdim:rgba(255,90,90,.18)}
+  .f:hover{background:rgba(255,255,255,.03)}
+  .fmeta{min-width:0;flex:1;display:flex;flex-direction:column;gap:5px}
+  .flab{display:flex;align-items:baseline;gap:8px;font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:rgba(168,165,163,.45)}
+  .flab .who{color:rgba(234,232,230,.82);letter-spacing:.06em}
+  .flab .pct{margin-left:auto;font-size:12px;letter-spacing:.02em;color:var(--f);
+    text-shadow:0 0 8px var(--fdim);font-variant-numeric:tabular-nums}
+  .fsub{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;
+    text-transform:uppercase;color:rgba(168,165,163,.3)}
+
+  /* F1 skewed segment array */
+  .f1 .seg{display:flex;gap:3px;height:13px}
+  .f1 .seg span{flex:1;transform:skewX(-22deg);border-radius:1px;
+    background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px rgba(255,255,255,.05)}
+  .f1 .seg span.on{background:var(--f);box-shadow:0 0 7px var(--fdim),inset 0 0 0 1px rgba(255,255,255,.35)}
+
+  /* F2 reactor arc */
+  .f2row{display:flex;align-items:center;gap:12px;width:100%}
+  .arc{position:relative;width:56px;height:34px;flex-shrink:0}
+  .arc .tk{stroke:rgba(255,255,255,.14);stroke-width:1.5}
+  .arc .tk.on{stroke:var(--f);filter:drop-shadow(0 0 3px var(--f))}
+  .arc b{position:absolute;left:0;right:0;bottom:0;text-align:center;font-family:var(--mono);
+    font-size:13px;color:var(--f);text-shadow:0 0 9px var(--fdim);font-variant-numeric:tabular-nums}
+
+  /* F3 scanline conduit */
+  .f3 .con{position:relative;height:14px;border-radius:2px;overflow:hidden;
+    background:#0b0908;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07)}
+  .f3 .con>i{position:absolute;inset:0 auto 0 0;background:var(--f);opacity:.9}
+  .f3 .con>u{position:absolute;inset:0;
+    background-image:repeating-linear-gradient(0deg,rgba(0,0,0,.55) 0 1px,transparent 1px 3px)}
+  .f3 .con>b{position:absolute;top:0;bottom:0;width:2px;background:#fff;
+    box-shadow:0 0 10px var(--f),0 0 22px var(--f)}
+
+  /* F4 bracketed readout */
+  .f4 .brk{position:relative;display:block;padding:0 11px}
+  .f4 .brk::before,.f4 .brk::after{content:"";position:absolute;top:-3px;bottom:-3px;width:6px;
+    border:1px solid var(--f);opacity:.6}
+  .f4 .brk::before{left:0;border-right:0}
+  .f4 .brk::after{right:0;border-left:0}
+  .f4 .cells{display:flex;gap:2px;height:12px}
+  .f4 .cells span{flex:1;border-radius:1px;background:rgba(255,255,255,.05)}
+  .f4 .cells span.on{background:var(--f);box-shadow:0 0 6px var(--fdim)}
+
+  /* F5 hex cells */
+  .f5 .hex{display:flex;gap:3px;height:14px}
+  .f5 .hex span{flex:1;background:rgba(255,255,255,.05);
+    clip-path:polygon(25% 0%,75% 0%,100% 50%,75% 100%,25% 100%,0% 50%)}
+  .f5 .hex span.on{background:var(--f);filter:drop-shadow(0 0 4px var(--fdim))}
+
+  /* F6 spectrum ticks */
+  .f6 .spec{display:flex;align-items:flex-end;gap:2px;height:18px}
+  .f6 .spec span{flex:1;border-radius:1px;background:rgba(255,255,255,.06)}
+  .f6 .spec span.on{background:var(--f);box-shadow:0 0 6px var(--fdim)}
+
+  /* F7 circuit trace */
+  .f7 .tr{position:relative;display:block;height:16px}
+  .f7 .tr .line{position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(255,255,255,.1)}
+  .f7 .tr .live{position:absolute;top:50%;left:0;height:1px;background:var(--f);
+    box-shadow:0 0 8px var(--f)}
+  .f7 .tr .node{position:absolute;top:50%;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;
+    transform:rotate(45deg);background:#0b0908;box-shadow:inset 0 0 0 1px rgba(255,255,255,.16)}
+  .f7 .tr .node.on{background:var(--f);box-shadow:0 0 8px var(--f)}
+  .f7 .tr .head{position:absolute;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;
+    transform:rotate(45deg);background:var(--f);box-shadow:0 0 12px var(--f)}
+
+  /* F8 holo panel */
+  .f8 .holo{position:relative;display:block;padding:8px 10px;
+    background:linear-gradient(135deg,rgba(87,226,213,.07),rgba(87,226,213,.01));
+    box-shadow:inset 0 0 0 1px rgba(87,226,213,.22);
+    clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))}
+  .f8.red .holo{background:linear-gradient(135deg,rgba(255,90,90,.08),rgba(255,90,90,.01));
+    box-shadow:inset 0 0 0 1px rgba(255,90,90,.26)}
+  .f8 .holo::after{content:"";position:absolute;inset:0;pointer-events:none;
+    background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 4px)}
+  .f8 .bars{display:flex;gap:2px;height:10px}
+  .f8 .bars span{flex:1;background:rgba(255,255,255,.06)}
+  .f8 .bars span.on{background:var(--f);box-shadow:0 0 6px var(--fdim)}
+
+  .note{border-left:2px solid var(--hl);padding:8px 0 8px 14px;margin:16px 0;color:var(--mut);max-width:80ch}
+  .note strong{color:var(--fg);font-weight:600}
+  code{font-family:var(--mono);font-size:12px;background:#1a1716;padding:1px 5px;border-radius:4px;color:#d6d3d1}
+</style>
+</head>
+<body>
+
+<h1>Usage indicator, and one row style for both panels</h1>
+<p>
+  Four options for the usage readout, then the sidebar rows rebuilt so Workspaces and Recent
+  sessions are the same component with different content. Everything uses the app's real tokens.
+</p>
+
+<h2>The usage indicator — four options</h2>
+<p>
+  All of them are account-aware: the avatar and name come from whichever Claude account is
+  active, so switching accounts switches the readout. All show the reset time.
+</p>
+
+<div class="row">
+
+  <div class="demo">
+    <h3>A · segmented capsule</h3>
+    <div class="frow">
+      <span class="av y">Y</span>
+      <span class="fname">Yishai</span>
+      <span class="segbar"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i></span>
+      <span class="fval">65%</span>
+    </div>
+    <div class="frow" style="height:20px;padding-top:0">
+      <span class="fname sub" style="padding-left:28px">5h · resets 2:40 PM</span>
+    </div>
+  </div>
+
+  <div class="demo">
+    <h3>B · current (for comparison)</h3>
+    <div class="frow">
+      <span class="fname">5h limit</span>
+      <span class="oldbar"><i style="width:65%"></i></span>
+      <span class="fval" style="color:#e8c88a">65%</span>
+    </div>
+    <div class="frow" style="height:20px;padding-top:0">
+      <span class="fname sub">no account, no reset</span>
+    </div>
+  </div>
+
+  <div class="demo">
+    <h3>C · dial</h3>
+    <div class="frow">
+      <span class="dial">
+        <svg width="26" height="26"><circle class="track" cx="13" cy="13" r="10" fill="none" stroke-width="3"/><circle class="fill" cx="13" cy="13" r="10" fill="none" stroke-width="3" stroke-dasharray="62.8" stroke-dashoffset="22"/></svg>
+        <b>65</b>
+      </span>
+      <span class="fname">Yishai<br><span class="sub">5h · resets 2:40 PM</span></span>
+    </div>
+  </div>
+
+  <div class="demo">
+    <h3>D · hairline underline</h3>
+    <div class="frow" style="height:auto;padding:8px">
+      <span class="av y">Y</span>
+      <span class="under">
+        <span class="lbl"><span>Yishai</span><span class="n">65%</span></span>
+        <span class="track"><i style="width:65%"></i></span>
+        <span class="sub">5h · resets 2:40 PM</span>
+      </span>
+    </div>
+  </div>
+
+</div>
+
+<p class="cap" style="margin-top:22px">
+  Each shown again at 91%, where the colour has to do its job:
+</p>
+
+<div class="row" style="margin-top:12px">
+  <div class="demo">
+    <h3>A · at 91%</h3>
+    <div class="frow">
+      <span class="av a">A</span>
+      <span class="fname">Amitai</span>
+      <span class="segbar dang"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span>
+      <span class="fval" style="color:var(--err)">91%</span>
+    </div>
+    <div class="frow" style="height:20px"><span class="fname sub" style="padding-left:28px">5h · resets 18m</span></div>
+  </div>
+  <div class="demo">
+    <h3>C · at 91%</h3>
+    <div class="frow">
+      <span class="dial dang">
+        <svg width="26" height="26"><circle class="track" cx="13" cy="13" r="10" fill="none" stroke-width="3"/><circle class="fill" cx="13" cy="13" r="10" fill="none" stroke-width="3" stroke-dasharray="62.8" stroke-dashoffset="5.7"/></svg>
+        <b>91</b>
+      </span>
+      <span class="fname">Amitai<br><span class="sub">5h · resets 18m</span></span>
+    </div>
+  </div>
+  <div class="demo">
+    <h3>D · at 91%</h3>
+    <div class="frow" style="height:auto;padding:8px">
+      <span class="av a">A</span>
+      <span class="under dang">
+        <span class="lbl"><span>Amitai</span><span class="n" style="color:var(--err)">91%</span></span>
+        <span class="track"><i style="width:91%"></i></span>
+        <span class="sub">5h · resets 18m</span>
+      </span>
+    </div>
+  </div>
+</div>
+
+
+<h2>Futuristic set</h2>
+<p>
+  A different direction rather than more bars: HUD readouts. Monospace micro-caps with wide
+  letter-spacing, graduations instead of a continuous fill, and glow doing the work the colour
+  fill was doing before. Teal at 65%, red at 91%. The accent is one CSS variable per row, so any
+  of these can run on GatedSpace's own orange instead &mdash; F1 and F5 are shown both ways.
+</p>
+
+<div class="row">
+  <div class="demo">
+    <h3>F1 &middot; skewed segment array</h3>
+      <div class="f f1 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="seg"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span><span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f1 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="seg"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Fourteen raked segments. The angle is what makes it read as a HUD rather than a progress bar.</p>
+  </div>
+  <div class="demo">
+    <h3>F3 &middot; scanline conduit</h3>
+      <div class="f f3 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="con"><i style="width:65%"></i><b style="left:calc(65% - 1px)"></b><u></u></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f3 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="con"><i style="width:91%"></i><b style="left:calc(91% - 1px)"></b><u></u></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">A lit conduit behind CRT scanlines, with a hard white leading edge.</p>
+  </div>
+  <div class="demo">
+    <h3>F4 &middot; bracketed cells</h3>
+      <div class="f f4 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="brk"><span class="cells"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span><span></span><span></span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f4 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="brk"><span class="cells"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Corner brackets clamp the readout. Sixteen cells, monospace caps.</p>
+  </div>
+  <div class="demo">
+    <h3>F5 &middot; hex lattice</h3>
+      <div class="f f5 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="hex"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f5 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="hex"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Twelve hexagons. The most overtly sci-fi of the set.</p>
+  </div>
+  <div class="demo">
+    <h3>F6 &middot; spectrum ticks</h3>
+      <div class="f f6 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="spec"><span class="on" style="height:40%"></span><span class="on" style="height:62%"></span><span class="on" style="height:48%"></span><span class="on" style="height:78%"></span><span class="on" style="height:55%"></span><span class="on" style="height:90%"></span><span class="on" style="height:66%"></span><span class="on" style="height:84%"></span><span class="on" style="height:52%"></span><span class="on" style="height:72%"></span><span class="" style="height:96%"></span><span class="" style="height:60%"></span><span class="" style="height:82%"></span><span class="" style="height:58%"></span><span class="" style="height:74%"></span><span class="" style="height:88%"></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f6 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="spec"><span class="on" style="height:40%"></span><span class="on" style="height:62%"></span><span class="on" style="height:48%"></span><span class="on" style="height:78%"></span><span class="on" style="height:55%"></span><span class="on" style="height:90%"></span><span class="on" style="height:66%"></span><span class="on" style="height:84%"></span><span class="on" style="height:52%"></span><span class="on" style="height:72%"></span><span class="on" style="height:96%"></span><span class="on" style="height:60%"></span><span class="on" style="height:82%"></span><span class="on" style="height:58%"></span><span class="on" style="height:74%"></span><span class="" style="height:88%"></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Uneven tick heights, like a spectrum analyser frozen mid-frame.</p>
+  </div>
+  <div class="demo">
+    <h3>F7 &middot; circuit trace</h3>
+      <div class="f f7 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="tr"><span class="line"></span><span class="live" style="width:65%"></span><span class="node on" style="left:0%"></span><span class="node on" style="left:20%"></span><span class="node on" style="left:40%"></span><span class="node on" style="left:60%"></span><span class="node" style="left:80%"></span><span class="node" style="left:100%"></span><span class="head" style="left:65%"></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f7 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="tr"><span class="line"></span><span class="live" style="width:91%"></span><span class="node on" style="left:0%"></span><span class="node on" style="left:20%"></span><span class="node on" style="left:40%"></span><span class="node on" style="left:60%"></span><span class="node on" style="left:80%"></span><span class="node" style="left:100%"></span><span class="head" style="left:91%"></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">A trace with six diamond nodes and a bright head at the current position.</p>
+  </div>
+  <div class="demo">
+    <h3>F8 &middot; holo panel</h3>
+      <div class="f f8 ">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="holo"><span class="bars"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span><span></span><span></span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f8 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="holo"><span class="bars"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">The readout sits in a chamfered panel with a sheen and scanlines over it.</p>
+  </div>
+  <div class="demo">
+    <h3>F2 &middot; reactor arc</h3>
+      <div class="f f2"><span class="f2row"><span class="arc"><svg width="56" height="34"><line class="tk on" x1="4.0" y1="30.0" x2="11.0" y2="30.0"/><line class="tk on" x1="4.3" y1="26.0" x2="11.2" y2="27.2"/><line class="tk on" x1="5.3" y1="22.2" x2="11.9" y2="24.5"/><line class="tk on" x1="6.9" y1="18.6" x2="13.0" y2="21.9"/><line class="tk on" x1="9.1" y1="15.3" x2="14.6" y2="19.6"/><line class="tk on" x1="11.7" y1="12.3" x2="16.5" y2="17.5"/><line class="tk on" x1="14.9" y1="9.9" x2="18.7" y2="15.8"/><line class="tk on" x1="18.4" y1="8.0" x2="21.2" y2="14.4"/><line class="tk on" x1="22.1" y1="6.7" x2="23.8" y2="13.5"/><line class="tk on" x1="26.0" y1="6.1" x2="26.6" y2="13.1"/><line class="tk on" x1="30.0" y1="6.1" x2="29.4" y2="13.1"/><line class="tk on" x1="33.9" y1="6.7" x2="32.2" y2="13.5"/><line class="tk on" x1="37.6" y1="8.0" x2="34.8" y2="14.4"/><line class="tk" x1="41.1" y1="9.9" x2="37.3" y2="15.8"/><line class="tk" x1="44.3" y1="12.3" x2="39.5" y2="17.5"/><line class="tk" x1="46.9" y1="15.3" x2="41.4" y2="19.6"/><line class="tk" x1="49.1" y1="18.6" x2="43.0" y2="21.9"/><line class="tk" x1="50.7" y1="22.2" x2="44.1" y2="24.5"/><line class="tk" x1="51.7" y1="26.0" x2="44.8" y2="27.2"/><line class="tk" x1="52.0" y1="30.0" x2="45.0" y2="30.0"/></svg><b>65</b></span><span class="fmeta"><span class="flab"><span class="who">Yishai</span><span>5H</span></span><span class="fsub">resets 2:40 PM</span></span></span></div>
+      <div class="f f2 red"><span class="f2row"><span class="arc"><svg width="56" height="34"><line class="tk on" x1="4.0" y1="30.0" x2="11.0" y2="30.0"/><line class="tk on" x1="4.3" y1="26.0" x2="11.2" y2="27.2"/><line class="tk on" x1="5.3" y1="22.2" x2="11.9" y2="24.5"/><line class="tk on" x1="6.9" y1="18.6" x2="13.0" y2="21.9"/><line class="tk on" x1="9.1" y1="15.3" x2="14.6" y2="19.6"/><line class="tk on" x1="11.7" y1="12.3" x2="16.5" y2="17.5"/><line class="tk on" x1="14.9" y1="9.9" x2="18.7" y2="15.8"/><line class="tk on" x1="18.4" y1="8.0" x2="21.2" y2="14.4"/><line class="tk on" x1="22.1" y1="6.7" x2="23.8" y2="13.5"/><line class="tk on" x1="26.0" y1="6.1" x2="26.6" y2="13.1"/><line class="tk on" x1="30.0" y1="6.1" x2="29.4" y2="13.1"/><line class="tk on" x1="33.9" y1="6.7" x2="32.2" y2="13.5"/><line class="tk on" x1="37.6" y1="8.0" x2="34.8" y2="14.4"/><line class="tk on" x1="41.1" y1="9.9" x2="37.3" y2="15.8"/><line class="tk on" x1="44.3" y1="12.3" x2="39.5" y2="17.5"/><line class="tk on" x1="46.9" y1="15.3" x2="41.4" y2="19.6"/><line class="tk on" x1="49.1" y1="18.6" x2="43.0" y2="21.9"/><line class="tk on" x1="50.7" y1="22.2" x2="44.1" y2="24.5"/><line class="tk" x1="51.7" y1="26.0" x2="44.8" y2="27.2"/><line class="tk" x1="52.0" y1="30.0" x2="45.0" y2="30.0"/></svg><b>91</b></span><span class="fmeta"><span class="flab"><span class="who">Amitai</span><span>5H</span></span><span class="fsub">resets 18m</span></span></span></div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Twenty graduations over a half circle, number in the well. Reads at a glance from across the room.</p>
+  </div>
+  <div class="demo">
+    <h3>F1 &middot; on GatedSpace orange</h3>
+      <div class="f f1 amber">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="seg"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span><span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f1 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="seg"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Same shape on the theme accent. Warmer, less spaceship.</p>
+  </div>
+  <div class="demo">
+    <h3>F5 &middot; on GatedSpace orange</h3>
+      <div class="f f5 amber">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Yishai</span><span>5H</span><span class="pct">65%</span></span>
+          <span class="hex"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span><span></span><span></span><span></span></span>
+          <span class="fsub">resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="f f5 red">
+        <span class="fmeta">
+          <span class="flab"><span class="who">Amitai</span><span>5H</span><span class="pct">91%</span></span>
+          <span class="hex"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span></span></span>
+          <span class="fsub">resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Hexes in orange sit closer to the rest of the app.</p>
+  </div>
+</div>
+
+<h2>Option B, eight ways</h2>
+<p>
+  Correction first: the tan dotted bar you cropped is the Claude Code TERMINAL statusline, not
+  GatedSpace. GatedSpace's own meter is <code>Meter</code> in <code>SessionUsageStrip</code> — a flat
+  56&times;8px rounded bar with no texture. I drew the terminal one and labelled it "current", which
+  was wrong. These are all variations on the style you liked, each with the account and the reset,
+  each shown at 65% and again at 91%.
+</p>
+
+<div class="row">
+  <div class="demo">
+    <h3>B1 · refined dot matrix</h3>
+      <div class="b b1">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b1 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Solid fill, dotted remainder, taller and rounder than the crop.</p>
+  </div>
+  <div class="demo">
+    <h3>B2 · gradient sweep</h3>
+      <div class="b b2">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b2 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">The fill deepens toward its leading edge instead of sitting flat.</p>
+  </div>
+  <div class="demo">
+    <h3>B3 · discrete blocks</h3>
+      <div class="b b3">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="blocks"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span><span class=""></span><span class=""></span><span class=""></span></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b3 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="blocks"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span><span class=""></span></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Twelve blocks rather than a continuous fill. The most terminal-native of them.</p>
+  </div>
+  <div class="demo">
+    <h3>B4 · diagonal hatch</h3>
+      <div class="b b4">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b4 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Hatch instead of dots for the remainder. Reads busier, more mechanical.</p>
+  </div>
+  <div class="demo">
+    <h3>B5 · leading-edge glow</h3>
+      <div class="b b5">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b5 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">A bright cap and a glow at the tip, so the bar looks like it is filling.</p>
+  </div>
+  <div class="demo">
+    <h3>B6 · recessed groove</h3>
+      <div class="b b6">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b6 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">The track is cut INTO the surface and the fill is bevelled above it.</p>
+  </div>
+  <div class="demo">
+    <h3>B7 · twin track</h3>
+      <div class="b b7">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i></span><span class="bar wk"><i style="width:83%"></i></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b7 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i></span><span class="bar wk"><i style="width:100%"></i></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">5h on top, the weekly window under it in blue. Two numbers, one row.</p>
+  </div>
+  <div class="demo">
+    <h3>B8 · notched</h3>
+      <div class="b b8">
+        <span class="av y">Y</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Yishai</span><span class="pct">65%</span></span>
+          <span class="bar"><i style="width:65%"></i><u></u></span>
+          <span class="breset">5h · resets 2:40 PM</span>
+        </span>
+      </div>
+      <div class="b b8 dang">
+        <span class="av a">A</span>
+        <span class="bmeta">
+          <span class="btop"><span class="who">Amitai</span><span class="pct" style="color:var(--err)">91%</span></span>
+          <span class="bar"><i style="width:91%"></i><u></u></span>
+          <span class="breset">5h · resets 18m</span>
+        </span>
+      </div>
+    <p class="cap" style="margin:8px 4px 2px;font-size:11.5px">Ten notches cut through the fill, so the percentage is readable without the number.</p>
+  </div>
+</div>
+
+<div class="note">
+  <strong>My pick is D.</strong> The bar being a 2px hairline UNDER the name rather than a chunky
+  block beside it is what makes it read as an app rather than a dashboard widget — and it is the
+  only one of the four where the account, the number, the bar and the reset all fit without the row
+  getting taller than the account row above it. A is the runner-up and is the most "abstract" of
+  them. C looks good in isolation but a 26px dial next to a 19px avatar in the row below fights it.
+</div>
+
+<h2>Sidebar rows — one style, both panels</h2>
+<p>
+  Right now Workspaces and Recent sessions look like different apps: square avatars against
+  rounded rows, different heights, different type sizes, different colours. This is one row
+  component. Same height, same radius, same icon slot, same right-hand slot.
+</p>
+
+<div class="row">
+
+  <div class="panel">
+    <div class="sect"><span>Workspaces</span><span>+</span></div>
+
+    <div class="item on"><span class="ico">GI</span><span class="nm">General Inquires</span><span class="cnt">1</span></div>
+    <div class="child"><span class="dot ok"></span><span class="nm">ok do all thats left</span><span class="when">2m</span></div>
+    <div class="child"><span class="dot run"></span><span class="nm">ok push it so it goes live</span><span class="when">now</span></div>
+    <div class="child"><span class="dot err"></span><span class="nm">ok i pressed some keys</span><span class="when">14m</span></div>
+    <div class="child"><span class="dot ok"></span><span class="nm">check the contact form wiring</span><span class="when">1h</span></div>
+
+    <div class="item"><span class="ico">GS</span><span class="nm">GatedSpace</span><span class="diff"><span class="a">+275</span> <span class="d">−1</span></span><span class="cnt">2</span></div>
+    <div class="item"><span class="ico">MB</span><span class="nm">Microsoft Business Model</span><span class="cnt">2</span></div>
+    <div class="item"><span class="ico">GV</span><span class="nm">GatedVoice</span><span class="cnt">2</span></div>
+    <div class="item"><span class="ico">WD</span><span class="nm">Web Development</span><span class="cnt">2</span></div>
+    <div class="item"><span class="ico">YD</span><span class="nm">YDdetailers</span><span class="cnt">2</span></div>
+  </div>
+
+  <div class="panel">
+    <div class="sect"><span>Recent sessions</span></div>
+
+    <div class="sect" style="padding-top:4px;font-size:10px">Today</div>
+    <div class="item"><span class="ico">GS</span><span class="nm">GS Edits</span><span class="cnt">2m</span></div>
+    <div class="item"><span class="ico">GK</span><span class="nm">GatedKey</span><span class="cnt">2h</span></div>
+    <div class="item"><span class="ico">IM</span><span class="nm">Iotron Medical</span><span class="cnt">2h</span></div>
+
+    <div class="sect" style="padding-top:10px;font-size:10px">Yesterday</div>
+    <div class="item"><span class="ico">SB</span><span class="nm">What changed on this branch</span><span class="cnt">19h</span></div>
+    <div class="item"><span class="ico">SB</span><span class="nm">Hello there</span><span class="cnt">2d</span></div>
+  </div>
+
+</div>
+
+<p class="cap">
+  Three things changed in the child rows, which is the part you flagged. They show the
+  <strong style="color:var(--fg)">last prompt</strong> sent to that pane rather than a derived
+  title. The dot is <strong style="color:var(--fg)">green by default</strong>, amber while a turn
+  is running, red on an error or an exhausted limit — it was grey for "nothing to report", which
+  is why every row in your screenshot looked dead. And the elapsed time on the right gives the
+  column something to line up against, which is what the workspace rows already had and the
+  child rows did not.
+</p>
+
+<div class="note">
+  <strong>The workspace name badge.</strong> Those two-letter tiles replace the round photo
+  avatars. The photos were the loudest thing in the sidebar and the least informative — every row
+  had a different hue fighting the status dots below it. A monochrome initial tile is the same
+  shape as the row's other slots and lets the dots be the only colour in the panel.
+</div>
+
+<p class="cap" style="margin-top:20px">
+  Tell me which usage option, and whether the badge idea is right or you want the photos kept.
+</p>
+
+</body>
+</html>

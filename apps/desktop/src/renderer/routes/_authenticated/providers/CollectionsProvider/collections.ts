@@ -95,6 +95,21 @@ export interface WorkspaceCreateMutationMetadata {
 
 const persistence = createElectronSQLitePersistence({
 	invoke: (channel, request) => window.ipcRenderer.invoke(channel, request),
+	/*
+	 * The 5s default is too tight for a development build.
+	 *
+	 * Dev serves thousands of unbundled modules and its IPC round trips run
+	 * around 3s under load ("[ipc] slow query ... took 3033ms" all over the dev
+	 * log). Twenty-odd collections all calling `loadSubset` at boot then push
+	 * past 5s, every one rejects with "Electron persistence request timed out",
+	 * and NO collection ever reaches ready — so the sidebar counts stay 0, the
+	 * dashboard sits on skeletons forever, and /v2-workspace/<id> renders
+	 * nothing because it cannot resolve its workspace.
+	 *
+	 * The packaged app never comes close to 5s, so this only widens the window
+	 * where dev is slow. `undefined` keeps the package default in production.
+	 */
+	timeoutMs: process.env.NODE_ENV === "development" ? 60_000 : undefined,
 });
 
 const indexDefaults = {

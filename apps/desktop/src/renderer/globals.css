@@ -4,6 +4,26 @@
 
 @source "./**/*.{ts,tsx}";
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+/*
+ * `packages/panes` was NEVER SCANNED, and it cost three attempts at the pane
+ * gutter.
+ *
+ * Tailwind only emits classes it can see in a source file. The workspace,
+ * tabs and panes all live in `@superset/panes`, which was missing from this
+ * list — so any class used ONLY there was silently absent from the stylesheet.
+ * Most of that package's classes happen to also appear somewhere under
+ * `renderer/`, which is why the app looked fine and hid the gap; the ones that
+ * did not were exactly the new arbitrary values:
+ * `p-[var(--gs-pane-inset,0px)]` and `bg-[var(--gs-pane-well,transparent)]`.
+ *
+ * So the gutter and the trough were correct in the markup, correct in the
+ * variables, and had no CSS rule to apply them. Three rounds were spent
+ * adjusting colour and geometry that were never being rendered.
+ *
+ * Verify with the built stylesheet, not by eye: after `bun run build:renderer`,
+ * `grep p-\\[var\\(--gs-pane-inset dist/renderer/assets/*.css` must match.
+ */
+@source "../../../../packages/panes/src/**/*.{ts,tsx}";
 @source "../../../../packages/ui/node_modules/streamdown/dist/*.js";
 
 /*
@@ -293,6 +313,63 @@
  * follows the theme, and it tiles at any width without the letter-spacing and
  * font-fallback problems a text character brings.
  */
+/*
+ * The floating tab rail's label.
+ *
+ * ASYMMETRIC DELAYS, and that asymmetry is the whole point — but only one side
+ * of it was ever a good idea.
+ *
+ * OPENING IS NOW IMMEDIATE. It used to wait 120ms before starting a 220ms
+ * expand, so 340ms passed between the pointer landing and the name being
+ * readable. The delay was there so a "deliberate" hover felt intentional;
+ * 120ms is right at the threshold where people stop reading a response as
+ * instant and start reading it as the app lagging, and that is exactly how it
+ * was reported. Nothing is gained by making a hover prove itself.
+ *
+ * CLOSING STILL WAITS 260ms, and that one earns its keep: crossing the rail on
+ * the way to another control would otherwise flash every tab open and shut
+ * behind the pointer.
+ *
+ * The expand is 150ms rather than 220ms for the same reason — `max-width` is a
+ * layout-animating property, so every frame of it costs a reflow of the rail,
+ * and a shorter curve is both snappier and cheaper.
+ *
+ * `max-width`, not `width`: the label is sized by its text, and a hardcoded
+ * expanded width would truncate the very name the hover exists to reveal. It is
+ * still layout-animating, which is why it is capped — 190px is about 26
+ * characters, past which a group name is unreadable anyway.
+ *
+ * `:focus-visible` is listed beside `:hover` deliberately. A tab whose name is
+ * only reachable by pointer is a tab a keyboard user cannot identify at all.
+ */
+.gs-tabrail-label {
+	max-width: 0;
+	opacity: 0;
+	margin-left: 0;
+	overflow: hidden;
+	white-space: nowrap;
+	transition:
+		max-width 150ms cubic-bezier(0.22, 1, 0.36, 1) 260ms,
+		opacity 110ms ease 260ms,
+		margin-left 150ms cubic-bezier(0.22, 1, 0.36, 1) 260ms;
+}
+
+.gs-tabrail-tab:hover .gs-tabrail-label,
+.gs-tabrail-tab:focus-within .gs-tabrail-label,
+.gs-tabrail-tab[data-active="true"] .gs-tabrail-label {
+	max-width: 190px;
+	opacity: 1;
+	margin-left: 8px;
+	transition-delay: 0ms;
+}
+
+/*
+ * A collapsed tab expands from a FIXED RIGHT EDGE, because the rail is anchored
+ * right. Whatever ends up last in the row therefore lands under the pointer that
+ * opened it — which is why the close button is not last, and is not rendered on
+ * a collapsed tab at all. See TabRail.
+ */
+
 .timeline-squiggle {
 	background-color: currentColor;
 	mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M0 4 Q 3 0 6 4 T 12 4' fill='none' stroke='%23fff' stroke-width='1.5'/%3E%3C/svg%3E");

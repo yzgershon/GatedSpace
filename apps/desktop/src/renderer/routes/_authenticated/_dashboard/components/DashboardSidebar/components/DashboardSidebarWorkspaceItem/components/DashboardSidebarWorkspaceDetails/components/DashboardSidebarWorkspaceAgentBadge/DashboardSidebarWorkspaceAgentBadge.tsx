@@ -52,7 +52,7 @@ export function DashboardSidebarWorkspaceAgentBadge({
 						"flex h-[18px] shrink-0 items-center rounded-full px-[3px]",
 						"bg-muted text-[11px] text-muted-foreground",
 						"-ml-1.5 first:ml-0",
-						"transition-[margin,padding,color] duration-500 ease-out motion-reduce:transition-none",
+						"transition-[margin,padding,color] duration-[260ms] ease-out motion-reduce:transition-none",
 						"details-expanded:ml-1 details-expanded:pl-1 details-expanded:pr-1.5 details-expanded:duration-200 details-expanded:first:ml-0",
 						"hover:text-foreground",
 						"focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
@@ -74,7 +74,7 @@ export function DashboardSidebarWorkspaceAgentBadge({
 					<span
 						className={cn(
 							"max-w-0 truncate opacity-0",
-							"transition-[max-width,margin,opacity] duration-500 ease-out motion-reduce:transition-none",
+							"transition-[max-width,margin,opacity] duration-[260ms] ease-out motion-reduce:transition-none",
 							"details-expanded:ml-1 details-expanded:max-w-28 details-expanded:opacity-100 details-expanded:duration-200",
 						)}
 					>

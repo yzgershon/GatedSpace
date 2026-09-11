@@ -29,6 +29,7 @@ import type {
 import { SUPERSET_HOME_DIR } from "../app-environment";
 import { getSessionCost, recordSessionCost } from "./cost-store";
 import { resolveResumeClaim } from "./resume-claim";
+import { canResumeUnderConfigDir } from "./transcript";
 import { type ClaudeSessionOptions, ClaudeSessionTransport } from "./transport";
 
 /**
@@ -158,6 +159,29 @@ class ClaudeSessionManager extends EventEmitter {
 	/** Spawn a session for `key`. No-op if one already exists for that key. */
 	start(key: string, opts: ClaudeSessionOptions): void {
 		if (this.sessions.has(key)) return;
+
+		/*
+		 * A `/swap` onto an account that cannot see this session's transcript.
+		 *
+		 * `--resume <id>` reads `<configDir>/projects`, so an account with its own
+		 * store has no such file and the CLI EXITS. The pane would then report
+		 * "Claude exited with code 1" for what is really a swap onto an account
+		 * that has never met this conversation — a crash notice for a normal
+		 * situation, and no obvious way back.
+		 *
+		 * So: drop the resume and say what happened. The transcript stays on
+		 * screen either way (it is already in the replay buffer), and the user
+		 * finds out here rather than from an exit code.
+		 */
+		if (opts.resumeSessionId && opts.configDir) {
+			if (!canResumeUnderConfigDir(opts.configDir, opts.resumeSessionId)) {
+				this.notice(
+					key,
+					"This account keeps its own session history and has no copy of this conversation, so it starts a new session. What is above stays here; the new account picks up from your next message.",
+				);
+				opts = { ...opts, resumeSessionId: undefined, forkSession: undefined };
+			}
+		}
 
 		// Two writers on one session id silently destroy the newer copy's
 		// transcript — it has happened twice. Ownership is claimed HERE, on
@@ -390,6 +414,7 @@ class ClaudeSessionManager extends EventEmitter {
 				type: "local_user_message",
 				id: `u-${key}-${this.seq++}`,
 				text,
+				at: Date.now(),
 				// Descriptors only — the base64 never enters the replay buffer, which
 				// lives for the whole session.
 				...(usable.length

@@ -9,6 +9,7 @@ import { cn } from "@superset/ui/utils";
 import { useEffect, useMemo } from "react";
 import { LuRefreshCw } from "react-icons/lu";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { estimateCostUsd, formatUsd } from "renderer/lib/usage-cost";
 
 interface UsageDialogProps {
 	open: boolean;
@@ -46,41 +47,10 @@ interface UsageModelRow {
 	name: string;
 	in: number;
 	out: number;
+	/** Optional so a stats payload from an older main process still renders. */
+	cacheRead?: number;
+	cacheWrite?: number;
 	total: number;
-}
-
-// USD per 1M tokens (input / output), Anthropic API list prices; Codex is
-// approximated at GPT-5 rates. Unmatched models fall back to Sonnet-tier.
-const PRICE_PER_MTOK: { match: RegExp; in: number; out: number }[] = [
-	{ match: /opus/i, in: 15, out: 75 },
-	{ match: /sonnet/i, in: 3, out: 15 },
-	{ match: /haiku/i, in: 1, out: 5 },
-	{ match: /fable/i, in: 3, out: 15 },
-	{ match: /codex/i, in: 1.25, out: 10 },
-];
-const FALLBACK_PRICE = { in: 3, out: 15 };
-
-/**
- * Rough list-price cost of the tokens we count (uncached input + output).
- * This excludes prompt-cache reads/writes — same basis as the token total
- * shown beside it — so it under-counts a real API bill but is consistent
- * with the displayed token figure.
- */
-function estimateCostUsd(models: UsageModelRow[]): number {
-	let usd = 0;
-	for (const m of models) {
-		const p =
-			PRICE_PER_MTOK.find((r) => r.match.test(m.name)) ?? FALLBACK_PRICE;
-		usd += (m.in / 1e6) * p.in + (m.out / 1e6) * p.out;
-	}
-	return usd;
-}
-
-function fmtUsd(n: number): string {
-	if (n >= 10_000) return `$${(n / 1000).toFixed(0)}k`;
-	if (n >= 1000) return `$${(n / 1000).toFixed(1)}k`;
-	if (n >= 100) return `$${n.toFixed(0)}`;
-	return `$${n.toFixed(2)}`;
 }
 
 /**
@@ -590,7 +560,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 								className="cursor-help"
 							>
 								<span className="font-semibold text-foreground">
-									≈ {fmtUsd(estCostUsd)}
+									≈ {formatUsd(estCostUsd)}
 								</span>{" "}
 								est. API cost
 							</span>

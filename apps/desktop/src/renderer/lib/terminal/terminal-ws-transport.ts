@@ -4,6 +4,11 @@ import {
 } from "@superset/workspace-client";
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { posthog } from "renderer/lib/posthog";
+import { requestAccountSwap } from "renderer/stores/claude-account-swap";
+import {
+	createSwapInterceptState,
+	interceptSwapCommand,
+} from "./swap-command-intercept";
 import { classifyTerminalFailure } from "./terminalConnectionDiagnostics";
 import { createWriteCoalescer, type WriteCoalescer } from "./write-coalescer";
 
@@ -559,10 +564,30 @@ function attachSocketListeners(
 	});
 
 	transport.onDataDisposable?.dispose();
+	/*
+	 * `/swap` is caught HERE because a terminal has no composer to catch it in.
+	 *
+	 * The buffer is per connection, not per transport: a reconnect redraws the
+	 * line from the pty's own state, and carrying a half-typed line across that
+	 * would make the erase count wrong.
+	 */
+	const swapState = createSwapInterceptState();
 	transport.onDataDisposable = terminal.onData((data) => {
 		if (socket.readyState !== WebSocket.OPEN) return;
 		if (transport.connectionState !== "open") return;
-		socket.send(JSON.stringify({ type: "input", data }));
+		const { forward, swapQuery } = interceptSwapCommand(swapState, data);
+		if (forward) socket.send(JSON.stringify({ type: "input", data: forward }));
+		if (swapQuery !== undefined) {
+			// A pty's environment is fixed when it opens, so this terminal keeps the
+			// account it started on. The picker says so rather than implying a
+			// switch that did not happen — that ambiguity is what `/swap` exists to
+			// remove, and reproducing it here would defeat the point.
+			requestAccountSwap({
+				kind: "default",
+				from: "terminal",
+				query: swapQuery,
+			});
+		}
 	});
 }
 

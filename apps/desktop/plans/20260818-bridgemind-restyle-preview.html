@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — BridgeMind-style restyle</title>
+<style>
+  /*
+   * GatedSpace's OWN palette (apps/desktop/src/renderer/globals.css, dark),
+   * with BridgeMind One's layout language: floating cards with gutters, a
+   * text-only nav, workspaces that nest their live sessions, and a pinned
+   * sidebar footer.
+   *
+   * Deliberately NOT BridgeMind's blue/grey. The thing worth copying is the
+   * structure; the colour is what makes it GatedSpace instead of a clone.
+   */
+  :root{
+    --background:#151110; --foreground:#eae8e6; --card:#201e1c;
+    --secondary:#2a2827; --muted-foreground:#a8a5a3; --tertiary:#1a1716;
+    --border:#2a2827; --highlight:#e07850; --sidebar:#1a1716;
+    --sidebar-accent:#252220;
+    --amber-400:#fbbf24; --amber-500:#f59e0b; --green-500:#22c55e;
+    --red-500:#ef4444; --fuchsia-500:#d946ef;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:36px 40px 120px;background:#0d0a09;color:var(--foreground);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+  h2{font-size:15px;font-weight:600;margin:56px 0 4px;padding-top:22px;border-top:1px solid #241f1e}
+  p{color:var(--muted-foreground);max-width:80ch;margin:6px 0 16px}
+  .lede{margin-bottom:26px}
+  code{font-family:var(--mono);font-size:12px;background:var(--tertiary);padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12px;color:rgba(168,165,163,.72);margin:10px 0 0;max-width:80ch}
+  .note{border-left:2px solid var(--highlight);padding:8px 0 8px 14px;margin:18px 0;color:var(--muted-foreground);max-width:80ch}
+  .note strong{color:var(--foreground);font-weight:600}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:rgba(168,165,163,.5);margin:20px 0 8px}
+  .tag{display:inline-block;font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+    padding:2px 7px;border-radius:4px;margin-left:8px;vertical-align:2px}
+  .keep{background:rgba(34,197,94,.14);color:#6ee7a8}
+  .skip{background:rgba(239,68,68,.13);color:#fca5a5}
+  .have{background:rgba(168,165,163,.14);color:var(--muted-foreground)}
+
+  /* ============ app shell ============ */
+  .app{display:flex;height:620px;max-width:1400px;border:1px solid #2a2422;border-radius:14px;
+    overflow:hidden;background:var(--background);box-shadow:0 24px 60px rgba(0,0,0,.55)}
+  .app.short{height:460px}
+
+  /* ---- sidebar ---- */
+  .side{width:212px;flex-shrink:0;background:var(--sidebar);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;padding:10px 0}
+  .brand{display:flex;align-items:center;gap:8px;padding:2px 12px 14px}
+  .mark{width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--highlight),#b8532f);flex-shrink:0}
+  .brand b{font-size:13px;font-weight:600;letter-spacing:-.01em}
+  .vchip{font-family:var(--mono);font-size:9px;color:rgba(168,165,163,.65);
+    border:1px solid var(--border);border-radius:4px;padding:0 4px;line-height:14px}
+  .nav{padding:0 8px}
+  .nrow{display:flex;align-items:center;justify-content:space-between;padding:6px 9px;border-radius:7px;
+    font-size:13px;color:var(--muted-foreground);cursor:default}
+  .nrow:hover{background:var(--sidebar-accent);color:var(--foreground)}
+  .nrow.on{background:var(--sidebar-accent);color:var(--foreground)}
+  .cnt{font-size:11px;color:rgba(168,165,163,.5);font-variant-numeric:tabular-nums}
+  .sect{display:flex;align-items:center;justify-content:space-between;padding:18px 17px 6px;
+    font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:rgba(168,165,163,.42)}
+  .sect span{cursor:default;font-size:14px}
+  .wrow{display:flex;align-items:center;gap:7px;padding:5px 9px;border-radius:7px;font-size:13px;
+    color:var(--muted-foreground);cursor:default}
+  .wrow:hover{background:var(--sidebar-accent);color:var(--foreground)}
+  .wrow.on{background:var(--sidebar-accent);color:var(--foreground);font-weight:500}
+  .caret{width:10px;font-size:9px;color:rgba(168,165,163,.4);flex-shrink:0}
+  .wname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srow{display:flex;align-items:center;gap:7px;padding:4px 9px 4px 26px;border-radius:7px;
+    font-size:12px;color:rgba(168,165,163,.75);cursor:default}
+  .srow:hover{background:var(--sidebar-accent);color:var(--foreground)}
+  .srow.on{background:rgba(224,120,80,.11);color:var(--foreground)}
+  .foot{margin-top:auto;padding:10px 8px 2px;border-top:1px solid var(--border)}
+  .acct{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:7px;font-size:13px}
+  .acct:hover{background:var(--sidebar-accent)}
+  .av{width:20px;height:20px;border-radius:6px;background:#6b5b54;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff}
+  .ultra{height:14px;padding:0 4px;border-radius:4px;background:var(--fuchsia-500);color:#fff;
+    font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;line-height:14px}
+  .gear{margin-left:auto;color:rgba(168,165,163,.5);font-size:13px}
+
+  /* ---- main ---- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;background:var(--background)}
+  .top{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;flex-shrink:0;
+    border-bottom:1px solid var(--border);font-size:13px}
+  .wsn{font-weight:500;letter-spacing:-.01em}
+  .chev{color:rgba(168,165,163,.35)}
+  .brn{color:var(--muted-foreground);font-size:12.5px}
+  .sp{flex:1}
+  .tb{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:var(--muted-foreground);position:relative;cursor:default}
+  .tb:hover{background:var(--secondary);color:var(--foreground)}
+  .updot{position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:99px;background:var(--green-500);
+    border:1.5px solid var(--background)}
+  .updot::after{content:"";position:absolute;inset:-1.5px;border-radius:99px;background:var(--green-500);
+    opacity:.7;animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+  @keyframes ping{75%,100%{transform:scale(2.2);opacity:0}}
+  .tidy{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 9px;border-radius:7px;
+    border:1px solid var(--border);background:var(--secondary);font-size:12px;color:var(--muted-foreground)}
+  .tidy:hover{color:var(--foreground)}
+
+  /* ---- preset bar ---- */
+  .pbar{display:flex;align-items:center;height:36px;padding:0 10px;flex-shrink:0;
+    border-bottom:1px solid rgba(42,40,39,.7)}
+  .pseg{display:flex;align-items:center;gap:3px;min-width:0}
+  .pseg.g{flex:1}
+  .pseg.e{flex:1;justify-content:flex-end}
+  .pseg.m{justify-content:center}
+  .pst{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 10px;border-radius:8px;
+    font-size:13px;color:var(--muted-foreground);white-space:nowrap;cursor:default}
+  .pst:hover{background:rgba(42,40,39,.7);color:var(--foreground)}
+  .pico{width:16px;height:16px;flex-shrink:0;border-radius:4px}
+
+  /* ---- card grid ---- */
+  .grid{flex:1;min-height:0;display:grid;gap:10px;padding:10px;overflow:hidden;
+    grid-template-columns:repeat(4,1fr);grid-auto-rows:1fr}
+  .grid.c2{grid-template-columns:repeat(2,1fr)}
+  .grid.c3{grid-template-columns:repeat(3,1fr)}
+  .grid.c4{grid-template-columns:repeat(4,1fr)}
+
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;
+    display:flex;flex-direction:column;overflow:hidden;min-width:0;position:relative}
+  .card.act{border-color:rgba(224,120,80,.55)}
+  .card.act::after{content:"";position:absolute;inset:0;border-radius:12px;pointer-events:none;
+    box-shadow:inset 0 0 0 1px rgba(224,120,80,.35)}
+  .chead{display:flex;align-items:center;gap:7px;height:30px;padding:0 9px;flex-shrink:0;
+    border-bottom:1px solid rgba(42,40,39,.65)}
+  .ctitle{flex:1;min-width:0;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    color:rgba(234,232,230,.9)}
+  .cacts{display:flex;gap:2px;color:rgba(168,165,163,.45);font-size:11px;flex-shrink:0}
+  .cmeta{display:flex;align-items:center;gap:8px;padding:6px 10px 4px;font-family:var(--mono);
+    font-size:9.5px;color:rgba(168,165,163,.55);flex-shrink:0}
+  .cmeta .pathy{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ctx{display:flex;align-items:center;gap:4px;flex-shrink:0}
+  .ctxbar{width:26px;height:3px;border-radius:2px;background:rgba(168,165,163,.2);overflow:hidden}
+  .ctxbar i{display:block;height:100%;background:var(--highlight)}
+  .cbody{flex:1;min-height:0;padding:2px 10px 6px;font-family:var(--mono);font-size:10.5px;
+    line-height:1.65;color:rgba(168,165,163,.82);overflow:hidden}
+  .cbody .hl{color:#eae8e6}
+  .cbody .dim{color:rgba(168,165,163,.45)}
+  .cbody .ok{color:var(--green-500)}
+  .cfoot{padding:0 10px 6px;font-family:var(--mono);font-size:9.5px;color:rgba(168,165,163,.5);flex-shrink:0}
+  .comp{margin:0 8px 8px;height:28px;border-radius:8px;border:1px solid rgba(42,40,39,.9);
+    background:rgba(21,17,16,.7);display:flex;align-items:center;padding:0 9px;gap:6px;flex-shrink:0}
+  .comp .car{color:var(--highlight);font-family:var(--mono);font-size:11px}
+  .comp .eng{margin-left:auto;font-family:var(--mono);font-size:9px;color:rgba(168,165,163,.45)}
+
+  .dot{position:relative;display:flex;width:8px;height:8px;flex-shrink:0}
+  .dot i{position:relative;width:8px;height:8px;border-radius:99px;display:inline-flex}
+  .dot b{position:absolute;width:100%;height:100%;border-radius:99px;opacity:.75;
+    animation:ping 1s cubic-bezier(0,0,.2,1) infinite}
+  .w i{background:var(--amber-500)}.w b{background:var(--amber-400)}
+  .r i{background:var(--green-500)}
+  .e i{background:var(--red-500)}
+  .idle i{background:rgba(168,165,163,.3)}
+
+  /* ---- empty state ---- */
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:20px}
+  .empty h3{font-size:17px;font-weight:600;margin:10px 0 2px}
+  .empty p{margin:0 0 18px;font-size:13px}
+  .launch{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;width:420px}
+  .lb{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;border-radius:9px;
+    border:1px solid var(--border);background:var(--card);font-size:13px;cursor:default}
+  .lb:hover{border-color:rgba(224,120,80,.5);background:#262220}
+  .more{margin-top:14px;font-size:12px;color:rgba(168,165,163,.55)}
+  .multi{margin-top:8px;font-size:13px;color:var(--highlight)}
+
+  .btns{margin:14px 0 0}
+  button.go{background:var(--secondary);color:var(--foreground);border:1px solid var(--border);
+    border-radius:8px;padding:6px 13px;font-size:12.5px;cursor:pointer;margin-right:8px}
+  button.go:hover{background:#343130}
+  button.go.on{border-color:var(--highlight);color:var(--foreground)}
+  table{border-collapse:collapse;margin:14px 0 0;font-size:13px;width:100%;max-width:900px}
+  th,td{text-align:left;padding:8px 16px 8px 0;border-bottom:1px solid #241f1e;vertical-align:top}
+  th{color:var(--muted-foreground);font-weight:600;font-size:12px}
+  td.w2{color:var(--muted-foreground)}
+</style>
+</head>
+<body>
+
+<h1>GatedSpace, restyled</h1>
+<p class="lede">
+  BridgeMind One's layout language — floating cards with gutters, a text-only nav, workspaces that
+  nest their live sessions, a pinned footer — applied to GatedSpace's own palette and content.
+  Every colour here is from your <code>globals.css</code>. The point is to judge the structure, not a reskin.
+</p>
+
+<h2>The whole window</h2>
+<p>Eight agents running in parallel. This is the shot his video sells, rebuilt as yours.</p>
+
+<div class="btns">
+  <button class="go" onclick="setCols(2,this)">2 across</button>
+  <button class="go" onclick="setCols(3,this)">3 across</button>
+  <button class="go on" id="dflt" onclick="setCols(4,this)">4 across</button>
+</div>
+
+<div class="app">
+  <div class="side">
+    <div class="brand"><span class="mark"></span><b>GatedSpace</b><span class="vchip">1.17.48</span></div>
+    <div class="nav">
+      <div class="nrow on">Dashboard <span class="cnt">3</span></div>
+      <div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs <span class="cnt">2</span></div>
+      <div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <span>+</span></div>
+    <div class="nav">
+      <div class="wrow on"><span class="caret">▾</span><span class="wname">superset</span><span class="cnt">5</span></div>
+      <div class="srow on"><span class="dot w"><b></b><i></i></span><span class="wname">Fix the blank terminal</span></div>
+      <div class="srow"><span class="dot r"><i></i></span><span class="wname">Tab status dots</span></div>
+      <div class="srow"><span class="dot idle"><i></i></span><span class="wname">powershell</span></div>
+      <div class="wrow"><span class="caret">▾</span><span class="wname">SecondBrain</span><span class="cnt">2</span></div>
+      <div class="srow"><span class="dot w"><b></b><i></i></span><span class="wname">UI batch preview</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">GatedKey</span><span class="cnt">1</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">sortie</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">yddetailers-site</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">Iotronmedical</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">AIOS</span></div>
+    </div>
+    <div class="foot">
+      <div class="acct"><span class="av">Y</span>Yishai<span class="ultra">Ultra</span><span class="gear">⚙</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="top">
+      <span class="wsn">superset</span>
+      <span class="vchip">v1.17.48</span>
+      <span class="chev">›</span>
+      <span class="brn">⑂ windows-port</span>
+      <span class="sp"></span>
+      <span class="tb" title="Update to 1.17.49">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg>
+        <span class="updot"></span>
+      </span>
+      <span class="tb">🗀</span>
+      <span class="tidy">▦ Tidy</span>
+    </div>
+
+    <div class="pbar">
+      <span class="pseg g"><span class="tb" style="width:24px;height:24px">⚙</span></span>
+      <span class="pseg m">
+        <span class="pst"><span class="pico" style="background:#e07850"></span>Claude</span>
+        <span class="pst"><span class="pico" style="background:#6b7280"></span>Codex</span>
+        <span class="pst"><span class="pico" style="background:#7aa2f7"></span>Gemini</span>
+        <span class="pst"><span class="pico" style="background:#8b8b8b"></span>Copilot</span>
+        <span class="pst"><span class="pico" style="background:#5a5a5a"></span>Kimi K2</span>
+      </span>
+      <span class="pseg e"></span>
+    </div>
+
+    <div class="grid c4" id="grid">
+      <div class="card act">
+        <div class="chead"><span class="dot w"><b></b><i></i></span><span class="ctitle">Fix the blank terminal</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/superset</span><span class="ctx">34%<span class="ctxbar"><i style="width:34%"></i></span></span></div>
+        <div class="cbody">
+          <span class="dim">◆ Thought for 1.6s</span><br>
+          xterm measures its cell <span class="hl">once</span>, in<br>
+          <span class="hl">open()</span> — fit() is not a<br>
+          re-measure. Re-measuring<br>
+          before every fit now.<br>
+          <span class="dim">◆ Run swift build</span>
+        </div>
+        <div class="cfoot">↓ Responding… 2m14s ↓119K [stop]</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot r"><i></i></span><span class="ctitle">Tab status dots</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/superset</span><span class="ctx">61%<span class="ctxbar"><i style="width:61%"></i></span></span></div>
+        <div class="cbody">
+          <span class="ok">✓</span> 2401 pass / 55 fail<br>
+          <span class="ok">✓</span> lint clean, 4305 files<br><br>
+          The dot was never blocked.<br>
+          <span class="hl">session</span> panes mapped to<br>
+          zero sources.
+        </div>
+        <div class="cfoot">stop · 4m57s [hooks: 3]</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot e"><i></i></span><span class="ctitle">Iotron contact form</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/Iotronmedical</span><span class="ctx">12%<span class="ctxbar"><i style="width:12%"></i></span></span></div>
+        <div class="cbody">
+          <span style="color:var(--red-500)">✕ turn ended in error</span><br>
+          <span class="dim">wrangler will not install</span><br>
+          <span class="dim">on win32-arm64</span><br><br>
+          Needs a decision before<br>
+          I retry.
+        </div>
+        <div class="cfoot">error · 38s</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Codex · auto</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot w"><b></b><i></i></span><span class="ctitle">UI batch preview</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/SecondBrain</span><span class="ctx">48%<span class="ctxbar"><i style="width:48%"></i></span></span></div>
+        <div class="cbody">
+          <span class="dim">◆ Searched 3 patterns</span><br>
+          Wrote the preview and<br>
+          opened it in Chrome.<br>
+          Cards, sidebar nesting<br>
+          and Tidy are in it.
+        </div>
+        <div class="cfoot">↓ Responding… 41s ↓63K [stop]</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot idle"><i></i></span><span class="ctitle">powershell</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/superset</span></div>
+        <div class="cbody">
+          <span class="dim">PS C:\Dev\superset&gt;</span> git status<br>
+          On branch windows-port<br>
+          nothing to commit,<br>
+          working tree clean<br>
+          <span class="dim">PS C:\Dev\superset&gt;</span>
+        </div>
+        <div class="cfoot">idle</div>
+        <div class="comp"><span class="car">›</span><span class="eng">terminal</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot r"><i></i></span><span class="ctitle">College sheet builder</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/SecondBrain</span><span class="ctx">22%<span class="ctxbar"><i style="width:22%"></i></span></span></div>
+        <div class="cbody">
+          Added the Apps Script<br>
+          column mapping. Ready<br>
+          for you to look at.<br><br>
+          <span class="ok">✓</span> 12 schools imported
+        </div>
+        <div class="cfoot">stop · 1m03s</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Gemini · auto</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot w"><b></b><i></i></span><span class="ctitle">GatedKey remap table</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/GatedKey</span><span class="ctx">19%<span class="ctxbar"><i style="width:19%"></i></span></span></div>
+        <div class="cbody">
+          <span class="dim">◆ Thought for 0.9s</span><br>
+          Copilot key is<br>
+          <span class="hl">Win+Shift+F23</span> and is<br>
+          remappable. Wiring the<br>
+          table now.
+        </div>
+        <div class="cfoot">↓ Responding… 1m22s ↓71K [stop]</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+
+      <div class="card">
+        <div class="chead"><span class="dot idle"><i></i></span><span class="ctitle">Sortie debrief form</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/sortie</span><span class="ctx">8%<span class="ctxbar"><i style="width:8%"></i></span></span></div>
+        <div class="cbody">
+          <span class="dim">Waiting for input.</span><br><br>
+          Hebrew strings are kept<br>
+          verbatim — say the word<br>
+          and I will ship it.
+        </div>
+        <div class="cfoot">idle</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="cap">
+  Click <strong>2 / 3 / 4 across</strong> above. At 4 you get his video shot; at 2 you get something you can
+  actually read. That trade is the single biggest thing to decide, and it is why the toggle is here rather
+  than a fixed number in a mock.
+</p>
+
+<h2>What the card is made of</h2>
+<div class="app short" style="height:210px">
+  <div class="main">
+    <div class="grid c2" style="grid-auto-rows:auto">
+      <div class="card act">
+        <div class="chead"><span class="dot w"><b></b><i></i></span><span class="ctitle">Fix the blank terminal</span><span class="cacts">⋯ ⤢ ✕</span></div>
+        <div class="cmeta"><span class="pathy">~/Dev/superset</span><span class="ctx">34%<span class="ctxbar"><i style="width:34%"></i></span></span></div>
+        <div class="cbody">
+          <span class="dim">◆ Thought for 1.6s</span><br>
+          Re-measuring the cell before every fit.<br>
+          <span class="dim">◆ Run swift build</span>
+        </div>
+        <div class="cfoot">↓ Responding… 2m14s ↓119K [stop]</div>
+        <div class="comp"><span class="car">›</span><span class="eng">Opus 4.6 · bypass</span></div>
+      </div>
+      <div style="padding:6px 4px;font-size:12.5px;color:var(--muted-foreground);line-height:2">
+        <div><strong style="color:var(--foreground)">Status dot</strong> — amber working, green done, red errored, grey idle <span class="tag have">built</span></div>
+        <div><strong style="color:var(--foreground)">Title + actions</strong> — ⋯ ⤢ ✕ <span class="tag have">have it</span></div>
+        <div><strong style="color:var(--foreground)">Meta row</strong> — cwd, and context % with a bar <span class="tag keep">new</span></div>
+        <div><strong style="color:var(--foreground)">Body</strong> — the live transcript</div>
+        <div><strong style="color:var(--foreground)">Footer</strong> — elapsed, tokens, stop</div>
+        <div><strong style="color:var(--foreground)">Composer</strong> — engine + mode inline, right <span class="tag have">have it</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="cap">
+  Only two rows here are genuinely new. Your <code>PaneHeader</code> already carries the dot, the title and
+  the actions; your active-pane ring already exists as an inset overlay written as
+  <code>rounded-[inherit]</code>, so it follows a radius the moment the container has one.
+</p>
+
+<h2>The empty state</h2>
+<div class="app short" style="height:400px">
+  <div class="side">
+    <div class="brand"><span class="mark"></span><b>GatedSpace</b><span class="vchip">1.17.48</span></div>
+    <div class="nav">
+      <div class="nrow">Dashboard</div><div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs</div><div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <span>+</span></div>
+    <div class="nav">
+      <div class="wrow on"><span class="caret">▸</span><span class="wname">superset</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">SecondBrain</span></div>
+      <div class="wrow"><span class="caret">▸</span><span class="wname">GatedKey</span></div>
+    </div>
+    <div class="foot"><div class="acct"><span class="av">Y</span>Yishai<span class="ultra">Ultra</span><span class="gear">⚙</span></div></div>
+  </div>
+  <div class="main">
+    <div class="top"><span class="wsn">superset</span><span class="vchip">v1.17.48</span><span class="chev">›</span><span class="brn">⑂ windows-port</span><span class="sp"></span><span class="tb">🗀</span></div>
+    <div class="empty">
+      <h3>Start building in superset</h3>
+      <p>Launch a coding agent — it runs in a real terminal inside this pane.</p>
+      <div class="launch">
+        <div class="lb"><span class="pico" style="background:#e07850"></span>Claude Code</div>
+        <div class="lb"><span class="pico" style="background:#6b7280"></span>Codex</div>
+        <div class="lb"><span class="pico" style="background:#7aa2f7"></span>Gemini CLI</div>
+        <div class="lb"><span class="pico" style="background:#8b8b8b"></span>Copilot</div>
+        <div class="lb"><span class="pico" style="background:#5a5a5a"></span>Kimi K2</div>
+        <div class="lb"><span class="pico" style="background:#4a4a4a"></span>Terminal</div>
+      </div>
+      <div class="more">⌄ 4 more not installed</div>
+      <div class="multi">Launch more than one…</div>
+    </div>
+  </div>
+</div>
+<p class="cap">
+  <strong>"Launch more than one…"</strong> is the load-bearing link. It is how you get to the eight-agent grid
+  above without eight manual splits, and it is the thing your current empty state has no answer for.
+</p>
+
+<h2>Verdict, item by item</h2>
+<table>
+  <tr><th>Element</th><th>Take it?</th><th>Why</th></tr>
+  <tr><td>Cards + gutters + radius</td><td><span class="tag keep">yes</span></td><td class="w2">The look you asked for. Most of the structure already exists; needs a radius and gutters.</td></tr>
+  <tr><td>Sidebar nesting + counts</td><td><span class="tag keep">yes</span></td><td class="w2">Live sessions per workspace at a glance. You already have the data from the status work.</td></tr>
+  <tr><td>Text-only nav rows</td><td><span class="tag keep">yes</span></td><td class="w2">Most of why his reads calm. Cheapest change on the list.</td></tr>
+  <tr><td>Tidy button</td><td><span class="tag keep">yes</span></td><td class="w2">Your mosaic accumulates lopsided splits with no reset. Best value per effort here.</td></tr>
+  <tr><td>Context % in the pane header</td><td><span class="tag keep">yes</span></td><td class="w2">You have the number; it is not legible across eight panes today.</td></tr>
+  <tr><td>Launcher empty state</td><td><span class="tag keep">yes</span></td><td class="w2">Especially "launch more than one".</td></tr>
+  <tr><td>Per-card shortcut hint bar</td><td><span class="tag skip">no</span></td><td class="w2">The same sentence eight times. You learn it once.</td></tr>
+  <tr><td>Agent / Code / Chat switcher</td><td><span class="tag skip">no</span></td><td class="w2">His Code tab is your whole app. You would ship two empty tabs.</td></tr>
+  <tr><td>His card density</td><td><span class="tag skip">careful</span></td><td class="w2">Four across is ~4 words a line. Great on video. Try 2 and 3 above.</td></tr>
+</table>
+
+<div class="note">
+  <strong>Sequence this after the blank terminal is confirmed.</strong> Gutters change every terminal's pixel
+  box, and this app has a documented history of xterm measuring its character cell exactly once and then
+  painting nothing. That bug already cost two builds and the 1.17.46 fix is still unconfirmed. If you change
+  pane geometry first and a pane comes up blank, you will not know which change did it.
+</div>
+
+<p class="cap" style="margin-top:22px">
+  Nothing here is coded. Say which rows of the table you want and I will build a real preview of those
+  specific pieces against the live components.
+</p>
+
+<script>
+function setCols(n, el){
+  var g = document.getElementById('grid');
+  g.className = 'grid c' + n;
+  document.querySelectorAll('button.go').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

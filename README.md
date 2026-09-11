@@ -64,6 +64,11 @@ the [Actions tab](https://github.com/yzgershon/GatedSpace/actions).
   and even PC reboots.
 - **Review before you merge.** Built-in diff view for each workspace, then
   open in your editor of choice.
+- **Quick open across folders.** Ctrl+T searches the open workspace, and any
+  folders listed in `~/.superset/search-roots.json`
+  (`{"roots": ["C:/Dev"]}`), so a file in a sibling project is one keystroke
+  away. Type a path like `Dev/superset/HANDOFF.md` and it resolves directly
+  instead of fuzzy-matching.
 - **Claude account profiles.** Optionally declare multiple Claude accounts
   (`~/.superset/claude-profile.json`) and GatedSpace routes new agents to
   whichever one has usage left.

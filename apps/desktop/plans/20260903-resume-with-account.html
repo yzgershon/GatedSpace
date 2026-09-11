@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Resume with another account — GatedSpace</title>
+<style>
+  :root {
+    --background: #151110;
+    --well: #0d0a09;
+    --card: #201b1a;
+    --popover: #1a1615;
+    --border: #2a2827;
+    --foreground: #e8e6e3;
+    --muted: #a8a5a3;
+    --highlight: #e07850;
+    --success: #6fae6f;
+    --warning: #d4a84b;
+    --destructive: #d46a5a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%; background: var(--well); color: var(--foreground);
+    font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+  }
+  .pane {
+    position: absolute; inset: 18px;
+    background: var(--background);
+    border: 1px solid var(--border); border-radius: 12px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .head {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 13px; color: var(--muted);
+  }
+  .chip {
+    margin-left: auto; display: flex; align-items: center; gap: 4px;
+    border: 1px solid rgba(42,40,39,.7); background: rgba(255,255,255,.04);
+    border-radius: 6px; padding: 1px 8px; font-size: 13px; color: rgba(168,165,163,.8);
+  }
+  .body { flex: 1; padding: 18px 20px; overflow: auto; font-size: 13.5px; }
+  .interrupted {
+    border-left: 2px solid var(--highlight); padding: 6px 12px; margin: 10px 0;
+    color: var(--foreground);
+  }
+  .meta { display: flex; align-items: center; gap: 8px; color: #8a8683; font-size: 12.5px; margin: 6px 0 14px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--destructive); }
+
+  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 20px 14px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 4px 8px; font-size: 12px; color: var(--foreground);
+    background: transparent; cursor: pointer;
+    transition: background-color 100ms;
+  }
+  .btn:hover { background: rgba(255,255,255,.06); }
+  .hint { font-size: 12px; color: rgba(168,165,163,.7); }
+
+  /* ---- the menu ---- */
+  .menu {
+    position: absolute; left: 150px; bottom: 96px; width: 352px;
+    background: var(--popover); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: 0 18px 44px -14px rgba(0,0,0,.9);
+    padding: 4px 0; overflow: hidden;
+  }
+  .menu-head { padding: 8px 10px 6px; }
+  .menu-title { font-size: 12.5px; color: var(--foreground); }
+  .menu-sub { font-size: 11.5px; color: rgba(168,165,163,.8); }
+  .row {
+    display: flex; align-items: flex-start; gap: 10px;
+    padding: 7px 10px; text-align: left; width: 100%;
+    background: transparent; border: 0; cursor: pointer; color: inherit;
+    transition: background-color 100ms;
+  }
+  .row:hover { background: rgba(255,255,255,.06); }
+  .row.selected { background: rgba(255,255,255,.09); }
+  .status { margin-top: 6px; width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status.ok { background: var(--success); }
+  .status.bad { background: var(--destructive); }
+  .status.off { background: rgba(168,165,163,.4); }
+  .row-main { min-width: 0; flex: 1; }
+  .label { font-size: 13px; color: var(--foreground); }
+  .sub { font-size: 11.5px; color: rgba(168,165,163,.8); }
+  .usage { margin-top: 4px; display: flex; align-items: center; gap: 6px; }
+  .track { height: 4px; width: 64px; border-radius: 999px; background: rgba(232,230,227,.12); overflow: hidden; }
+  .fill { display: block; height: 100%; border-radius: 999px; }
+  .fill.ok { background: var(--success); }
+  .fill.warn { background: var(--warning); }
+  .fill.danger { background: var(--destructive); }
+  .pct { font-size: 11px; color: rgba(168,165,163,.7); font-variant-numeric: tabular-nums; }
+  .resets { font-size: 11px; color: rgba(168,165,163,.5); }
+  .check { margin-top: 2px; color: var(--highlight); font-size: 14px; }
+  .add {
+    border-top: 1px solid rgba(42,40,39,.6); margin-top: 4px;
+    display: flex; align-items: center; gap: 10px; padding: 7px 10px;
+    font-size: 13px; color: var(--foreground); cursor: pointer;
+  }
+  .add:hover { background: rgba(255,255,255,.06); }
+  .composer {
+    margin: 0 20px 18px; border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px 12px; color: #6e6a67; font-size: 13px; background: rgba(255,255,255,.02);
+  }
+</style>
+</head>
+<body>
+<div class="pane">
+  <div class="head">
+    <span>◈</span><span>Backend</span>
+    <span class="chip">◔ Amitai</span>
+  </div>
+  <div class="body">
+    <div style="color:#8f8b88">…refactoring the risk model into attributed rules.</div>
+    <div class="interrupted">[Request interrupted by user]</div>
+    <div class="meta"><span class="dot"></span> Failed · 4 turns · $8.0006 · 222.9s</div>
+  </div>
+  <div class="actions">
+    <button class="btn">Restart session</button>
+    <button class="btn">◑ Resume with another account</button>
+    <span class="hint">Picks the conversation back up where it stopped.</span>
+  </div>
+  <div class="composer">Ask Claude to do anything</div>
+</div>
+
+<div class="menu">
+  <div class="menu-head">
+    <div class="menu-title">Move this conversation to another account</div>
+    <div class="menu-sub">Restarts this session on the account you pick and carries the conversation over.</div>
+  </div>
+
+  <button class="row selected">
+    <span class="status ok"></span>
+    <span class="row-main">
+      <span class="label">Amitai</span>
+      <span class="sub">amitai@gmail.com</span>
+      <span class="usage">
+        <span class="track"><span class="fill warn" style="width:82%"></span></span>
+        <span class="pct">82% used</span>
+        <span class="resets">· resets Sep 3, 8pm</span>
+      </span>
+    </span>
+    <span class="check">✓</span>
+  </button>
+
+  <button class="row">
+    <span class="status ok"></span>
+    <span class="row-main">
+      <span class="label">Yish</span>
+      <span class="sub">yzgershon@gmail.com</span>
+      <span class="usage">
+        <span class="track"><span class="fill ok" style="width:12%"></span></span>
+        <span class="pct">12% used</span>
+        <span class="resets">· resets Sep 3, 11pm</span>
+      </span>
+    </span>
+  </button>
+
+  <button class="row">
+    <span class="status bad"></span>
+    <span class="row-main">
+      <span class="label">Robbie</span>
+      <span class="sub">⚠ Out of quota right now</span>
+      <span class="usage">
+        <span class="track"><span class="fill danger" style="width:100%"></span></span>
+        <span class="pct">100% used</span>
+        <span class="resets">· resets Sep 4, 2am</span>
+      </span>
+    </span>
+  </button>
+
+  <div class="add">＋ Add a Claude account…</div>
+</div>
+</body>
+</html>

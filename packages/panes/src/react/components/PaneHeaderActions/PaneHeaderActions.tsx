@@ -29,8 +29,13 @@ export function PaneHeaderActions<TData>({
 						<TooltipTrigger asChild>
 							<button
 								type="button"
+								aria-label={
+									action.label ??
+									(typeof tooltip === "string" ? tooltip : action.key)
+								}
+								aria-pressed={action.pressed}
 								onClick={() => action.onClick(context)}
-								className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								className="flex size-[var(--gs-pane-action-size,20px)] items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted aria-pressed:bg-muted aria-pressed:text-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 							>
 								{icon}
 							</button>

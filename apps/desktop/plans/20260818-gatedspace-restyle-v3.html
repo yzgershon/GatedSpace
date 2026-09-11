@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — the goal</title>
+<style>
+  /*
+   * Target: BridgeMind One's Code view. Read off the screenshot, then rebuilt
+   * as GatedSpace with GatedSpace's palette and session-pane content.
+   *
+   * Measured from the reference:
+   *   header            ~40px, integrated, centered segmented control
+   *   sidebar           ~240px, text-only nav, nested sessions, pinned footer
+   *   card gutter       ~14px, radius ~11px, 1px border
+   *   focused card      brighter border on all four edges
+   *   card header       ~34px: dot, agent mark, title, ⋯ ⤢ ＋ ✕
+   *   meta row          worktree + path left, tokens + todo count right
+   *   prompt            inset panel, left accent bar, timestamp right
+   *   ◆ lines           collapsed multi-tool summaries with [hooks: N]
+   *   status line       spinner + phrase + elapsed left, tokens + [stop] right
+   *   composer          engine + mode INSIDE the input, right-aligned
+   *   hint bar          ONLY on the focused card
+   *
+   * From GatedSpace (globals.css dark + SessionTimelineView):
+   *   every colour; prompt 13.5px; gutter dot 7px; tool name 13.5px semibold;
+   *   tool arg mono 12px; tool output mono 11.5px; result text-xs.
+   */
+  :root{
+    --bg:#151110; --fg:#eae8e6; --card:#1c1918; --card2:#201e1c;
+    --sec:#2a2827; --mut:#a8a5a3; --ter:#1a1716; --bd:#2a2827;
+    --hl:#e07850; --side:#171413; --sideacc:#242120;
+    --ok:#22c55e; --warn:#f59e0b; --err:#ef4444; --fx:#d946ef;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 110px;background:#0a0807;color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:23px;font-weight:600;margin:0 0 6px;letter-spacing:-.015em}
+  h2{font-size:15px;font-weight:600;margin:54px 0 4px;padding-top:22px;border-top:1px solid #241f1e}
+  p{color:var(--mut);max-width:82ch;margin:6px 0 16px}
+  code{font-family:var(--mono);font-size:12px;background:var(--ter);padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.72);margin:12px 0 0;max-width:82ch}
+  .note{border-left:2px solid var(--hl);padding:8px 0 8px 14px;margin:18px 0;color:var(--mut);max-width:82ch}
+  .note strong{color:var(--fg);font-weight:600}
+  .btns{margin:16px 0 12px}
+  button.go{background:var(--sec);color:var(--fg);border:1px solid var(--bd);border-radius:8px;
+    padding:6px 13px;font-size:12.5px;cursor:pointer;margin-right:8px}
+  button.go.on{border-color:var(--hl)}
+
+  /* ==================== window ==================== */
+  .app{width:1440px;height:900px;display:flex;border:1px solid #2b2523;border-radius:12px;overflow:hidden;
+    background:var(--bg);box-shadow:0 34px 80px rgba(0,0,0,.62)}
+  .app.sm{height:540px}
+
+  /* ---------- sidebar ---------- */
+  .side{width:240px;flex-shrink:0;background:var(--side);border-right:1px solid var(--bd);
+    display:flex;flex-direction:column}
+  .sbrand{display:flex;align-items:center;gap:8px;height:48px;padding:0 14px;flex-shrink:0}
+  .mark{width:19px;height:19px;border-radius:5px;flex-shrink:0;
+    background:linear-gradient(140deg,var(--hl),#9c3f22);box-shadow:0 1px 6px rgba(224,120,80,.35)}
+  .sbrand b{font-size:13.5px;font-weight:600;letter-spacing:-.012em}
+  .sbrand .n{font-size:10px;color:rgba(168,165,163,.5);font-variant-numeric:tabular-nums}
+  .sbtog{margin-left:auto;color:rgba(168,165,163,.42);font-size:14px}
+  .nav{padding:2px 8px}
+  .nrow{display:flex;align-items:center;justify-content:space-between;height:30px;padding:0 10px;
+    border-radius:7px;font-size:13.5px;color:var(--mut)}
+  .nrow.on{background:var(--sideacc);color:var(--fg)}
+  .cnt{font-size:11.5px;color:rgba(168,165,163,.42);font-variant-numeric:tabular-nums}
+  .sect{display:flex;align-items:center;justify-content:space-between;padding:20px 18px 6px;
+    font-size:12.5px;color:rgba(168,165,163,.45)}
+  .sect i{font-style:normal;font-size:15px;color:rgba(168,165,163,.45)}
+  .wrow{display:flex;align-items:center;gap:6px;height:28px;padding:0 10px;border-radius:7px;
+    font-size:13.5px;color:var(--mut)}
+  .wrow.on{background:var(--sideacc);color:var(--fg);font-weight:500}
+  .cv{width:10px;font-size:9px;color:rgba(168,165,163,.35);flex-shrink:0}
+  .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .srow{display:flex;align-items:center;gap:7px;height:26px;padding:0 10px 0 26px;border-radius:7px;
+    font-size:12.5px;color:rgba(168,165,163,.72)}
+  .srow.on{background:rgba(224,120,80,.1);color:var(--fg)}
+  .sfoot{margin-top:auto;padding:8px 8px 8px;border-top:1px solid var(--bd)}
+  .frow{display:flex;align-items:center;justify-content:space-between;height:28px;padding:0 10px;
+    border-radius:7px;font-size:13px;color:var(--mut)}
+  .frow .v{font-size:12px;color:rgba(168,165,163,.45);font-variant-numeric:tabular-nums}
+  .acct{display:flex;align-items:center;gap:9px;padding:7px 10px;border-radius:8px;margin-top:2px}
+  .av{width:24px;height:24px;border-radius:7px;background:linear-gradient(140deg,#7a655c,#5a4a43);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
+  .aname{font-size:13px;line-height:1.15}
+  .aname i{display:block;font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.06em;
+    text-transform:uppercase;color:var(--fx)}
+  .aicons{margin-left:auto;display:flex;gap:8px;color:rgba(168,165,163,.42);font-size:13px}
+
+  /* ---------- main + toolbar ---------- */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
+  .bar{display:flex;align-items:center;height:48px;padding:0 12px;flex-shrink:0;
+    background:rgba(42,40,39,.32);border-bottom:1px solid var(--bd)}
+  .bl{display:flex;align-items:center;gap:9px;flex:1;min-width:0}
+  .bc{display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .br{display:flex;align-items:center;justify-content:flex-end;gap:5px;flex:1;min-width:0}
+  .ws{font-size:13.5px;font-weight:500;letter-spacing:-.01em;white-space:nowrap}
+  .vch{font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.68);border:1px solid var(--bd);
+    border-radius:5px;padding:1px 5px;line-height:14px;flex-shrink:0}
+  .sep{width:1px;height:16px;background:var(--bd);flex-shrink:0}
+  .brn{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--mut);white-space:nowrap}
+
+  /* the centered segmented preset launcher */
+  .seg{display:flex;align-items:center;gap:2px;padding:3px;border-radius:10px;
+    background:rgba(13,10,9,.55);border:1px solid rgba(42,40,39,.9)}
+  .sg{display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:7px;
+    font-size:13px;color:var(--mut);white-space:nowrap}
+  .sg:hover{background:rgba(42,40,39,.75);color:var(--fg)}
+  .sg.on{background:var(--sec);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.4)}
+  .pic{width:15px;height:15px;border-radius:4px;flex-shrink:0}
+
+  .tb{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    color:var(--mut);position:relative;flex-shrink:0}
+  .tb:hover{background:var(--sec);color:var(--fg)}
+  .updot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:99px;background:var(--ok);
+    border:1.5px solid var(--bg)}
+  .updot::after{content:"";position:absolute;inset:-1.5px;border-radius:99px;background:var(--ok);
+    opacity:.7;animation:ping 1.6s cubic-bezier(0,0,.2,1) infinite}
+  @keyframes ping{75%,100%{transform:scale(2.3);opacity:0}}
+  .tidy{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px;border-radius:8px;
+    border:1px solid var(--bd);background:rgba(42,40,39,.5);font-size:12.5px;color:var(--mut);flex-shrink:0}
+  .wc{display:flex;gap:2px;margin-left:6px;color:rgba(168,165,163,.5);font-size:11px}
+  .wc span{width:26px;height:24px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+
+  /* ---------- card grid ---------- */
+  .grid{flex:1;min-height:0;display:grid;gap:14px;padding:14px;grid-template-columns:1fr 1fr;grid-auto-rows:1fr}
+  .grid.c1{grid-template-columns:1fr}
+  .grid.c3{grid-template-columns:repeat(3,1fr)}
+
+  .pane{background:var(--card);border:1px solid var(--bd);border-radius:11px;display:flex;
+    flex-direction:column;overflow:hidden;min-width:0;position:relative}
+  .pane.act{border-color:rgba(224,120,80,.62);box-shadow:0 0 0 1px rgba(224,120,80,.18),0 8px 26px -12px rgba(0,0,0,.7)}
+  .ph{display:flex;align-items:center;gap:8px;height:34px;padding:0 11px;flex-shrink:0;
+    border-bottom:1px solid rgba(42,40,39,.6)}
+  .agm{width:13px;height:13px;border-radius:3px;flex-shrink:0}
+  .pt{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    color:rgba(234,232,230,.9)}
+  .pacts{display:flex;gap:6px;color:rgba(168,165,163,.4);font-size:11.5px;flex-shrink:0}
+
+  .meta{display:flex;align-items:center;gap:7px;padding:7px 12px 5px;flex-shrink:0;
+    font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.5)}
+  .meta .wt{color:rgba(168,165,163,.65)}
+  .meta .pth{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .meta .rt{flex-shrink:0}
+  .meta .todo{flex-shrink:0;color:rgba(168,165,163,.45)}
+
+  .tx{flex:1;min-height:0;overflow:hidden;padding:2px 12px 0;display:flex;flex-direction:column;gap:9px}
+  .prompt{position:relative;border:1px solid rgba(42,40,39,.8);background:rgba(32,30,28,.62);
+    border-radius:8px;padding:9px 13px 9px 15px;flex-shrink:0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.05)}
+  .prompt::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:2px;border-radius:2px;background:var(--hl)}
+  .prompt .txt{font-size:13.5px;color:var(--fg);padding-right:52px}
+  .prompt .ts{position:absolute;top:9px;right:12px;font-family:var(--mono);font-size:9.5px;color:rgba(168,165,163,.4)}
+
+  .row{position:relative;padding-left:30px}
+  .row>.d{position:absolute;top:7px;left:8px;width:7px;height:7px;border-radius:99px}
+  .d.ok{background:var(--ok)}.d.err{background:var(--err)}
+  .d.run{background:var(--warn);animation:pulse 1.6s ease-in-out infinite}
+  .d.prose{background:rgba(168,165,163,.4)}
+  @keyframes pulse{50%{opacity:.32}}
+
+  .sum{display:flex;align-items:baseline;gap:7px;font-size:12.5px;color:rgba(168,165,163,.72)}
+  .sum .dia{color:rgba(168,165,163,.5);font-size:10px}
+  .sum .hk{margin-left:auto;font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.35);flex-shrink:0}
+  .tool{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .tool b{font-weight:600;font-size:13.5px;color:var(--fg);flex-shrink:0}
+  .tool .arg{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-family:var(--mono);font-size:12px;color:rgba(168,165,163,.58)}
+  .out{margin-top:5px;border:1px solid rgba(42,40,39,.85);border-radius:8px;overflow:hidden;background:rgba(13,10,9,.35)}
+  .out pre{margin:0;padding:6px 12px;font-family:var(--mono);font-size:11.5px;line-height:1.68;
+    color:var(--mut);white-space:pre-wrap}
+  .prose-t{font-size:13.5px;color:var(--fg);line-height:1.62;position:relative;padding-right:52px}
+  .prose-t .m{font-family:var(--mono);font-size:12.5px;background:var(--ter);padding:0 4px;border-radius:3px}
+  .prose-t .ts{position:absolute;top:1px;right:0;font-family:var(--mono);font-size:9.5px;color:rgba(168,165,163,.38)}
+  .caret{display:inline-block;width:6px;height:14px;background:rgba(234,232,230,.72);border-radius:1px;
+    transform:translateY(2px);margin-left:2px;animation:pulse 1.1s ease-in-out infinite}
+  .think{font-size:13px;color:rgba(168,165,163,.78)}
+  .think .b{padding-top:4px;font-size:12px;font-style:italic;color:rgba(168,165,163,.75)}
+  .sub{margin-top:6px;border:1px solid rgba(42,40,39,.7);background:rgba(32,30,28,.4);border-radius:8px;
+    padding:6px 11px;font-size:12px;color:var(--mut)}
+  .result{font-size:12px;color:rgba(168,165,163,.68)}
+  .divider{display:flex;align-items:center;gap:12px;color:rgba(168,165,163,.45);font-size:11px}
+  .divider .sq{flex:1;height:1px;background:repeating-linear-gradient(90deg,rgba(168,165,163,.22) 0 3px,transparent 3px 6px)}
+
+  /* the live status line, matching the reference's bottom row */
+  .status{display:flex;align-items:center;gap:8px;padding:4px 0 0;font-size:12.5px;color:rgba(168,165,163,.85)}
+  .status .gl{font-family:var(--mono);color:var(--hl);width:11px;flex-shrink:0}
+  .status .rt{margin-left:auto;font-family:var(--mono);font-size:10.5px;color:rgba(168,165,163,.45);flex-shrink:0}
+
+  .comp{margin:8px 12px 0;flex-shrink:0;border:1px solid rgba(42,40,39,.95);border-radius:9px;
+    background:rgba(10,8,7,.5);display:flex;align-items:center;gap:8px;height:34px;padding:0 11px}
+  .comp .c{color:var(--hl);font-family:var(--mono);font-size:12px}
+  .comp .cur{width:6px;height:14px;background:rgba(234,232,230,.55);border-radius:1px;animation:pulse 1.1s ease-in-out infinite}
+  .comp .eng{margin-left:auto;font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.45);flex-shrink:0}
+  .hint{display:flex;gap:14px;padding:7px 13px 9px;font-family:var(--mono);font-size:10px;
+    color:rgba(168,165,163,.38);flex-shrink:0}
+  .hint b{color:rgba(168,165,163,.6);font-weight:500}
+  .pad{height:10px;flex-shrink:0}
+
+  .empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  .empty h3{font-size:18px;font-weight:600;margin:12px 0 3px}
+  .empty p{margin:0 0 20px;font-size:13px}
+  .launch{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;width:460px}
+  .lb{display:flex;align-items:center;gap:10px;height:42px;padding:0 14px;border-radius:10px;
+    border:1px solid var(--bd);background:var(--card);font-size:13.5px}
+  .more{margin-top:16px;font-size:12px;color:rgba(168,165,163,.5)}
+  .multi{margin-top:10px;font-size:13px;color:var(--hl)}
+</style>
+</head>
+<body>
+
+<h1>GatedSpace — the goal</h1>
+<p style="margin-bottom:22px">
+  Built against your reference shot line by line. 1440×900 at 1:1, GatedSpace palette, session-pane
+  content. The toolbar is rebuilt: <strong>the presets bar is gone as a separate row</strong> and lives in
+  the header as a centered segmented control, exactly where BridgeMind puts Agent&nbsp;|&nbsp;Code&nbsp;|&nbsp;Chat.
+  That buys back 36px of vertical space and centres the presets, which you asked for separately.
+</p>
+
+<div class="btns">
+  <button class="go" onclick="cols(1,this)">1 pane</button>
+  <button class="go on" onclick="cols(2,this)">2×2</button>
+  <button class="go" onclick="cols(3,this)">3 across</button>
+</div>
+
+<div class="app">
+  <div class="side">
+    <div class="sbrand"><span class="mark"></span><b>GatedSpace</b><span class="n">1</span><span class="sbtog">▤</span></div>
+    <div class="nav">
+      <div class="nrow on">Dashboard <span class="cnt">3</span></div>
+      <div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs <span class="cnt">2</span></div>
+      <div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <i>+</i></div>
+    <div class="nav">
+      <div class="wrow"><span class="cv">▾</span><span class="nm">SecondBrain</span><span class="cnt">1</span></div>
+      <div class="srow"><span class="d ok" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="nm">College sheet</span></div>
+      <div class="wrow on"><span class="cv">▾</span><span class="nm">superset</span><span class="cnt">4</span></div>
+      <div class="srow on"><span class="d run" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="nm">Blank terminal</span><span class="cnt">6</span></div>
+      <div class="srow"><span class="d ok" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="nm">Tab status dots</span><span class="cnt">4</span></div>
+      <div class="srow"><span class="d run" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="nm">Restyle preview</span><span class="cnt">2</span></div>
+      <div class="srow"><span class="d prose" style="position:static"></span><span class="agm" style="background:#5a5652"></span><span class="nm">powershell</span></div>
+      <div class="wrow"><span class="cv">▾</span><span class="nm">Iotronmedical</span><span class="cnt">1</span></div>
+      <div class="srow"><span class="d err" style="position:static"></span><span class="agm" style="background:#7a828f"></span><span class="nm">Contact form</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">GatedKey</span><span class="cnt">1</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">sortie</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">yddetailers-site</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">AIOS</span></div>
+    </div>
+    <div class="sfoot">
+      <div class="frow">Right sidebar <span class="v">Off</span></div>
+      <div class="frow">Spend today <span class="v">$14.82</span></div>
+      <div class="acct">
+        <span class="av">Y</span>
+        <span class="aname">Yishai<i>Ultra</i></span>
+        <span class="aicons"><span>☾</span><span>⚙</span></span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="bar">
+      <div class="bl">
+        <span class="ws">superset</span>
+        <span class="vch">v1.17.48</span>
+        <span class="sep"></span>
+        <span class="brn">⑂ windows-port</span>
+      </div>
+      <div class="bc">
+        <div class="seg">
+          <span class="sg on"><span class="pic" style="background:#e07850"></span>Claude</span>
+          <span class="sg"><span class="pic" style="background:#7a828f"></span>Codex</span>
+          <span class="sg"><span class="pic" style="background:#7aa2f7"></span>Gemini</span>
+          <span class="sg"><span class="pic" style="background:#8b8b8b"></span>Copilot</span>
+          <span class="sg"><span class="pic" style="background:#5a5652"></span>Terminal</span>
+        </div>
+      </div>
+      <div class="br">
+        <span class="tb"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17V3"/><path d="m6 11 6 6 6-6"/><path d="M19 21H5"/></svg><span class="updot"></span></span>
+        <span class="tb">🗀</span>
+        <span class="tidy">▦ Tidy</span>
+        <span class="wc"><span>—</span><span>▢</span><span>✕</span></span>
+      </div>
+    </div>
+
+    <div class="grid" id="grid">
+
+      <!-- FOCUSED -->
+      <div class="pane act">
+        <div class="ph"><span class="d run" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="pt">Blank terminal — re-measure the cell</span><span class="pacts">⋯ ⤢ ＋ ✕</span></div>
+        <div class="meta"><span class="wt">⧉ windows-port</span><span class="pth">~/Dev/superset</span><span class="todo">4/6 ✓</span><span class="rt">119K / 500K</span></div>
+        <div class="tx">
+          <div class="prompt"><span class="ts">2:14 PM</span><div class="txt">The plain PowerShell pane is still blank in 1.17.45. Dragging it into a split fixes it — figure out why.</div></div>
+          <div class="row"><span class="d ok"></span>
+            <div class="sum"><span class="dia">◆</span>Read 4 files, Searched 2 patterns, Ran 1 test<span class="hk">[hooks: 6]</span></div>
+          </div>
+          <div class="row"><span class="d ok"></span>
+            <div class="think">Thought for 4s</div>
+            <div class="think b">Split-fixes-it means the cell is non-zero but wrong. If it were 0×0, fit() would bail forever and resizing could not help either.</div>
+          </div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Read</b><span class="arg">packages/xterm/src/CharSizeService.ts</span></div>
+            <div class="out"><pre>measure() is called once, from open().
+proposeDimensions() reads the CACHED value.</pre></div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t"><span class="ts">2:16 PM</span>xterm measures its character cell <span class="m">exactly once</span>, in <span class="m">open()</span> — and <span class="m">fit()</span> is not a re-measure. Re-measuring before every fit now.<span class="caret"></span></div>
+          </div>
+          <div class="status"><span class="gl">✻</span><span>Reticulating</span><span class="rt">2m14s ↓119K [stop]</span></div>
+        </div>
+        <div class="comp"><span class="c">›</span><span class="cur"></span><span class="eng">Opus 4.6 (xhigh) · bypass</span></div>
+        <div class="hint"><span><b>Shift+Tab</b>:mode</span><span><b>Esc</b>:cancel</span><span><b>Ctrl+x</b>:shortcuts</span></div>
+      </div>
+
+      <!-- DONE -->
+      <div class="pane">
+        <div class="ph"><span class="d ok" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="pt">Tab status dots + pane counts</span><span class="pacts">⋯ ⤢ ＋ ✕</span></div>
+        <div class="meta"><span class="wt">⧉ windows-port</span><span class="pth">~/Dev/superset</span><span class="todo">12/12 ✓</span><span class="rt">305K / 500K</span></div>
+        <div class="tx">
+          <div class="prompt"><span class="ts">11:02 AM</span><div class="txt">Yellow means processing, green means done, red if it hit an error.</div></div>
+          <div class="row"><span class="d ok"></span>
+            <div class="sum"><span class="dia">◆</span>Searched 6 patterns, Read 9 files<span class="hk">[hooks: 11]</span></div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t"><span class="ts">11:09 AM</span>It was never blocked. That mapper knew only pane kinds <span class="m">terminal</span> and <span class="m">chat</span> — a live pane is kind <span class="m">session</span>, so it produced an empty source list and there was never a status to draw.</div>
+          </div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Bash</b><span class="arg">bun test apps/desktop</span></div>
+            <div class="out"><pre>2401 pass · 55 fail · 6 skip
+lint clean across 4,305 files</pre></div>
+          </div>
+          <div class="divider"><span class="sq"></span><span>effort changed to xhigh</span><span class="sq"></span></div>
+          <div class="result">Done · 14 turns · $3.0812 · 12m04s</div>
+        </div>
+        <div class="comp"><span class="c">›</span><span class="eng">Opus 4.6 (xhigh) · bypass</span></div>
+        <div class="pad"></div>
+      </div>
+
+      <!-- ERROR / CODEX -->
+      <div class="pane">
+        <div class="ph"><span class="d err" style="position:static"></span><span class="agm" style="background:#7a828f"></span><span class="pt">Iotron contact form</span><span class="pacts">⋯ ⤢ ＋ ✕</span></div>
+        <div class="meta"><span class="wt">⧉ main</span><span class="pth">~/Dev/Iotronmedical</span><span class="todo">1/4 ✓</span><span class="rt">38K / 500K</span></div>
+        <div class="tx">
+          <div class="prompt"><span class="ts">9:41 AM</span><div class="txt">Wire the contact form to a Cloudflare Worker.</div></div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Bash</b><span class="arg">npm i -g wrangler</span></div>
+            <div class="out"><pre>npm ERR! Unsupported platform for wrangler
+npm ERR! wanted  {"os":"win32","cpu":"x64"}
+npm ERR! current {"os":"win32","cpu":"arm64"}</pre></div>
+          </div>
+          <div class="row"><span class="d err"></span>
+            <div class="prose-t"><span class="ts">9:42 AM</span>Wrangler will not install on ARM64. This needs a different host, or the form stays a placeholder — your call before I retry.</div>
+          </div>
+          <div class="result" style="color:#fca5a5">Failed · 3 turns · $0.0912 · 38s</div>
+        </div>
+        <div class="comp"><span class="c">›</span><span class="eng">GPT-5.6 (medium) · auto</span></div>
+        <div class="pad"></div>
+      </div>
+
+      <!-- SUBAGENTS -->
+      <div class="pane">
+        <div class="ph"><span class="d run" style="position:static"></span><span class="agm" style="background:#e07850"></span><span class="pt">Restyle preview</span><span class="pacts">⋯ ⤢ ＋ ✕</span></div>
+        <div class="meta"><span class="wt">⧉ windows-port</span><span class="pth">~/Dev/superset</span><span class="todo">2/5 ✓</span><span class="rt">241K / 500K</span></div>
+        <div class="tx">
+          <div class="prompt"><span class="ts">2:31 PM</span><div class="txt">Make the preview look like the reference. The toolbar should look amazing too.</div></div>
+          <div class="row"><span class="d ok"></span>
+            <div class="tool"><b>Task</b><span class="arg">measure SessionTimelineView</span></div>
+            <div class="sub">▾ 3 steps · Read ×2, Grep ×1</div>
+          </div>
+          <div class="row"><span class="d prose"></span>
+            <div class="prose-t"><span class="ts">2:33 PM</span>Pulled the real values — prompt <span class="m">13.5px</span>, gutter dot <span class="m">7px</span>, tool output <span class="m">11.5px</span> mono. The presets bar merges into the header.</div>
+          </div>
+          <div class="status"><span class="gl">✳</span><span>Manifesting</span><span class="rt">41s ↓12.8K [stop]</span></div>
+        </div>
+        <div class="comp"><span class="c">›</span><span class="eng">Opus 4.6 (xhigh) · bypass</span></div>
+        <div class="pad"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<p class="cap">
+  <strong>The hint bar only appears on the focused card.</strong> I criticised it as eight repetitions of the
+  same sentence last time — I was wrong; look at the reference and only the active pane carries it. That is
+  the right answer and it is what this does.
+</p>
+
+<h2>Empty state</h2>
+<div class="app sm">
+  <div class="side">
+    <div class="sbrand"><span class="mark"></span><b>GatedSpace</b><span class="n">1</span><span class="sbtog">▤</span></div>
+    <div class="nav">
+      <div class="nrow">Dashboard</div><div class="nrow">Automations</div>
+      <div class="nrow">Tasks &amp; PRs</div><div class="nrow">Usage</div>
+    </div>
+    <div class="sect">Workspaces <i>+</i></div>
+    <div class="nav">
+      <div class="wrow on"><span class="cv">▸</span><span class="nm">superset</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">SecondBrain</span></div>
+      <div class="wrow"><span class="cv">▸</span><span class="nm">GatedKey</span></div>
+    </div>
+    <div class="sfoot">
+      <div class="frow">Right sidebar <span class="v">Off</span></div>
+      <div class="frow">Spend today <span class="v">$14.82</span></div>
+      <div class="acct"><span class="av">Y</span><span class="aname">Yishai<i>Ultra</i></span><span class="aicons"><span>☾</span><span>⚙</span></span></div>
+    </div>
+  </div>
+  <div class="main">
+    <div class="bar">
+      <div class="bl"><span class="ws">superset</span><span class="vch">v1.17.48</span><span class="sep"></span><span class="brn">⑂ windows-port</span></div>
+      <div class="bc"><div class="seg">
+        <span class="sg on"><span class="pic" style="background:#e07850"></span>Claude</span>
+        <span class="sg"><span class="pic" style="background:#7a828f"></span>Codex</span>
+        <span class="sg"><span class="pic" style="background:#7aa2f7"></span>Gemini</span>
+        <span class="sg"><span class="pic" style="background:#8b8b8b"></span>Copilot</span>
+        <span class="sg"><span class="pic" style="background:#5a5652"></span>Terminal</span>
+      </div></div>
+      <div class="br"><span class="tb">🗀</span><span class="tidy">▦ Tidy</span><span class="wc"><span>—</span><span>▢</span><span>✕</span></span></div>
+    </div>
+    <div class="empty">
+      <h3>Start building in superset</h3>
+      <p>Launch an agent — it runs in its own session pane.</p>
+      <div class="launch">
+        <div class="lb"><span class="pic" style="background:#e07850;width:17px;height:17px"></span>Claude Code</div>
+        <div class="lb"><span class="pic" style="background:#7a828f;width:17px;height:17px"></span>Codex</div>
+        <div class="lb"><span class="pic" style="background:#7aa2f7;width:17px;height:17px"></span>Gemini CLI</div>
+        <div class="lb"><span class="pic" style="background:#8b8b8b;width:17px;height:17px"></span>Copilot</div>
+        <div class="lb"><span class="pic" style="background:#5a5a5a;width:17px;height:17px"></span>Kimi K2</div>
+        <div class="lb"><span class="pic" style="background:#4a4a4a;width:17px;height:17px"></span>Terminal</div>
+      </div>
+      <div class="more">⌄ 4 more not installed</div>
+      <div class="multi">Launch more than one…</div>
+    </div>
+  </div>
+</div>
+
+<h2>What changed from the reference, and why</h2>
+<p>
+  Everything structural is matched. Three things are deliberately different, and each is because your app
+  is not his:
+</p>
+<ul style="color:var(--mut);max-width:82ch">
+  <li style="margin-bottom:8px"><strong style="color:var(--fg)">No Agent&nbsp;|&nbsp;Code&nbsp;|&nbsp;Chat switcher.</strong>
+    His Code tab is your entire app; you would ship two empty tabs. That prime centre slot goes to the
+    preset launcher instead — which is also how you get the centred, larger presets you asked for.</li>
+  <li style="margin-bottom:8px"><strong style="color:var(--fg)">Proportional text, not monospace.</strong>
+    His panes are terminals so everything is mono. Yours fold stream-json into a transcript — prose is
+    proportional, tool arguments and output stay mono. Forcing mono everywhere would undo the session view.</li>
+  <li style="margin-bottom:8px"><strong style="color:var(--fg)">Windows controls, not traffic lights.</strong>
+    The rounded, floating look you liked comes from the card gutters and radius, not from macOS chrome.</li>
+</ul>
+
+<div class="note">
+  <strong>One thing to weigh before I build it.</strong> Merging the presets into the header removes a whole
+  row, which is most of why this reads cleaner than what you have now. But it caps how many presets fit —
+  five is comfortable at this width, and beyond that they would need to scroll or collapse. You currently
+  show every pinned preset. If you routinely pin more than five, say so and I will keep the separate bar and
+  just centre it.
+</div>
+
+<p class="cap" style="margin-top:20px">
+  Nothing is coded. Tell me what to change, or which pieces to build first.
+</p>
+
+<script>
+function cols(n, el){
+  var g = document.getElementById('grid');
+  g.className = n === 2 ? 'grid' : 'grid c' + n;
+  document.querySelectorAll('button.go').forEach(function(b){ b.classList.remove('on'); });
+  el.classList.add('on');
+}
+</script>
+</body>
+</html>

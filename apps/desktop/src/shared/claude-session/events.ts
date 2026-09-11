@@ -251,6 +251,14 @@ export interface LocalUserMessageEvent {
 	type: "local_user_message";
 	id: string;
 	text: string;
+	/**
+	 * Wall-clock ms when the prompt was written to stdin.
+	 *
+	 * Optional because it is additive: events already sitting in a session's
+	 * replay buffer, and transcripts folded from disk, predate it. Absent means
+	 * "no time to show" rather than a default that would be a lie.
+	 */
+	at?: number;
 	/** Images sent with this prompt, described but not carried — see below. */
 	attachments?: UserAttachment[];
 }

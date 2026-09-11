@@ -1,5 +1,22 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useState,
+	useSyncExternalStore,
+} from "react";
+import {
+	deriveSessionPaneStatus,
+	useSessionPaneStatuses,
+} from "renderer/hooks/useSessionPaneStatuses";
+import {
+	getSessionActivity,
+	getSessionActivityVersion,
+	getSessionPaneIdsForWorkspace,
+	getSessionWorkspaceEntries,
+	subscribeSessionActivity,
+} from "renderer/stores/session-activity";
 import {
 	getV2NotificationSourceKey,
 	getV2NotificationSourcesForPane,
@@ -10,6 +27,7 @@ import {
 import {
 	type ActivePaneStatus,
 	getHighestPriorityStatus,
+	type PaneStatus,
 } from "shared/tabs-types";
 import {
 	type TerminalAgentBinding,
@@ -21,34 +39,44 @@ import {
 } from "../useTerminalAgentStatuses";
 
 const TERMINAL_PREFIX = "terminal:";
+const SESSION_PREFIX = "session:";
 
-function terminalIdsFromSources(
+function idsWithPrefix(
 	sources: Iterable<V2NotificationSourceInput>,
+	prefix: string,
 ): string[] {
 	const ids: string[] = [];
 	for (const key of new Set([...sources].map(getV2NotificationSourceKey))) {
-		if (key.startsWith(TERMINAL_PREFIX)) {
-			ids.push(key.slice(TERMINAL_PREFIX.length));
-		}
+		if (key.startsWith(prefix)) ids.push(key.slice(prefix.length));
 	}
 	return ids;
 }
 
 /**
- * Highest-priority status across a set of notification sources. Terminal
- * statuses are derived from host agent bindings (the single source of
- * truth); chat sources have no status yet and contribute nothing.
+ * Highest-priority status across a set of notification sources.
+ *
+ * Two kinds contribute, from two different sources of truth, because the two
+ * kinds of agent report through different channels: a TERMINAL agent's status
+ * comes from host agent bindings (hook events the CLI fires), while a SESSION
+ * pane's comes from its own streamed transcript, mirrored into the renderer's
+ * session-activity store. Chat sources are a v1 leftover and still contribute
+ * nothing.
  */
 export function useV2SourcesNotificationStatus(
 	workspaceId: string,
 	sources: Iterable<V2NotificationSourceInput>,
 ): ActivePaneStatus | null {
-	const statuses = useTerminalAgentStatuses(workspaceId);
-	return getHighestPriorityStatus(
-		terminalIdsFromSources(sources).map((terminalId) =>
-			statuses.get(terminalId),
-		),
+	const terminalStatuses = useTerminalAgentStatuses(workspaceId);
+	const sourceList = [...sources];
+	const sessionStatuses = useSessionPaneStatuses(
+		idsWithPrefix(sourceList, SESSION_PREFIX),
 	);
+	return getHighestPriorityStatus([
+		...idsWithPrefix(sourceList, TERMINAL_PREFIX).map((terminalId) =>
+			terminalStatuses.get(terminalId),
+		),
+		...sessionStatuses.values(),
+	]);
 }
 
 export function useV2PaneNotificationStatus(
@@ -61,27 +89,51 @@ export function useV2PaneNotificationStatus(
 	);
 }
 
+/**
+ * Every session pane belonging to a workspace, as a status lookup. Reads
+ * through the same store the tab dots use, so a workspace row and its tabs can
+ * never disagree about whether an agent is done.
+ *
+ * `getSessionPaneIdsForWorkspace` is read during render without its own
+ * subscription because `useSessionPaneStatuses` already subscribes to the same
+ * store — a registration bumps the same version a status change does, so the
+ * re-render that refreshes the statuses refreshes this list with it.
+ */
+function useWorkspaceSessionStatuses(
+	workspaceId: string,
+): Map<string, PaneStatus> {
+	return useSessionPaneStatuses(getSessionPaneIdsForWorkspace(workspaceId));
+}
+
 export function useV2WorkspaceNotificationStatus(
 	workspaceId: string,
 ): ActivePaneStatus | null {
 	const statuses = useTerminalAgentStatuses(workspaceId);
+	const sessionStatuses = useWorkspaceSessionStatuses(workspaceId);
 	const manualUnread = useV2NotificationStore((state) =>
 		Boolean(state.manualUnread[workspaceId]),
 	);
 	return getHighestPriorityStatus([
 		manualUnread ? "review" : undefined,
 		...statuses.values(),
+		...sessionStatuses.values(),
 	]);
 }
 
 export function useV2WorkspaceIsUnread(workspaceId: string): boolean {
 	const statuses = useTerminalAgentStatuses(workspaceId);
+	const sessionStatuses = useWorkspaceSessionStatuses(workspaceId);
 	const manualUnread = useV2NotificationStore((state) =>
 		Boolean(state.manualUnread[workspaceId]),
 	);
 	if (manualUnread) return true;
 	for (const status of statuses.values()) {
 		if (status === "review") return true;
+	}
+	// `error` counts as unread here as well as `review`: both mean a turn ended
+	// and nobody has looked at it, which is exactly what unread describes.
+	for (const status of sessionStatuses.values()) {
+		if (status === "review" || status === "error") return true;
 	}
 	return false;
 }
@@ -117,6 +169,13 @@ export function useV2AttentionWorkspaceCount(): number {
 	const terminalSeenAt = useV2NotificationStore(
 		(state) => state.terminalSeenAt,
 	);
+	const sessionSeenTurn = useV2NotificationStore(
+		(state) => state.sessionSeenTurn,
+	);
+	const activityVersion = useSyncExternalStore(
+		subscribeSessionActivity,
+		getSessionActivityVersion,
+	);
 	const [cacheVersion, setCacheVersion] = useState(0);
 
 	useEffect(() => {
@@ -127,9 +186,22 @@ export function useV2AttentionWorkspaceCount(): number {
 		});
 	}, [queryClient]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: cacheVersion re-reads the query cache
+	// biome-ignore lint/correctness/useExhaustiveDependencies: cacheVersion re-reads the query cache, activityVersion re-reads the session-activity store
 	return useMemo(() => {
 		const workspaceIds = new Set(Object.keys(manualUnread));
+		// Session panes report through their own store rather than through the
+		// bindings query — a session pane runs the CLI in stream-json mode and
+		// never registers a terminal agent binding, so without this loop a
+		// workspace whose only agent is a session pane never badges at all.
+		for (const [paneId, workspaceId] of getSessionWorkspaceEntries()) {
+			const status = deriveSessionPaneStatus({
+				activity: getSessionActivity(paneId),
+				seenTurn: sessionSeenTurn[paneId],
+			});
+			if (status === "review" || status === "error") {
+				workspaceIds.add(workspaceId);
+			}
+		}
 		const entries = queryClient.getQueriesData<TerminalAgentBinding[]>({
 			queryKey: ["terminal-agent-bindings"],
 		});
@@ -146,5 +218,12 @@ export function useV2AttentionWorkspaceCount(): number {
 			}
 		}
 		return workspaceIds.size;
-	}, [cacheVersion, manualUnread, terminalSeenAt, queryClient]);
+	}, [
+		cacheVersion,
+		activityVersion,
+		manualUnread,
+		terminalSeenAt,
+		sessionSeenTurn,
+		queryClient,
+	]);
 }

@@ -42,6 +42,7 @@ import {
 	getTerminalBaseEnv,
 	resolveLaunchShell,
 } from "./env.ts";
+import { hasLiveChildren, readProcessTable } from "./process-table";
 import { listTerminalResourceSessions } from "./resource-sessions.ts";
 import {
 	createModeTracker,
@@ -386,12 +387,16 @@ export interface TerminalSessionSummary {
 	exitCode: number;
 	attached: boolean;
 	title: string | null;
+	/** Running a command, as opposed to sitting at a prompt. */
+	busy: boolean;
 }
 
 export function listTerminalSessions(
 	options: { workspaceId?: string; includeExited?: boolean } = {},
 ): TerminalSessionSummary[] {
 	const includeExited = options.includeExited ?? true;
+	// Read once for the whole list rather than per session.
+	const table = readProcessTable();
 
 	return Array.from(sessions.values())
 		.filter((session) => session.listed)
@@ -409,6 +414,10 @@ export function listTerminalSessions(
 			exitCode: session.exitCode,
 			attached: pruneAndCountOpenSockets(session) > 0,
 			title: session.title,
+			// `null` from hasLiveChildren means the table could not be read; a
+			// session whose state is unknown is reported as busy so it is never
+			// silently hidden.
+			busy: hasLiveChildren(session.pty.pid, table) !== false,
 		}));
 }
 
@@ -423,6 +432,8 @@ export function countTerminalSessions(
 	const excludedTerminalIds = options.excludeTerminalIds
 		? new Set(options.excludeTerminalIds)
 		: null;
+	// One table read for the whole sweep.
+	const table = readProcessTable();
 	let count = 0;
 
 	for (const session of sessions.values()) {
@@ -435,6 +446,19 @@ export function countTerminalSessions(
 		}
 		if (!includeExited && session.exited) continue;
 		if (excludedTerminalIds?.has(session.terminalId)) continue;
+		/*
+		 * Only shells that are RUNNING something count.
+		 *
+		 * This used to count every live, unattached session, so a shell sitting
+		 * at an idle prompt was indistinguishable from one mid-build — which is
+		 * how the badge came to read "4 shells" when nothing was happening. An
+		 * idle shell is still there and still listed; it just is not something
+		 * to be notified about.
+		 *
+		 * `false` is the only value that excludes. `null` (table unreadable)
+		 * counts, so a failure to introspect never hides a real background job.
+		 */
+		if (hasLiveChildren(session.pty.pid, table) === false) continue;
 		count += 1;
 	}
 

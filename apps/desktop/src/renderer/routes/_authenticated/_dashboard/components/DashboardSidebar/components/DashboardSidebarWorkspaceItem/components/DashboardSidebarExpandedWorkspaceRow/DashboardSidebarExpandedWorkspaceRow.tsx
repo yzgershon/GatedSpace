@@ -116,7 +116,13 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 					else if (ref) ref.current = node;
 				}}
 				className={cn(
-					"relative w-full rounded-lg text-left text-sm",
+					/*
+					 * `rounded-[8px]` and `mx-2`, matching the nav rows, the session
+					 * rows and the Recent-sessions panel. This row used `rounded-lg`
+					 * full-bleed while everything else was 8px and inset, which is
+					 * most of why the two panels looked like different apps.
+					 */
+					"relative mx-2 w-[calc(100%-1rem)] rounded-[8px] text-left text-sm",
 					// Selected is an OUTLINED card, not a flat fill. A fill of the
 					// same family as the hover state made "selected" and "the mouse
 					// is here" nearly the same thing; a ring in the accent colour
@@ -124,7 +130,8 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 					"transition-[background-color,box-shadow,transform] duration-150",
 					isActive &&
 						"bg-accent/40 shadow-[inset_0_0_0_1px_var(--color-highlight)]",
-					onClick && (isActive ? "hover:bg-accent/50" : "hover:bg-muted/45"),
+					onClick &&
+						(isActive ? "hover:bg-accent/50" : "hover:bg-sidebar-accent/60"),
 					// Presses settle rather than snap. Scale rather than a colour
 					// flash, because the row already changes colour on hover and a
 					// second colour change on press reads as a flicker.

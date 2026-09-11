@@ -1,0 +1,1071 @@
+bun test v1.3.14 (0d9b296a)
+
+apps\desktop\src\main\lib\bundled-cli.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+SyntaxError: Export named 'app' not found in module 'C:\Dev\superset\node_modules\.bun\electron@40.8.5\node_modules\electron\index.js'.
+-------------------------------
+
+
+apps\desktop\src\main\lib\host-service-coordinator.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+SyntaxError: Export named 'app' not found in module 'C:\Dev\superset\node_modules\.bun\electron@40.8.5\node_modules\electron\index.js'.
+-------------------------------
+
+
+apps\desktop\src\main\terminal-host\session-shell-ready.test.ts:
+[agent-setup] shell integration mode=native shell=zsh
+[agent-setup] shell integration mode=native shell=sh
+[agent-setup] shell integration mode=native shell=ksh
+[agent-setup] shell integration mode=native shell=bash
+[Session session-1787371583684] Subprocess exited with code 1
+[Session session-1787371583685] Subprocess exited with code 0
+[agent-setup] shell integration mode=native shell=fish
+[agent-setup] shell integration mode=native shell=dash
+
+apps\desktop\src\main\terminal-host\session.test.ts:
+[Session session-emulator-backpressure] Emulator backlog reached 1100000 bytes, pausing PTY reads
+[Session session-emulator-resume] Emulator backlog reached 1100000 bytes, pausing PTY reads
+[Session session-combined-backpressure] Emulator backlog reached 1100000 bytes, pausing PTY reads
+[Session session-close-backpressure] Emulator backlog reached 1100000 bytes, pausing PTY reads
+[Session session-error-backpressure] Emulator backlog reached 1100000 bytes, pausing PTY reads
+
+apps\desktop\src\main\terminal-host\terminal-host.test.ts:
+[Session session-spawn-fail] Subprocess error: Spawn failed: posix_spawnp failed.
+[treeKillAsync] Failed to SIGKILL pid 4242: Command failed: taskkill /pid 4242 /T /F
+ERROR: The process "4242" not found.
+
+[Session session-spawn-fail-fixed] Subprocess error: Spawn failed: posix_spawnp failed.
+[Session session-spawn-fail-fixed] Subprocess exited with code 1
+[treeKillAsync] Failed to SIGKILL pid 4242: Command failed: taskkill /pid 4242 /T /F
+ERROR: The process "4242" not found.
+
+[treeKillAsync] Failed to SIGKILL pid 12345: Command failed: taskkill /pid 12345 /T /F
+ERROR: The process "12345" not found.
+
+[treeKillAsync] Failed to SIGKILL pid 4242: Command failed: taskkill /pid 4242 /T /F
+ERROR: The process "4242" not found.
+
+
+apps\desktop\src\renderer\hotkeys\display.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at new K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:153:16)
+      at <anonymous> (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:180:15)
+      at map (1:11)
+      at new TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:25:27)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:147:17)
+      at C:\Dev\superset\apps\desktop\src\renderer\lib\trpc-client.ts:10:49
+-------------------------------
+
+
+apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:
+168 | 			buildCopilotWrapperExecLine(),
+169 | 		);
+170 | 		writeFileSync(wrapperPath, wrapperScript, { mode: 0o755 });
+171 | 		chmodSync(wrapperPath, 0o755);
+172 | 
+173 | 		execFileSync(wrapperPath, [], {
+        ^
+error: Executable not found in $PATH: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\copilot"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:173:3)
+(fail) agent-wrappers copilot > rewrites stale superset-notify.json with current hook path [9.63ms]
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+killed 1 dangling process
+257 | 		);
+258 | 		chmodSync(realCodex, 0o755);
+259 | 
+260 | 		createCodexWrapper();
+261 | 
+262 | 		execFileSync(wrapperPath, [], {
+        ^
+error: Command failed: C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\codex
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:262:3)
+(fail) agent-wrappers copilot > trusts the Superset workspace codex project config without replacing CODEX_HOME [5259.21ms]
+  ^ this test timed out after 5000ms.
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+/bin/bash: warning: shell level (1000) too high, resetting to 1
+      2 [main] bash (115952) C:\Program Files\Git\usr\bin\bash.exe: *** fatal error in forked process - CreateFileMapping shared.5, Win32 error 1455.  Terminating.
+      0 [main] bash 388549 dofork: child -1 - forked process 115952 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: line 153: 388980 Bus error               "$REAL_BIN" "${_superset_codex_args[@]}" --enable hooks -c 'notify=["bash","C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\hooks\notify.sh"]' "$@"
+299 | 		);
+300 | 		chmodSync(realCodex, 0o755);
+301 | 
+302 | 		createCodexWrapper();
+303 | 
+304 | 		execFileSync(wrapperPath, ["exec", "Reply with exactly OK."], {
+        ^
+error: Command failed: C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\codex exec Reply with exactly OK.
+/bin/bash: warning: shell level (1000) too high, resetting to 1
+      2 [main] bash (115952) C:\Program Files\Git\usr\bin\bash.exe: *** fatal error in forked process - CreateFileMapping shared.5, Win32 error 1455.  Terminating.
+      0 [main] bash 388549 dofork: child -1 - forked process 115952 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: line 153: 388980 Bus error               "$REAL_BIN" "${_superset_codex_args[@]}" --enable hooks -c 'notify=["bash","C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\hooks\notify.sh"]' "$@"
+
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:304:3)
+(fail) agent-wrappers copilot > forwards hooks enablement through the codex wrapper for manual launches [1283199.88ms]
+  ^ this test timed out after 5000ms.
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+killed 1 dangling process
+356 | 		);
+357 | 		chmodSync(realCodex, 0o755);
+358 | 
+359 | 		createCodexWrapper();
+360 | 
+361 | 		execFileSync(wrapperPath, [], {
+        ^
+error: Command failed: C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\codex
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:361:3)
+(fail) agent-wrappers copilot > emits codex Start from the wrapper-owned TUI session log [6822.67ms]
+  ^ this test timed out after 5000ms.
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+/bin/bash: warning: shell level (1000) too high, resetting to 1
+      1 [main] bash (24996) child_copy: cygheap read copy failed, 0x0..0x805F993D0, done 0, windows pid 24996, Win32 error 299
+      3 [main] bash 870828 dofork: child -1 - forked process 24996 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+      0 [main] bash 870965 dofork: child -1 - CreateProcessW failed for 'C:\Program Files\Git\usr\bin\bash.exe', errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+      2 [main] bash (52052) child_copy: cygheap read copy failed, 0x0..0x8063D9850, done 0, windows pid 52052, Win32 error 299
+      2 [main] bash 876723 dofork: child -1 - forked process 52052 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: line 153: 877683 Bus error               "$REAL_BIN" "${_superset_codex_args[@]}" --enable hooks -c 'notify=["bash","C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\hooks\notify.sh"]' "$@"
+      1 [main] bash (29268) child_copy: cygheap read copy failed, 0x0..0x806483120, done 0, windows pid 29268, Win32 error 299
+      2 [main] bash 877750 dofork: child -1 - forked process 29268 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+2277529 [main] bash 877750 dofork: child -1 - forked process 54416 died unexpectedly, retry 0, exit code 0xC000012D, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+415 | 		);
+416 | 		chmodSync(realCodex, 0o755);
+417 | 
+418 | 		createCodexWrapper();
+419 | 
+420 | 		execFileSync(wrapperPath, [], {
+        ^
+error: Command failed: C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\codex
+/bin/bash: warning: shell level (1000) too high, resetting to 1
+      1 [main] bash (24996) child_copy: cygheap read copy failed, 0x0..0x805F993D0, done 0, windows pid 24996, Win32 error 299
+      3 [main] bash 870828 dofork: child -1 - forked process 24996 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+      0 [main] bash 870965 dofork: child -1 - CreateProcessW failed for 'C:\Program Files\Git\usr\bin\bash.exe', errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+      2 [main] bash (52052) child_copy: cygheap read copy failed, 0x0..0x8063D9850, done 0, windows pid 52052, Win32 error 299
+      2 [main] bash 876723 dofork: child -1 - forked process 52052 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: line 153: 877683 Bus error               "$REAL_BIN" "${_superset_codex_args[@]}" --enable hooks -c 'notify=["bash","C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\hooks\notify.sh"]' "$@"
+      1 [main] bash (29268) child_copy: cygheap read copy failed, 0x0..0x806483120, done 0, windows pid 29268, Win32 error 299
+      2 [main] bash 877750 dofork: child -1 - forked process 29268 died unexpectedly, retry 0, exit code 0xC0000005, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+2277529 [main] bash 877750 dofork: child -1 - forked process 54416 died unexpectedly, retry 0, exit code 0xC000012D, errno 11
+/tmp/superset-agent-wrappers-111124-1787371602937/superset/bin/codex: fork: retry: Resource temporarily unavailable
+
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:420:3)
+(fail) agent-wrappers copilot > emits codex Start from legacy TUI session logs with v1 tab context [16635753.26ms]
+  ^ this test timed out after 5000ms.
+[agent-setup] Updated codex wrapper
+[agent-setup] Updated codex.cmd shim
+killed 1 dangling process
+477 | 		);
+478 | 		chmodSync(realCodex, 0o755);
+479 | 
+480 | 		createCodexWrapper();
+481 | 
+482 | 		execFileSync(wrapperPath, [], {
+        ^
+error: Command failed: C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\superset\bin\codex
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:482:3)
+(fail) agent-wrappers copilot > does not emit codex events from unrelated rollout files [5033.55ms]
+  ^ this test timed out after 5000ms.
+[agent-setup] Updated mastracode wrapper
+[agent-setup] Updated mastracode.cmd shim
+[agent-setup] Updated amp wrapper
+[agent-setup] Updated amp.cmd shim
+[agent-setup] Updated Amp lifecycle plugin
+[agent-setup] Updated droid wrapper
+[agent-setup] Updated droid.cmd shim
+701 | 				hooks.some(
+702 | 					(def) =>
+703 | 						def.hooks?.length === 1 &&
+704 | 						def.hooks[0]?.command === currentHookPath,
+705 | 				),
+706 | 			).toBe(true);
+           ^
+error: expect(received).toBe(expected)
+
+Expected: true
+Received: false
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:706:6)
+(fail) agent-wrappers copilot > replaces stale Gemini hook commands from old superset paths [94.65ms]
+[agent-setup] Could not parse existing ~/.factory/settings.json; skipping Droid hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingDroidSettings (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-droid.ts:52:23)
+      at getDroidSettingsJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-droid.ts:121:19)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:940:4)
+
+[agent-setup] Could not parse existing ~/.factory/settings.json; skipping Droid hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingDroidSettings (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-droid.ts:52:23)
+      at getDroidSettingsJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-droid.ts:121:19)
+      at createDroidSettingsJson (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-droid.ts:199:18)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:943:3)
+
+[agent-setup] Expected ~/.factory/settings.json to contain a JSON object; skipping Droid hook merge
+1156 | 			),
+1157 | 		).toBe(true);
+1158 | 
+1159 | 		// Idempotent
+1160 | 		expect(content2).not.toBeNull();
+1161 | 		expect(JSON.parse(content2 as string)).toEqual(JSON.parse(content));
+                                                ^
+error: expect(received).toEqual(expected)
+
+@@ -12,3 +12,11 @@
+        },
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++         "matcher": "*",
++       },
+      ],
+@@ -24,6 +32,22 @@
+        },
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++         "matcher": "*",
++       },
+      ],
+      "PostToolUseFailure": [
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++         "matcher": "*",
++       },
+        {
+@@ -47,6 +71,20 @@
+        },
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++       },
+      ],
+      "SessionStart": [
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++       },
+        {
+@@ -69,3 +107,10 @@
+        },
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
++             "type": "command",
++           },
++         ],
++       },
+      ],
+@@ -76,3 +121,10 @@
+              "command": "/opt/custom-prompt.sh",
++             "type": "command",
++           },
++         ],
++       },
++       {
++         "hooks": [
++           {
++             "command": ""C:\Program Files\Git\bin\bash.exe" -c "SUPERSET_AGENT_ID=claude 'C:/Users/yzger/AppData/Local/Temp/superset-agent-wrappers-111124-1787371602937/superset/hooks/notify.sh' || true"",
+              "type": "command",
+
+- Expected  - 0
++ Received  + 59
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:1161:42)
+(fail) agent-wrappers claude settings.json > replaces stale Claude hook commands from old superset paths [67.21ms]
+[agent-setup] Could not parse existing ~/.claude/settings.json; skipping Claude hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingClaudeSettings (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:100:23)
+      at getClaudeGlobalSettingsJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:162:19)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:1176:4)
+
+[agent-setup] Could not parse existing ~/.claude/settings.json; skipping Claude hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingClaudeSettings (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:100:23)
+      at getClaudeGlobalSettingsJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:162:19)
+      at createClaudeSettingsJson (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:247:18)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:1179:3)
+
+[agent-setup] Expected ~/.claude/settings.json to contain a JSON object; skipping Claude hook merge
+[agent-setup] Could not parse existing ~/.codex/hooks.json; skipping Codex hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingCodexHooks (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:324:23)
+      at getCodexGlobalHooksJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:390:19)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:1596:4)
+
+[agent-setup] Could not parse existing ~/.codex/hooks.json; skipping Codex hook merge: SyntaxError: JSON Parse error: Expected '}'
+      at readExistingCodexHooks (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:324:23)
+      at getCodexGlobalHooksJsonContent (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:390:19)
+      at createCodexHooksJson (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers-claude-codex-opencode.ts:465:18)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\agent-wrappers.test.ts:1599:3)
+
+[agent-setup] Expected ~/.codex/hooks.json to contain a JSON object; skipping Codex hook merge
+[agent-setup] Updated pi extension
+
+apps\desktop\src\main\lib\agent-setup\notify-hook.test.ts:
+29 | 		const script = readFileSync(
+30 | 			path.join(import.meta.dir, "templates", "notify-hook.template.sh"),
+31 | 			"utf-8",
+32 | 		);
+33 | 
+34 | 		expect(script).toContain(
+                      ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "curl -sX POST \"$SUPERSET_HOST_AGENT_HOOK_URL\" \\\n    --connect-timeout 2 --max-time 5"
+Received: "#!/bin/bash\r\n{{MARKER}}\r\n# CLI agent lifecycle hook — POSTs an AgentIdentity payload to the v2\r\n# host-service endpoint, with a v1 Electron hook fallback while both\r\n# terminal stacks are supported.\r\n\r\n# Codex passes JSON as argv; Claude/Mastra/Droid pipe via stdin.\r\nif [ -n \"$1\" ]; then\r\n  INPUT=\"$1\"\r\nelse\r\n  INPUT=$(cat)\r\nfi\r\n\r\nHOOK_SESSION_ID=$(echo \"$INPUT\" | grep -oE '\"session_id\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | grep -oE '\"[^\"]*\"$' | tr -d '\"')\r\nRESOURCE_ID=$(echo \"$INPUT\" | grep -oE '\"resourceId\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | grep -oE '\"[^\"]*\"$' | tr -d '\"')\r\nif [ -z \"$RESOURCE_ID\" ]; then\r\n  RESOURCE_ID=$(echo \"$INPUT\" | grep -oE '\"resource_id\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | grep -oE '\"[^\"]*\"$' | tr -d '\"')\r\nfi\r\nSESSION_ID=${RESOURCE_ID:-$HOOK_SESSION_ID}\r\n\r\n# Claude/Mastra/Droid use \"hook_event_name\"; Codex uses \"type\".\r\nEVENT_TYPE=$(echo \"$INPUT\" | grep -oE '\"hook_event_name\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | grep -oE '\"[^\"]*\"$' | tr -d '\"')\r\nif [ -z \"$EVENT_TYPE\" ]; then\r\n  CODEX_TYPE=$(echo \"$INPUT\" | grep -oE '\"type\"[[:space:]]*:[[:space:]]*\"[^\"]*\"' | grep -oE '\"[^\"]*\"$' | tr -d '\"')\r\n  case \"$CODEX_TYPE\" in\r\n    agent-turn-complete|task_complete) EVENT_TYPE=\"Stop\" ;;\r\n    task_started) EVENT_TYPE=\"Start\" ;;\r\n    exec_approval_request|apply_patch_approval_request|request_user_input)\r\n      EVENT_TYPE=\"PermissionRequest\"\r\n      ;;\r\n  esac\r\nfi\r\n\r\n# UserPromptSubmit normalizes here; other aliases are mapped server-side\r\n# by mapEventType so the wire stays a single source of truth.\r\n[ \"$EVENT_TYPE\" = \"UserPromptSubmit\" ] && EVENT_TYPE=\"Start\"\r\n\r\n# Never default to \"Stop\" on parse failure — silent drop is safer than\r\n# a false completion notification.\r\n[ -z \"$EVENT_TYPE\" ] && exit 0\r\n\r\nDEBUG_HOOKS_ENABLED=\"0\"\r\nif [ -n \"$SUPERSET_DEBUG_HOOKS\" ]; then\r\n  case \"$SUPERSET_DEBUG_HOOKS\" in\r\n    1|true|TRUE|True|yes|YES|on|ON) DEBUG_HOOKS_ENABLED=\"1\" ;;\r\n  esac\r\nelif [ \"$SUPERSET_ENV\" = \"development\" ] || [ \"$NODE_ENV\" = \"development\" ]; then\r\n  DEBUG_HOOKS_ENABLED=\"1\"\r\nfi\r\n\r\nif [ \"$DEBUG_HOOKS_ENABLED\" = \"1\" ]; then\r\n  echo \"[notify-hook] event=$EVENT_TYPE terminalId=$SUPERSET_TERMINAL_ID agentId=$SUPERSET_AGENT_ID hookSessionId=$HOOK_SESSION_ID resourceId=$RESOURCE_ID paneId=$SUPERSET_PANE_ID tabId=$SUPERSET_TAB_ID workspaceId=$SUPERSET_WORKSPACE_ID\" >&2\r\nfi\r\n\r\ndebug_log() {\r\n  [ \"$DEBUG_HOOKS_ENABLED\" = \"1\" ] || return 0\r\n  printf '%s [notify-hook] %s\\n' \"$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date)\" \"$*\" >> \"${SUPERSET_HOOK_DEBUG_LOG:-/tmp/superset-agent-hooks.log}\" 2>/dev/null || true\r\n}\r\n\r\ndebug_log \"event=$EVENT_TYPE terminalId=$SUPERSET_TERMINAL_ID agentId=$SUPERSET_AGENT_ID sessionId=$SESSION_ID hookSessionId=$HOOK_SESSION_ID resourceId=$RESOURCE_ID tabId=$SUPERSET_TAB_ID\"\r\n\r\nV1_EVENT_TYPE=\"$EVENT_TYPE\"\r\ncase \"$V1_EVENT_TYPE\" in\r\n  Attached|attached|SessionStart|sessionStart|session_start)\r\n    V1_EVENT_TYPE=\"Start\"\r\n    ;;\r\n  Detached|detached|SessionEnd|sessionEnd|session_end)\r\n    V1_EVENT_TYPE=\"Stop\"\r\n    ;;\r\nesac\r\n\r\njson_escape() {\r\n  printf '%s' \"$1\" | sed -e 's/\\\\/\\\\\\\\/g' -e 's/\"/\\\\\"/g'\r\n}\r\n\r\nif [ -n \"$SUPERSET_HOST_AGENT_HOOK_URL\" ] && [ -n \"$SUPERSET_TERMINAL_ID\" ]; then\r\n  PAYLOAD=\"{\\\"json\\\":{\\\"terminalId\\\":\\\"$(json_escape \"$SUPERSET_TERMINAL_ID\")\\\",\\\"eventType\\\":\\\"$(json_escape \"$EVENT_TYPE\")\\\",\\\"agent\\\":{\\\"agentId\\\":\\\"$(json_escape \"$SUPERSET_AGENT_ID\")\\\",\\\"sessionId\\\":\\\"$(json_escape \"$SESSION_ID\")\\\"}}}\"\r\n\r\n  STATUS_CODE=$(curl -sX POST \"$SUPERSET_HOST_AGENT_HOOK_URL\" \\\r\n    --connect-timeout 2 --max-time 5 \\\r\n    -H \"Content-Type: application/json\" \\\r\n    -d \"$PAYLOAD\" \\\r\n    -o /dev/null -w \"%{http_code}\" 2>/dev/null)\r\n\r\n  if [ \"$DEBUG_HOOKS_ENABLED\" = \"1\" ]; then\r\n    echo \"[notify-hook] host-service dispatched status=$STATUS_CODE\" >&2\r\n  fi\r\n  debug_log \"host-service status=$STATUS_CODE url=$SUPERSET_HOST_AGENT_HOOK_URL\"\r\n\r\n  case \"$STATUS_CODE\" in\r\n    2*) exit 0 ;;\r\n  esac\r\nfi\r\n\r\n# v1 fallback: Electron localhost hook server. Kept while v1 terminals exist.\r\n[ -z \"$SUPERSET_TAB_ID\" ] && [ -z \"$SESSION_ID\" ] && [ -z \"$SUPERSET_TERMINAL_ID\" ] && exit 0\r\n\r\nif [ \"$DEBUG_HOOKS_ENABLED\" = \"1\" ]; then\r\n  STATUS_CODE=$(curl -sG \"http://127.0.0.1:${SUPERSET_PORT:-{{DEFAULT_PORT}}}/hook/complete\" \\\r\n    --connect-timeout 1 --max-time 2 \\\r\n    --data-urlencode \"paneId=$SUPERSET_PANE_ID\" \\\r\n    --data-urlencode \"tabId=$SUPERSET_TAB_ID\" \\\r\n    --data-urlencode \"workspaceId=$SUPERSET_WORKSPACE_ID\" \\\r\n    --data-urlencode \"terminalId=$SUPERSET_TERMINAL_ID\" \\\r\n    --data-urlencode \"sessionId=$SESSION_ID\" \\\r\n    --data-urlencode \"hookSessionId=$HOOK_SESSION_ID\" \\\r\n    --data-urlencode \"resourceId=$RESOURCE_ID\" \\\r\n    --data-urlencode \"eventType=$V1_EVENT_TYPE\" \\\r\n    --data-urlencode \"env=$SUPERSET_ENV\" \\\r\n    --data-urlencode \"version=$SUPERSET_HOOK_VERSION\" \\\r\n    -o /dev/null -w \"%{http_code}\" 2>/dev/null)\r\n  echo \"[notify-hook] v1 dispatched status=$STATUS_CODE\" >&2\r\n  debug_log \"v1 status=$STATUS_CODE port=${SUPERSET_PORT:-{{DEFAULT_PORT}}}\"\r\nelse\r\n  debug_log \"v1 dispatch port=${SUPERSET_PORT:-{{DEFAULT_PORT}}}\"\r\n  curl -sG \"http://127.0.0.1:${SUPERSET_PORT:-{{DEFAULT_PORT}}}/hook/complete\" \\\r\n    --connect-timeout 1 --max-time 2 \\\r\n    --data-urlencode \"paneId=$SUPERSET_PANE_ID\" \\\r\n    --data-urlencode \"tabId=$SUPERSET_TAB_ID\" \\\r\n    --data-urlencode \"workspaceId=$SUPERSET_WORKSPACE_ID\" \\\r\n    --data-urlencode \"terminalId=$SUPERSET_TERMINAL_ID\" \\\r\n    --data-urlencode \"sessionId=$SESSION_ID\" \\\r\n    --data-urlencode \"hookSessionId=$HOOK_SESSION_ID\" \\\r\n    --data-urlencode \"resourceId=$RESOURCE_ID\" \\\r\n    --data-urlencode \"eventType=$V1_EVENT_TYPE\" \\\r\n    --data-urlencode \"env=$SUPERSET_ENV\" \\\r\n    --data-urlencode \"version=$SUPERSET_HOOK_VERSION\" \\\r\n    > /dev/null 2>&1\r\nfi\r\n\r\nexit 0\r\n"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\notify-hook.test.ts:34:18)
+(fail) getNotifyScriptContent > gives the v2 host-service hook enough time to deliver [0.54ms]
+
+apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:
+[agent-setup] Updated zsh wrapper files
+[agent-setup] Updated zsh wrapper files
+[agent-setup] Updated bash wrapper
+[agent-setup] Updated bash wrapper
+[agent-setup] Updated zsh wrapper files
+253 | 		const args = getCommandShellArgs("/bin/zsh", "echo ok", TEST_PATHS);
+254 | 		expect(args[0]).toBe("-lc");
+255 | 		expect(args[1]).toContain(
+256 | 			`source ${quoteShellLiteral(path.join(TEST_ZSH_DIR, ".zshrc"))} &&`,
+257 | 		);
+258 | 		expect(args[1]).toContain(
+                        ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "_superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin\\claude'"
+Received: "source 'C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\zsh\\.zshrc' &&\nunalias amp 2>/dev/null || true\namp() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/amp'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command amp \"$@\"\n  fi\n}\nunalias claude 2>/dev/null || true\nclaude() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/claude'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command claude \"$@\"\n  fi\n}\nunalias codex 2>/dev/null || true\ncodex() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/codex'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command codex \"$@\"\n  fi\n}\nunalias droid 2>/dev/null || true\ndroid() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/droid'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command droid \"$@\"\n  fi\n}\nunalias opencode 2>/dev/null || true\nopencode() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/opencode'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command opencode \"$@\"\n  fi\n}\nunalias gemini 2>/dev/null || true\ngemini() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/gemini'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command gemini \"$@\"\n  fi\n}\nunalias mastracode 2>/dev/null || true\nmastracode() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/mastracode'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command mastracode \"$@\"\n  fi\n}\nunalias copilot 2>/dev/null || true\ncopilot() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/copilot'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command copilot \"$@\"\n  fi\n}\nunalias vibe 2>/dev/null || true\nvibe() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/vibe'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command vibe \"$@\"\n  fi\n}\necho ok"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:258:19)
+(fail) shell-wrappers > uses login zsh command args when wrappers exist [47.57ms]
+266 | 		const args = getCommandShellArgs("/bin/zsh", "echo ok", TEST_PATHS);
+267 | 		expect(args[0]).toBe("-lc");
+268 | 		expect(args[1]).not.toContain(
+269 | 			`source ${quoteShellLiteral(path.join(TEST_ZSH_DIR, ".zshrc"))} &&`,
+270 | 		);
+271 | 		expect(args[1]).toContain(
+                        ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "_superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin\\claude'"
+Received: "unalias amp 2>/dev/null || true\namp() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/amp'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command amp \"$@\"\n  fi\n}\nunalias claude 2>/dev/null || true\nclaude() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/claude'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command claude \"$@\"\n  fi\n}\nunalias codex 2>/dev/null || true\ncodex() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/codex'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command codex \"$@\"\n  fi\n}\nunalias droid 2>/dev/null || true\ndroid() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/droid'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command droid \"$@\"\n  fi\n}\nunalias opencode 2>/dev/null || true\nopencode() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/opencode'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command opencode \"$@\"\n  fi\n}\nunalias gemini 2>/dev/null || true\ngemini() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/gemini'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command gemini \"$@\"\n  fi\n}\nunalias mastracode 2>/dev/null || true\nmastracode() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/mastracode'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command mastracode \"$@\"\n  fi\n}\nunalias copilot 2>/dev/null || true\ncopilot() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/copilot'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command copilot \"$@\"\n  fi\n}\nunalias vibe 2>/dev/null || true\nvibe() {\n  _superset_wrapper='C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin/vibe'\n  if [ -x \"$_superset_wrapper\" ] && [ ! -d \"$_superset_wrapper\" ]; then\n    \"$_superset_wrapper\" \"$@\"\n  else\n    command vibe \"$@\"\n  fi\n}\necho ok"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:271:19)
+(fail) shell-wrappers > falls back to login shell args when zsh wrappers are missing [5.83ms]
+[agent-setup] Updated bash wrapper
+304 | `,
+305 | 		);
+306 | 		chmodSync(path.join(TEST_BIN_DIR, "claude"), 0o755);
+307 | 
+308 | 		const args = getCommandShellArgs("/bin/bash", "claude", TEST_PATHS);
+309 | 		const output = execFileSync("bash", args, {
+                       ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:309:18)
+(fail) shell-wrappers > uses managed wrappers for non-interactive commands even if shell config rewrites PATH [47.51ms]
+[agent-setup] Updated bash wrapper
+339 | 			BASH_DIR: TEST_BASH_DIR,
+340 | 		};
+341 | 		createBashWrapper(fallbackPaths);
+342 | 
+343 | 		const args = getCommandShellArgs("/bin/bash", "claude", fallbackPaths);
+344 | 		const output = execFileSync("bash", args, {
+                       ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:344:18)
+(fail) shell-wrappers > falls back to system binaries for managed commands when wrappers are missing [13.33ms]
+[agent-setup] Updated bash wrapper
+386 | 			BASH_DIR: TEST_BASH_DIR,
+387 | 		};
+388 | 		createBashWrapper(fallbackPaths);
+389 | 
+390 | 		const args = getCommandShellArgs("/bin/bash", "claude", fallbackPaths);
+391 | 		const output = execFileSync("bash", args, {
+                       ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:391:18)
+(fail) shell-wrappers > falls back to system binaries when wrapper exists but is not executable [9.91ms]
+[agent-setup] shell integration mode=native shell=csh
+[agent-setup] shell integration mode=native shell=powershell
+580 | 			BIN_DIR: path.join(integrationRoot, "bin"),
+581 | 			ZSH_DIR: path.join(integrationRoot, "zsh"),
+582 | 			BASH_DIR: path.join(integrationRoot, "bash"),
+583 | 		};
+584 | 
+585 | 		mkdirSync(homeDir, { recursive: true });
+        ^
+error: ENOENT: no such file or directory, mkdir 'C:\Users\yzger\AppData\Local\Temp\superset-shell-wrappers-111124-1787389540188\special $USER "quoted" 'single'\home'
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:585:3)
+(fail) shell-wrappers > bash managed commands treat special characters in wrapper paths literally [9.76ms]
+[agent-setup] Updated bash wrapper
+636 | 				"--rcfile",
+637 | 				path.join(TEST_BASH_DIR, "rcfile"),
+638 | 				"-ic",
+639 | 				'echo "$SUPERSET_WORKSPACE_NAME"',
+640 | 			];
+641 | 			const output = execFileSync("bash", args, {
+                        ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:641:19)
+(fail) shell-wrappers > SUPERSET_* env var protection from user RC overrides > bash wrapper restores SUPERSET_WORKSPACE_NAME after user .bashrc overrides it [24.72ms]
+[agent-setup] Updated bash wrapper
+671 | 				"--rcfile",
+672 | 				path.join(TEST_BASH_DIR, "rcfile"),
+673 | 				"-ic",
+674 | 				'echo "$SUPERSET_WORKSPACE_NAME"',
+675 | 			];
+676 | 			const output = execFileSync("bash", args, {
+                        ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:676:19)
+(fail) shell-wrappers > SUPERSET_* env var protection from user RC overrides > bash wrapper restores SUPERSET_WORKSPACE_NAME after user .bash_profile overrides it [17.62ms]
+[agent-setup] Updated bash wrapper
+707 | 				"--rcfile",
+708 | 				path.join(TEST_BASH_DIR, "rcfile"),
+709 | 				"-ic",
+710 | 				'echo "$SUPERSET_WORKSPACE_NAME|$SUPERSET_WORKSPACE_PATH"',
+711 | 			];
+712 | 			const output = execFileSync("bash", args, {
+                        ^
+error: Executable not found in $PATH: "bash"
+      at execFileSync (node:child_process:271:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:712:19)
+(fail) shell-wrappers > SUPERSET_* env var protection from user RC overrides > bash wrapper restores multiple SUPERSET_* vars after user RC overrides them [15.95ms]
+840 | 		it("uses --init-command to prepend BIN_DIR to PATH for fish", () => {
+841 | 			const args = getShellArgs("/opt/homebrew/bin/fish", TEST_PATHS);
+842 | 
+843 | 			expect(args[0]).toBe("-l");
+844 | 			expect(args[1]).toBe("--init-command");
+845 | 			expect(args[2]).toContain(`set -l _superset_bin "${TEST_BIN_DIR}"`);
+                         ^
+error: expect(received).toContain(expected)
+
+Expected to contain: "set -l _superset_bin \"C:\\Users\\yzger\\AppData\\Local\\Temp\\superset-shell-wrappers-111124-1787389540188\\bin\""
+Received: "set -l _superset_bin \"C:\\\\Users\\\\yzger\\\\AppData\\\\Local\\\\Temp\\\\superset-shell-wrappers-111124-1787389540188\\\\bin\"; contains -- \"$_superset_bin\" $PATH; or set -gx PATH \"$_superset_bin\" $PATH; function _superset_prompt_mark --on-event fish_prompt; printf '\\033]777;superset-shell-ready\\007\\033]133;A\\007'; end"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\main\lib\agent-setup\shell-wrappers.test.ts:845:20)
+(fail) shell-wrappers > fish shell > uses --init-command to prepend BIN_DIR to PATH for fish [5.88ms]
+[agent-setup] Updated zsh wrapper files
+[agent-setup] Updated bash wrapper
+[agent-setup] Updated powershell wrapper
+[agent-setup] Updated powershell wrapper
+[agent-setup] Updated powershell wrapper
+[agent-setup] Updated powershell wrapper
+
+apps\desktop\src\renderer\hotkeys\utils\binding.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\hotkeys\utils\resolveHotkeyFromEvent.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:
+36 | 		restore?.();
+37 | 		restore = null;
+38 | 	});
+39 | 
+40 | 	test("resolves immediately when document.fonts is unavailable", async () => {
+41 | 		const doc = document as Document & { fonts?: FontFaceSet };
+                   ^
+ReferenceError: document is not defined
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:41:15)
+(fail) waitForFontReady > resolves immediately when document.fonts is unavailable [0.43ms]
+16 | 			calls.push(spec);
+17 | 			return load(spec);
+18 | 		},
+19 | 		calls,
+20 | 	};
+21 | 	const doc = document as Document & { fonts?: FontFaceSet };
+                  ^
+ReferenceError: document is not defined
+      at stubFonts (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:21:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:58:32)
+(fail) waitForFontReady > calls FontFaceSet.load with the configured size and family list [0.22ms]
+16 | 			calls.push(spec);
+17 | 			return load(spec);
+18 | 		},
+19 | 		calls,
+20 | 	};
+21 | 	const doc = document as Document & { fonts?: FontFaceSet };
+                  ^
+ReferenceError: document is not defined
+      at stubFonts (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:21:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:75:26)
+(fail) waitForFontReady > waits for the font promise before resolving (covers the open-before-load race) [0.21ms]
+16 | 			calls.push(spec);
+17 | 			return load(spec);
+18 | 		},
+19 | 		calls,
+20 | 	};
+21 | 	const doc = document as Document & { fonts?: FontFaceSet };
+                  ^
+ReferenceError: document is not defined
+      at stubFonts (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:21:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:98:26)
+(fail) waitForFontReady > times out instead of blocking forever when the font never loads [0.18ms]
+16 | 			calls.push(spec);
+17 | 			return load(spec);
+18 | 		},
+19 | 		calls,
+20 | 	};
+21 | 	const doc = document as Document & { fonts?: FontFaceSet };
+                  ^
+ReferenceError: document is not defined
+      at stubFonts (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:21:14)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\font-settle.test.ts:114:26)
+(fail) waitForFontReady > still resolves when the font load promise rejects [0.35ms]
+
+apps\desktop\src\renderer\lib\terminal\terminal-image-paste.test.ts:
+[Terminal] Failed to paste clipboard image: 100 | 	});
+101 | 
+102 | 	it("falls back to Ctrl+V when the save fails", async () => {
+103 | 		const { terminal, paste, input } = makeFakeTerminal();
+104 | 		const save: SaveClipboardImage = mock(async () => {
+105 | 			throw new Error("nope");
+                   ^
+error: nope
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\terminal-image-paste.test.ts:105:14)
+      at pasteImageFileToTerminal (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\terminal-image-paste.ts:81:22)
+      at async <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\terminal-image-paste.test.ts:108:9)
+
+
+apps\desktop\src\renderer\stores\editor-state\editorCoordinator.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > marks terminal seen monotonically and prunes entries [34.69ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > sets and clears manual unread per workspace [0.26ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > migrates v1 persisted state, keeping only manual unread marks [0.13ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > keeps version-2 persisted state intact [0.07ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > keeps version-3 session seen turns intact [0.10ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > maps panes and tabs to typed notification sources [0.10ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > maps a live session pane to a source keyed on the pane id [0.06ms]
+293 |       if (str instanceof Promise) {
+294 |         return str.then(parse);
+295 |       }
+296 |       return parse(str);
+297 |     },
+298 |     setItem: (name, newValue) => storage.setItem(name, JSON.stringify(newValue, options == null ? void 0 : options.replacer)),
+                                       ^
+TypeError: undefined is not an object (evaluating 'storage.setItem')
+      at setItem (C:\Dev\superset\node_modules\.bun\zustand@5.0.12+56f7f0775a141268\node_modules\zustand\esm\middleware.mjs:298:34)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\stores\v2-notifications\store.test.ts:48:26)
+(fail) v2 notification store > tracks and prunes the seen turn for a session pane [0.06ms]
+
+apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:
+166 | 	});
+167 | 
+168 | 	describe("home directory expansion", () => {
+169 | 		test("expands ~ to home directory", () => {
+170 | 			const result = resolvePath("~/Documents/file.ts");
+171 | 			expect(result).toBe(path.join(homedir, "Documents/file.ts"));
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home\Documents\file.ts"
+Received: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home/Documents/file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:171:19)
+(fail) resolvePath > home directory expansion > expands ~ to home directory [0.86ms]
+195 | 	});
+196 | 
+197 | 	describe("relative paths", () => {
+198 | 		test("resolves relative path against cwd", () => {
+199 | 			const result = resolvePath("src/file.ts", "/project");
+200 | 			expect(result).toBe("/project/src/file.ts");
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "/project/src/file.ts"
+Received: "C:\project\src\file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:200:19)
+(fail) resolvePath > relative paths > resolves relative path against cwd [0.22ms]
+200 | 			expect(result).toBe("/project/src/file.ts");
+201 | 		});
+202 | 
+203 | 		test("resolves ./prefixed path against cwd", () => {
+204 | 			const result = resolvePath("./src/file.ts", "/project");
+205 | 			expect(result).toBe("/project/src/file.ts");
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "/project/src/file.ts"
+Received: "C:\project\src\file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:205:19)
+(fail) resolvePath > relative paths > resolves ./prefixed path against cwd [0.09ms]
+205 | 			expect(result).toBe("/project/src/file.ts");
+206 | 		});
+207 | 
+208 | 		test("resolves ../prefixed path against cwd", () => {
+209 | 			const result = resolvePath("../sibling/file.ts", "/project/subdir");
+210 | 			expect(result).toBe("/project/sibling/file.ts");
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "/project/sibling/file.ts"
+Received: "C:\project\sibling\file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:210:19)
+(fail) resolvePath > relative paths > resolves ../prefixed path against cwd [0.09ms]
+216 | 	});
+217 | 
+218 | 	describe("combined expansion", () => {
+219 | 		test("expands ~ then resolves (already absolute after expansion)", () => {
+220 | 			const result = resolvePath("~/file.ts", "/ignored/cwd");
+221 | 			expect(result).toBe(path.join(homedir, "file.ts"));
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home\file.ts"
+Received: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home/file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:221:19)
+(fail) resolvePath > combined expansion > expands ~ then resolves (already absolute after expansion) [0.09ms]
+290 | 			expect(result).toBe("/absolute/path/file.ts");
+291 | 		});
+292 | 
+293 | 		test("handles wrappers combined with ~ expansion", () => {
+294 | 			const result = resolvePath('"~/Documents/file.ts"');
+295 | 			expect(result).toBe(path.join(homedir, "Documents/file.ts"));
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home\Documents\file.ts"
+Received: "C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home/Documents/file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:295:19)
+(fail) resolvePath > wrapper character stripping > handles wrappers combined with ~ expansion [0.10ms]
+295 | 			expect(result).toBe(path.join(homedir, "Documents/file.ts"));
+296 | 		});
+297 | 
+298 | 		test("handles wrappers combined with relative paths", () => {
+299 | 			const result = resolvePath("(src/file.ts)", "/project");
+300 | 			expect(result).toBe("/project/src/file.ts");
+                        ^
+error: expect(received).toBe(expected)
+
+Expected: "/project/src/file.ts"
+Received: "C:\project\src\file.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:300:19)
+(fail) resolvePath > wrapper character stripping > handles wrappers combined with relative paths [0.10ms]
+610 | 	test("file:// URLs do not need a cwd", () => {
+611 | 		expect(() => resolvePath("file:///Users/me/file.ts")).not.toThrow();
+612 | 	});
+613 | 
+614 | 	test("a relative path with a cwd resolves correctly", () => {
+615 | 		expect(resolvePath("src/index.ts", "/workspace")).toBe(
+                                                          ^
+error: expect(received).toBe(expected)
+
+Expected: "/workspace/src/index.ts"
+Received: "C:\workspace\src\index.ts"
+
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\external\helpers.test.ts:615:53)
+(fail) resolvePath guards against process.cwd() fallback > a relative path with a cwd resolves correctly [0.10ms]
+
+apps\desktop\src\lib\trpc\routers\utils\git-hook-tolerance.test.ts:
+[git] Switched branch but post-checkout hook failed (non-fatal): husky - post-checkout script failed
+husky - command not found in PATH=...
+
+apps\desktop\src\main\lib\terminal\daemon\daemon-manager.test.ts:
+[DaemonTerminalManager] Resetting...
+[DaemonTerminalManager] Reset complete
+
+apps\desktop\src\renderer\hotkeys\hooks\useRecordHotkeys\useRecordHotkeys.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:
+[terminal] Font stack "sans-serif" has no monospace primary family; falling back to default terminal font.
+[terminal] Font stack "serif" has no monospace primary family; falling back to default terminal font.
+[terminal] Font stack "cursive" has no monospace primary family; falling back to default terminal font.
+[terminal] Font stack "cursive, monospace" has no monospace primary family; falling back to default terminal font.
+[terminal] Font stack "sans-serif, "JetBrains Mono"" has no monospace primary family; falling back to default terminal font.
+10 |  * Stub `document.createElement("canvas")` so `getContext("2d").measureText`
+11 |  * returns widths from `measureForFont`. Non-canvas tags defer to the
+12 |  * existing test-setup stub.
+13 |  */
+14 | function stubCanvas(measureForFont: (font: string) => MeasureFn) {
+15 | 	const originalCreate = document.createElement;
+                             ^
+ReferenceError: document is not defined
+      at stubCanvas (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:15:25)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:109:13)
+(fail) sanitizeTerminalFontFamily > passes a monospace font through when the stack already ends with monospace [0.27ms]
+10 |  * Stub `document.createElement("canvas")` so `getContext("2d").measureText`
+11 |  * returns widths from `measureForFont`. Non-canvas tags defer to the
+12 |  * existing test-setup stub.
+13 |  */
+14 | function stubCanvas(measureForFont: (font: string) => MeasureFn) {
+15 | 	const originalCreate = document.createElement;
+                             ^
+ReferenceError: document is not defined
+      at stubCanvas (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:15:25)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:118:13)
+(fail) sanitizeTerminalFontFamily > appends a monospace fallback when the stack lacks one [0.09ms]
+10 |  * Stub `document.createElement("canvas")` so `getContext("2d").measureText`
+11 |  * returns widths from `measureForFont`. Non-canvas tags defer to the
+12 |  * existing test-setup stub.
+13 |  */
+14 | function stubCanvas(measureForFont: (font: string) => MeasureFn) {
+15 | 	const originalCreate = document.createElement;
+                             ^
+ReferenceError: document is not defined
+      at stubCanvas (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:15:25)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:126:13)
+(fail) sanitizeTerminalFontFamily > falls back to default for a proportional primary family (quoted) [0.09ms]
+10 |  * Stub `document.createElement("canvas")` so `getContext("2d").measureText`
+11 |  * returns widths from `measureForFont`. Non-canvas tags defer to the
+12 |  * existing test-setup stub.
+13 |  */
+14 | function stubCanvas(measureForFont: (font: string) => MeasureFn) {
+15 | 	const originalCreate = document.createElement;
+                             ^
+ReferenceError: document is not defined
+      at stubCanvas (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:15:25)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:133:13)
+(fail) sanitizeTerminalFontFamily > falls back to default for a proportional primary family (bare) [0.07ms]
+10 |  * Stub `document.createElement("canvas")` so `getContext("2d").measureText`
+11 |  * returns widths from `measureForFont`. Non-canvas tags defer to the
+12 |  * existing test-setup stub.
+13 |  */
+14 | function stubCanvas(measureForFont: (font: string) => MeasureFn) {
+15 | 	const originalCreate = document.createElement;
+                             ^
+ReferenceError: document is not defined
+      at stubCanvas (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:15:25)
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\renderer\lib\terminal\appearance\appearance.test.ts:140:13)
+(fail) sanitizeTerminalFontFamily > trusts the value when canvas measurement throws [0.06ms]
+
+apps\desktop\src\renderer\stores\tabs\actions\move-pane.test.ts:
+[mergeTabIntoTab] Source tab has orphaned panes — aborting merge
+
+apps\desktop\src\lib\trpc\routers\changes\utils\merge-pull-request.test.ts:
+[git/mergePR] Explicit PR resolution failed; falling back to branch merge. {
+  worktreePath: "/tmp/broken-worktree",
+  error: "fatal: permission denied",
+}
+
+apps\desktop\src\lib\trpc\routers\workspaces\utils\ai-name.test.ts:
+[workspace-ai-name] title generation failed 134 | 		});
+135 | 	});
+136 | 
+137 | 	it("falls back when generation throws", async () => {
+138 | 		getSmallModelMock.mockResolvedValueOnce({ id: "test-model" });
+139 | 		generateTitleFromMessageMock.mockRejectedValueOnce(new Error("boom"));
+                                                               ^
+error: boom
+      at <anonymous> (C:\Dev\superset\apps\desktop\src\lib\trpc\routers\workspaces\utils\ai-name.test.ts:139:58)
+
+
+apps\desktop\src\lib\trpc\routers\workspaces\utils\git.test.ts:
+[git] Worktree created at C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-hook-failure-wt but post-checkout hook failed (non-fatal): Command failed: C:\Program Files\Git\clangarm64\bin\git.EXE -C C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-hook-failure worktree add --no-track -b feature/hook-failure C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-hook-failure-wt HEAD
+Preparing worktree (new branch 'feature/hook-failure')
+post-checkout failed
+
+Preparing worktree (new branch 'feature/hook-failure')
+post-checkout failed
+
+HEAD is now at b49326d 'init'
+
+Created worktree at C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-hook-failure-wt with branch feature/hook-failure from HEAD
+Failed to create worktree: Command failed: C:\Program Files\Git\clangarm64\bin\git.EXE -C C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-existing-path worktree add --no-track -b feature/existing-path C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-existing-path-wt HEAD
+Preparing worktree (new branch 'feature/existing-path')
+fatal: 'C:/Users/yzger/AppData/Local/Temp/superset-test-git-111124/worktree-existing-path-wt' already exists
+
+Created worktree at C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-notrack-wt with branch feature/no-track-test from origin/main
+Created worktree at C:\Users\yzger\AppData\Local\Temp\superset-test-git-111124\worktree-slash-branch-wt with branch feature/new-workspace from feat/workstreams-view
+
+apps\desktop\src\lib\trpc\routers\workspaces\utils\setup.test.ts:
+Failed to read setup config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.json: JSON Parse error: Expected '}'
+Failed to read setup config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.json: 'setup' field must be an array of strings
+Failed to read setup config at C:\Users\yzger\AppData\Local\Temp\superset-agent-wrappers-111124-1787371602937\home\.superset\projects\test-project-id\config.json: JSON Parse error: Expected '}'
+Failed to read local config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.local.json: JSON Parse error: Expected '}'
+Failed to read local config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.local.json: 'setup.before' must be an array of strings
+Failed to read local config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.local.json: 'setup.before' must be an array of strings
+Failed to read setup config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.json: 'run' field must be an array of strings
+Failed to read setup config at C:\Users\yzger\AppData\Local\Temp\superset-test-setup-111124\main-repo\.superset\config.json: 'cwd' field must be a non-empty string
+
+apps\desktop\src\lib\trpc\routers\workspaces\utils\teardown.test.ts:
+[teardown] No teardown commands found for "test-workspace" (config: not found, mainRepoPath: C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\main-repo)
+[teardown] No teardown commands found for "test-workspace" (config: found, no teardown field, mainRepoPath: C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\main-repo)
+[teardown] No teardown commands found for "test-workspace" (config: found, no teardown field, mainRepoPath: C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\main-repo)
+[teardown] Running for "test-workspace": echo "executed" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\main-repo-config-executed.txt"
+[agent-setup] shell integration mode=native shell=C:\Program Files\Git\bin\bash.exe
+[teardown] Running for "test-workspace": echo "executed" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\worktree-config-executed.txt"
+[teardown] Running for "test-workspace": echo "worktree" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\from-worktree.txt"
+[teardown] Running for "test-workspace": exit 1
+Teardown failed for workspace test-workspace: Teardown exited with code 1: 
+[teardown] Running for "test-workspace": echo "created" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\teardown-test.txt" && test -f "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\teardown-test.txt"
+[teardown] Running for "my-workspace": echo "$SUPERSET_WORKSPACE_NAME|$SUPERSET_ROOT_PATH" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\env-test.txt"
+[teardown] Running for "test-workspace": echo "user" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\from-user.txt"
+[teardown] Running for "test-workspace": echo "main" > "C:\Users\yzger\AppData\Local\Temp\superset-test-teardown-111124\worktree\from-main.txt"
+
+apps\desktop\src\renderer\routes\_authenticated\_dashboard\v2-workspace\$workspaceId\hooks\usePaneRegistry\components\ClaudeSessionPane\SessionComposer.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\routes\_authenticated\_dashboard\v2-workspace\$workspaceId\hooks\usePaneRegistry\components\ClaudeSessionPane\sessionStore.draft.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+apps\desktop\src\renderer\routes\_authenticated\_dashboard\v2-workspace\$workspaceId\hooks\usePaneRegistry\components\ClaudeSessionPane\SessionTimelineView.test.ts:
+
+# Unhandled error between tests
+-------------------------------
+138 |   } };
+139 | }
+140 | const L = () => {
+141 |   const e = globalThis.electronTRPC;
+142 |   if (!e)
+143 |     throw new Error(
+                    ^
+error: Could not find `electronTRPC` global. Check that `exposeElectronTRPC` has been called in your preload file.
+      at L (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:143:15)
+      at K (C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:133:10)
+      at C:\Dev\superset\node_modules\.bun\trpc-electron@0.1.2+9d7b50dbdad448ff\node_modules\trpc-electron\dist\renderer.mjs:184:15
+      at map (unknown:1:11)
+      at TRPCUntypedClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:27:17)
+      at createTRPCClient (C:\Dev\superset\node_modules\.bun\@trpc+client@11.16.0+3de329830e79ce0e\node_modules\@trpc\client\dist\index.mjs:175:45)
+-------------------------------
+
+
+ 2432 pass
+ 6 skip
+ 55 fail
+ 10 errors
+ 2 snapshots, 55121 expect() calls
+Ran 2493 tests across 245 files. [18018.65s]

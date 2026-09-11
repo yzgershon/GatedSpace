@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>GatedSpace — floating tabs</title>
+<style>
+  /* Real GatedSpace tokens, read out of renderer/globals.css. No invented colour. */
+  :root{
+    --bg:#151110; --fg:#eae8e6; --card:#1c1918; --card2:#201e1c;
+    --bd:#2a2827; --mut:#a8a5a3; --hl:#e07850; --sidebar:#1a1716;
+    --well:#0d0a09; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
+    --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;padding:34px 38px 120px;background:#070505;color:var(--fg);
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:14px;line-height:1.6}
+  h1{font-size:24px;font-weight:600;margin:0 0 8px;letter-spacing:-.015em}
+  h2{font-size:16px;font-weight:600;margin:54px 0 10px;padding-top:22px;border-top:1px solid #241f1e}
+  h3{font-size:12px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;
+     color:rgba(168,165,163,.5);margin:26px 0 10px}
+  p{color:var(--mut);max-width:86ch;margin:8px 0 18px}
+  code{font-family:var(--mono);font-size:12px;background:#1a1716;padding:1px 5px;border-radius:4px;color:#d6d3d1}
+  .cap{font-size:12.5px;color:rgba(168,165,163,.68);margin:12px 0 0;max-width:86ch}
+  .note{border-left:2px solid var(--hl);padding:10px 0 10px 15px;margin:20px 0;color:var(--mut);max-width:86ch}
+  .note strong{color:var(--fg);font-weight:600}
+  .note.bad{border-left-color:var(--err)}
+  .rec{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:#0d0a09;background:var(--hl);border-radius:4px;padding:2px 7px;vertical-align:2px;margin-left:8px}
+  table{border-collapse:collapse;margin:16px 0;font-size:13px;max-width:100%}
+  th,td{text-align:left;padding:8px 16px 8px 0;border-bottom:1px solid #241f1e;vertical-align:top}
+  th{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:rgba(168,165,163,.5);font-weight:600}
+  td{color:var(--mut)} td:first-child{color:var(--fg)}
+  ul,ol{color:var(--mut);max-width:86ch} li{margin:6px 0}
+
+  /* ======================= app shell ======================= */
+  .app{width:1400px;max-width:100%;background:var(--well);border-radius:12px;overflow:hidden;
+    box-shadow:0 40px 90px rgba(0,0,0,.7);display:flex;flex-direction:column;font-size:13px}
+  .bar{height:46px;flex-shrink:0;display:flex;align-items:center;gap:10px;padding:0 12px 0 16px;position:relative}
+  .brand{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .brand b{font-size:13.5px;font-weight:600;letter-spacing:-.012em}
+  .vtag{font-family:var(--mono);font-size:10px;color:rgba(168,165,163,.6);
+    border:1px solid rgba(42,40,39,.9);border-radius:5px;padding:1px 5px;line-height:14px}
+  .ico{width:26px;height:26px;border-radius:7px;display:flex;align-items:center;justify-content:center;
+    color:rgba(168,165,163,.55);font-size:13px;flex-shrink:0;cursor:default}
+  .ico:hover{background:rgba(255,255,255,.05);color:var(--fg)}
+  .barmid{position:absolute;left:0;right:0;display:flex;justify-content:center;pointer-events:none}
+  .seg{display:flex;align-items:center;gap:2px;padding:3px;border-radius:10px;
+    background:rgba(8,6,5,.75);border:1px solid rgba(42,40,39,.7);pointer-events:auto}
+  .sg{display:inline-flex;align-items:center;gap:7px;height:26px;padding:0 11px;border-radius:7px;
+    font-size:12.5px;color:var(--mut);white-space:nowrap}
+  .pic{width:14px;height:14px;border-radius:4px;flex-shrink:0}
+  .barright{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;z-index:2}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 10px;border-radius:7px;
+    font-size:12px;color:var(--mut);background:rgba(255,255,255,.035);white-space:nowrap}
+  .wc{display:flex;gap:2px;margin-left:6px;color:rgba(168,165,163,.5);font-size:11px}
+  .wc span{width:28px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:5px}
+
+  /* ======================= THE FLOATING TAB RAIL ======================= */
+  /* Anchored right, grows LEFTWARD into the empty middle. Hovering a tab can
+     never shove the open-in button sideways. */
+  .railwrap{flex:1;min-width:0;display:flex;justify-content:flex-end;align-items:center;
+    padding-right:10px;z-index:3}
+  .rail{display:flex;align-items:center;gap:4px;padding:3px;border-radius:11px;
+    background:rgba(8,6,5,.72);border:1px solid rgba(42,40,39,.65);
+    box-shadow:0 6px 20px -10px rgba(0,0,0,.9)}
+  .tab{display:flex;align-items:center;height:28px;padding:0 6px;border-radius:8px;
+    color:var(--mut);white-space:nowrap;cursor:default;position:relative;
+    transition:background .16s ease,color .16s ease}
+  .tab:hover{background:rgba(42,40,39,.75);color:var(--fg)}
+  .tab.on{background:var(--card2);color:var(--fg);box-shadow:inset 0 0 0 1px rgba(224,120,80,.34)}
+  .tmark{width:17px;height:17px;border-radius:5px;flex-shrink:0;display:flex;align-items:center;
+    justify-content:center;font-size:9.5px;font-weight:700;color:#0d0a09}
+  /* the label collapses to nothing and grows back — max-width animates, so the
+     tab keeps its natural width instead of a hardcoded one */
+  .tlab{display:inline-flex;align-items:center;gap:7px;max-width:0;opacity:0;overflow:hidden;
+    transition:max-width .24s cubic-bezier(.22,1,.36,1),opacity .16s ease,margin-left .24s cubic-bezier(.22,1,.36,1);
+    margin-left:0;font-size:12.5px}
+  .tab.on .tlab,.tab:hover .tlab{max-width:190px;opacity:1;margin-left:7px}
+  .tcount{font-size:10.5px;color:rgba(168,165,163,.5);font-variant-numeric:tabular-nums}
+  .tclose{width:15px;height:15px;border-radius:4px;display:flex;align-items:center;justify-content:center;
+    font-size:11px;color:rgba(168,165,163,.55)}
+  .tclose:hover{background:rgba(255,255,255,.09);color:var(--fg)}
+  /* status: a ring around the mark, so a collapsed tab still reports */
+  .tab.st-run .tmark{box-shadow:0 0 0 2px var(--warn);animation:pulse 1.6s infinite}
+  .tab.st-ok  .tmark{box-shadow:0 0 0 2px var(--ok)}
+  .tab.st-err .tmark{box-shadow:0 0 0 2px var(--err)}
+  @keyframes pulse{50%{opacity:.45}}
+  .tadd{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+    color:rgba(168,165,163,.5);font-size:14px}
+  .tadd:hover{background:rgba(42,40,39,.75);color:var(--fg)}
+  .railsep{width:1px;height:16px;background:rgba(42,40,39,.9);margin:0 2px}
+
+  /* variant swatches */
+  .vgrid{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+  .vcard{background:var(--card);border:1px solid var(--bd);border-radius:11px;padding:16px 18px;min-width:290px;flex:1}
+  .vcard h4{margin:0 0 4px;font-size:13px;font-weight:600;color:var(--fg)}
+  .vcard p{font-size:12.5px;margin:6px 0 14px;color:rgba(168,165,163,.75)}
+  .vstage{background:var(--well);border-radius:9px;padding:12px;display:flex;justify-content:center}
+  .vB .tmark{box-shadow:none;animation:none}
+  .vB .sdot{width:6px;height:6px;border-radius:99px;flex-shrink:0;margin-left:5px}
+  .vC .tmark{display:none}
+  .vC .bigdot{width:9px;height:9px;border-radius:99px;flex-shrink:0}
+  .vC .tab{padding:0 9px}
+
+  /* body */
+  .body{flex:1;min-height:0;display:flex;gap:18px;padding:0 18px 18px}
+  .side{width:228px;flex-shrink:0;background:var(--sidebar);border-radius:12px;overflow:hidden;
+    box-shadow:0 8px 26px -12px rgba(0,0,0,.7);padding:10px 8px}
+  .nrow{display:flex;align-items:center;gap:9px;height:30px;padding:0 10px;border-radius:8px;
+    font-size:13px;color:var(--mut)}
+  .nrow.on{background:#252220;color:var(--fg)}
+  .grid{flex:1;min-width:0;display:flex;gap:18px}
+  .pane{flex:1;background:var(--card);border-radius:8px;overflow:hidden;display:flex;flex-direction:column;
+    box-shadow:0 8px 26px -12px rgba(0,0,0,.75)}
+  .ph{height:28px;display:flex;align-items:center;gap:8px;padding:0 11px;background:#252220;font-size:12px}
+  .pbody{flex:1;padding:14px;font-family:var(--mono);font-size:11.5px;color:rgba(168,165,163,.55);line-height:1.9}
+  .pacts{margin-left:auto;display:flex;gap:5px;color:rgba(168,165,163,.45);font-size:12px}
+  .fold{font-size:11px;color:rgba(168,165,163,.4)}
+  .ctx{font-size:11px;color:rgba(168,165,163,.4);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+
+<h1>Floating tabs, and taking tabs out of the workspace</h1>
+<p>
+  Two changes that only make sense together. The <strong>look</strong>: one expanded tab, the rest
+  collapsed to a mark, opening on hover. The <strong>architecture</strong>: a tab stops being a child
+  of whichever workspace the sidebar has selected and becomes a thing with its own identity that
+  carries its workspace with it.
+</p>
+<p>
+  Everything below is at 1:1 and uses the app's real tokens. <strong>Nothing here is built.</strong>
+  Hover the collapsed tabs — the expansion is live, not a picture of one.
+</p>
+
+<h2>The bar, with the rail in it</h2>
+<div class="app">
+  <div class="bar">
+    <div class="brand">
+      <div style="width:17px;height:17px;border-radius:5px;background:var(--hl)"></div>
+      <b>GatedSpace</b><span class="vtag">v1.17.57</span>
+    </div>
+    <div class="ico">&#9707;</div>
+    <div class="ico">&#9906;</div>
+
+    <div class="barmid">
+      <div class="seg">
+        <div class="sg"><span class="pic" style="background:var(--hl)"></span>Claude</div>
+        <div class="sg"><span class="pic" style="background:#6b7280"></span>Codex</div>
+        <div class="sg"><span class="pic" style="background:#4285f4"></span>Gemini</div>
+        <div class="sg"><span class="pic" style="background:#8b5cf6"></span>Copilot</div>
+      </div>
+    </div>
+
+    <div class="railwrap">
+      <div class="rail">
+        <div class="tab on st-run">
+          <span class="tmark" style="background:var(--hl)">C</span>
+          <span class="tlab">SecondBrain audit<span class="tcount">3</span><span class="tclose">&#10005;</span></span>
+        </div>
+        <div class="tab st-ok">
+          <span class="tmark" style="background:#6b7280">Cx</span>
+          <span class="tlab">Terminal &mdash; build<span class="tcount">1</span><span class="tclose">&#10005;</span></span>
+        </div>
+        <div class="tab st-err">
+          <span class="tmark" style="background:#4285f4">G</span>
+          <span class="tlab">Gemini review<span class="tcount">2</span><span class="tclose">&#10005;</span></span>
+        </div>
+        <div class="tab">
+          <span class="tmark" style="background:#3f3b39">&#9635;</span>
+          <span class="tlab">yddetailers site<span class="tcount">1</span><span class="tclose">&#10005;</span></span>
+        </div>
+        <div class="railsep"></div>
+        <div class="tadd">+</div>
+      </div>
+    </div>
+
+    <div class="barright">
+      <span class="btn">2 shells running</span>
+      <span class="btn">Open in &#9662;</span>
+      <div class="ico">&#9707;</div>
+      <div class="wc"><span>&#8211;</span><span>&#9633;</span><span>&#10005;</span></div>
+    </div>
+  </div>
+
+  <div class="body">
+    <div class="side">
+      <div class="nrow on">&#9635; Workspaces</div>
+      <div class="nrow">&#9200; History</div>
+      <div class="nrow">&#9201; Usage</div>
+    </div>
+    <div class="grid">
+      <div class="pane">
+        <div class="ph">
+          <span style="width:6px;height:6px;border-radius:99px;background:var(--warn)"></span>
+          <span style="color:var(--hl)">&#10033;</span> Claude
+          <span class="fold">&hellip;&#92;Dev&#92;SecondBrain</span>
+          <span class="ctx">128k / 1.0M</span>
+          <span class="pacts">&#8943; &#10530; + &#9707; &#10005;</span>
+        </div>
+        <div class="pbody">&gt; auditing the restyle batch&hellip;<br>&nbsp;&nbsp;12 items checked</div>
+      </div>
+      <div class="pane">
+        <div class="ph">
+          <span style="color:#6b7280">&#9635;</span> pwsh
+          <span class="fold">&hellip;&#92;Dev&#92;superset</span>
+          <span class="pacts">&#8943; &#10530; + &#9707; &#10005;</span>
+        </div>
+        <div class="pbody">PS C:&#92;Dev&#92;superset&gt; bun run build<br>&nbsp;&nbsp;building&hellip;</div>
+      </div>
+    </div>
+  </div>
+</div>
+<p class="cap">
+  The rail sits in the gap you named: right of the agent presets, left of the shells chip and
+  Open in. It is anchored to the RIGHT and grows leftward, so expanding a tab moves nothing on the
+  right-hand side. The collapsed marks still report status through the ring &mdash; amber pulsing is
+  working, green is done and unseen, red is an error.
+</p>
+
+<div class="note"><strong>Why the ring and not a separate dot.</strong> A collapsed tab is about
+17px wide. A mark plus a dot inside that is two objects fighting for the same few pixels, and the
+dot is the one that loses. Wrapping the mark in the colour makes the status the size of the whole
+tab, which is what you actually want to catch from across the room. Variant B keeps them separate
+if you would rather.</div>
+
+<h2>The three collapsed shapes</h2>
+<div class="vgrid">
+  <div class="vcard">
+    <h4>A &middot; Mark in a status ring <span class="rec">recommended</span></h4>
+    <p>Agent colour identifies it, the ring reports it. Reads at a glance and survives eight tabs.</p>
+    <div class="vstage"><div class="rail">
+      <div class="tab on st-run"><span class="tmark" style="background:var(--hl)">C</span><span class="tlab">SecondBrain<span class="tcount">3</span></span></div>
+      <div class="tab st-ok"><span class="tmark" style="background:#6b7280">Cx</span><span class="tlab">build<span class="tcount">1</span></span></div>
+      <div class="tab st-err"><span class="tmark" style="background:#4285f4">G</span><span class="tlab">review<span class="tcount">2</span></span></div>
+    </div></div>
+  </div>
+  <div class="vcard vB">
+    <h4>B &middot; Mark plus a dot</h4>
+    <p>Closer to the sidebar rows and the old strip. Honest, slightly wider, and the dot is small.</p>
+    <div class="vstage"><div class="rail">
+      <div class="tab on"><span class="tmark" style="background:var(--hl)">C</span><span class="sdot" style="background:var(--warn)"></span><span class="tlab">SecondBrain<span class="tcount">3</span></span></div>
+      <div class="tab"><span class="tmark" style="background:#6b7280">Cx</span><span class="sdot" style="background:var(--ok)"></span><span class="tlab">build<span class="tcount">1</span></span></div>
+      <div class="tab"><span class="tmark" style="background:#4285f4">G</span><span class="sdot" style="background:var(--err)"></span><span class="tlab">review<span class="tcount">2</span></span></div>
+    </div></div>
+  </div>
+  <div class="vcard vC">
+    <h4>C &middot; Bare dot</h4>
+    <p>The quietest. But every collapsed tab looks the same until you hover, which is the one job
+      collapsed tabs have.</p>
+    <div class="vstage"><div class="rail">
+      <div class="tab on"><span class="bigdot" style="background:var(--warn)"></span><span class="tlab">SecondBrain<span class="tcount">3</span></span></div>
+      <div class="tab"><span class="bigdot" style="background:var(--ok)"></span><span class="tlab">build<span class="tcount">1</span></span></div>
+      <div class="tab"><span class="bigdot" style="background:var(--err)"></span><span class="tlab">review<span class="tcount">2</span></span></div>
+    </div></div>
+  </div>
+</div>
+
+<h2>Behaviour, and the things that must not break</h2>
+<ul>
+  <li><strong>Hover opens on a delay, closes on a longer one.</strong> Roughly 120ms in, 260ms out.
+    Without it the rail flickers every time the pointer crosses it on the way to Open in.</li>
+  <li><strong>The rail is a drop target.</strong> Dragging a pane onto empty rail space gives it its
+    own group. That is the ONLY one-gesture way to do it, and it is the thing that nearly died with
+    the tab strip &mdash; the group pill exists today largely to keep it alive.</li>
+  <li><strong>Drag to reorder stays.</strong> Tabs reorder within the rail as they do in the strip.</li>
+  <li><strong>Double-click the active tab renames the group.</strong> It has no other home once the
+    pill is gone.</li>
+  <li><strong>Expansion animates <code>max-width</code>, not <code>width</code>.</strong> A hardcoded
+    expanded width truncates the one name you hovered in order to read.</li>
+</ul>
+
+<div class="note bad"><strong>The failure mode to design against.</strong> Collapsed tabs are only
+worth it if you can still tell WHICH is which without hovering all of them. Four tabs all running
+Claude collapse to four identical orange marks. So the mark is the AGENT, the ring is the STATUS,
+and the tab keeps its pane count on expand. Where several tabs share an agent, the sidebar is the
+fallback &mdash; it already lists them as text rows with their names.</div>
+
+<h2>Taking tabs out of the workspace</h2>
+<p>
+  This is the part that is real work rather than styling. Today a tab cannot exist outside a
+  workspace, and the code is explicit about why.
+</p>
+
+<h3>How it works now</h3>
+<ul>
+  <li><code>WorkspaceState { version, tabs[], activeTabId }</code> is persisted into
+    <code>v2WorkspaceLocalState.paneLayout</code>, <strong>keyed by workspaceId</strong>.</li>
+  <li><code>useV2WorkspacePaneLayout</code> builds a <strong>new store per workspaceId</strong>
+    (<code>useMemo([workspaceId])</code>). Its comment says why: during fast workspace switches live
+    queries briefly return stale rows, and one shared store let panes from one worktree render and
+    persist under another.</li>
+  <li>So switching workspace swaps the entire tab set. The strip is a view of the sidebar's
+    selection, not a view of your work.</li>
+</ul>
+
+<h3>What it becomes</h3>
+<ul>
+  <li><strong>One tab list for the app.</strong> Each tab records the <code>workspaceId</code> its
+    panes belong to.</li>
+  <li><strong>Clicking a tab switches the workspace to that tab's workspace</strong>, rather than
+    switching workspace replacing the tabs. The rail shows all your work; the sidebar becomes how you
+    START something rather than what you are limited to.</li>
+  <li>Persistence moves from one blob per workspace to one record per tab, so two workspaces can no
+    longer write over each other's layout.</li>
+</ul>
+
+<div class="note"><strong>What "separate from workspace" cannot mean, and this is a real limit.</strong>
+A tab still has to name ONE workspace, because its panes do. host-service refuses a terminal whose
+workspace does not match the one that owns it (<code>getTerminalWorkspaceMismatchError</code>), and a
+session pane's cwd comes from the workspace's worktree path. A tab holding panes from three
+workspaces would be three different answers to "what does this terminal belong to". So: tabs stop
+being FILTERED by the selected workspace, and each tab still carries its own.</div>
+
+<div class="note bad"><strong>The isolation guarantee has to survive the move.</strong> The
+per-workspace store exists to stop cross-worktree bleed. A single global store gives that up unless
+panes validate their tab's workspace before mounting and persistence writes per tab. That check is
+not optional &mdash; it is the whole reason the current design looks the way it does, and skipping it
+reintroduces a bug that was already paid for once.</div>
+
+<h2>What gets deleted</h2>
+<table>
+  <tr><th>Goes</th><th>Where its job lands</th></tr>
+  <tr><td>The group pill (top left)</td><td>The rail. Same drop target, same double-click rename, same menu.</td></tr>
+  <tr><td><code>workspace-topbar-groups-slot</code></td><td>Replaced by the rail's own slot, further right.</td></tr>
+  <tr><td><code>TabBar</code> / <code>TabItem</code></td><td>The rail replaces both skins' strips. The hover card's pane rows come with it &mdash; <code>getTabIcon</code> was written for those rows and has been unreachable since the strip was dropped.</td></tr>
+  <tr><td><code>tabStrip</code> token</td><td>Gone. One tab UI, not two.</td></tr>
+  <tr><td>Per-workspace <code>paneLayout</code> blob</td><td>One record per tab, migrated on first run.</td></tr>
+</table>
+
+<h2>Order I would build it</h2>
+<ol>
+  <li><strong>The rail, still per-workspace.</strong> Pure UI: new component, new top-bar slot, pill
+    deleted. Nothing about persistence moves. This is the half you can look at and judge, and it is
+    reversible.</li>
+  <li><strong>The migration.</strong> Flatten every <code>paneLayout</code> into one list stamped with
+    its workspaceId, behind a version bump, with the old blob left in place until it is confirmed.</li>
+  <li><strong>Cross-workspace switching.</strong> Clicking a tab navigates. This is the one that can
+    break session ownership, so it goes last and on its own.</li>
+</ol>
+
+<p class="cap" style="margin-top:26px">
+  Nothing is coded. Tell me which collapsed shape (A, B or C), and whether to build step 1 on its own
+  first. I would, because steps 2 and 3 are hard to judge from a picture and easy to judge from a
+  running app.
+</p>
+
+</body>
+</html>

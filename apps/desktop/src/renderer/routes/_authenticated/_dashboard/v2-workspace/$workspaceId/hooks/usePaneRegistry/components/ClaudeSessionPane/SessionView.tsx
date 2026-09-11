@@ -11,12 +11,15 @@ import { cn } from "@superset/ui/utils";
 import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
+import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type {
 	SessionTimeline,
 	SessionUsage,
 } from "shared/claude-session/timeline";
+import { ResumeWithAccount } from "./ResumeWithAccount";
 import {
 	type EffortLevel,
 	type FileMention,
@@ -24,6 +27,7 @@ import {
 	SessionComposer,
 	type SessionMode,
 } from "./SessionComposer";
+import { SessionHintBar } from "./SessionHintBar";
 import { SessionTimelineView } from "./SessionTimelineView";
 import { SessionUsageStrip } from "./SessionUsageStrip";
 import type { UsageLimits } from "./usage-limits";
@@ -39,12 +43,19 @@ interface SessionViewProps {
 	onSearchFiles?: (query: string) => Promise<FileMention[]>;
 	/** Run a local slash command in the live session, for the palette's panels. */
 	onRunCommand?: (command: string) => Promise<string | null>;
+	/** `/swap`: move this conversation onto another Claude account. */
+	onSwapAccount?: (account: ClaudeAccount) => void;
+	/** Which account this pane is pinned to, if it has been swapped. */
+	pinnedAccountId?: string | null;
+	/** The config dir this pane's process was actually spawned with. */
+	accountConfigDir?: string | null;
 	/** Pane id, so an unsent prompt survives the pane unmounting. */
 	draftKey?: string;
 	/** Subscription windows for the active account, for the warning banner. */
 	limits?: UsageLimits | null;
 	/** Panes sharing this tab. Above one, the header sheds its wider items. */
 	paneCount?: number;
+	isActive?: boolean;
 	onRestart?: () => void;
 	/**
 	 * The stored transcript is still loading. Distinguishes a resumed session
@@ -117,6 +128,7 @@ function SessionHeader({
 	paneCount?: number;
 }) {
 	const compact = (paneCount ?? 1) > 1;
+	const { metaStrip } = useSkinTokens();
 	const header = timeline.header;
 	const running = timeline.status === "streaming";
 	// Renderer is a browser context — no node:path. Basename by hand (win + posix).
@@ -128,6 +140,15 @@ function SessionHeader({
 		: undefined;
 	const connectedMcp =
 		header?.mcpServers.filter((s) => s.status === "connected").length ?? 0;
+
+	/*
+	 * No strip at all. Everything it carried that was worth keeping has a better
+	 * home: the folder is in the title row beside the pane's name, and the
+	 * context fraction sits with the engine label in the composer, where you are
+	 * already looking when you decide whether to send another turn.
+	 */
+	if (metaStrip === "none") return null;
+
 	return (
 		<div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden border-b border-border px-4 text-xs">
 			{running ? (
@@ -261,9 +282,13 @@ export function SessionView({
 	onEffortChange,
 	onSearchFiles,
 	onRunCommand,
+	onSwapAccount,
+	pinnedAccountId,
+	accountConfigDir,
 	draftKey,
 	limits,
 	paneCount,
+	isActive,
 	onRestart,
 	restoring = false,
 }: SessionViewProps) {
@@ -325,21 +350,36 @@ export function SessionView({
 					// is never shown over partial content.
 					<SessionTranscriptSkeleton />
 				) : (
-					<SessionTimelineView timeline={timeline} />
+					<SessionTimelineView timeline={timeline} onInterrupt={onInterrupt} />
 				)}
 				{timeline.status === "error" && onRestart ? (
 					// A dead session isn't a dead pane: the conversation is still on disk,
 					// so offer the way back rather than making the user close the tab.
 					// It sits at the END of the conversation, where the session stopped,
 					// instead of in chrome that would compete with the composer.
-					<div className="flex items-center gap-2 px-4 pb-2">
+					//
+					// TWO WAYS BACK, because stopping has two reasons. Usually the
+					// session died and you want it again; often — the whole reason
+					// `/swap` exists — you stopped it BECAUSE the account ran low, and
+					// what you want is the same conversation on a different one. That
+					// second case used to mean closing the tab and finding the session
+					// again in the recent list, so it is offered here rather than left
+					// as a slash command you have to know about.
+					<div className="flex flex-wrap items-center gap-2 px-4 pb-2">
 						<button
 							type="button"
 							onClick={onRestart}
-							className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors duration-100 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 						>
 							Restart session
 						</button>
+						{onSwapAccount ? (
+							<ResumeWithAccount
+								pinnedAccountId={pinnedAccountId}
+								runningConfigDir={accountConfigDir}
+								onPick={onSwapAccount}
+							/>
+						) : null}
 						<span className="text-xs text-muted-foreground/70">
 							Picks the conversation back up where it stopped.
 						</span>
@@ -377,8 +417,11 @@ export function SessionView({
 				onEffortChange={onEffortChange}
 				onSearchFiles={onSearchFiles}
 				onRunCommand={onRunCommand}
+				onSwapAccount={onSwapAccount}
+				pinnedAccountId={pinnedAccountId}
 				draftKey={draftKey}
 			/>
+			<SessionHintBar isActive={isActive === true} />
 		</div>
 	);
 }

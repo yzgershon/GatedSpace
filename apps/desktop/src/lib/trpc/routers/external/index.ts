@@ -207,6 +207,28 @@ export const createExternalRouter = () => {
 			}
 		}),
 
+		/**
+		 * Hand a local file to whatever the OS opens it with.
+		 *
+		 * Used for `.html`, which is worth previewing rather than reading: the
+		 * default handler for it is the default browser, so this respects the
+		 * user's choice instead of hardcoding a path to one. `shell.openPath`
+		 * rather than `openExternal` with a `file://` URL — the URL form has to
+		 * survive percent-encoding of spaces and drive letters, and openPath
+		 * takes the path as-is.
+		 */
+		openLocalFile: publicProcedure
+			.input(z.string())
+			.mutation(async ({ input }) => {
+				assertLocalAbsolutePath(input, "openLocalFile");
+				const error = await shell.openPath(input);
+				// openPath resolves with a MESSAGE on failure, not a rejection, so
+				// an unhandled one would look like success.
+				if (error) {
+					throw new TRPCError({ code: "BAD_REQUEST", message: error });
+				}
+			}),
+
 		openInFinder: publicProcedure
 			.input(z.string())
 			.mutation(async ({ input }) => {

@@ -1,0 +1,1 @@
+export { AppBrandMark } from "./AppBrandMark";

@@ -54,12 +54,24 @@ export interface TerminalRuntime {
 	progressAddon: ProgressAddon | null;
 	wrapper: HTMLDivElement;
 	container: HTMLDivElement | null;
+	onResize: (() => void) | undefined;
 	gate: ParserIdleGate;
 	resizeObserver: ResizeObserver | null;
 	_disposeResizeObserver: (() => void) | null;
+	_disposeGeometryReconcile: (() => void) | null;
+	/**
+	 * Whether a fit has ever succeeded against a visible container.
+	 *
+	 * Until it has, `lastCols`/`lastRows` are the geometry this terminal was
+	 * BORN with, not a measurement — and persisting those is what turns one
+	 * mismatched pane into a permanent one (see `persistDimensions`).
+	 */
+	hasFitted: boolean;
 	lastCols: number;
 	lastRows: number;
 	_disposeAddons: (() => void) | null;
+	/** Clears the glyph atlas and redraws. See LoadAddonsResult.forceRepaint. */
+	_forceRepaint: (() => void) | null;
 	_disposeImagePasteFallback: (() => void) | null;
 	_disposeCopyOnSelect: (() => void) | null;
 }
@@ -122,7 +134,43 @@ function clearPersistedBuffer(terminalId: string) {
 	} catch {}
 }
 
+/**
+ * A terminal is never 0 columns wide, so refuse to record that it was.
+ *
+ * This is the ratchet that made the blank terminal permanent. xterm measures
+ * its character cell once, in `open()`, and measuring before the element has
+ * layout yields 0x0 — the original bug. The 0x0 geometry was then WRITTEN HERE
+ * on unmount, read back by `loadSavedDimensions` on the next mount (which only
+ * checked `typeof === "number"`, and 0 is a number), and used to build a 0x0
+ * terminal, which painted nothing and persisted 0x0 again.
+ *
+ * So every later fix to the measurement looked like it had done nothing: the
+ * pane was no longer measuring wrong, it was replaying a wrong measurement
+ * saved weeks earlier. It lives in localStorage, i.e. per userData, which is
+ * why a fresh dev instance shows a working terminal on the same build where
+ * the installed app shows a black one.
+ */
+function isUsableDimension(value: unknown): value is number {
+	return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+/**
+ * Save the geometry only if it was ever MEASURED.
+ *
+ * `lastCols`/`lastRows` start as the birth geometry and are only replaced by a
+ * successful fit. Writing them back regardless is a ratchet: a terminal whose
+ * fit was swallowed carries its predecessor's size into storage, is reborn at
+ * that size on the next mount, and writes it out again — so one mismatched pane
+ * becomes a permanently mismatched terminal id that survives restarts. Leaving
+ * the stored value untouched keeps the last real measurement instead.
+ */
+function persistFittedDimensions(runtime: TerminalRuntime) {
+	if (!runtime.hasFitted) return;
+	persistDimensions(runtime.terminalId, runtime.lastCols, runtime.lastRows);
+}
+
 function persistDimensions(terminalId: string, cols: number, rows: number) {
+	if (!isUsableDimension(cols) || !isUsableDimension(rows)) return;
 	try {
 		localStorage.setItem(
 			`${DIMS_KEY_PREFIX}${terminalId}`,
@@ -138,9 +186,16 @@ function loadSavedDimensions(
 		const raw = localStorage.getItem(`${DIMS_KEY_PREFIX}${terminalId}`);
 		if (!raw) return null;
 		const parsed = JSON.parse(raw);
-		if (typeof parsed.cols === "number" && typeof parsed.rows === "number") {
-			return parsed;
+		if (isUsableDimension(parsed.cols) && isUsableDimension(parsed.rows)) {
+			return { cols: parsed.cols, rows: parsed.rows };
 		}
+		/*
+		 * A stored 0x0 (or NaN, or negative) is poison, not data. Dropping it
+		 * falls through to DEFAULT_COLS/DEFAULT_ROWS and the pane paints again,
+		 * so an app already carrying a bad value repairs itself on next launch
+		 * with nothing for the user to clear.
+		 */
+		clearPersistedDimensions(terminalId);
 		return null;
 	} catch {
 		return null;
@@ -153,14 +208,144 @@ function clearPersistedDimensions(terminalId: string) {
 	} catch {}
 }
 
+/**
+ * The geometry a terminal id will be born with on the next mount.
+ *
+ * Exported so the PTY can be spawned at the same numbers. `createRuntime` has
+ * always preferred the saved dims over the defaults, but the launchers passed
+ * the bare `DEFAULT_COLS`/`DEFAULT_ROWS` constants — so for exactly the case
+ * that matters, a terminal id rehydrated from a persisted pane layout, the two
+ * ends were born DIFFERENT and the shell's first output was laid out at a size
+ * the renderer never had. That reflow is what pushed Codex's update prompt off
+ * the top of a freshly opened pane.
+ */
+export function getInitialDimensions(terminalId: string): {
+	cols: number;
+	rows: number;
+} {
+	return (
+		loadSavedDimensions(terminalId) ?? {
+			cols: DEFAULT_COLS,
+			rows: DEFAULT_ROWS,
+		}
+	);
+}
+
 function hostIsVisible(container: HTMLDivElement | null): boolean {
 	if (!container) return false;
 	return container.clientWidth > 0 && container.clientHeight > 0;
 }
 
+/**
+ * One-shot diagnostics for the blank terminal.
+ *
+ * Every documented fix for this is already in the shipped build, dev runs the
+ * same code and paints correctly, and every hypothesis checkable from outside
+ * the app has been eliminated: it is not per-terminal state (a brand new pane
+ * is blank too), not the shell (dev runs the same powershell.exe), not the
+ * host-service start race (blank after waiting for it), and not a poisoned
+ * saved geometry (the stored value was read and is valid).
+ *
+ * What is left is a runtime difference between packaged and dev that cannot be
+ * seen from the outside, so the next build has to come back with numbers
+ * instead of another theory. These are the four that decide it:
+ *
+ *  - `cell` 0x0  → the measurement is still wrong, and `remeasureCharSize` is
+ *    not reaching xterm's private CharSizeService in the packaged bundle.
+ *  - `cell` sane but `container` 0x0 → layout, not measurement.
+ *  - both sane but `cols/rows` tiny or unchanged → `fit()` is the problem.
+ *  - everything sane and still blank → it is the renderer/WebGL surface.
+ *
+ * Capped per terminal so a resize storm cannot flood the log.
+ */
+const diagCounts = new Map<string, number>();
+const DIAG_LIMIT = 4;
+
+function logTerminalDiagnostics(
+	tag: string,
+	terminalId: string,
+	terminal: XTerm,
+	container: HTMLElement | null,
+): void {
+	const seen = diagCounts.get(terminalId) ?? 0;
+	if (seen >= DIAG_LIMIT) return;
+	diagCounts.set(terminalId, seen + 1);
+
+	try {
+		const charSize = (
+			terminal as unknown as {
+				_core?: {
+					_charSizeService?: {
+						width?: number;
+						height?: number;
+						hasValidSize?: boolean;
+					};
+				};
+			}
+		)._core?._charSizeService;
+		const rect = container
+			? { w: container.clientWidth, h: container.clientHeight }
+			: null;
+		console.log(
+			`[terminal-diag] ${tag} id=${terminalId.slice(0, 8)}` +
+				` cell=${charSize?.width ?? "?"}x${charSize?.height ?? "?"}` +
+				` valid=${charSize?.hasValidSize ?? "?"}` +
+				` grid=${terminal.cols}x${terminal.rows}` +
+				` container=${rect ? `${rect.w}x${rect.h}` : "none"}` +
+				` dpr=${typeof devicePixelRatio === "number" ? devicePixelRatio : "?"}`,
+		);
+	} catch (error) {
+		console.log(`[terminal-diag] ${tag} failed to read internals:`, error);
+	}
+}
+
+/**
+ * Reaches into xterm's CharSizeService, which is not on the public API. Same
+ * justification as the mode tracker's use of private internals: @xterm/xterm
+ * and @xterm/headless share this engine and the shape is stable.
+ */
+type CharSizeInternals = {
+	_core?: { _charSizeService?: { measure(): void } };
+};
+
+/**
+ * Force xterm to re-measure its cell size.
+ *
+ * xterm measures the cell EXACTLY ONCE, inside `open()`, by laying out a probe
+ * glyph — and then never again unless a font *option* changes. Two things
+ * routinely make that single measurement wrong:
+ *
+ *  1. `open()` ran before the element had layout, so the probe measured 0x0.
+ *  2. `open()` ran before the configured font finished loading, so the probe
+ *     measured a fallback face (see font-settle.ts, whose header notes the
+ *     result "only repairs on the next resize" — this is that repair).
+ *
+ * **`fit()` is not a re-measure.** `FitAddon.proposeDimensions()` reads the
+ * cached dimensions and returns undefined when the cell is 0x0, so a terminal
+ * that measured badly can never fit its way out: no `resize()` means the
+ * renderer's `handleResize` never runs, and `handleResize` is the only thing
+ * that rebuilds the drawing surface. A full refresh paints into the degenerate
+ * surface and shows nothing, which is why a blank pane stayed blank while the
+ * session behind it was healthy, and why dragging a split — a real container
+ * resize — made the content appear correctly.
+ *
+ * Cheap (one probe layout) and idempotent, and every caller is already
+ * debounced or one-shot, so this is not on a hot path.
+ */
+function remeasureCharSize(terminal: XTerm): void {
+	try {
+		(
+			terminal as unknown as CharSizeInternals
+		)._core?._charSizeService?.measure();
+	} catch {
+		// Private surface — a future xterm may rename it. Falling back to the
+		// stale measurement is exactly the old behaviour, never worse.
+	}
+}
+
 function measureAndResize(
 	runtime: TerminalRuntime,
-	onResize?: () => void,
+	onResize = runtime.onResize,
 ): void {
 	if (!hostIsVisible(runtime.container)) return;
 	const { terminal } = runtime;
@@ -174,9 +359,21 @@ function measureAndResize(
 		const prevCols = terminal.cols;
 		const prevRows = terminal.rows;
 
+		// Re-measure BEFORE fitting. The container has real layout by the time
+		// this runs, so this is the point where a measurement taken too early
+		// (detached element, or an unloaded font) gets corrected — and fit()
+		// silently does nothing while the cached cell size is still 0x0.
+		remeasureCharSize(terminal);
 		runtime.fitAddon.fit();
+		runtime.hasFitted = true;
 		runtime.lastCols = terminal.cols;
 		runtime.lastRows = terminal.rows;
+		logTerminalDiagnostics(
+			"after-fit",
+			runtime.terminalId,
+			terminal,
+			runtime.container,
+		);
 
 		if (wasPinnedToBottom) {
 			terminal.scrollToBottom();
@@ -190,9 +387,71 @@ function measureAndResize(
 		terminal.refresh(0, Math.max(0, terminal.rows - 1));
 
 		if (terminal.cols !== prevCols || terminal.rows !== prevRows) {
+			// Refresh cached glyphs after the surface resize has settled. This is
+			// separate from the CSS-zoom clipping fix in webgl-viewport.ts: even
+			// perfectly measured cells can draw into an incorrectly sized viewport.
+			requestAnimationFrame(() => {
+				if (!hostIsVisible(runtime.container)) return;
+				(
+					runtime._forceRepaint ??
+					(() => terminal.refresh(0, Math.max(0, terminal.rows - 1)))
+				)();
+			});
 			onResize?.();
 		}
 	});
+}
+
+/**
+ * When to re-check that the grid still matches the box, after an attach.
+ *
+ * The idle gate's deadline is 250ms, so the middle check lands after a fit that
+ * had to wait one out, and the last one covers a font settle (2s cap) landing
+ * late. Three checks, each one `proposeDimensions()` — a computed style read
+ * and two divisions — so this is nothing next to being wrong.
+ */
+const GEOMETRY_RECONCILE_MS = [50, 400, 1400] as const;
+
+/**
+ * Prove the grid matches the container, rather than assuming the fit ran.
+ *
+ * A `fit()` that never happened is invisible: the terminal paints, the pty is
+ * told the same wrong numbers by the `attached` handler, and both ends agree on
+ * a grid too wide and too tall for the box — so every line loses its right-hand
+ * end and rows fall off the bottom, with nothing left to trigger a correction.
+ * The ResizeObserver only fires on a CHANGE, and the container was already its
+ * final size. That is why dragging a split repaired it and nothing else did.
+ *
+ * `proposeDimensions()` is the same arithmetic `fit()` uses, so a disagreement
+ * with the live grid is exactly the condition that needs another fit — whatever
+ * swallowed the first one.
+ *
+ * The last check reports the geometry to the pty UNCONDITIONALLY. Everything
+ * else here is change-triggered, and "the two ends drifted apart" is precisely
+ * the case a change-triggered path cannot see.
+ */
+function scheduleGeometryReconcile(
+	runtime: TerminalRuntime,
+	onResize?: () => void,
+): () => void {
+	const timers = GEOMETRY_RECONCILE_MS.map((delay, index) =>
+		setTimeout(() => {
+			if (!hostIsVisible(runtime.container)) return;
+			const proposed = runtime.fitAddon.proposeDimensions();
+			if (
+				proposed &&
+				(proposed.cols !== runtime.terminal.cols ||
+					proposed.rows !== runtime.terminal.rows)
+			) {
+				measureAndResize(runtime, onResize);
+				return;
+			}
+			if (index === GEOMETRY_RECONCILE_MS.length - 1) onResize?.();
+		}, delay),
+	);
+	return () => {
+		for (const timer of timers) clearTimeout(timer);
+	};
 }
 
 function createResizeScheduler(
@@ -238,9 +497,7 @@ export function createRuntime(
 	appearance: TerminalAppearance,
 	options: { initialBuffer?: string } = {},
 ): TerminalRuntime {
-	const savedDims = loadSavedDimensions(terminalId);
-	const cols = savedDims?.cols ?? DEFAULT_COLS;
-	const rows = savedDims?.rows ?? DEFAULT_ROWS;
+	const { cols, rows } = getInitialDimensions(terminalId);
 
 	const { terminal, fitAddon, serializeAddon } = createTerminal(
 		cols,
@@ -279,7 +536,8 @@ export function createRuntime(
 
 	// Activate Unicode 11 widths (inside loadAddons) before restoring the buffer,
 	// else CJK/emoji/ZWJ widths get baked wrong into the replay. (#3572)
-	const addonsResult = loadAddons(terminal);
+	const addonsResult = loadAddons(terminal, () => measureAndResize(runtime));
+	logTerminalDiagnostics("after-open", terminalId, terminal, wrapper);
 	if (options.initialBuffer !== undefined) {
 		terminal.write(options.initialBuffer);
 	} else {
@@ -310,7 +568,7 @@ export function createRuntime(
 		isEnabled: isCopyOnSelectEnabled,
 	});
 
-	return {
+	const runtime: TerminalRuntime = {
 		terminalId,
 		terminal,
 		fitAddon,
@@ -319,15 +577,20 @@ export function createRuntime(
 		progressAddon: addonsResult.progressAddon,
 		wrapper,
 		container: null,
+		onResize: undefined,
 		gate,
 		resizeObserver: null,
 		_disposeResizeObserver: null,
+		_disposeGeometryReconcile: null,
+		hasFitted: false,
 		lastCols: cols,
 		lastRows: rows,
 		_disposeAddons: addonsResult.dispose,
+		_forceRepaint: addonsResult.forceRepaint,
 		_disposeImagePasteFallback: disposeImagePasteFallback,
 		_disposeCopyOnSelect: disposeCopyOnSelect,
 	};
+	return runtime;
 }
 
 export function attachToContainer(
@@ -336,6 +599,7 @@ export function attachToContainer(
 	onResize?: () => void,
 	options: { focus?: boolean } = {},
 ) {
+	runtime.onResize = onResize;
 	// If we're already attached to this exact container, do nothing. Prevents
 	// redundant refresh/fit from transient remounts during provider key
 	// churn — VSCode setVisible() is idempotent for the same host element.
@@ -364,6 +628,12 @@ export function attachToContainer(
 	runtime.resizeObserver = observer;
 	runtime._disposeResizeObserver = scheduler.dispose;
 
+	runtime._disposeGeometryReconcile?.();
+	runtime._disposeGeometryReconcile = scheduleGeometryReconcile(
+		runtime,
+		onResize,
+	);
+
 	if (options.focus !== false) {
 		runtime.terminal.focus();
 	}
@@ -371,7 +641,9 @@ export function attachToContainer(
 
 export function detachFromContainer(runtime: TerminalRuntime) {
 	persistBuffer(runtime.terminalId, runtime.serializeAddon);
-	persistDimensions(runtime.terminalId, runtime.lastCols, runtime.lastRows);
+	persistFittedDimensions(runtime);
+	runtime._disposeGeometryReconcile?.();
+	runtime._disposeGeometryReconcile = null;
 	runtime._disposeResizeObserver?.();
 	runtime._disposeResizeObserver = null;
 	runtime.resizeObserver?.disconnect();
@@ -381,6 +653,7 @@ export function detachFromContainer(runtime: TerminalRuntime) {
 	// see getTerminalParkingContainer.
 	getTerminalParkingContainer().appendChild(runtime.wrapper);
 	runtime.container = null;
+	runtime.onResize = undefined;
 }
 
 export function updateRuntimeAppearance(
@@ -417,8 +690,10 @@ export function disposeRuntime(
 	const clearPersistedState = options.clearPersistedState ?? true;
 	if (!clearPersistedState) {
 		persistBuffer(runtime.terminalId, runtime.serializeAddon);
-		persistDimensions(runtime.terminalId, runtime.lastCols, runtime.lastRows);
+		persistFittedDimensions(runtime);
 	}
+	runtime._disposeGeometryReconcile?.();
+	runtime._disposeGeometryReconcile = null;
 	runtime._disposeImagePasteFallback?.();
 	runtime._disposeImagePasteFallback = null;
 	runtime._disposeCopyOnSelect?.();
@@ -431,6 +706,7 @@ export function disposeRuntime(
 	runtime.resizeObserver = null;
 	cancelParserIdleWork(runtime.gate);
 	runtime.container = null;
+	runtime.onResize = undefined;
 	runtime.wrapper.remove();
 	runtime.terminal.dispose();
 	if (clearPersistedState) {

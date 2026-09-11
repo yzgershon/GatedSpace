@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RenameBranchDialog } from "renderer/components/WorkspaceSidebar/WorkspaceListItem/components";
 import { useDiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { useV2WorkspaceNotificationStatus } from "renderer/hooks/host-service/useV2NotificationStatus";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useOptimisticCollectionActions } from "renderer/routes/_authenticated/hooks/useOptimisticCollectionActions";
 import { useDeletingWorkspaces } from "renderer/routes/_authenticated/providers/DeletingWorkspacesProvider";
 import { useDashboardSidebarHover } from "../../providers/DashboardSidebarHoverProvider";
 import type { DashboardSidebarWorkspace } from "../../types";
 import { DashboardSidebarDeleteDialog } from "../DashboardSidebarDeleteDialog";
+import { DashboardSidebarWorkspaceSessions } from "../DashboardSidebarWorkspaceSessions";
 import { DashboardSidebarCollapsedWorkspaceButton } from "./components/DashboardSidebarCollapsedWorkspaceButton";
 import { DashboardSidebarExpandedWorkspaceRow } from "./components/DashboardSidebarExpandedWorkspaceRow";
 import { DashboardSidebarWorkspaceContextMenu } from "./components/DashboardSidebarWorkspaceContextMenu/DashboardSidebarWorkspaceContextMenu";
@@ -72,6 +74,7 @@ export function DashboardSidebarWorkspaceItem({
 	});
 
 	const { v2Workspaces: v2WorkspaceActions } = useOptimisticCollectionActions();
+	const { sidebarSessions } = useSkinTokens();
 	const [renameBranchTarget, setRenameBranchTarget] = useState<string | null>(
 		null,
 	);
@@ -238,6 +241,17 @@ export function DashboardSidebarWorkspaceItem({
 					/>
 				)}
 			</DashboardSidebarExpandedWorkspaceRow>
+			{/*
+			 * The workspace's live sessions, nested under its row.
+			 *
+			 * Only for the ACTIVE workspace: a pane registers itself when it mounts,
+			 * so this is empty everywhere else by construction rather than by a
+			 * check. Gating on `isActive` as well makes that intent explicit and
+			 * saves the store read on every other row in the tree.
+			 */}
+			{sidebarSessions && isActive && !isPending ? (
+				<DashboardSidebarWorkspaceSessions workspaceId={id} />
+			) : null}
 		</div>
 	);
 

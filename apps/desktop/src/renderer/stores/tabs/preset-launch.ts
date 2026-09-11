@@ -2,7 +2,20 @@ import type { ExecutionMode } from "@superset/local-db/schema/zod";
 import { buildTerminalCommand } from "renderer/lib/terminal/launch-command";
 import { quote } from "shell-quote";
 
-export type PresetOpenTarget = "new-tab" | "active-tab";
+/**
+ * Where a preset lands.
+ *
+ * `active-pane` is a STRONGER request than `active-tab`, and the difference is
+ * the point. `active-tab` is a preference that the preset's own
+ * `executionMode` is allowed to overrule — a preset configured "each in its own
+ * new tab" still gets one. `active-pane` is the user pointing at a specific
+ * pane and asking for the thing to appear THERE, which no mode may override.
+ *
+ * The launcher pane needs the second one. It is opened by the pane header's
+ * `+`, which has already split the layout to make room; sending its choice to a
+ * new tab undoes the split that was the whole reason for the gesture.
+ */
+export type PresetOpenTarget = "new-tab" | "active-tab" | "active-pane";
 export type PresetMode = ExecutionMode;
 
 export type PresetLaunchPlan =
@@ -27,15 +40,20 @@ export function getPresetLaunchPlan({
 	hasActiveTerminal?: boolean;
 }): PresetLaunchPlan {
 	const hasMultipleCommands = commandCount > 1;
+	const wantsActiveTab = target === "active-tab" || target === "active-pane";
 	const shouldUseActiveTab =
-		target === "active-tab" &&
-		(mode === "split-pane" || mode === "sequential") &&
-		hasActiveTab;
+		wantsActiveTab &&
+		hasActiveTab &&
+		// An explicit `active-pane` wins over the preset's own mode; a plain
+		// `active-tab` only applies to the modes that were already pane-shaped.
+		(target === "active-pane" ||
+			mode === "split-pane" ||
+			mode === "sequential");
 
 	if (mode === "sequential") {
 		// Sequential grouped presets should never create split panes. Prefer the
 		// focused terminal, then fall back to one new terminal tab.
-		if (target === "active-tab" && hasActiveTerminal) {
+		if (wantsActiveTab && hasActiveTerminal) {
 			return "active-terminal";
 		}
 		return "new-tab-single";

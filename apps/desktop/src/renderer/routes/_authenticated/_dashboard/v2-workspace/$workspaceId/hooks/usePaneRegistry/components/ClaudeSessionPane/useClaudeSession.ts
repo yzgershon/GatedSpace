@@ -11,6 +11,7 @@
  * terminals persist; closing the pane for good is what calls dispose.
  */
 import { useCallback, useEffect, useSyncExternalStore } from "react";
+import { registerSessionWorkspace } from "renderer/stores/session-activity";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { EffortLevel, SessionMode } from "./SessionComposer";
 import { isRestoringTranscript } from "./session-restore";
@@ -28,6 +29,8 @@ import {
 interface UseClaudeSessionOptions {
 	/** Stable key for this session (the pane id). */
 	paneKey: string;
+	/** Which workspace owns this pane, so status dots can be attributed. */
+	workspaceId: string;
 	/** Working directory — the workspace / worktree path. */
 	cwd: string;
 	model?: string;
@@ -45,6 +48,7 @@ interface UseClaudeSessionOptions {
 
 export function useClaudeSession({
 	paneKey,
+	workspaceId,
 	cwd,
 	model,
 	configDir,
@@ -58,6 +62,13 @@ export function useClaudeSession({
 		useCallback((listener) => subscribeSession(paneKey, listener), [paneKey]),
 		useCallback(() => getSessionSnapshot(paneKey), [paneKey]),
 	);
+
+	// Registered on mount rather than at spawn: the workspace is known now, and
+	// waiting for the CLI to say hello would leave a starting session's dot
+	// unattributable to any workspace.
+	useEffect(() => {
+		registerSessionWorkspace(paneKey, workspaceId);
+	}, [paneKey, workspaceId]);
 
 	// Idempotent: the first mount subscribes and spawns, later mounts re-attach
 	// to the session that's already running.
@@ -104,6 +115,8 @@ export function useClaudeSession({
 		timeline: snapshot.timeline,
 		mode: snapshot.mode,
 		effort: snapshot.effort,
+		/** The config dir this pane's process was actually spawned with. */
+		accountConfigDir: snapshot.accountConfigDir,
 		/** The stored conversation is still being read off disk. */
 		restoring: isRestoringTranscript({
 			restore: snapshot.restore,
