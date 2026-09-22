@@ -13,10 +13,11 @@
 import type { Pane, WorkspaceStore } from "@superset/panes";
 import { toast } from "@superset/ui/sonner";
 import { useEffect, useRef } from "react";
+import { attachCodexDraftImage } from "renderer/lib/codex-session/draft";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { useSendPageToSessionIntent } from "renderer/stores/send-page-to-session-intent";
 import type { StoreApi } from "zustand/vanilla";
-import type { PaneViewerData } from "../../types";
+import type { PaneViewerData, SessionPaneData } from "../../types";
 import { attachSessionDraftImage } from "../usePaneRegistry/components/ClaudeSessionPane";
 import { prepareImageFromBase64 } from "../usePaneRegistry/components/ClaudeSessionPane/composer-images";
 import {
@@ -79,7 +80,13 @@ export function useSendPageToSessionConsumer({
 			.mutate({ paneId: browserPaneId })
 			.then(({ base64 }) =>
 				prepareImageFromBase64(base64, "page.png").then((image) => {
-					attachSessionDraftImage(target.paneId, image);
+					const pane = store.getState().getPane(target.paneId)?.pane;
+					if ((pane?.data as SessionPaneData)?.provider === "codex")
+						attachCodexDraftImage(target.paneId, {
+							name: image.name,
+							url: `data:${image.mediaType};base64,${image.data}`,
+						});
+					else attachSessionDraftImage(target.paneId, image);
 					toast.success("Page attached to the session");
 				}),
 			)

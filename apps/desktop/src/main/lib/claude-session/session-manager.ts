@@ -234,7 +234,10 @@ class ClaudeSessionManager extends EventEmitter {
 			);
 		}
 
-		const transport = new ClaudeSessionTransport(options);
+		const transport = new ClaudeSessionTransport({
+			...options,
+			sessionKey: key,
+		});
 		// A replaced transport can still flush output on its way out. Every
 		// handler checks it's the CURRENT one for this key, so a dying process
 		// can't emit into — or worse, deregister — its successor.
@@ -317,6 +320,9 @@ class ClaudeSessionManager extends EventEmitter {
 				`Couldn't start Claude: ${err.message}${this.stderrContext(key)}`,
 				true,
 			);
+			transport.dispose();
+			this.sessions.delete(key);
+			this.releaseLockFor(key);
 		});
 		this.sessions.set(key, transport);
 		if (!this.buffers.has(key)) this.buffers.set(key, []);
@@ -474,6 +480,12 @@ class ClaudeSessionManager extends EventEmitter {
 
 	interrupt(key: string): void {
 		this.sessions.get(key)?.interrupt();
+	}
+
+	answerPermission(key: string, id: string, allow: boolean): void {
+		const session = this.sessions.get(key);
+		if (!session) throw new Error("This session is no longer running.");
+		session.answerPermission(id, allow);
 	}
 
 	/** Terminate and forget the session for `key`, transcript included. */

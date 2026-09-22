@@ -6,7 +6,7 @@ import {
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "@superset/ui/collapsible";
-import { claudeIcon } from "@superset/ui/icons/preset-icons";
+import { claudeIcon, codexIcon } from "@superset/ui/icons/preset-icons";
 import { Input } from "@superset/ui/input";
 import { Label } from "@superset/ui/label";
 import { toast } from "@superset/ui/sonner";
@@ -422,11 +422,7 @@ export function ModelsSettings({ visibleItems }: ModelsSettingsProps) {
 						<SettingsSection
 							title="OpenAI"
 							icon={
-								<img
-									alt=""
-									className="size-4 dark:invert"
-									src="https://models.dev/logos/openai.svg"
-								/>
+								<img alt="" className="size-4 dark:invert" src={codexIcon} />
 							}
 							description="Sign in with ChatGPT or use an API key."
 							action={

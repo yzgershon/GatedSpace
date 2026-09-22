@@ -10,6 +10,7 @@ import { createChangesRouter } from "./changes";
 import { createChatServiceRouter } from "./chat-service";
 import { createClaudeSessionRouter } from "./claude-session";
 import { createClaudeSessionsRouter } from "./claude-sessions";
+import { createCodexSessionRouter } from "./codex-session";
 import { createConfigRouter } from "./config";
 import { createDeviceRouter } from "./device";
 import { createDiagnosticsRouter } from "./diagnostics";
@@ -39,6 +40,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		chatService: createChatServiceRouter(),
 		claudeSessions: createClaudeSessionsRouter(),
 		claudeSession: createClaudeSessionRouter(),
+		codexSession: createCodexSessionRouter(),
 		analytics: createAnalyticsRouter(),
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),

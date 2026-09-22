@@ -16,6 +16,7 @@
  */
 import type {
 	AssistantContentBlock,
+	ClaudePermissionRequest,
 	ClaudeStreamEvent,
 	StreamEvent,
 	TextBlock,
@@ -202,6 +203,7 @@ export interface DraftBlock {
 }
 
 export interface SessionTimeline {
+	permissions?: ClaudePermissionRequest[];
 	header?: SessionHeader;
 	items: TimelineItem[];
 	rateLimit?: RateLimitInfo;
@@ -582,6 +584,8 @@ export function applyEvent(
 	event: ClaudeStreamEvent,
 ): SessionTimeline {
 	switch (event.type) {
+		case "local_permissions":
+			return { ...state, permissions: event.requests };
 		// GatedSpace's own echo of the prompt we wrote to stdin (the CLI doesn't
 		// send one back), recorded in main so it survives a pane remount.
 		case "local_user_message":
@@ -598,7 +602,9 @@ export function applyEvent(
 				...state,
 				// A fatal notice is the end of the story: settle the status and drop
 				// any half-streamed drafts, or the UI spins on a turn that died.
-				...(event.fatal ? { status: "error" as const, drafts: [] } : {}),
+				...(event.fatal
+					? { status: "error" as const, drafts: [], permissions: [] }
+					: {}),
 				items: [
 					...state.items,
 					{

@@ -125,7 +125,7 @@ export function UpdatesPill({ isCollapsed = false }: UpdatesPillProps) {
 				? `${event?.error ?? "Update failed"} — click to retry`
 				: isUpdated
 					? `Updated${version ? ` to v${version}` : ""}`
-					: `Install update${version ? ` v${version}` : ""} — sessions keep running`;
+					: `Install update${version ? ` v${version}` : ""} and restart GatedSpace`;
 
 	if (isCollapsed) {
 		return (

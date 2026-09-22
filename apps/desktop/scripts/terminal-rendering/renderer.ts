@@ -14,6 +14,10 @@ import {
 let runtime: TerminalRuntime;
 let host: HTMLDivElement;
 let reportedSize: number[];
+const testRenderer =
+	new URLSearchParams(location.search).get("renderer") === "dom"
+		? "dom"
+		: "webgl";
 const reportSize = () => {
 	reportedSize = [runtime.terminal.cols, runtime.terminal.rows];
 };
@@ -87,6 +91,86 @@ function snapshot() {
 
 Object.assign(window, {
 	terminalSmoke: {
+		async selectionScene(scrollback = false) {
+			host.style.margin = "64px 0 0 135px";
+			await write("\x1b[?1049l\x1b[?1000l\x1b[?1006l\x1b[2J\x1b[3J\x1b[H");
+			await write(
+				Array.from(
+					{ length: scrollback ? 120 : runtime.terminal.rows - 1 },
+					(_, i) =>
+						`Row${String(i).padStart(3, "0")} alpha bravo charlie delta`,
+				).join("\r\n"),
+			);
+			if (scrollback) runtime.terminal.scrollToLine(15);
+			else runtime.terminal.scrollToTop();
+			runtime.terminal.clearSelection();
+			await wait(100);
+		},
+		selectionPoint(col: number, row: number) {
+			const t = runtime.terminal;
+			const rect = t.element
+				?.querySelector(".xterm-screen")
+				?.getBoundingClientRect();
+			if (!rect) throw Error("Missing terminal screen");
+			return {
+				x: Math.round(rect.left + (col * rect.width) / t.cols),
+				y: Math.round(rect.top + ((row + 0.5) * rect.height) / t.rows),
+			};
+		},
+		selectionResult() {
+			const t = runtime.terminal;
+			return {
+				text: t.getSelection(),
+				position: t.getSelectionPosition(),
+				viewport: t.buffer.active.viewportY,
+			};
+		},
+		async endSelection() {
+			host.style.margin = "0";
+			runtime.terminal.clearSelection();
+			runtime.terminal.reset();
+			await write("\x1b[2J\x1b[3J\x1b[H");
+			runtime.terminal.scrollToBottom();
+			await paintCorners();
+		},
+		async caretStability() {
+			await write("\x1b[?1049l\x1b[?25h\x1b[2J\x1b[H");
+			runtime.terminal.focus();
+			const started = performance.now();
+			await write(
+				Array.from(
+					{ length: 2000 },
+					(_, i) =>
+						`Line ${i}: terminal text, glyphs and viewport remain aligned\r\n`,
+				).join(""),
+			);
+			const throughputMs = performance.now() - started;
+			await write(
+				"\x1b[2J\x1b[HPS C:\\Dev> codex\r\n\r\nOpenAI Codex  /  GPT-6 Astra\r\n\r\n  Clear text at 85% scale\r\n\r\n> Ask Codex anything",
+			);
+			runtime.terminal.scrollToBottom();
+			await wait(80);
+			const position = () => {
+				const rect = runtime.terminal.element
+					?.querySelector(".xterm-cursor")
+					?.getBoundingClientRect();
+				return rect ? [rect.x, rect.y] : null;
+			};
+			const before = position();
+			await write("\x1b[?2026h\x1b[1;1HWorking");
+			await wait(50);
+			const during = position();
+			await write("\x1b[7;20H\x1b[?2026l");
+			await wait(80);
+			return {
+				throughputMs,
+				movedDuringSynchronizedOutput:
+					JSON.stringify(before) !== JSON.stringify(during),
+				cursorCount:
+					runtime.terminal.element?.querySelectorAll(".xterm-cursor").length,
+				smoothScrollDuration: runtime.terminal.options.smoothScrollDuration,
+			};
+		},
 		async sharedAtlas() {
 			const surface = document.createElement("div");
 			surface.style.cssText = "display:flex;zoom:.85";
@@ -100,6 +184,7 @@ Object.assign(window, {
 					const peer = createRuntime(
 						`atlas-${crypto.randomUUID()}`,
 						appearance,
+						{ renderer: "webgl" },
 					);
 					peers.push(peer);
 					attachToContainer(peer, container);
@@ -228,7 +313,9 @@ Object.assign(window, {
 			host.style.cssText = "width:900px;height:580px;overflow:hidden";
 			surface.appendChild(host);
 			document.body.appendChild(surface);
-			runtime = createRuntime(`smoke-${crypto.randomUUID()}`, appearance);
+			runtime = createRuntime(`smoke-${crypto.randomUUID()}`, appearance, {
+				renderer: testRenderer,
+			});
 			attachToContainer(runtime, host, reportSize);
 			await write("PS C:\\Dev> idle shell prompt");
 			await wait(2300); // Includes font settling and every attach refit.

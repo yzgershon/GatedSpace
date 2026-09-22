@@ -4,6 +4,7 @@ import { useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";
 import { useRelayUrl } from "renderer/hooks/useRelayUrl";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
+import { useHostProjects } from "renderer/react-query/projects/useHostProjects";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import {
@@ -128,6 +129,7 @@ function useStableDashboardSidebarProjects(
 
 export function useDashboardSidebarData() {
 	const collections = useCollections();
+	const hostProjects = useHostProjects();
 	const { machineId, activeHostUrl } = useLocalHostService();
 	const relayUrl = useRelayUrl();
 	const { toggleProjectCollapsed } = useDashboardSidebarState();
@@ -150,43 +152,63 @@ export function useDashboardSidebarData() {
 		[hosts],
 	);
 
-	const { data: rawSidebarProjects = [] } = useLiveQuery(
-		(q) =>
-			q
-				.from({ sidebarProjects: collections.v2SidebarProjects })
-				.innerJoin(
-					{ projects: collections.v2Projects },
-					({ sidebarProjects, projects }) =>
-						eq(sidebarProjects.projectId, projects.id),
-				)
-				.leftJoin(
-					{ repos: collections.githubRepositories },
-					({ projects, repos }) => eq(projects.githubRepositoryId, repos.id),
-				)
-				.orderBy(({ sidebarProjects }) => sidebarProjects.tabOrder, "asc")
-				.select(({ sidebarProjects, projects, repos }) => ({
-					id: projects.id,
-					name: projects.name,
-					slug: projects.slug,
-					githubRepositoryId: projects.githubRepositoryId,
-					githubOwner: repos?.owner ?? null,
-					githubRepoName: repos?.name ?? null,
-					iconUrl: projects.iconUrl,
-					createdAt: projects.createdAt,
-					updatedAt: projects.updatedAt,
-					isCollapsed: sidebarProjects.isCollapsed,
-				})),
-		[collections],
-	);
+	const { data: rawSidebarProjects = [], isReady: projectsReady } =
+		useLiveQuery(
+			(q) =>
+				q
+					.from({ sidebarProjects: collections.v2SidebarProjects })
+					.leftJoin(
+						{ projects: collections.v2Projects },
+						({ sidebarProjects, projects }) =>
+							eq(sidebarProjects.projectId, projects.id),
+					)
+					.leftJoin(
+						{ repos: collections.githubRepositories },
+						({ projects, repos }) => eq(projects?.githubRepositoryId, repos.id),
+					)
+					.orderBy(({ sidebarProjects }) => sidebarProjects.tabOrder, "asc")
+					.select(({ sidebarProjects, projects, repos }) => ({
+						id: sidebarProjects.projectId,
+						name: projects?.name ?? null,
+						slug: projects?.slug ?? sidebarProjects.projectId,
+						githubRepositoryId: projects?.githubRepositoryId ?? null,
+						githubOwner: repos?.owner ?? null,
+						githubRepoName: repos?.name ?? null,
+						iconUrl: projects?.iconUrl ?? null,
+						createdAt: projects?.createdAt ?? sidebarProjects.createdAt,
+						updatedAt: projects?.updatedAt ?? sidebarProjects.createdAt,
+						isCollapsed: sidebarProjects.isCollapsed,
+					})),
+			[collections],
+		);
 
 	const sidebarProjects = useMemo(
 		() =>
 			rawSidebarProjects.map((project) => ({
 				...project,
+				name:
+					project.name ??
+					(() => {
+						const local = hostProjects.find((row) => row.id === project.id);
+						return (
+							local?.name ||
+							local?.repoName ||
+							local?.repoPath
+								.replace(/[\\/]+$/, "")
+								.split(/[\\/]/)
+								.pop() ||
+							"Workspace"
+						);
+					})(),
+				slug: project.slug ?? project.id,
+				iconUrl: project.iconUrl ?? null,
+				githubRepositoryId: project.githubRepositoryId ?? null,
+				createdAt: project.createdAt ?? new Date(0),
+				updatedAt: project.updatedAt ?? new Date(0),
 				githubOwner: project.githubOwner ?? null,
 				githubRepoName: project.githubRepoName ?? null,
 			})),
-		[rawSidebarProjects],
+		[rawSidebarProjects, hostProjects],
 	);
 
 	const { data: sidebarSections = [] } = useLiveQuery(
@@ -213,23 +235,24 @@ export function useDashboardSidebarData() {
 		[hostWorkspaces],
 	);
 
-	const { data: sidebarLocalStateRows = [] } = useLiveQuery(
-		(q) =>
-			q
-				.from({ sidebarWorkspaces: collections.v2WorkspaceLocalState })
-				.orderBy(
-					({ sidebarWorkspaces }) => sidebarWorkspaces.sidebarState.tabOrder,
-					"asc",
-				)
-				.select(({ sidebarWorkspaces }) => ({
-					workspaceId: sidebarWorkspaces.workspaceId,
-					projectId: sidebarWorkspaces.sidebarState.projectId,
-					tabOrder: sidebarWorkspaces.sidebarState.tabOrder,
-					sectionId: sidebarWorkspaces.sidebarState.sectionId,
-					isHidden: sidebarWorkspaces.sidebarState.isHidden,
-				})),
-		[collections],
-	);
+	const { data: sidebarLocalStateRows = [], isReady: localStateReady } =
+		useLiveQuery(
+			(q) =>
+				q
+					.from({ sidebarWorkspaces: collections.v2WorkspaceLocalState })
+					.orderBy(
+						({ sidebarWorkspaces }) => sidebarWorkspaces.sidebarState.tabOrder,
+						"asc",
+					)
+					.select(({ sidebarWorkspaces }) => ({
+						workspaceId: sidebarWorkspaces.workspaceId,
+						projectId: sidebarWorkspaces.sidebarState.projectId,
+						tabOrder: sidebarWorkspaces.sidebarState.tabOrder,
+						sectionId: sidebarWorkspaces.sidebarState.sectionId,
+						isHidden: sidebarWorkspaces.sidebarState.isHidden,
+					})),
+			[collections],
+		);
 	const rawSidebarWorkspaces = useMemo(
 		() =>
 			sidebarLocalStateRows.flatMap((localState) => {
@@ -415,7 +438,7 @@ export function useDashboardSidebarData() {
 		 * alongside an empty `groups`: a sidebar with rows in it is never
 		 * "loading" as far as the user is concerned, whatever is still in flight.
 		 */
-		isReady: hostWorkspacesReady,
+		isReady: hostWorkspacesReady && projectsReady && localStateReady,
 		refreshWorkspacePullRequest,
 		toggleProjectCollapsed,
 	};

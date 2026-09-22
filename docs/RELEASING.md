@@ -4,8 +4,8 @@ GatedSpace is a Windows-focused fork of Superset. A change usually reaches users
 two ways, and **most changes want BOTH** unless you were told to scope it to one:
 
 1. **Public release** — the GitHub release every installed app auto-updates from.
-2. **Personal / dev build** — a hand-installed build for the maintainer's own
-   machine, which does NOT auto-update.
+2. **Personal / dev build** — a build for the maintainer's own machine, updated
+   from the local release folder through the app's Update button.
 
 ## Use the right command — there are two, and they are different
 
@@ -76,8 +76,8 @@ Flags: `--dry-run` (plan only, touches nothing), `--no-publish` (leave a draft),
 
 ## 2. Personal / dev build (the maintainer's own machine)
 
-The maintainer's installed app does NOT auto-update — it's replaced by a deliberate
-reinstall. Personal builds **omit** the local-only flag so they stay cloud-capable
+Personal builds offer completed local installers through the Update button and
+**Check for Updates** command; they never download a public release. Personal builds **omit** the local-only flag so they stay cloud-capable
 (they talk to the maintainer's local stack rather than the public build's
 local-only restrictions).
 
@@ -89,8 +89,23 @@ GATEDSPACE_PERSONAL=1 bun run build
 ```
 
 The `-personal` in the filename separates it from public-release installers in the
-same folder. Hand it over; the maintainer closes GatedSpace, runs the installer,
-reopens (terminals survive via the pty-daemon).
+same folder. Configure `~/.superset/personal-update.json` with an absolute
+`releaseDir` (for example `{"releaseDir":"C:/Dev/superset/apps/desktop/release"}`).
+Version 1.18.10 and newer check that folder every 30 seconds, filter by the running
+architecture, and require the installer's completed `.blockmap`. Clicking Update
+starts an acknowledged helper, closes the app, installs, and reopens it. Launch
+errors appear in the app; installer output is recorded in
+`%TEMP%/gatedspace-personal-update.log`. Older builds may need one manual install
+to acquire this updater fix. Do not run an installer during a user's active work.
+
+The main bundle must bake both `GATEDSPACE_PERSONAL` and
+`NEXT_PUBLIC_RELEASE_BUILD`; shell-only variables disappear after installation.
+
+Updater verification: `bun test src/main/lib/personal-update.test.ts
+src/main/lib/auto-updater-personal.test.ts` from `apps/desktop`. The routing test
+isolates personal and public channels in subprocesses.
+`node scripts/test-personal-update.ts` exercises the real Windows launcher using
+a harmless test executable, including parent-exit, timeout and failure cases.
 
 Public release builds are the opposite: CI bakes `NEXT_PUBLIC_LOCAL_ONLY=1`, so
 they are local-only with no account/cloud. Don't set `GATEDSPACE_PERSONAL` for

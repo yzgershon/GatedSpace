@@ -43,29 +43,30 @@ export function DefaultHeaderContent({
 		<div className="@container relative flex h-full w-full min-w-0 items-center gap-2 px-3">
 			<div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 @min-[640px]:max-w-[calc(50%-50px)]">
 				{headerLead}
-				{titleContent ?? (
-					<>
-						{!headerLead && icon && <span className="shrink-0">{icon}</span>}
-						{onRename && typeof title === "string" ? (
-							<PaneTitleEditor
-								title={title}
-								isActive={isActive}
-								onRename={onRename}
-								paneId={paneId}
-							/>
-						) : (
-							<span
-								className={cn(
-									"truncate text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors duration-150",
-									isActive ? "text-foreground" : "text-muted-foreground",
-								)}
-								title={typeof title === "string" ? title : undefined}
-							>
-								{title}
-							</span>
-						)}
-					</>
+				{/* Custom file/review titles already own their icon. Session headers
+				    have a folder lead and retain a separate provider identity. */}
+				{icon && (headerLead || !titleContent) && (
+					<span className="shrink-0">{icon}</span>
 				)}
+				{titleContent ??
+					(onRename && typeof title === "string" ? (
+						<PaneTitleEditor
+							title={title}
+							isActive={isActive}
+							onRename={onRename}
+							paneId={paneId}
+						/>
+					) : (
+						<span
+							className={cn(
+								"truncate gs-pane-title text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors duration-150",
+								isActive ? "text-foreground" : "text-muted-foreground",
+							)}
+							title={typeof title === "string" ? title : undefined}
+						>
+							{title}
+						</span>
+					))}
 				{titleActions}
 				{overflowControl}
 				{/*

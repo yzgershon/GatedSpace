@@ -1,52 +1,19 @@
-/**
- * Composer for a Claude Code session pane.
- *
- * Presentational + controlled: the parent owns transport wiring and passes
- * callbacks. Shaped to match the VS Code Claude Code extension, which is the
- * reference Yish gave for this pane:
- *
- *  - A floating rounded card, not a docked bar. It overlays the timeline so the
- *    conversation keeps the full width behind it.
- *  - ONE popup holds mode and effort together. Two separate controls made a
- *    single decision ("how autonomous should this be") look like two.
- *  - Mode names are the extension's friendly ones over the CLI's
- *    default/acceptEdits/plan/bypassPermissions. The DESCRIPTIONS say what the
- *    CLI flag actually does, which for the last one is not what the extension
- *    claims — bypassPermissions never pauses for anything.
- *  - Shift+Tab cycles modes, because the popup says it does.
- *  - Effort: a real slider over 6 positions low→ultracode, draggable and
- *    keyboard-operable; "max" gets a rainbow knob and "ultracode"
- *    (= xhigh + workflows) glows purple.
- *  - NO mic. GatedVoice owns dictation, and a button that only looks like it
- *    listens is worse than no button.
- */
-import { Popover, PopoverContent, PopoverTrigger } from "@superset/ui/popover";
-import { cn } from "@superset/ui/utils";
 import {
 	ArrowUp,
-	AtSign,
-	Check,
 	ClipboardList,
 	Code,
 	Hand,
-	Plus,
-	SlidersHorizontal,
+	Paperclip,
 	Square,
-	SquareSlash,
 	Zap,
 } from "lucide-react";
-import {
-	type CSSProperties,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	type ClaudeAccount,
 	useClaudeAccounts,
 } from "renderer/components/ClaudeAccountSwap";
-import { useSkinTokens } from "renderer/hooks/useSkinTokens";
+import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
+import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
 	matchSwapCandidate,
 	parseSwapCommand,
@@ -117,31 +84,15 @@ export const SESSION_MODES = [
 ] as const;
 export type SessionMode = (typeof SESSION_MODES)[number]["id"];
 
-/** Grow with the text, but stop before the composer eats the conversation. */
-const TEXTAREA_MAX_HEIGHT = 200;
-
-/**
- * The composer's accent follows the THEME.
- *
- * These were literal hex — Claude's orange, sampled from the reference UI — on
- * the argument that the send button belongs to the assistant rather than to the
- * editor around it. Living with several themes settled it the other way: in
- * Dracula and Koi the ring around the focused box and the send arrow stayed
- * orange while every other accent in the window changed, so the one control you
- * look at most was the one thing that never matched.
- *
- * `primary` is the token every theme defines as its accent, so this now shifts
- * with the rest of the app and needs no per-theme handling.
- */
-const SEND_BUTTON =
-	"bg-primary text-primary-foreground hover:bg-primary/90 transition-colors";
-
 export interface FileMention {
 	name: string;
 	relativePath: string;
 }
 
 interface SessionComposerProps {
+	model?: string;
+	fast?: boolean;
+	onFastChange?: (fast: boolean) => Promise<void>;
 	status: SessionStatus;
 	slashCommands: string[];
 	mode: SessionMode;
@@ -198,99 +149,6 @@ export function nextMode(mode: SessionMode): SessionMode {
 	return next?.id ?? "manual";
 }
 
-/**
- * Effort as an actual slider.
- *
- * This was a row of six buttons drawn as dots. It LOOKED like a slider and
- * behaved like a radio group: you could click a position but not drag to one,
- * which is the specific gap between something that resembles a control and
- * something that is one.
- *
- * A real `input[type=range]` rather than pointer handlers on a div. Dragging,
- * clicking anywhere on the track, arrow keys, Home/End and the right
- * screen-reader semantics are all inherent to the element; rebuilding them by
- * hand is how the previous version ended up click-only.
- *
- * The knob takes the accent at the top of the scale, because ultracode needs an
- * xhigh-capable model and turns on orchestration — it is not simply "more", so
- * it should not look like simply the far end. Colours are theme tokens
- * throughout: earlier versions pinned literal purple and stayed purple in every
- * theme.
- */
-function EffortSlider({
-	effort,
-	onChange,
-}: {
-	effort: EffortLevel;
-	onChange: (e: EffortLevel) => void;
-}) {
-	const activeIndex = Math.max(0, EFFORT_LEVELS.indexOf(effort));
-	const lastIndex = EFFORT_LEVELS.length - 1;
-	const isUltracode = effort === "ultracode";
-
-	return (
-		<div
-			className={cn(
-				// The capsule IS the track. The input on top is transparent apart
-				// from its knob, so the two cannot drift out of alignment the way a
-				// separately-drawn bar would.
-				"effort-track relative flex h-5 w-[92px] items-center rounded-full",
-				isUltracode && "animate-ultracode-glow",
-			)}
-		>
-			{EFFORT_LEVELS.map((level, index) => (
-				<span
-					key={level}
-					aria-hidden="true"
-					className="effort-tick"
-					data-top={level === "ultracode"}
-					// A fraction, not a percentage: the CSS multiplies it by the
-					// knob-adjusted width, which is the only span the knob can cover.
-					style={{ "--effort-tick-at": index / lastIndex } as CSSProperties}
-				/>
-			))}
-			<input
-				type="range"
-				min={0}
-				max={lastIndex}
-				step={1}
-				value={activeIndex}
-				onChange={(event) => {
-					const next = EFFORT_LEVELS[Number(event.target.value)];
-					if (next) onChange(next);
-				}}
-				// Named and described for assistive tech as the scale it is, rather
-				// than as a bare number between 0 and 5.
-				aria-label="Effort"
-				aria-valuetext={EFFORT_LABELS[effort]}
-				title={EFFORT_LABELS[effort]}
-				data-top={isUltracode}
-				data-rainbow={effort === "max"}
-				className="effort-slider relative"
-			/>
-		</div>
-	);
-}
-
-/**
- * Mode picker and effort in one popup.
- *
- * Effort lives at the bottom of the same sheet rather than in a control of its
- * own: both answer "how much should Claude do on its own", and splitting them
- * meant reading two widgets to know one thing.
- */
-/**
- * The models offered in the popover.
- *
- * ALIASES, not version ids, and that is deliberate. `/model claude-opus-4-8`
- * goes stale the moment a new model ships; `/model opus` keeps meaning "the
- * current Opus". The CLI resolves these itself, so this list survives releases
- * without anyone editing it.
- *
- * The `[1m]` long-context variants are left out: they are a context-window
- * choice rather than a model choice, and typing `/model` still reaches the full
- * list the CLI reports.
- */
 const MODEL_CHOICES: { id: string; label: string; description: string }[] = [
 	{
 		id: "default",
@@ -311,203 +169,10 @@ const MODEL_CHOICES: { id: string; label: string; description: string }[] = [
 	},
 ];
 
-function ModesPopover({
-	mode,
-	effort,
-	onModeChange,
-	onEffortChange,
-	onPickModel,
-	variant = "button",
-}: {
-	mode: SessionMode;
-	effort: EffortLevel;
-	onModeChange: (mode: SessionMode) => void;
-	onEffortChange: (effort: EffortLevel) => void;
-	/** Applies a model by running `/model <id>`, the path the palette uses. */
-	onPickModel?: (id: string) => void;
-	/**
-	 * "button" is the icon-and-label control on the composer's own toolbar.
-	 * "inline" is the reference's treatment: dim mono `effort · mode`, sitting
-	 * INSIDE the input at its right edge with no chrome of its own.
-	 *
-	 * Rendering it as text rather than dropping the control keeps mode and
-	 * effort one click away. The reference prints the same string and gives you
-	 * nothing to click; there is no reason to copy the worse half.
-	 */
-	variant?: "button" | "inline";
-}) {
-	const active = SESSION_MODES.find((m) => m.id === mode) ?? SESSION_MODES[0];
-	const ActiveIcon = active.Icon;
-	/*
-	 * Model sits behind a tab rather than a third section, because the popover
-	 * already carries modes and effort and a fourth stacked block turns it into
-	 * a scroll. Modes stays the default: it is what the trigger names.
-	 */
-	const [tab, setTab] = useState<"modes" | "model">("modes");
-
-	return (
-		<Popover>
-			<PopoverTrigger asChild>
-				{variant === "inline" ? (
-					<button
-						type="button"
-						aria-label="Mode and effort"
-						className="shrink-0 rounded-md px-1.5 py-0.5 text-[11.5px] text-muted-foreground/55 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-					>
-						{EFFORT_LABELS[effort]}
-						<span className="px-1 text-muted-foreground/30">·</span>
-						{active.label}
-					</button>
-				) : (
-					<button
-						type="button"
-						aria-label="Mode and effort"
-						className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12.5px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-					>
-						<ActiveIcon className="size-3.5" />
-						{active.label}
-					</button>
-				)}
-			</PopoverTrigger>
-			<PopoverContent
-				align="end"
-				side="top"
-				sideOffset={8}
-				className="w-[26rem] p-0"
-			>
-				<div className="flex items-center justify-between px-3 pt-2.5 pb-1.5">
-					<div className="flex items-center gap-1">
-						{(["modes", "model"] as const).map((id) => (
-							<button
-								key={id}
-								type="button"
-								onClick={() => setTab(id)}
-								className={cn(
-									"rounded-md px-2 py-0.5 text-[12.5px] capitalize transition-colors",
-									tab === id
-										? "bg-accent text-foreground"
-										: "text-muted-foreground hover:text-foreground",
-								)}
-							>
-								{id}
-							</button>
-						))}
-					</div>
-					<span
-						className={cn(
-							"flex items-center gap-1 text-[11px] text-muted-foreground/60",
-							tab !== "modes" && "invisible",
-						)}
-					>
-						<kbd className="rounded border border-border bg-tertiary px-1 py-px font-sans text-[10px]">
-							⇧
-						</kbd>
-						+
-						<kbd className="rounded border border-border bg-tertiary px-1 py-px font-sans text-[10px]">
-							tab
-						</kbd>
-						to switch
-					</span>
-				</div>
-				{tab === "model" ? (
-					<div className="flex flex-col px-1 pb-1">
-						{MODEL_CHOICES.map((m) => (
-							<button
-								key={m.id}
-								type="button"
-								onClick={() => onPickModel?.(m.id)}
-								disabled={!onPickModel}
-								className={cn(
-									"flex items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors focus-visible:outline-none",
-									"hover:bg-accent/50 disabled:pointer-events-none disabled:opacity-40",
-								)}
-							>
-								<span className="min-w-0 flex-1">
-									<span className="block text-[13px] text-foreground">
-										{m.label}
-									</span>
-									<span className="block text-[12px] text-muted-foreground/80">
-										{m.description}
-									</span>
-								</span>
-								<span className="mt-0.5 shrink-0 font-mono text-[11px] text-muted-foreground/50">
-									/model {m.id}
-								</span>
-							</button>
-						))}
-					</div>
-				) : (
-					<div className="flex flex-col px-1 pb-1">
-						{SESSION_MODES.map((m) => {
-							const Icon = m.Icon;
-							const selected = m.id === mode;
-							return (
-								<button
-									key={m.id}
-									type="button"
-									onClick={() => onModeChange(m.id)}
-									className={cn(
-										"flex items-start gap-2.5 rounded-md px-2 py-2 text-left transition-colors focus-visible:outline-none",
-										selected ? "bg-accent" : "hover:bg-accent/50",
-									)}
-								>
-									<Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-									<span className="min-w-0 flex-1">
-										<span className="block text-[13px] text-foreground">
-											{m.label}
-										</span>
-										<span className="block text-[12px] text-muted-foreground/80">
-											{m.description}
-										</span>
-									</span>
-									{selected ? (
-										<Check className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-									) : null}
-								</button>
-							);
-						})}
-					</div>
-				)}
-				<div className="flex items-center gap-2.5 border-border/60 border-t px-3 py-2">
-					<SlidersHorizontal className="size-4 shrink-0 text-muted-foreground" />
-					<span className="text-[13px] text-foreground">
-						Effort{" "}
-						<span className="text-muted-foreground/80">
-							({EFFORT_LABELS[effort]})
-						</span>
-					</span>
-					<div className="flex-1" />
-					<EffortSlider effort={effort} onChange={onEffortChange} />
-				</div>
-			</PopoverContent>
-		</Popover>
-	);
-}
-
-/** A small square icon button on the composer's bottom row. */
-function IconButton({
-	label,
-	onClick,
-	children,
-}: {
-	label: string;
-	onClick: () => void;
-	children: React.ReactNode;
-}) {
-	return (
-		<button
-			type="button"
-			aria-label={label}
-			title={label}
-			onClick={onClick}
-			className="flex size-7 items-center justify-center rounded-md text-foreground/75 transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-		>
-			{children}
-		</button>
-	);
-}
-
 export function SessionComposer({
+	model = "Claude",
+	fast = false,
+	onFastChange,
 	status,
 	slashCommands,
 	mode,
@@ -528,7 +193,7 @@ export function SessionComposer({
 	const [text, setText] = useState(() =>
 		draftKey ? getSessionDraft(draftKey).text : "",
 	);
-	const [focused, setFocused] = useState(false);
+	const [settingsBusy, setSettingsBusy] = useState(false);
 	const [caret, setCaret] = useState(0);
 	const [mentions, setMentions] = useState<FileMention[]>([]);
 	const [images, setImages] = useState<UserImagePayload[]>(() =>
@@ -539,7 +204,6 @@ export function SessionComposer({
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 	const isRunning = status === "streaming";
-	const { composer } = useSkinTokens();
 
 	/**
 	 * Attach anything, by two different routes.
@@ -657,15 +321,6 @@ export function SessionComposer({
 		};
 	}, [onSearchFiles, mention]);
 
-	// Grow to fit what's typed. No dependency list: every render is a moment the
-	// text may have changed, and writing the same height back is a no-op.
-	useEffect(() => {
-		const el = textareaRef.current;
-		if (!el) return;
-		el.style.height = "auto";
-		el.style.height = `${Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT)}px`;
-	});
-
 	// Ctrl+Esc puts the caret here from anywhere, and takes it back out — the
 	// placeholder promises it, so it has to be real. With more than one session
 	// pane open the last one mounted answers; that's a fair reading of "focus
@@ -699,19 +354,6 @@ export function SessionComposer({
 		});
 	};
 
-	/** Type a leading character for the user and open its picker. */
-	const startWith = (char: string) => {
-		const next = text.startsWith(char) ? text : `${char}${text}`;
-		setText(next);
-		requestAnimationFrame(() => {
-			const el = textareaRef.current;
-			if (!el) return;
-			el.focus();
-			el.setSelectionRange(next.length, next.length);
-			setCaret(next.length);
-		});
-	};
-
 	const submit = () => {
 		const value = text.trim();
 		/*
@@ -742,28 +384,8 @@ export function SessionComposer({
 
 	const canSend = Boolean(text.trim()) || images.length > 0;
 
-	/*
-	 * "inline" is the reference's composer: ONE row, as wide as the transcript,
-	 * recessed rather than raised, with the engine string inside it.
-	 *
-	 * The panel variant capped itself at `max-w-3xl` and centred, while the
-	 * transcript beside it is full width on purpose — so it floated as a narrow
-	 * island under a wide conversation, which is the single thing that most
-	 * gave away that this was not the reference. It also painted `bg-card`, one
-	 * step LIGHTER than the pane, where the reference recesses it.
-	 */
-	const inline = composer === "inline";
-
 	return (
-		// z-30 puts the composer above the pinned prompt (z-10) inside the
-		// scroller. Without it a tall sticky prompt rendered over the box you type
-		// into, and over the slash palette that opens from it.
-		<div
-			className={cn(
-				"pointer-events-none absolute inset-x-0 bottom-0 z-30 flex justify-center",
-				inline ? "px-3 pb-2" : "px-4 pb-4",
-			)}
-		>
+		<div className="session-composer-area">
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target is
 			    a region, not a control; the same files go in via the + button,
 			    which is the keyboard-reachable path. */}
@@ -787,36 +409,8 @@ export function SessionComposer({
 					setDragging(false);
 					attachFiles(files);
 				}}
-				className={cn(
-					"pointer-events-auto relative w-full border transition-[border-color,box-shadow]",
-					/*
-					 * Inline: full width, 9px radius to sit inside the pane's 11px, and
-					 * a fill DARKER than the card so it reads as a well you type into.
-					 * No drop shadow — it is part of the card, not floating over it.
-					 *
-					 * Panel: the resting border used to be `transparent`, which is why
-					 * this read flatter than the reference: the box had no edge of its
-					 * own and leaned entirely on a soft shadow. It keeps a real edge
-					 * now, on the theme's border token rather than a hardcoded white so
-					 * it survives the light themes, plus a tighter, deeper shadow than
-					 * shadow-lg — the box should sit ABOVE the conversation, and a
-					 * diffuse shadow reads as haze rather than lift.
-					 */
-					inline
-						? "rounded-[9px] bg-[color-mix(in_oklab,var(--background)_70%,black)]"
-						: "max-w-3xl rounded-2xl bg-card",
-					inline
-						? dragging
-							? "border-highlight"
-							: focused
-								? "border-border/90"
-								: "border-border/70"
-						: dragging
-							? "border-highlight shadow-[0_0_0_3px_color-mix(in_oklab,var(--highlight)_22%,transparent)]"
-							: focused
-								? "border-primary shadow-[0_0_0_3px_color-mix(in_oklab,var(--color-primary)_12%,transparent),0_18px_40px_-12px_rgb(0_0_0/0.55)]"
-								: "border-border shadow-[0_10px_30px_-12px_rgb(0_0_0/0.45),0_2px_6px_-2px_rgb(0_0_0/0.25)]",
-				)}
+				className="session-composer"
+				data-dragging={dragging}
 			>
 				{showPalette && onRunCommand ? (
 					<SlashPalette
@@ -896,28 +490,16 @@ export function SessionComposer({
 							/>
 						))}
 						{imageError ? (
-							<span className="text-[11.5px] text-destructive">
+							<span className="select-text cursor-text text-[11.5px] text-destructive">
 								{imageError}
 							</span>
 						) : null}
 					</div>
 				) : null}
 
-				{/*
-				 * A wrapper so the inline variant can put the accent caret and the
-				 * engine string on the SAME row as the input. In the panel variant it
-				 * carries no classes and is inert — a bare block around a block.
-				 */}
-				<div className={cn(inline && "flex items-start gap-2 px-3 pt-0.5")}>
-					{inline ? (
-						<span
-							aria-hidden="true"
-							className="shrink-0 pt-[11px] font-mono text-[12px] text-highlight leading-none"
-						>
-							›
-						</span>
-					) : null}
-					<textarea
+				<div className="session-input">
+					<span aria-hidden="true">›</span>
+					<GrowingTextarea
 						ref={textareaRef}
 						value={text}
 						onPaste={(e) => {
@@ -938,9 +520,8 @@ export function SessionComposer({
 						onSelect={(e) =>
 							setCaret((e.target as HTMLTextAreaElement).selectionStart ?? 0)
 						}
-						onFocus={() => setFocused(true)}
-						onBlur={() => setFocused(false)}
 						onKeyDown={(e) => {
+							if (e.nativeEvent.isComposing) return;
 							// Shift+Tab cycles modes — the popup advertises it, and reaching for
 							// the mouse to change mode mid-thought is what it's avoiding.
 							if (e.key === "Tab" && e.shiftKey && mentions.length === 0) {
@@ -969,99 +550,14 @@ export function SessionComposer({
 								submit();
 							}
 						}}
-						rows={1}
-						/*
-						 * The inline variant leaves the box EMPTY at rest.
-						 *
-						 * "ctrl esc to focus or unfocus Claude" is a keybinding lecture
-						 * sitting in the one place the reference reserves for the engine
-						 * you are talking to. The binding still works and the hint bar is
-						 * where a keystroke belongs; a resting prompt should look ready,
-						 * not instructional.
-						 */
+						aria-label="Message Claude"
 						placeholder={
 							isRunning
 								? "Queue another message…"
-								: inline
-									? ""
-									: "ctrl esc to focus or unfocus Claude"
+								: "Ask to make changes, @files, or /commands…"
 						}
-						className={cn(
-							"w-full resize-none bg-transparent text-[13.5px] text-foreground outline-none placeholder:text-muted-foreground/50",
-							inline ? "min-w-0 flex-1 py-2" : "px-4 pt-3.5 pb-2.5",
-						)}
 					/>
 				</div>
-				{/*
-				 * Inline footer: `+` on the left, engine on the right, on a row of
-				 * their own BELOW the text.
-				 *
-				 * They used to sit in the same flex row as the textarea, which meant
-				 * the input's width stopped where "Extra high · auto" began and every
-				 * line wrapped early against it. A footer row costs 22px once and
-				 * gives the text the full width on every line — and it is where the
-				 * attach button gets to come back without crowding the caret.
-				 */}
-				{inline ? (
-					<div className="flex items-center gap-1 px-2 pb-1.5">
-						<button
-							type="button"
-							aria-label="Attach a file"
-							onClick={() => fileInputRef.current?.click()}
-							className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 transition-colors hover:bg-foreground/5 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-						>
-							<Plus className="size-3.5" />
-						</button>
-						<div className="min-w-2 flex-1" />
-						<ModesPopover
-							mode={mode}
-							effort={effort}
-							onModeChange={onModeChange}
-							onEffortChange={onEffortChange}
-							onPickModel={
-								onRunCommand
-									? (id) => {
-											void onRunCommand(`/model ${id}`);
-										}
-									: undefined
-							}
-							variant="inline"
-						/>
-					</div>
-				) : null}
-
-				{/*
-				 * A hairline between what you type and the controls under it, the
-				 * way VS Code's composer draws it.
-				 *
-				 * Deliberately faint — at /50 of the border token it reads as a
-				 * change of surface rather than as a rule, which is the point: it
-				 * should separate the two halves without becoming another line to
-				 * look at. Edge to edge rather than inset, so it reads as the
-				 * composer being in two parts rather than as a stray divider.
-				 *
-				 * On the border token, so it follows the theme like everything else.
-				 */}
-				{/*
-				 * Full-strength divider and 3px/4px padding, down from /50 and
-				 * 8px/10px. At half opacity the rule was doing the job of a hint
-				 * rather than a separation, and the padding made a 46px bar out of
-				 * 28px icons — eleven pixels that belong to the conversation.
-				 */}
-				{/*
-				 * The toolbar row belongs to the panel variant only.
-				 *
-				 * Inline, every one of these is reachable without it: `+` is the
-				 * palette's attach builtin, `@` and `/` are the characters they
-				 * insert, mode and effort are the engine string at the right of the
-				 * input, Enter sends, and Stop is `[stop]` in the status line — which
-				 * is exactly where the reference puts it. Nothing is lost; a 28px bar
-				 * of buttons under a one-line input is what is lost.
-				 *
-				 * The file input itself is NOT part of the row. It is the hidden
-				 * element the palette's attach action clicks, so it has to exist in
-				 * both variants or attaching silently stops working inline.
-				 */}
 				<input
 					ref={fileInputRef}
 					type="file"
@@ -1075,46 +571,82 @@ export function SessionComposer({
 						e.target.value = "";
 					}}
 				/>
-				<div
-					className={cn(
-						"flex items-center gap-0.5 border-border border-t px-2.5 pt-[3px] pb-1",
-						inline && "hidden",
-					)}
-					// Hidden rather than unmounted: the modes popover would otherwise
-					// be the only interactive thing in here that inline still needs,
-					// and mounting it twice gives two triggers with one aria-label.
-					// `display:none` takes it out of the tab order and the a11y tree,
-					// which is the behaviour wanted, without a second code path.
-					aria-hidden={inline || undefined}
-					inert={inline || undefined}
-				>
-					<IconButton
-						label="Attach a file"
+				<div className="session-composer-toolbar">
+					<button
+						type="button"
+						className="session-attach"
+						aria-label="Attach a file"
 						onClick={() => fileInputRef.current?.click()}
 					>
-						<Plus className="size-4" />
-					</IconButton>
-					<IconButton label="Mention a file" onClick={() => startWith("@")}>
-						<AtSign className="size-4" />
-					</IconButton>
-					<IconButton label="Run a command" onClick={() => startWith("/")}>
-						<SquareSlash className="size-4" />
-					</IconButton>
-
-					<div className="flex-1" />
-
-					<ModesPopover
-						mode={mode}
-						effort={effort}
-						onModeChange={onModeChange}
-						onEffortChange={onEffortChange}
-						onPickModel={
+						<Paperclip size={18} />
+					</button>
+					<SessionComposerSettings
+						provider="Claude"
+						model={model}
+						models={MODEL_CHOICES.map((m) => ({
+							id: m.id,
+							name: m.id === "default" ? "Default model" : `Claude ${m.label}`,
+						}))}
+						onModelChange={
 							onRunCommand
 								? (id) => {
-										void onRunCommand(`/model ${id}`);
+										setSettingsBusy(true);
+										void onRunCommand(`/model ${id}`)
+											.then((reply) => {
+												if (!reply || !/set model to/i.test(reply))
+													throw new Error(
+														reply ||
+															"Could not change the model. Wait for Claude to finish and retry.",
+													);
+												setImageError(null);
+											})
+											.catch((error: Error) => setImageError(error.message))
+											.finally(() => setSettingsBusy(false));
 									}
 								: undefined
 						}
+						mode={mode}
+						modes={[
+							{
+								id: "acceptEdits",
+								label: "Auto",
+								description: "Edit automatically; approve commands when needed",
+							},
+							{
+								id: "plan",
+								label: "Plan",
+								description: "Think through the approach first",
+								kind: "plan",
+							},
+							{
+								id: "bypassPermissions",
+								label: "Full access",
+								description: "Work without approval prompts",
+								kind: "full",
+							},
+							{
+								id: "manual",
+								label: "Manual",
+								description: "Approve each edit and command",
+							},
+						]}
+						onModeChange={(value) => onModeChange(value as SessionMode)}
+						effort={effort}
+						efforts={EFFORT_LEVELS}
+						onEffortChange={(value) => onEffortChange(value as EffortLevel)}
+						fast={fast}
+						onFastChange={
+							onFastChange
+								? (value) => {
+										setSettingsBusy(true);
+										void onFastChange(value)
+											.then(() => setImageError(null))
+											.catch((error: Error) => setImageError(error.message))
+											.finally(() => setSettingsBusy(false));
+									}
+								: undefined
+						}
+						disabled={isRunning || settingsBusy}
 					/>
 
 					{isRunning ? (
@@ -1126,10 +658,7 @@ export function SessionComposer({
 									type="button"
 									onClick={submit}
 									aria-label="Queue message"
-									className={cn(
-										"ml-1 flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-										SEND_BUTTON,
-									)}
+									className="session-send"
 								>
 									<ArrowUp className="size-4" />
 								</button>
@@ -1138,7 +667,7 @@ export function SessionComposer({
 								type="button"
 								onClick={onInterrupt}
 								aria-label="Stop"
-								className="ml-1 flex size-8 items-center justify-center rounded-lg bg-foreground/10 text-foreground transition-colors hover:bg-foreground/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+								className="session-send session-stop"
 							>
 								<Square className="size-3 fill-current" />
 							</button>
@@ -1149,12 +678,7 @@ export function SessionComposer({
 							onClick={submit}
 							disabled={!canSend}
 							aria-label="Send"
-							className={cn(
-								"ml-1 flex size-8 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-								canSend
-									? SEND_BUTTON
-									: "bg-foreground/10 text-muted-foreground",
-							)}
+							className="session-send"
 						>
 							<ArrowUp className="size-4" />
 						</button>

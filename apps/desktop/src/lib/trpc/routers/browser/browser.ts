@@ -1,12 +1,49 @@
 import { observable } from "@trpc/server/observable";
 import { session } from "electron";
+import { installAgentBrowserAdapter } from "main/lib/browser/agent-browser-adapter";
+import {
+	agentBrowserService,
+	type BrowserOpenRequest,
+} from "main/lib/browser/agent-browser-service";
 import { browserManager } from "main/lib/browser/browser-manager";
 import { BROWSER_SCRIPT_NAMES, getBrowserScript } from "shared/browser-scripts";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
 export const createBrowserRouter = () => {
+	installAgentBrowserAdapter();
 	return router({
+		agentOpenRequests: publicProcedure
+			.input(z.object({ workspaceId: z.string() }))
+			.subscription(({ input }) =>
+				observable<BrowserOpenRequest>((emit) => {
+					const listener = (request: BrowserOpenRequest) => {
+						if (request.workspaceId === input.workspaceId) emit.next(request);
+					};
+					agentBrowserService.on("open", listener);
+					for (const request of agentBrowserService.requests(input.workspaceId))
+						emit.next(request);
+					return () => {
+						agentBrowserService.off("open", listener);
+					};
+				}),
+			),
+		agentOpened: publicProcedure
+			.input(
+				z.object({
+					requestId: z.string(),
+					workspaceId: z.string(),
+					error: z.string().optional(),
+				}),
+			)
+			.mutation(({ input }) => {
+				agentBrowserService.acknowledge(
+					input.requestId,
+					input.workspaceId,
+					input.error,
+				);
+				return { success: true };
+			}),
 		register: publicProcedure
 			.input(z.object({ paneId: z.string(), webContentsId: z.number() }))
 			.mutation(({ input }) => {

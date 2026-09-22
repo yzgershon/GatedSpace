@@ -164,6 +164,7 @@ export function DashboardSidebar({
 	 */
 	const openSessionFromSidebar = useCallback(
 		(request: {
+			provider: "claude" | "codex";
 			sessionId: string;
 			cwd: string | null;
 			title: string;
@@ -172,6 +173,7 @@ export function DashboardSidebar({
 			if (
 				activeWorkspaceId &&
 				openSessionInWorkspace(collections, activeWorkspaceId, {
+					provider: request.provider,
 					sessionId: request.sessionId,
 					cwd: request.cwd,
 					title: request.title,
@@ -269,9 +271,14 @@ export function DashboardSidebar({
 
 	const orderedGroups = useMemo(() => {
 		const byId = new Map(groups.map((g) => [g.id, g]));
-		return projectOrder
+		const ordered = projectOrder
 			.map((id) => byId.get(id))
 			.filter((g): g is DashboardSidebarProject => g != null);
+		const orderedIds = new Set(ordered.map((project) => project.id));
+		return [
+			...ordered,
+			...groups.filter((project) => !orderedIds.has(project.id)),
+		];
 	}, [groups, projectOrder]);
 
 	const workspaceShortcutLabels = useDashboardSidebarShortcuts(orderedGroups);
@@ -472,6 +479,18 @@ export function DashboardSidebar({
 										<>
 											<div className="flex-1 overflow-y-auto hide-scrollbar">
 												{showSkeleton ? <DashboardSidebarSkeleton /> : null}
+												{!showSkeleton && orderedGroups.length === 0 ? (
+													<div className="px-5 py-8 text-sm text-muted-foreground">
+														<p>No workspaces to show yet.</p>
+														<button
+															type="button"
+															className="mt-3 text-foreground underline underline-offset-4"
+															onClick={() => navigate({ to: "/v2-workspaces" })}
+														>
+															Browse workspaces
+														</button>
+													</div>
+												) : null}
 												<DndContext
 													sensors={sensors}
 													collisionDetection={closestCenter}

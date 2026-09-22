@@ -48,6 +48,14 @@ export default defineConfig({
 		plugins: [tsconfigPaths, copyResourcesPlugin()],
 
 		define: {
+			"process.env.GATEDSPACE_PERSONAL": defineEnv(
+				process.env.GATEDSPACE_PERSONAL,
+				"",
+			),
+			"process.env.NEXT_PUBLIC_RELEASE_BUILD": defineEnv(
+				process.env.NEXT_PUBLIC_RELEASE_BUILD,
+				"",
+			),
 			"process.env.NODE_ENV": defineEnv(process.env.NODE_ENV, "production"),
 			"process.env.SKIP_ENV_VALIDATION": defineEnv(
 				process.env.SKIP_ENV_VALIDATION,

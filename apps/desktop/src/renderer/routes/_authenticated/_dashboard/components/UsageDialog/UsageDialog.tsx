@@ -556,7 +556,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 								tokens all-time
 							</span>
 							<span
-								title="Estimated at Anthropic API list prices per model (input/output). Excludes prompt-cache reads/writes; Codex is approximated at GPT-5 rates."
+								title="Historical API-equivalent estimate, including cache tokens. Codex entries use legacy GPT-5 approximations, not current model pricing. This is not your ChatGPT subscription bill."
 								className="cursor-help"
 							>
 								<span className="font-semibold text-foreground">

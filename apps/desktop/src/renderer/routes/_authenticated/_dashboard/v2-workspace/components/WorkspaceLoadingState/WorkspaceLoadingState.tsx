@@ -12,25 +12,33 @@
  * Nothing here is interactive and nothing animates position — a skeleton that
  * moves draws the eye to itself instead of to the content arriving.
  */
-import { Skeleton } from "@superset/ui/skeleton";
+import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { SessionPaneSkeleton } from "../SessionPaneSkeleton";
 
 export function WorkspaceLoadingState() {
+	const { paneGap, paneRadius, paneSurface } = useSkinTokens();
 	return (
 		// `output` rather than a div with role="status": it carries that role
 		// natively, so a screen reader announces the wait instead of reading
 		// nothing at all for the second or two the pane is empty.
 		<output
-			className="flex h-full w-full flex-col bg-background"
+			className="flex h-full min-h-0 w-full min-w-0 flex-col overflow-hidden"
+			style={{ padding: paneGap / 2 }}
 			aria-busy="true"
 			aria-label="Loading workspace"
 		>
-			<div className="flex h-9 shrink-0 items-center gap-1.5 border-b border-border px-2">
-				{/* Active tab at full strength, the one behind it dimmer. */}
-				<Skeleton className="h-6 w-36 rounded-md" />
-				<Skeleton className="h-6 w-24 rounded-md bg-accent/55" />
+			<div
+				className="flex min-h-0 flex-1 flex-col overflow-hidden"
+				style={{
+					borderRadius: paneRadius,
+					background:
+						paneSurface === "raised"
+							? "color-mix(in oklab, var(--background) 42%, var(--card))"
+							: "var(--background)",
+				}}
+			>
+				<SessionPaneSkeleton />
 			</div>
-			<SessionPaneSkeleton />
 		</output>
 	);
 }

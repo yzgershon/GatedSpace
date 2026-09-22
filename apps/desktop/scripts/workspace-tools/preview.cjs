@@ -76,6 +76,15 @@ app
 		);
 		await wait(2800);
 		await capture("headers");
+		assert.equal(
+			await run(
+				`document.querySelectorAll('[data-pane-id="session-b"] img[title="Codex session"]').length`,
+			),
+			1,
+		);
+		pass(
+			"terminal custom title preserves the agent icon beside its folder button",
+		);
 		const metrics = await run(
 			`(()=>{const roots=['session-a','session-b'].map(id=>document.querySelector('[data-pane-id="'+id+'"]'));return roots.map(root=>{const menu=root.querySelector('[aria-label="Pane menu"]').getBoundingClientRect(),add=root.querySelector('[aria-label="New pane"]').getBoundingClientRect(),header=root.firstElementChild.getBoundingClientRect();return{height:header.height,menuLeft:menu.left,addRight:add.right}})})()`,
 		);

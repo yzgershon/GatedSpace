@@ -1,3 +1,13 @@
+import { useSyncExternalStore } from "react";
+import {
+	getCodexSession,
+	subscribeCodexSession,
+} from "renderer/lib/codex-session/store";
+import {
+	getSessionSnapshot,
+	subscribeSession,
+} from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/sessionStore";
+import { useFocusedSession } from "renderer/stores/focused-session";
 /**
  * The five-hour limit, as a bracketed cell readout.
  *
@@ -70,21 +80,80 @@ export function DashboardSidebarUsageBar() {
 	 * same mistake in a new shape. Not polled in the background: a hidden
 	 * window has nobody looking at the bar.
 	 */
-	const { data: limits } = electronTrpc.usage.activeLimits.useQuery(undefined, {
+	const focused = useFocusedSession((state) => state.session);
+	const provider = focused?.provider ?? "claude";
+	const paneId = focused?.paneId ?? "";
+	const configDir = useSyncExternalStore(
+		(listener) =>
+			provider === "claude" && paneId
+				? subscribeSession(paneId, listener)
+				: () => {},
+		() =>
+			provider === "claude" && paneId
+				? getSessionSnapshot(paneId).accountConfigDir
+				: null,
+	);
+	const model = useSyncExternalStore(
+		(listener) =>
+			provider === "codex" && paneId
+				? subscribeCodexSession(paneId, listener)
+				: () => {},
+		() => (provider === "codex" ? getCodexSession(paneId)?.model : undefined),
+	);
+	const queryOptions = {
 		staleTime: 0,
 		refetchInterval: 5_000,
 		refetchIntervalInBackground: false,
 		refetchOnWindowFocus: true,
+	};
+	const active = electronTrpc.usage.activeLimits.useQuery(undefined, {
+		...queryOptions,
+		enabled: provider === "claude" && !configDir,
 	});
+	const claude = electronTrpc.usage.limitsFor.useQuery(
+		{ configDir: configDir ?? "" },
+		{ ...queryOptions, enabled: provider === "claude" && Boolean(configDir) },
+	);
+	const codex = electronTrpc.codexSession.limits.useQuery(
+		{ model },
+		{
+			...queryOptions,
+			refetchInterval: 30_000,
+			enabled: provider === "codex",
+			retry: false,
+		},
+	);
+	const limits =
+		provider === "codex" ? codex.data : configDir ? claude.data : active.data;
 
-	const percent = limits?.fiveHourPercent ?? null;
-	if (percent === null) return null;
+	const codexWindow = provider === "codex" ? codex.data?.window : null;
+	const percent =
+		provider === "codex"
+			? (codexWindow?.usedPercent ?? null)
+			: (limits?.fiveHourPercent ?? null);
+	const windowLabel = codexWindow?.label ?? "5h";
+	const windowDescription = codexWindow?.description ?? "5-hour window";
+	if (percent === null)
+		return (
+			<output className="block px-2 py-2 text-xs text-muted-foreground">
+				{provider === "codex" ? "Codex" : "Claude"} usage{" "}
+				{(
+					provider === "codex"
+						? codex.isPending
+						: configDir
+							? claude.isPending
+							: active.isPending
+				)
+					? "loading…"
+					: "unavailable"}
+			</output>
+		);
 
 	const tone = toneFor(percent);
 	const lit = Math.round((percent / 100) * CELLS);
-	const resets = limits?.fiveHourResets
-		? trimZone(limits.fiveHourResets)
-		: null;
+	const resetLabel =
+		provider === "codex" ? codexWindow?.resets : limits?.fiveHourResets;
+	const resets = resetLabel ? trimZone(resetLabel) : null;
 
 	return (
 		<Tooltip>
@@ -105,7 +174,7 @@ export function DashboardSidebarUsageBar() {
 						<span className="min-w-0 truncate tracking-[0.06em] text-foreground/80">
 							{limits?.label ?? "Claude"}
 						</span>
-						<span>5h</span>
+						<span>{windowLabel}</span>
 						<span
 							className="ml-auto text-[11.5px] tabular-nums tracking-normal"
 							style={{ color: "var(--gs-usage)" }}
@@ -156,8 +225,10 @@ export function DashboardSidebarUsageBar() {
 			</TooltipTrigger>
 			<TooltipContent side="top">
 				{limits?.label ? `${limits.label} · ` : ""}
-				{percent}% of the 5-hour window used
-				{limits?.weeklyPercent === null || limits?.weeklyPercent === undefined
+				{percent}% of the {windowDescription} used
+				{windowLabel === "week" ||
+				limits?.weeklyPercent === null ||
+				limits?.weeklyPercent === undefined
 					? ""
 					: ` · ${limits.weeklyPercent}% of the week`}
 			</TooltipContent>

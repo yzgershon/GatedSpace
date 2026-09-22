@@ -14,6 +14,7 @@ import {
 	refreshCopyOnSelectSetting,
 } from "./copy-on-select-setting";
 import { scheduleFontSettleRefit } from "./font-settle";
+import { installTerminalMouseCoordinates } from "./mouse-coordinates";
 import {
 	cancelParserIdleWork,
 	createParserIdleGate,
@@ -74,6 +75,7 @@ export interface TerminalRuntime {
 	_forceRepaint: (() => void) | null;
 	_disposeImagePasteFallback: (() => void) | null;
 	_disposeCopyOnSelect: (() => void) | null;
+	_disposeMouseCoordinates: (() => void) | null;
 }
 
 function createTerminal(
@@ -90,7 +92,7 @@ function createTerminal(
 	const terminal = new XTerm({
 		cols,
 		rows,
-		cursorBlink: true,
+		cursorBlink: false,
 		fontFamily: appearance.fontFamily,
 		fontSize: appearance.fontSize,
 		theme: appearance.theme,
@@ -99,13 +101,11 @@ function createTerminal(
 		macOptionIsMeta: false,
 		cursorStyle: "block",
 		cursorInactiveStyle: "outline",
-		// Wheel scrolling feel. These two work together: scrollSensitivity sets how
-		// far one notch travels, smoothScrollDuration animates between positions.
-		// A small instant hop still reads as a "step", so we take a few lines per
-		// notch and glide them. Terminals scroll in whole character rows, so this is
-		// as fluid as the medium allows — tune the pair, not either one alone.
+		// Move a few whole character rows per wheel notch.
 		scrollSensitivity: 3,
-		smoothScrollDuration: 180,
+		// TUI redraws move the cursor and viewport together. Animating only the
+		// viewport leaves the caret at a different row during every redraw.
+		smoothScrollDuration: 0,
 		vtExtensions: { kittyKeyboard: true },
 		scrollbar: { showScrollbar: false },
 	});
@@ -495,7 +495,7 @@ function createResizeScheduler(
 export function createRuntime(
 	terminalId: string,
 	appearance: TerminalAppearance,
-	options: { initialBuffer?: string } = {},
+	options: { initialBuffer?: string; renderer?: "webgl" | "dom" } = {},
 ): TerminalRuntime {
 	const { cols, rows } = getInitialDimensions(terminalId);
 
@@ -531,12 +531,17 @@ export function createRuntime(
 	// re-parents the wrapper out of it, detachFromContainer() puts it back.
 	getTerminalParkingContainer().appendChild(wrapper);
 	terminal.open(wrapper);
+	const disposeMouseCoordinates = installTerminalMouseCoordinates(terminal);
 
 	installTerminalKeyEventHandler(terminal);
 
 	// Activate Unicode 11 widths (inside loadAddons) before restoring the buffer,
 	// else CJK/emoji/ZWJ widths get baked wrong into the replay. (#3572)
-	const addonsResult = loadAddons(terminal, () => measureAndResize(runtime));
+	const addonsResult = loadAddons(
+		terminal,
+		() => measureAndResize(runtime),
+		options.renderer,
+	);
 	logTerminalDiagnostics("after-open", terminalId, terminal, wrapper);
 	if (options.initialBuffer !== undefined) {
 		terminal.write(options.initialBuffer);
@@ -589,6 +594,7 @@ export function createRuntime(
 		_forceRepaint: addonsResult.forceRepaint,
 		_disposeImagePasteFallback: disposeImagePasteFallback,
 		_disposeCopyOnSelect: disposeCopyOnSelect,
+		_disposeMouseCoordinates: disposeMouseCoordinates,
 	};
 	return runtime;
 }
@@ -698,6 +704,8 @@ export function disposeRuntime(
 	runtime._disposeImagePasteFallback = null;
 	runtime._disposeCopyOnSelect?.();
 	runtime._disposeCopyOnSelect = null;
+	runtime._disposeMouseCoordinates?.();
+	runtime._disposeMouseCoordinates = null;
 	runtime._disposeAddons?.();
 	runtime._disposeAddons = null;
 	runtime._disposeResizeObserver?.();

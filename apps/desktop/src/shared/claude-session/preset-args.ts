@@ -30,6 +30,7 @@ const OWNED_VALUE_FLAGS = new Set([
 	"--input-format",
 	"--output-format",
 	"--permission-mode",
+	"--permission-prompt-tool",
 	"--resume",
 ]);
 

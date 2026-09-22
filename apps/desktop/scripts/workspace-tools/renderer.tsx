@@ -37,6 +37,7 @@ import { useDefaultPaneActions } from "../../src/renderer/routes/_authenticated/
 import { browserRuntimeRegistry } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/browserRuntimeRegistry";
 import { SessionAccountChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionAccountChip";
 import { SessionFolderChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionFolderChip";
+import { SessionPaneIcon } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionPaneIcon";
 import { TerminalSessionTitle } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/TerminalPane/components/TerminalSessionTitle";
 import type { PaneViewerData } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import "@xterm/xterm/css/xterm.css";
@@ -165,6 +166,7 @@ const registry: PaneRegistry<PaneViewerData> = {
 		onAfterClose: (pane) => disposed.push(pane.id),
 	},
 	terminal: {
+		getIcon: () => <SessionPaneIcon agentId="codex" />,
 		getTitle: () => "Dev",
 		getTabIcon: () => <PanelBottom />,
 		renderHeaderLead: (ctx) => (
@@ -353,6 +355,8 @@ Object.assign(window, {
 				proposed: runtime.fitAddon.proposeDimensions(),
 				viewport: gl ? Array.from(gl.getParameter(gl.VIEWPORT)) : null,
 				buffer: gl ? [gl.drawingBufferWidth, gl.drawingBufferHeight] : null,
+				domRows:
+					terminal.element?.querySelectorAll(".xterm-rows > div").length ?? 0,
 			};
 		},
 		async paintTerminal() {

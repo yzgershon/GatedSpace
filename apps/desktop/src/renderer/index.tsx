@@ -1,3 +1,5 @@
+// Establish Tailwind's layer order before component styles declare utilities.
+import "./globals.css";
 import { initSentry } from "./lib/sentry";
 
 initSentry();
@@ -19,7 +21,6 @@ import { electronQueryClient } from "./providers/ElectronTRPCProvider";
 import { NotFound } from "./routes/not-found";
 import { routeTree } from "./routeTree.gen";
 
-import "./globals.css";
 import "./styles/bundled-fonts.css";
 import { trackFocusSurface } from "renderer/lib/focus-surface";
 import { suppressMiddleClickAutoscroll } from "renderer/lib/suppress-middle-click-autoscroll";

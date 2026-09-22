@@ -1,0 +1,179 @@
+.session-effort-popover {
+	width: min(340px, calc(100vw - 32px));
+	padding: 0;
+	border-radius: 22px;
+	background: var(--popover);
+	color: var(--popover-foreground);
+	border: 1px solid var(--border);
+	box-shadow: 0 12px 32px #0003;
+}
+.session-effort-sheet {
+	padding: 18px 16px 20px;
+	width: 100%;
+}
+.session-effort-heading {
+	display: grid;
+	grid-template-columns: 28px 1fr 28px;
+	align-items: start;
+	gap: 10px;
+	margin-bottom: 22px;
+	color: var(--muted-foreground);
+}
+.session-effort-heading > svg {
+	margin-top: 3px;
+}
+.session-effort-heading > div {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 2px;
+	min-width: 0;
+}
+.session-effort-heading strong {
+	color: var(--primary);
+	font-size: 18px;
+	line-height: 26px;
+	font-weight: 600;
+}
+.session-effort-heading span {
+	font-size: 13px;
+	line-height: 20px;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.session-effort-heading button {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 8px;
+	transition:
+		background 160ms,
+		color 160ms;
+}
+.session-effort-heading button:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.session-effort-heading .session-fast-toggle[aria-pressed="true"] {
+	color: #f1c66c;
+	background: #f1c66c14;
+}
+.session-fast-toggle[aria-pressed="true"] svg {
+	fill: currentColor;
+}
+.session-fast-description {
+	margin: 13px 0 0;
+	text-align: center;
+	font-size: 10px;
+	color: var(--muted-foreground);
+}
+.session-fast-description[data-active="true"] {
+	color: #f1c66c;
+}
+.session-effort-sheet[data-compact="true"] {
+	padding: 12px 13px 13px;
+}
+.session-effort-sheet[data-compact="true"] .session-effort-heading {
+	margin-bottom: 14px;
+	gap: 6px;
+}
+.session-effort-sheet[data-compact="true"] .session-effort-heading strong {
+	font-size: 15px;
+	line-height: 22px;
+}
+.session-effort-sheet[data-compact="true"] .session-effort-heading span {
+	font-size: 11px;
+	line-height: 16px;
+}
+.session-effort-sheet[data-compact="true"] .session-effort-range {
+	--effort-track-size: 26px;
+}
+.session-effort-trigger {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	white-space: nowrap;
+	border-radius: 7px;
+	padding: 5px 7px;
+	color: var(--muted-foreground);
+	font: inherit;
+	font-size: 12px;
+	transition:
+		color 160ms,
+		background 160ms;
+}
+.session-effort-trigger:hover {
+	color: var(--foreground);
+	background: var(--accent);
+}
+.session-effort-range {
+	--effort-track-size: 32px;
+	position: relative;
+	height: var(--effort-track-size);
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--foreground) 9%, transparent);
+	box-shadow: inset 0 0 0 1px
+		color-mix(in srgb, var(--foreground) 8%, transparent);
+}
+.session-effort-fill {
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: var(--primary);
+	clip-path: inset(
+		0 calc((1 - var(--effort-progress)) * (100% - var(--effort-track-size))) 0 0
+			round 999px
+	);
+	transition: clip-path 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.session-effort-stops {
+	position: absolute;
+	inset: 0 calc(var(--effort-track-size) / 2);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+.session-effort-stops span {
+	height: 5px;
+	width: 5px;
+	margin: 0 -2.5px;
+	border-radius: 50%;
+	background: color-mix(in srgb, var(--foreground) 30%, transparent);
+}
+.session-effort-thumb {
+	position: absolute;
+	top: -3px;
+	left: calc(var(--effort-progress) * (100% - var(--effort-track-size)) - 3px);
+	width: calc(var(--effort-track-size) + 6px);
+	height: calc(var(--effort-track-size) + 6px);
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 2px 6px #0002;
+	transition: left 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.session-effort-range input {
+	position: absolute;
+	inset: -4px 0;
+	width: 100%;
+	height: calc(var(--effort-track-size) + 8px);
+	margin: 0;
+	opacity: 0;
+	cursor: pointer;
+}
+.session-effort-range:has(input:focus-visible) {
+	outline: 2px solid var(--ring);
+	outline-offset: 6px;
+}
+.session-effort-range[data-dragging="true"]
+	:is(.session-effort-thumb, .session-effort-fill) {
+	transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.session-effort-thumb,
+	.session-effort-fill {
+		transition: none;
+	}
+}

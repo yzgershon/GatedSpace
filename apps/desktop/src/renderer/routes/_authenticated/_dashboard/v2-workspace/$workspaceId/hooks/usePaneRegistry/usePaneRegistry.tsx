@@ -18,8 +18,15 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo } from "react";
 import { LuClipboard, LuClipboardCopy, LuEraser, LuPlus } from "react-icons/lu";
+import { CodexAccount } from "renderer/components/CodexSession/components/CodexAccount/CodexAccount";
+import { CodexContext } from "renderer/components/CodexSession/components/CodexContext/CodexContext";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { agentAccent } from "renderer/lib/agent-accent";
+import {
+	disposeCodexSession,
+	getCodexSession,
+	subscribeCodexSession,
+} from "renderer/lib/codex-session/store";
 import { FileIcon } from "renderer/lib/fileIcons";
 import { getBaseName } from "renderer/lib/pathBasename";
 import { consumeTerminalBackgroundIntent } from "renderer/lib/terminal/terminal-background-intents";
@@ -59,6 +66,7 @@ import {
 	type ClaudeSessionResumeRequest,
 	ClaudeSessionsPane,
 } from "./components/ClaudeSessionsPane";
+import { CodexSessionPane } from "./components/CodexSessionPane/CodexSessionPane";
 import { CommentPane } from "./components/CommentPane";
 import { CommentPaneHeaderExtras } from "./components/CommentPane/components/CommentPaneHeaderExtras";
 import { CommentPaneTitle } from "./components/CommentPane/components/CommentPaneTitle";
@@ -130,6 +138,7 @@ interface UsePaneRegistryOptions {
 	 * `renderPane`, which runs long after the page body has finished.
 	 */
 	workspaceCwd?: string;
+	onReviewChanges?: () => void;
 	newTabActionsRef?: React.RefObject<NewTabPaneActions | null>;
 }
 
@@ -140,6 +149,7 @@ export function usePaneRegistry({
 	store,
 	newTabActionsRef,
 	workspaceCwd,
+	onReviewChanges,
 }: UsePaneRegistryOptions): PaneRegistry<PaneViewerData> {
 	const { workspace } = useWorkspace();
 	const workspaceId = workspace.id;
@@ -231,13 +241,13 @@ export function usePaneRegistry({
 			// Claude sessions open in the session pane, which renders the stored
 			// transcript and reattaches to the conversation. A fork opens the same
 			// pane with --fork-session, so the original keeps its own transcript.
-			// Codex has no stream-json equivalent and stays a terminal.
-			if (request.provider === "claude") {
+			if (request.provider === "claude" || request.provider === "codex") {
 				const state = store.getState();
 				const pane = {
 					kind: "session" as const,
 					titleOverride: request.title,
 					data: {
+						provider: request.provider,
 						resumeSessionId: request.sessionId,
 						...(request.mode === "fork" ? { forkSession: true } : {}),
 						...(request.cwd ? { cwd: request.cwd } : {}),
@@ -350,12 +360,21 @@ export function usePaneRegistry({
 					// `shrink-0` span with no gap of its own — two children in a
 					// fragment would render touching.
 					<span className="flex items-center gap-1.5">
-						<SessionStatusDot paneId={ctx.pane.id} />
-						<SessionPaneIcon />
+						{(ctx.pane.data as SessionPaneData).provider !== "codex" && (
+							<SessionStatusDot paneId={ctx.pane.id} />
+						)}
+						<SessionPaneIcon
+							agentId={(ctx.pane.data as SessionPaneData).provider}
+						/>
 					</span>
 				),
-				getTabIcon: () => <SessionPaneIcon />,
-				getTitle: () => "Claude",
+				getTabIcon: (pane) => (
+					<SessionPaneIcon agentId={(pane.data as SessionPaneData).provider} />
+				),
+				getTitle: (pane) =>
+					(pane.data as SessionPaneData).provider === "codex"
+						? "Codex"
+						: "Claude",
 				/*
 				 * Where the session is, and how full it is — the two things the
 				 * deleted meta strip carried that are per-pane and worth a glance
@@ -367,8 +386,12 @@ export function usePaneRegistry({
 						fallbackCwd={(ctx.pane.data as SessionPaneData).cwd ?? workspaceCwd}
 					/>
 				),
-				renderMenuHeader: (ctx) => <SessionAccountChip paneId={ctx.pane.id} />,
-				hideMaximizeControl: true,
+				renderMenuHeader: (ctx) =>
+					(ctx.pane.data as SessionPaneData).provider === "codex" ? (
+						<CodexAccount />
+					) : (
+						<SessionAccountChip paneId={ctx.pane.id} />
+					),
 				/*
 				 * The context readout is CENTRED rather than tucked at the right.
 				 *
@@ -377,22 +400,33 @@ export function usePaneRegistry({
 				 * with the length of the title beside it cannot be scanned. Centred,
 				 * the four readings line up.
 				 */
-				renderHeaderCenter: (ctx: RendererContext<PaneViewerData>) => (
-					<SessionContextChip paneId={ctx.pane.id} />
-				),
-				// A session pane runs the claude binary by definition, so unlike a
-				// terminal there is nothing to record at launch or look up.
-				getAccent: () => agentAccent("claude"),
+				renderHeaderCenter: (ctx: RendererContext<PaneViewerData>) =>
+					(ctx.pane.data as SessionPaneData).provider === "codex" ? (
+						<CodexContext paneId={ctx.pane.id} />
+					) : (
+						<SessionContextChip paneId={ctx.pane.id} />
+					),
+				// Native session data records its provider; older panes default to Claude.
+				getAccent: (ctx) =>
+					agentAccent((ctx.pane.data as SessionPaneData).provider ?? "claude"),
 				// Label the tab with what the session is about — several open
 				// sessions all reading "Claude" tells you nothing.
 				titleSource: (pane) => ({
-					subscribe: (callback) => subscribeSession(pane.id, callback),
-					getSnapshot: () => getSessionTitle(pane.id),
+					subscribe: (callback) =>
+						(pane.data as SessionPaneData).provider === "codex"
+							? subscribeCodexSession(pane.id, callback)
+							: subscribeSession(pane.id, callback),
+					getSnapshot: () =>
+						(pane.data as SessionPaneData).provider === "codex"
+							? (getCodexSession(pane.id)?.title ?? "Codex")
+							: getSessionTitle(pane.id),
 				}),
 				renderPane: (ctx: RendererContext<PaneViewerData>) => {
 					const data = ctx.pane.data as SessionPaneData;
+					const SessionComponent =
+						data.provider === "codex" ? CodexSessionPane : ClaudeSessionPane;
 					return (
-						<ClaudeSessionPane
+						<SessionComponent
 							paneId={ctx.pane.id}
 							workspaceId={workspaceId}
 							// Drives the header's compact mode. With panes side by side
@@ -403,6 +437,7 @@ export function usePaneRegistry({
 							isActive={ctx.isActive}
 							model={data.model}
 							resumeSessionId={data.resumeSessionId}
+							{...(data.provider === "codex" ? { onReviewChanges } : {})}
 							forkSession={data.forkSession}
 							cwdOverride={data.cwd}
 							// Persisted on the pane so a restored layout resumes the real
@@ -429,7 +464,10 @@ export function usePaneRegistry({
 					),
 				// A session deliberately outlives an unmount (tab switches keep the
 				// process alive); closing the pane is the one thing that kills it.
-				onAfterClose: (pane) => disposeSession(pane.id),
+				onAfterClose: (pane) =>
+					(pane.data as SessionPaneData).provider === "codex"
+						? disposeCodexSession(pane.id)
+						: disposeSession(pane.id),
 			},
 			file: {
 				getIcon: (ctx: RendererContext<PaneViewerData>) => {
@@ -533,11 +571,13 @@ export function usePaneRegistry({
 			},
 			terminal: {
 				getIcon: (ctx) => {
-					const { terminalId } = ctx.pane.data as TerminalPaneData;
+					const { terminalId, agentId } = ctx.pane.data as TerminalPaneData;
 					return (
 						<TerminalPaneIcon
 							workspaceId={workspaceId}
 							terminalId={terminalId}
+							agentId={agentId}
+							showAgent
 						/>
 					);
 				},
@@ -757,6 +797,7 @@ export function usePaneRegistry({
 			onRevealPath,
 			createNewAgentSession,
 			resumeAgentSession,
+			onReviewChanges,
 		],
 	);
 }

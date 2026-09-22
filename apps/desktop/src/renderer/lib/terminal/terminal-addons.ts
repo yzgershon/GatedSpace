@@ -33,6 +33,9 @@ let suggestedRendererType: "webgl" | "dom" | undefined;
 export function loadAddons(
 	terminal: XTerm,
 	onRendererChange?: () => void,
+	renderer: "webgl" | "dom" = /Windows/i.test(navigator.userAgent)
+		? "dom"
+		: "webgl",
 ): LoadAddonsResult {
 	let disposed = false;
 	let webglAddon: WebglAddon | null = null;
@@ -70,7 +73,12 @@ export function loadAddons(
 	} catch {}
 
 	const rafId = requestAnimationFrame(() => {
-		if (disposed || suggestedRendererType === "dom") return;
+		// Chromium rasterizes DOM text at the effective CSS zoom. The WebGL
+		// glyph atlas uses window DPR instead, then scales that bitmap a second
+		// time in our independently zoomed panes. Prefer sharp native text on
+		// Windows and keep the corrected GPU path for other platforms.
+		if (disposed || renderer === "dom" || suggestedRendererType === "dom")
+			return;
 
 		try {
 			webglAddon = new WebglAddon();

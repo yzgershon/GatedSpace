@@ -19,7 +19,7 @@ import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { SessionPaneSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import { SessionView } from "./SessionView";
 import { getPinnedAccount, subscribePinnedAccount } from "./session-account";
-import { swapSessionAccount } from "./sessionStore";
+import { recordSessionModel, swapSessionAccount } from "./sessionStore";
 import type { UsageLimits } from "./usage-limits";
 import {
 	type ClaudePresetLaunch,
@@ -79,6 +79,8 @@ function ClaudeSessionPaneInner({
 		accountConfigDir,
 		setMode,
 		setEffort,
+		fast,
+		setFast,
 		send,
 		interrupt,
 		restart,
@@ -135,6 +137,12 @@ function ClaudeSessionPaneInner({
 			}
 			return electronTrpcClient.claudeSession.runCommand
 				.mutate({ key: paneId, command })
+				.then((reply) => {
+					const model = /^\/model\s+([\w.[\]-]+)$/.exec(command)?.[1];
+					if (model && reply && /set model to/i.test(reply))
+						recordSessionModel(paneId, model);
+					return reply;
+				})
 				.catch(() => null);
 		},
 		[paneId],
@@ -221,6 +229,8 @@ function ClaudeSessionPaneInner({
 			onInterrupt={interrupt}
 			onModeChange={setMode}
 			onEffortChange={setEffort}
+			fast={fast}
+			onFastChange={setFast}
 			onSearchFiles={searchFiles}
 			onRunCommand={runCommand}
 			onSwapAccount={swapAccount}

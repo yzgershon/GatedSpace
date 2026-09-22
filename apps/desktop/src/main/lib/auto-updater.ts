@@ -14,6 +14,11 @@ import {
 } from "shared/auto-update";
 import { PLATFORM } from "shared/constants";
 import { crashSentinel } from "./crash-sentinel";
+import {
+	findPersonalUpdate,
+	installPersonalUpdate,
+	readPersonalReleaseDir,
+} from "./personal-update";
 
 // electron-updater's internal cache only self-invalidates when the remote
 // sha512 differs from cached metadata, so a corrupt cached download (e.g.
@@ -59,6 +64,8 @@ const IS_PRERELEASE = isPrereleaseBuild();
 // build flavour and update channel are separate questions — a public build may
 // be cloud-capable and still deserve updates.
 const IS_RELEASE_BUILD = env.NEXT_PUBLIC_RELEASE_BUILD === "1";
+const IS_PERSONAL_BUILD =
+	PLATFORM.IS_WINDOWS && env.GATEDSPACE_PERSONAL === "1";
 const IS_AUTO_UPDATE_PLATFORM =
 	PLATFORM.IS_MAC ||
 	PLATFORM.IS_LINUX ||
@@ -146,7 +153,50 @@ export function isUpdateReadyToInstall(): boolean {
 	return isInstalling || currentStatus === AUTO_UPDATE_STATUS.READY;
 }
 
-export function installUpdate(): void {
+export function getPersonalUpdate() {
+	return IS_PERSONAL_BUILD ? findPersonalUpdate(app.getVersion()) : null;
+}
+
+export async function installAvailablePersonalUpdate(
+	expectedPath?: string,
+): Promise<void> {
+	if (isInstalling) return;
+	try {
+		const update = getPersonalUpdate();
+		if (!update || (expectedPath && expectedPath !== update.installerPath))
+			throw new Error(
+				"No completed personal update is available. Check for updates again.",
+			);
+		isInstalling = true;
+		await installPersonalUpdate(update.installerPath, () => {
+			setSkipQuitConfirmation();
+			crashSentinel.expectExit("updater-restart");
+			app.quit();
+		});
+	} catch (error) {
+		isInstalling = false;
+		emitStatus(
+			AUTO_UPDATE_STATUS.ERROR,
+			undefined,
+			error instanceof Error ? error.message : String(error),
+		);
+		throw error;
+	}
+}
+
+function checkPersonalUpdates() {
+	isDismissed = false;
+	emitStatus(AUTO_UPDATE_STATUS.CHECKING);
+	const update = getPersonalUpdate();
+	emitStatus(
+		update ? AUTO_UPDATE_STATUS.READY : AUTO_UPDATE_STATUS.IDLE,
+		update?.version,
+	);
+	return update;
+}
+
+export async function installUpdate(): Promise<void> {
+	if (IS_PERSONAL_BUILD) return installAvailablePersonalUpdate();
 	if (env.NODE_ENV === "development") {
 		// Simulate the real lifecycle so the renderer can be previewed with the
 		// simulate* mutations: installing lingers, then the post-update
@@ -191,6 +241,19 @@ export function dismissUpdate(): void {
 }
 
 export function checkForUpdates(): void {
+	if (isInstalling) return;
+	if (IS_PERSONAL_BUILD) {
+		try {
+			checkPersonalUpdates();
+		} catch (error) {
+			emitStatus(
+				AUTO_UPDATE_STATUS.ERROR,
+				undefined,
+				error instanceof Error ? error.message : String(error),
+			);
+		}
+		return;
+	}
 	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
 		return;
 	}
@@ -207,7 +270,47 @@ export function checkForUpdates(): void {
 	});
 }
 
-export function checkForUpdatesInteractive(): void {
+export async function checkForUpdatesInteractive(): Promise<void> {
+	if (IS_PERSONAL_BUILD) {
+		return (async () => {
+			try {
+				if (!readPersonalReleaseDir())
+					throw new Error(
+						"Set releaseDir in ~/.superset/personal-update.json to your personal installer folder.",
+					);
+				const update = checkPersonalUpdates();
+				if (!update) {
+					await dialog.showMessageBox({
+						type: "info",
+						title: "Personal updates",
+						message: "You're up to date!",
+						detail: `No completed personal installer newer than ${app.getVersion()} is available.`,
+					});
+					return;
+				}
+				const { response } = await dialog.showMessageBox({
+					type: "info",
+					title: "Personal update available",
+					message: `GatedSpace ${update.version} is ready to install.`,
+					detail:
+						"Installing closes and reopens GatedSpace. Wait for active agents to finish before continuing.",
+					buttons: ["Install and restart", "Later"],
+					defaultId: 0,
+					cancelId: 1,
+				});
+				if (response === 0)
+					await installAvailablePersonalUpdate(update.installerPath);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				emitStatus(AUTO_UPDATE_STATUS.ERROR, undefined, message);
+				await dialog.showMessageBox({
+					type: "error",
+					title: "Personal update failed",
+					message,
+				});
+			}
+		})();
+	}
 	if (env.NODE_ENV === "development") {
 		dialog.showMessageBox({
 			type: "info",
@@ -228,7 +331,7 @@ export function checkForUpdatesInteractive(): void {
 	isDismissed = false;
 	emitStatus(AUTO_UPDATE_STATUS.CHECKING);
 
-	autoUpdater
+	return autoUpdater
 		.checkForUpdates()
 		.then((result) => {
 			if (
@@ -319,6 +422,13 @@ export function simulateError(): void {
 }
 
 export function setupAutoUpdater(): void {
+	if (IS_PERSONAL_BUILD && env.NODE_ENV !== "development") {
+		// A build may finish while the app is open. The public feed is never used.
+		const interval = setInterval(checkForUpdates, 30_000);
+		interval.unref();
+		checkForUpdates();
+		return;
+	}
 	if (env.NODE_ENV === "development" || !IS_AUTO_UPDATE_PLATFORM) {
 		return;
 	}

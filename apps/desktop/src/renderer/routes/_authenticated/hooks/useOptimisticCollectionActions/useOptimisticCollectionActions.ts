@@ -1,8 +1,14 @@
 import type { TaskPriority, V2UsersHostRole } from "@superset/db/enums";
 import { toast } from "@superset/ui/sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { isDesktopChatDevMode } from "renderer/lib/dev-chat";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
+import { isLocalMode } from "renderer/lib/local-mode";
+import {
+	hostProjectMetadataKey,
+	useHostProjects,
+} from "renderer/react-query/projects/useHostProjects";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useHostWorkspaces } from "renderer/routes/_authenticated/providers/HostWorkspacesProvider";
 import {
@@ -100,6 +106,8 @@ function useOptimisticMutationRunner() {
 
 export function useOptimisticCollectionActions() {
 	const collections = useCollections();
+	const queryClient = useQueryClient();
+	const hostProjects = useHostProjects();
 	const { workspaces: hostWorkspaces, cache: hostWorkspacesCache } =
 		useHostWorkspaces();
 	const runMutation = useOptimisticMutationRunner();
@@ -197,11 +205,35 @@ export function useOptimisticCollectionActions() {
 						}),
 					),
 				renameProject: (projectId: string, name: string) =>
-					runProjectMutation("Failed to rename project", () =>
-						collections.v2Projects.update(projectId, (draft) => {
-							draft.name = name;
-						}),
-					),
+					runProjectMutation("Failed to rename project", () => {
+						if (!isLocalMode() && collections.v2Projects.has(projectId)) {
+							return collections.v2Projects.update(projectId, (draft) => {
+								draft.name = name.trim();
+							});
+						}
+						const local = hostProjects.find(
+							(project) => project.id === projectId,
+						);
+						if (!local)
+							throw new Error(
+								"The workspace's host is unavailable. Try again when it reconnects.",
+							);
+						const promise = getHostServiceClientByUrl(local.hostUrl)
+							.project.rename.mutate({ projectId, name })
+							.then(async () => {
+								// Only the local-only collection is a writable mirror. Never insert a
+								// fabricated cloud project to paper over a missing Electric row.
+								if (isLocalMode() && collections.v2Projects.has(projectId)) {
+									collections.v2Projects.update(projectId, (draft) => {
+										draft.name = name.trim();
+									});
+								}
+								await queryClient.invalidateQueries({
+									queryKey: hostProjectMetadataKey(local.hostUrl),
+								});
+							});
+						return makeHostWorkspaceTransaction("update", promise);
+					}),
 				updateRepository: (projectId: string, repoCloneUrl: string | null) =>
 					runProjectMutation("Failed to update project repository", () =>
 						collections.v2Projects.update(projectId, (draft) => {
@@ -351,6 +383,8 @@ export function useOptimisticCollectionActions() {
 		};
 	}, [
 		collections,
+		hostProjects,
+		queryClient,
 		hostWorkspaces,
 		hostWorkspacesCache,
 		runMutation,

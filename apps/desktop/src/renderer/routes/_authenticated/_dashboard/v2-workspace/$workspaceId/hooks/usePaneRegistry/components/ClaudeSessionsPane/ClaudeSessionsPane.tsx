@@ -14,7 +14,7 @@ export interface ClaudeSessionResumeRequest {
 	cwd: string | null;
 	title: string;
 	/**
-	 * "fork" opens a copy under a fresh session id (Claude only). Used for
+	 * "fork" opens a copy under a fresh session id. Used for
 	 * sessions that are already live in another pane — the host refuses a
 	 * plain resume for those, since a second writer on one session id
 	 * silently destroys the newer copy's conversation.
@@ -89,7 +89,15 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 		refetchInterval: 10_000,
 		refetchOnWindowFocus: true,
 	});
+	const liveCodexSessions = useQuery({
+		queryKey: ["native-codex-live-sessions"],
+		queryFn: () => electronTrpcClient.codexSession.liveSessionIds.query(),
+		refetchInterval: 10_000,
+		refetchOnWindowFocus: true,
+	});
 	const liveSessionKeys = useMemo(() => {
+		if (!liveBindings.data || !livePaneSessions.data || !liveCodexSessions.data)
+			return null;
 		const keys = new Set<string>();
 		for (const binding of liveBindings.data ?? []) {
 			if (!binding.agentSessionId) continue;
@@ -98,8 +106,10 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 		for (const sessionId of livePaneSessions.data ?? []) {
 			keys.add(`claude:${sessionId}`);
 		}
+		for (const sessionId of liveCodexSessions.data)
+			keys.add(`codex:${sessionId}`);
 		return keys;
-	}, [liveBindings.data, livePaneSessions.data]);
+	}, [liveBindings.data, livePaneSessions.data, liveCodexSessions.data]);
 
 	const filtered = useMemo(() => {
 		const sessions = data ?? [];
@@ -189,13 +199,11 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 				) : (
 					<ul className="flex flex-col">
 						{filtered.map((session) => {
-							const isLive = liveSessionKeys.has(
-								`${provider}:${session.sessionId}`,
-							);
+							const isLive =
+								liveSessionKeys === null ||
+								liveSessionKeys.has(`${provider}:${session.sessionId}`);
 							const liveHint =
-								provider === "claude"
-									? "Already open in a live pane — clicking opens a forked copy under a new session id; the original pane keeps this session."
-									: "Already open in a live pane. Close that pane first — Codex sessions can't be forked.";
+								"Already open, or its state cannot be confirmed. Opens a forked copy so the original conversation stays intact.";
 							return (
 								<li key={session.filePath}>
 									<button
@@ -207,9 +215,7 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 												sessionId: session.sessionId,
 												cwd: session.cwd,
 												title: session.title,
-												...(isLive && provider === "claude"
-													? { mode: "fork" as const }
-													: {}),
+												...(isLive ? { mode: "fork" as const } : {}),
 											})
 										}
 										className={cn(
@@ -225,7 +231,7 @@ export function ClaudeSessionsPane({ onResume }: ClaudeSessionsPaneProps) {
 											{isLive ? (
 												<span className="flex shrink-0 items-center gap-1 rounded-full bg-primary/10 px-1.5 py-px text-[10px] font-medium text-primary">
 													<span className="size-1.5 rounded-full bg-primary" />
-													{provider === "claude" ? "open · forks" : "open"}
+													open · forks
 												</span>
 											) : null}
 										</div>

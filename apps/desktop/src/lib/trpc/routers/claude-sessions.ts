@@ -1,5 +1,7 @@
+import { join } from "node:path";
 import { shell } from "electron";
 import { readAgentLastUserMessage } from "main/lib/agent-last-message";
+import { SUPERSET_HOME_DIR } from "main/lib/app-environment";
 import {
 	applyTitleOverrides,
 	type ClaudeSessionSummary,
@@ -9,32 +11,74 @@ import {
 	setSessionTitleOverride,
 } from "main/lib/claude-sessions";
 import { searchSessionContent } from "main/lib/claude-sessions/search-content";
-import { listCodexSessions } from "main/lib/codex-sessions";
+import {
+	mergePinnedCodexSessions,
+	PinnedCodexSessions,
+} from "main/lib/codex-session/pinned-sessions";
+import { codexSessionManager } from "main/lib/codex-session/session-manager";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
 
 export type AgentSessionProvider = "claude" | "codex";
+const pinnedCodex = new PinnedCodexSessions(
+	join(SUPERSET_HOME_DIR, "pinned-codex-sessions.json"),
+);
 
 export const createClaudeSessionsRouter = () => {
 	return router({
+		pinnedCodex: publicProcedure.query(() => pinnedCodex.read()),
+		pinCodex: publicProcedure
+			.input(
+				z.object({
+					sessionId: z.string().uuid(),
+					title: z.string().trim().min(1).max(120),
+					pinned: z.boolean(),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				const session = input.pinned
+					? await codexSessionManager.readSummary(input.sessionId)
+					: pinnedCodex.read().find((row) => row.sessionId === input.sessionId);
+				if (session)
+					pinnedCodex.set({ ...session, title: input.title }, input.pinned);
+				return { ok: true };
+			}),
 		list: publicProcedure
 			.input(
 				z
 					.object({
 						limit: z.number().min(1).max(100).optional(),
 						provider: z.enum(["claude", "codex"]).optional(),
+						search: z.string().max(200).optional(),
 					})
 					.optional(),
 			)
-			.query(({ input }): ClaudeSessionSummary[] => {
-				const limit = input?.limit ?? 30;
-				if (input?.provider === "codex") {
-					// CodexSessionSummary is structurally identical. Overrides are keyed
-					// by session id and provider-agnostic, so Codex gets them too.
-					return applyTitleOverrides(listCodexSessions(limit));
-				}
-				return listClaudeSessions(limit);
-			}),
+			.query(
+				async ({
+					input,
+				}): Promise<(ClaudeSessionSummary & { pinned?: boolean })[]> => {
+					const limit = input?.limit ?? 30;
+					if (input?.provider === "codex") {
+						// CodexSessionSummary is structurally identical. Overrides are keyed
+						// by session id and provider-agnostic, so Codex gets them too.
+						return mergePinnedCodexSessions(
+							applyTitleOverrides(
+								await codexSessionManager.listThreads(limit, input.search),
+							),
+							pinnedCodex.read(),
+							input.search,
+						).map((row) => ({
+							sizeBytes: 0,
+							contextTokens: null,
+							filePath: "",
+							firstMessage: "",
+							projectDirName: "",
+							...row,
+						}));
+					}
+					return listClaudeSessions(limit);
+				},
+			),
 
 		/**
 		 * Session ids whose TRANSCRIPT contains the query.
@@ -58,12 +102,13 @@ export const createClaudeSessionsRouter = () => {
 					limit: z.number().min(1).max(400).optional(),
 				}),
 			)
-			.query(({ input }): string[] => {
+			.query(async ({ input }): Promise<string[]> => {
 				const limit = input.limit ?? 200;
-				const candidates =
-					input.provider === "codex"
-						? listCodexSessions(limit)
-						: listClaudeSessions(limit);
+				if (input.provider === "codex")
+					return (
+						await codexSessionManager.listThreads(limit, input.query)
+					).map((s) => s.sessionId);
+				const candidates = listClaudeSessions(limit);
 				return searchSessionContent(candidates, input.query, limit);
 			}),
 
@@ -80,10 +125,18 @@ export const createClaudeSessionsRouter = () => {
 				z.object({
 					sessionId: z.string().min(8).max(64),
 					title: z.string().max(MAX_SESSION_TITLE).nullable(),
+					provider: z.enum(["claude", "codex"]).optional(),
 				}),
 			)
-			.mutation(({ input }) => {
+			.mutation(async ({ input }) => {
+				if (input.provider === "codex" && input.title)
+					await codexSessionManager.rename(input.sessionId, input.title);
 				setSessionTitleOverride(input.sessionId, input.title);
+				const pinned = pinnedCodex
+					.read()
+					.find((row) => row.sessionId === input.sessionId);
+				if (input.provider === "codex" && pinned && input.title?.trim())
+					pinnedCodex.set({ ...pinned, title: input.title.trim() }, true);
 				return { ok: true } as const;
 			}),
 
@@ -107,10 +160,15 @@ export const createClaudeSessionsRouter = () => {
 				}),
 			)
 			.mutation(async ({ input }) => {
-				const sessions =
-					input.provider === "codex"
-						? listCodexSessions(200)
-						: listClaudeSessions(200);
+				if (input.provider === "codex") {
+					await codexSessionManager.archive(input.sessionId);
+					const pinned = pinnedCodex
+						.read()
+						.find((row) => row.sessionId === input.sessionId);
+					if (pinned) pinnedCodex.set(pinned, false);
+					return { ok: true } as const;
+				}
+				const sessions = listClaudeSessions(200);
 				const match = sessions.find((s) => s.sessionId === input.sessionId);
 				if (!match) return { ok: false, reason: "not-found" } as const;
 				/*
@@ -121,13 +179,9 @@ export const createClaudeSessionsRouter = () => {
 				 * session came straight back on the next refresh — indistinguishable
 				 * from a delete that silently failed.
 				 *
-				 * Codex keeps its own single file and has no account fan-out, so it
-				 * still deletes exactly what was listed.
+				 * Codex is handled above through its archive API.
 				 */
-				const targets =
-					input.provider === "codex"
-						? [match.filePath]
-						: findSessionFiles(input.sessionId);
+				const targets = findSessionFiles(input.sessionId);
 				// A session that resolved to nothing on disk is already gone; saying
 				// so is more honest than reporting success for a no-op.
 				if (targets.length === 0) {

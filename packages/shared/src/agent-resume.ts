@@ -48,18 +48,17 @@ export const AGENT_RESUME_SYNTAX: Record<ResumableAgentId, AgentResumeSyntax> =
 			args: (sessionId, options) => [
 				"--resume",
 				sessionId,
-				// Claude can branch a conversation; Codex cannot.
+				// Preserve the original conversation when opening a copy.
 				...(options?.fork ? ["--fork-session"] : []),
 			],
 			replayConfiguredArgs: true,
 		},
 		codex: {
 			command: "codex",
-			// No fork mode upstream, so a fork request has no valid syntax and must
-			// fail rather than silently resume in place — which would be the exact
-			// two-writer hazard the caller asked to avoid.
-			args: (sessionId, options) =>
-				options?.fork ? null : ["resume", sessionId],
+			args: (sessionId, options) => [
+				options?.fork ? "fork" : "resume",
+				sessionId,
+			],
 			replayConfiguredArgs: false,
 		},
 	};

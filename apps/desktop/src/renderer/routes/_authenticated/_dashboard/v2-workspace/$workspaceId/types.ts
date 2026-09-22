@@ -37,6 +37,8 @@ export type LauncherPaneData = Record<string, never>;
 // the read-only ClaudeSessionsPaneData list above. Minimal per-instance state —
 // the timeline streams from the main-process transport keyed by pane id.
 export interface SessionPaneData {
+	/** Missing on saved Claude panes from earlier versions. */
+	provider?: "claude" | "codex";
 	/** Optional model override; omit for the CLI default. */
 	model?: string;
 	/** Resume an existing claude session id instead of starting fresh. */

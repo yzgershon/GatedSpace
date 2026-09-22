@@ -47,6 +47,7 @@ import {
 import type { SessionRestoreState } from "./session-restore";
 
 export interface SessionSnapshot {
+	fast: boolean;
 	timeline: SessionTimeline;
 	mode: SessionMode;
 	effort: EffortLevel;
@@ -67,6 +68,7 @@ export interface SessionSnapshot {
 }
 
 export interface SessionStartOptions {
+	workspaceId?: string;
 	cwd: string;
 	model?: string;
 	configDir?: string;
@@ -81,6 +83,8 @@ export interface SessionStartOptions {
 }
 
 interface SessionEntry {
+	/** Explicit choice from /model, retained across pane remounts and respawns. */
+	modelOverride?: string;
 	snapshot: SessionSnapshot;
 	listeners: Set<() => void>;
 	subscription: { unsubscribe: () => void } | null;
@@ -112,6 +116,7 @@ const DEFAULT_EFFORT: EffortLevel = "xhigh";
 
 /** Stable identity for panes whose session hasn't been created yet. */
 const EMPTY_SNAPSHOT: SessionSnapshot = {
+	fast: false,
 	timeline: emptyTimeline(),
 	mode: DEFAULT_MODE,
 	effort: DEFAULT_EFFORT,
@@ -186,6 +191,8 @@ export function ensureSession(key: string, opts: SessionStartOptions): void {
 	 */
 	const pinned = getPinnedAccount(key);
 	entry.options = pinned ? { ...opts, configDir: pinned.configDir } : opts;
+	if (entry.modelOverride)
+		entry.options = { ...entry.options, model: entry.modelOverride };
 	/*
 	 * The cwd is readable the moment it is known, before any event arrives.
 	 *
@@ -318,7 +325,8 @@ function attach(key: string, opts: SessionStartOptions): void {
 			electronTrpcClient.claudeSession.start.mutate({
 				key,
 				cwd: opts.cwd,
-				model: opts.model,
+				workspaceId: opts.workspaceId,
+				model: entry.modelOverride ?? opts.model,
 				// `entry.options` carries the `/swap` pin; `opts` is what the pane
 				// asked for. Spawning from the former is what binds a restored pane
 				// to the account it was swapped onto.
@@ -329,6 +337,7 @@ function attach(key: string, opts: SessionStartOptions): void {
 				binary: opts.binary,
 				extraArgs: opts.extraArgs,
 				env: opts.env,
+				fast: entry.snapshot.fast,
 			}),
 		);
 	}
@@ -471,6 +480,7 @@ export function setSessionMode(key: string, mode: SessionMode): void {
 		electronTrpcClient.claudeSession.restart.mutate({
 			key,
 			cwd: options.cwd,
+			workspaceId: options.workspaceId,
 			model: options.model,
 			configDir: options.configDir,
 			permissionMode: mode,
@@ -478,6 +488,7 @@ export function setSessionMode(key: string, mode: SessionMode): void {
 			binary: options.binary,
 			extraArgs: options.extraArgs,
 			env: options.env,
+			fast: entry.snapshot.fast,
 		}),
 	);
 }
@@ -568,6 +579,7 @@ export function swapSessionAccount(key: string, account: PinnedAccount): void {
 		electronTrpcClient.claudeSession.restart.mutate({
 			key,
 			cwd: options.cwd,
+			workspaceId: options.workspaceId,
 			model: options.model,
 			configDir: account.configDir,
 			permissionMode: entry.snapshot.mode,
@@ -575,6 +587,7 @@ export function swapSessionAccount(key: string, account: PinnedAccount): void {
 			binary: options.binary,
 			extraArgs: options.extraArgs,
 			env: options.env,
+			fast: entry.snapshot.fast,
 		}),
 	);
 }
@@ -662,6 +675,7 @@ export function restartSession(key: string): void {
 		electronTrpcClient.claudeSession.restart.mutate({
 			key,
 			cwd: options.cwd,
+			workspaceId: options.workspaceId,
 			model: options.model,
 			configDir: options.configDir,
 			permissionMode: entry.snapshot.mode,
@@ -669,6 +683,7 @@ export function restartSession(key: string): void {
 			binary: options.binary,
 			extraArgs: options.extraArgs,
 			env: options.env,
+			fast: entry.snapshot.fast,
 		}),
 	);
 }
@@ -705,4 +720,46 @@ export function disposeSession(key: string): void {
 	entry.subscription?.unsubscribe();
 	entries.delete(key);
 	void electronTrpcClient.claudeSession.stop.mutate({ key });
+}
+
+/** Called only after the CLI acknowledges a /model command. */
+export function recordSessionModel(key: string, model: string): void {
+	const entry = getOrCreateEntry(key);
+	entry.modelOverride = model;
+	if (entry.options) entry.options = { ...entry.options, model };
+	update(key, (snapshot) => ({
+		...snapshot,
+		timeline: {
+			...snapshot.timeline,
+			header: snapshot.timeline.header
+				? { ...snapshot.timeline.header, model }
+				: undefined,
+		},
+	}));
+}
+
+/** Fast is opt-in per session. Only display success after the CLI acknowledges it. */
+export async function setSessionFast(
+	key: string,
+	fast: boolean,
+): Promise<void> {
+	const entry = getOrCreateEntry(key);
+	if (entry.snapshot.timeline.status === "streaming")
+		throw new Error("Wait for Claude to finish before changing speed.");
+	const reply = await electronTrpcClient.claudeSession.runCommand.mutate({
+		key,
+		command: `/fast ${fast ? "on" : "off"}`,
+	});
+	if (
+		!reply ||
+		!new RegExp(`fast mode\\s+(?:is\\s+)?${fast ? "on" : "off"}`, "i").test(
+			reply,
+		)
+	) {
+		throw new Error(
+			reply ||
+				"Claude did not confirm the speed change. Try again when the session is ready.",
+		);
+	}
+	update(key, (snapshot) => ({ ...snapshot, fast }));
 }

@@ -151,6 +151,13 @@ describe("buildAgentEffortArgs", () => {
 		]);
 	});
 
+	it("defaults Codex to Extra High", () => {
+		expect(buildAgentEffortArgs("codex", undefined)).toEqual([
+			"-c",
+			"model_reasoning_effort=xhigh",
+		]);
+	});
+
 	it("returns [] when no effort is set", () => {
 		expect(buildAgentEffortArgs("claude", undefined)).toEqual([]);
 		expect(buildAgentEffortArgs("claude", "")).toEqual([]);

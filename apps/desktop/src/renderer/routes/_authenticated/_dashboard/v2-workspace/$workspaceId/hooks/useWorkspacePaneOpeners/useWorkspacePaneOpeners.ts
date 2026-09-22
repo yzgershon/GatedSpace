@@ -38,7 +38,10 @@ export function useWorkspacePaneOpeners({
 	) => void;
 	addTerminalTab: () => Promise<void>;
 	addBrowserTab: () => void;
-	addSessionTab: (options?: { target?: PresetOpenTarget }) => void;
+	addSessionTab: (options?: {
+		target?: PresetOpenTarget;
+		provider?: "claude" | "codex";
+	}) => void;
 	openBrowserUrl: (url: string) => void;
 	openClaudeSessions: () => void;
 	openCommentPane: (comment: CommentPaneData) => void;
@@ -165,11 +168,14 @@ export function useWorkspacePaneOpeners({
 	 * the tab you had just made vanished under you.
 	 */
 	const addSessionTab = useCallback(
-		(options?: { target?: PresetOpenTarget }) => {
+		(options?: {
+			target?: PresetOpenTarget;
+			provider?: "claude" | "codex";
+		}) => {
 			const state = store.getState();
 			const pane = {
 				kind: "session",
-				data: {} as SessionPaneData,
+				data: { provider: options?.provider } as SessionPaneData,
 			} as const;
 
 			if (options?.target === "active-tab" && state.activeTabId) {

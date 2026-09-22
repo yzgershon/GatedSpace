@@ -25,11 +25,14 @@ import {
 	ContextMenuTrigger,
 } from "@superset/ui/context-menu";
 import { Input } from "@superset/ui/input";
+import { toast } from "@superset/ui/sonner";
 import { cn } from "@superset/ui/utils";
 import { useQuery } from "@tanstack/react-query";
 import {
+	Archive,
 	Copy,
 	Pencil,
+	Pin,
 	Play,
 	Search,
 	Terminal as TerminalIcon,
@@ -89,7 +92,25 @@ export function SidebarSessionsPanel({
 	}) => void;
 }) {
 	const [query, setQuery] = useState("");
-	const [provider, setProvider] = useState<AgentSessionProvider>("claude");
+	const [provider, setProvider] = useState<AgentSessionProvider>(() =>
+		localStorage.getItem("gatedspace-session-provider") === "codex"
+			? "codex"
+			: "claude",
+	);
+	const savedCodex = useQuery({
+		queryKey: ["pinned-codex-sessions"],
+		queryFn: () => electronTrpcClient.claudeSessions.pinnedCodex.query(),
+		staleTime: 30_000,
+	});
+	useEffect(() => {
+		if (
+			savedCodex.data?.length &&
+			!localStorage.getItem("gatedspace-session-provider")
+		) {
+			setProvider("codex");
+			localStorage.setItem("gatedspace-session-provider", "codex");
+		}
+	}, [savedCodex.data]);
 	/** Session currently being renamed inline, and the text in its field. */
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameDraft, setRenameDraft] = useState("");
@@ -135,9 +156,19 @@ export function SidebarSessionsPanel({
 	);
 
 	const sessions = useQuery({
-		queryKey: ["sidebar-agent-sessions", provider],
+		queryKey: [
+			"sidebar-agent-sessions",
+			provider,
+			provider === "codex" ? query.trim() : "",
+		],
 		queryFn: () =>
-			electronTrpcClient.claudeSessions.list.query({ limit: 60, provider }),
+			electronTrpcClient.claudeSessions.list.query({
+				limit: 60,
+				provider,
+				...(provider === "codex" && query.trim()
+					? { search: query.trim().slice(0, 200) }
+					: {}),
+			}),
 		refetchOnWindowFocus: true,
 		staleTime: 15_000,
 	});
@@ -162,9 +193,20 @@ export function SidebarSessionsPanel({
 		refetchOnWindowFocus: true,
 	});
 
+	const codexPaneSessions = useQuery({
+		queryKey: ["sidebar-codex-pane-sessions"],
+		queryFn: () => electronTrpcClient.codexSession.liveSessionIds.query(),
+		refetchInterval: 10_000,
+		refetchOnWindowFocus: true,
+	});
 	const liveKeys = useMemo(
-		() => liveSessionKeys(bindings.data ?? null, paneSessions.data ?? null),
-		[bindings.data, paneSessions.data],
+		() =>
+			liveSessionKeys(
+				bindings.data ?? null,
+				paneSessions.data ?? null,
+				codexPaneSessions.data ?? null,
+			),
+		[bindings.data, paneSessions.data, codexPaneSessions.data],
 	);
 
 	const commitRename = useCallback(
@@ -184,27 +226,43 @@ export function SidebarSessionsPanel({
 			}
 			try {
 				await electronTrpcClient.claudeSessions.rename.mutate({
+					provider,
 					sessionId,
 					// Empty hands the session back to its generated title, which is the
 					// only way to undo a rename.
 					title: next ? next : null,
 				});
 				await sessions.refetch();
+			} catch (error) {
+				toast.error("Could not rename session", {
+					description: error instanceof Error ? error.message : String(error),
+				});
 			} finally {
 				committingRename.current = null;
 			}
 		},
-		[sessions],
+		[sessions, provider],
 	);
 
 	const deleteSession = useCallback(
 		async (sessionId: string) => {
 			setConfirmingDeleteId(null);
-			await electronTrpcClient.claudeSessions.remove.mutate({
-				provider,
-				sessionId,
-			});
-			await sessions.refetch();
+			try {
+				await electronTrpcClient.claudeSessions.remove.mutate({
+					provider,
+					sessionId,
+				});
+				await sessions.refetch();
+			} catch (error) {
+				toast.error(
+					provider === "codex"
+						? "Could not archive Codex session"
+						: "Could not delete session",
+					{
+						description: error instanceof Error ? error.message : String(error),
+					},
+				);
+			}
 		},
 		[provider, sessions],
 	);
@@ -269,12 +327,14 @@ export function SidebarSessionsPanel({
 	const grouped = useMemo(() => {
 		const now = Date.now();
 		const rows: (
-			| { kind: "header"; label: SessionDateGroup }
+			| { kind: "header"; label: SessionDateGroup | "Pinned" }
 			| { kind: "session"; session: (typeof filtered)[number] }
 		)[] = [];
-		let current: SessionDateGroup | null = null;
+		let current: SessionDateGroup | "Pinned" | null = null;
 		for (const session of filtered) {
-			const group = sessionDateGroup(session.lastModified, now);
+			const group = session.pinned
+				? "Pinned"
+				: sessionDateGroup(session.lastModified, now);
 			if (group !== current) {
 				current = group;
 				rows.push({ kind: "header", label: group });
@@ -302,7 +362,10 @@ export function SidebarSessionsPanel({
 					<button
 						key={entry.id}
 						type="button"
-						onClick={() => setProvider(entry.id)}
+						onClick={() => {
+							setProvider(entry.id);
+							localStorage.setItem("gatedspace-session-provider", entry.id);
+						}}
 						className={cn(
 							"flex-1 rounded-[6px] px-2 py-1 text-xs transition-colors focus-visible:outline-none",
 							provider === entry.id
@@ -326,7 +389,20 @@ export function SidebarSessionsPanel({
 			</div>
 
 			<div className="mt-1 min-h-0 flex-1 overflow-y-auto py-1">
-				{sessions.isLoading ? (
+				{sessions.isError ? (
+					<div className="px-3 py-2 text-xs text-muted-foreground">
+						<p className="select-text cursor-text">
+							Could not load sessions. {sessions.error.message}
+						</p>
+						<button
+							type="button"
+							className="mt-2 underline"
+							onClick={() => void sessions.refetch()}
+						>
+							Try again
+						</button>
+					</div>
+				) : sessions.isLoading ? (
 					<p className="px-3 py-2 text-xs text-muted-foreground">Loading…</p>
 				) : filtered.length === 0 ? (
 					<p className="px-3 py-2 text-xs text-muted-foreground">
@@ -537,13 +613,17 @@ export function SidebarSessionsPanel({
 											type="button"
 											aria-label={
 												confirmingDeleteId === session.sessionId
-													? `Confirm delete ${session.title}`
-													: `Delete ${session.title}`
+													? `Confirm ${provider === "codex" ? "archive" : "delete"} ${session.title}`
+													: `${provider === "codex" ? "Archive" : "Delete"} ${session.title}`
 											}
 											title={
 												confirmingDeleteId === session.sessionId
-													? "Click again to send this session to the Recycle Bin"
-													: "Delete"
+													? provider === "codex"
+														? "Click again to archive this Codex conversation"
+														: "Click again to send this session to the Recycle Bin"
+													: provider === "codex"
+														? "Archive"
+														: "Delete"
 											}
 											onClick={() => {
 												if (confirmingDeleteId === session.sessionId) {
@@ -561,11 +641,39 @@ export function SidebarSessionsPanel({
 													: "text-muted-foreground/50 opacity-0 hover:text-destructive",
 											)}
 										>
-											<Trash2 className="size-3.5" />
+											{provider === "codex" ? (
+												<Archive className="size-3.5" />
+											) : (
+												<Trash2 className="size-3.5" />
+											)}
 										</button>
 									</div>
 								</ContextMenuTrigger>
 								<ContextMenuContent>
+									{provider === "codex" && (
+										<ContextMenuItem
+											onSelect={() => {
+												void electronTrpcClient.claudeSessions.pinCodex
+													.mutate({
+														sessionId: session.sessionId,
+														title: session.title,
+														pinned: !session.pinned,
+													})
+													.then(() => sessions.refetch())
+													.catch((error: unknown) =>
+														toast.error("Could not update pinned session", {
+															description:
+																error instanceof Error
+																	? error.message
+																	: String(error),
+														}),
+													);
+											}}
+										>
+											<Pin className="mr-2 size-4" />
+											{session.pinned ? "Unpin session" : "Pin session"}
+										</ContextMenuItem>
+									)}
 									<ContextMenuItem
 										onSelect={() =>
 											onOpenSession({

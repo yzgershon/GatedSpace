@@ -2,7 +2,7 @@
 	"name": "@superset/desktop",
 	"productName": "GatedSpace",
 	"description": "GatedSpace - an agentic development environment for Windows (derived from Superset)",
-	"version": "1.18.8",
+	"version": "1.18.17",
 	"main": "./dist/main/index.js",
 	"resources": "src/resources",
 	"repository": {
@@ -77,6 +77,7 @@
 		"@hookform/resolvers": "5.2.2",
 		"@lezer/highlight": "1.2.3",
 		"@mastra/core": "1.33.1",
+		"@modelcontextprotocol/sdk": "1.28.0",
 		"@paper-design/shaders-react": "0.0.76",
 		"@parcel/watcher": "2.5.6",
 		"@pierre/diffs": "1.2.2",

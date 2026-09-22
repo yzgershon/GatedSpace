@@ -1,7 +1,7 @@
 import { alert } from "@superset/ui/atoms/Alert";
 import { toast } from "@superset/ui/sonner";
 import { useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useDashboardSidebarSectionRename } from "renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarSectionRenameContext";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
 import { useOptimisticCollectionActions } from "renderer/routes/_authenticated/hooks/useOptimisticCollectionActions";
@@ -30,6 +30,7 @@ export function useDashboardSidebarProjectSectionActions({
 
 	const [isRenaming, setIsRenaming] = useState(false);
 	const [renameValue, setRenameValue] = useState(project.name);
+	const submitting = useRef(false);
 
 	const startRename = () => {
 		setRenameValue(project.name);
@@ -41,11 +42,24 @@ export function useDashboardSidebarProjectSectionActions({
 		setRenameValue(project.name);
 	};
 
-	const submitRename = () => {
-		setIsRenaming(false);
+	const submitRename = async () => {
+		if (submitting.current) return;
 		const trimmed = renameValue.trim();
-		if (!trimmed || trimmed === project.name) return;
-		projectActions.renameProject(project.id, trimmed);
+		if (!trimmed || trimmed === project.name) {
+			setIsRenaming(false);
+			return;
+		}
+		submitting.current = true;
+		try {
+			const transaction = projectActions.renameProject(project.id, trimmed);
+			if (!transaction) return;
+			await transaction.isPersisted.promise;
+			setIsRenaming(false);
+		} catch {
+			// The mutation runner reports the error; retain the draft for retry.
+		} finally {
+			submitting.current = false;
+		}
 	};
 
 	const handleOpenInFinder = () => {

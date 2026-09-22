@@ -115,7 +115,7 @@
     },
     "apps/desktop": {
       "name": "@superset/desktop",
-      "version": "1.18.8",
+      "version": "1.18.17",
       "dependencies": {
         "@agentclientprotocol/claude-agent-acp": "0.56.0",
         "@ai-sdk/anthropic": "3.0.64",
@@ -156,6 +156,7 @@
         "@hookform/resolvers": "5.2.2",
         "@lezer/highlight": "1.2.3",
         "@mastra/core": "1.33.1",
+        "@modelcontextprotocol/sdk": "1.28.0",
         "@paper-design/shaders-react": "0.0.76",
         "@parcel/watcher": "2.5.6",
         "@pierre/diffs": "1.2.2",
@@ -620,7 +621,7 @@
     },
     "packages/cli": {
       "name": "@superset/cli",
-      "version": "1.18.8",
+      "version": "1.18.17",
       "dependencies": {
         "@clack/prompts": "0.10.1",
         "@superset/cli-framework": "workspace:*",
@@ -715,7 +716,7 @@
     },
     "packages/host-service": {
       "name": "@superset/host-service",
-      "version": "1.18.8",
+      "version": "1.18.17",
       "dependencies": {
         "@agentclientprotocol/claude-agent-acp": "0.56.0",
         "@agentclientprotocol/sdk": "1.2.0",

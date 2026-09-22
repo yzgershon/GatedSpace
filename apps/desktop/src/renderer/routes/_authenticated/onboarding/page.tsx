@@ -1,6 +1,7 @@
 import { chatServiceTrpc } from "@superset/chat/client";
 import { Badge } from "@superset/ui/badge";
 import { Button } from "@superset/ui/button";
+import { codexIcon } from "@superset/ui/icons/preset-icons";
 import { Spinner } from "@superset/ui/spinner";
 import { cn } from "@superset/ui/utils";
 import { createFileRoute } from "@tanstack/react-router";
@@ -8,7 +9,7 @@ import { type ReactNode, useState } from "react";
 import { FaAws } from "react-icons/fa";
 import { HiArrowUpRight } from "react-icons/hi2";
 import { LuCheck } from "react-icons/lu";
-import { SiGithub, SiOpenai } from "react-icons/si";
+import { SiGithub } from "react-icons/si";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { GhAuthDialog } from "./components/GhAuthDialog";
 import {
@@ -79,7 +80,7 @@ function OnboardingDashboardPage() {
 					onRecheck={() => void refetchAnthropic()}
 				/>
 				<OnboardingRow
-					icon={<SiOpenai className="size-4.5" />}
+					icon={<img src={codexIcon} alt="Codex" className="size-4.5" />}
 					chipClassName="bg-foreground text-background"
 					name="Codex"
 					description="OpenAI's coding agent."

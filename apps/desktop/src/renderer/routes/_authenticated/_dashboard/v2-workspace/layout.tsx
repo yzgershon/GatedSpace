@@ -1,7 +1,7 @@
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useV2UserPreferences } from "renderer/hooks/useV2UserPreferences";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { useDashboardSidebarState } from "renderer/routes/_authenticated/hooks/useDashboardSidebarState";
@@ -70,13 +70,26 @@ function V2WorkspaceLayout() {
 	);
 	const failedEntry = failedEntries?.[0] ?? null;
 
-	const lastEnsuredWorkspaceIdRef = useRef<string | null>(null);
 	useEffect(() => {
-		if (!workspace || lastEnsuredWorkspaceIdRef.current === workspace.id)
-			return;
-		lastEnsuredWorkspaceIdRef.current = workspace.id;
-		ensureWorkspaceInSidebar(workspace.id, workspace.projectId);
-	}, [ensureWorkspaceInSidebar, workspace]);
+		if (!workspace) return;
+		let cancelled = false;
+		// On cold start the local collections can still be hydrating. Ensuring
+		// membership before they are ready can be overwritten by stored rows.
+		void Promise.all([
+			collections.v2SidebarProjects.preload(),
+			collections.v2WorkspaceLocalState.preload(),
+		])
+			.then(() => {
+				if (!cancelled)
+					ensureWorkspaceInSidebar(workspace.id, workspace.projectId);
+			})
+			.catch((error) =>
+				console.error("Failed to restore workspace sidebar membership", error),
+			);
+		return () => {
+			cancelled = true;
+		};
+	}, [collections, ensureWorkspaceInSidebar, workspace]);
 
 	const hostStatus = useRemoteHostStatus(workspace);
 

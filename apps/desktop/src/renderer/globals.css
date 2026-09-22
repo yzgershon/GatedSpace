@@ -709,3 +709,13 @@
 		margin: 0;
 	}
 }
+
+/* Keep pane names legible and consistent while renaming or switching sessions. */
+.gs-pane-title {
+	font-family:
+		"Segoe UI Variable Display", "Segoe UI Variable", "Segoe UI", system-ui,
+		sans-serif;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+	line-height: 1.35;
+}

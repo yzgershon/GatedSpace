@@ -14,6 +14,12 @@ import {
 } from "./session-list-helpers";
 
 describe("liveSessionKeys", () => {
+	test("native Codex ownership is tracked separately from Claude", () => {
+		const keys = liveSessionKeys([], ["same-id"], ["codex-id"]);
+		expect(keys?.has("codex:codex-id")).toBe(true);
+		expect(keys?.has("claude:codex-id")).toBe(false);
+		expect(liveSessionKeys([], [], null)).toBeNull();
+	});
 	test("a terminal-held session is keyed by agent and session id", () => {
 		const keys = liveSessionKeys(
 			[{ agentId: "claude", agentSessionId: "abc" }],

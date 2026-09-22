@@ -24,6 +24,7 @@ const EMPTY_STATE: WorkspaceState<PaneViewerData> = {
 };
 
 export interface OpenSessionRequest {
+	provider?: "claude" | "codex";
 	sessionId: string;
 	/** The session's own project directory, which may not be this worktree. */
 	cwd: string | null;
@@ -56,6 +57,7 @@ export function openSessionInWorkspace(
 			{
 				kind: "session",
 				data: {
+					provider: request.provider,
 					resumeSessionId: request.sessionId,
 					forkSession: request.fork,
 					// The session's own directory wins: resuming it against this

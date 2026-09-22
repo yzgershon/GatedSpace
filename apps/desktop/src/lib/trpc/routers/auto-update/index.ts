@@ -1,21 +1,18 @@
 import { observable } from "@trpc/server/observable";
-import { app } from "electron";
 import {
 	type AutoUpdateStatusEvent,
 	autoUpdateEmitter,
 	checkForUpdates,
 	checkForUpdatesInteractive,
 	dismissUpdate,
+	getPersonalUpdate,
 	getUpdateStatus,
+	installAvailablePersonalUpdate,
 	installUpdate,
 	simulateDownloading,
 	simulateError,
 	simulateUpdateReady,
 } from "main/lib/auto-updater";
-import {
-	findPersonalUpdate,
-	installPersonalUpdate,
-} from "main/lib/personal-update";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
@@ -46,11 +43,11 @@ export const createAutoUpdateRouter = () => {
 		}),
 
 		checkInteractive: publicProcedure.mutation(() => {
-			checkForUpdatesInteractive();
+			return checkForUpdatesInteractive();
 		}),
 
 		install: publicProcedure.mutation(() => {
-			installUpdate();
+			return installUpdate();
 		}),
 
 		/*
@@ -60,7 +57,7 @@ export const createAutoUpdateRouter = () => {
 		 * normal state for a public build.
 		 */
 		checkPersonal: publicProcedure.query(() => {
-			return findPersonalUpdate(app.getVersion());
+			return getPersonalUpdate();
 		}),
 
 		installPersonal: publicProcedure
@@ -72,11 +69,7 @@ export const createAutoUpdateRouter = () => {
 				 * spawns an executable, so it verifies the path is still one this
 				 * module would have offered before running it.
 				 */
-				const update = findPersonalUpdate(app.getVersion());
-				if (!update || update.installerPath !== input.installerPath) {
-					throw new Error("No matching personal update is available");
-				}
-				installPersonalUpdate(update.installerPath, () => app.quit());
+				return installAvailablePersonalUpdate(input.installerPath);
 			}),
 
 		dismiss: publicProcedure.mutation(() => {

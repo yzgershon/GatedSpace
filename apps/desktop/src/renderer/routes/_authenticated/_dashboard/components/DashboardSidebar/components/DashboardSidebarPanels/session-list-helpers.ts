@@ -37,8 +37,9 @@ export function liveSessionKeys(
 		agentSessionId?: string | null;
 	}> | null,
 	paneSessionIds: string[] | null,
+	codexPaneSessionIds: string[] | null = [],
 ): Set<string> | null {
-	if (hostBindings === null) return null;
+	if (hostBindings === null || codexPaneSessionIds === null) return null;
 	const keys = new Set<string>();
 	for (const binding of hostBindings) {
 		if (!binding.agentSessionId) continue;
@@ -47,6 +48,8 @@ export function liveSessionKeys(
 	for (const sessionId of paneSessionIds ?? []) {
 		keys.add(`claude:${sessionId}`);
 	}
+	for (const sessionId of codexPaneSessionIds ?? [])
+		keys.add(`codex:${sessionId}`);
 	return keys;
 }
 

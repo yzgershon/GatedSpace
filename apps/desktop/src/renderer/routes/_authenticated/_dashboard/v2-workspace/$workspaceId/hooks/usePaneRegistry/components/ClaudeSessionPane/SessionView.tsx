@@ -1,38 +1,23 @@
-/**
- * The full session surface: header + scrollable timeline + composer.
- *
- * Pure and presentational — it takes a `SessionTimeline` plus composer
- * callbacks, so it renders identically from a live stream or a captured
- * transcript, and can be reviewed on a build before the transport/IPC wiring
- * lands. The pane wrapper (next increment) owns the transport and passes these
- * props down.
- */
-import { cn } from "@superset/ui/utils";
-import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
 import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
-import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import type { UserImagePayload } from "shared/claude-session/events";
-import type {
-	SessionTimeline,
-	SessionUsage,
-} from "shared/claude-session/timeline";
+import type { SessionTimeline } from "shared/claude-session/timeline";
 import { ResumeWithAccount } from "./ResumeWithAccount";
 import {
 	type EffortLevel,
 	type FileMention,
-	SESSION_MODES,
 	SessionComposer,
 	type SessionMode,
 } from "./SessionComposer";
-import { SessionHintBar } from "./SessionHintBar";
+import { SessionPermissionRequests } from "./SessionPermissionRequests";
 import { SessionTimelineView } from "./SessionTimelineView";
-import { SessionUsageStrip } from "./SessionUsageStrip";
 import type { UsageLimits } from "./usage-limits";
 
 interface SessionViewProps {
+	fast?: boolean;
+	onFastChange?: (fast: boolean) => Promise<void>;
 	timeline: SessionTimeline;
 	mode: SessionMode;
 	effort: EffortLevel;
@@ -65,202 +50,22 @@ interface SessionViewProps {
 	restoring?: boolean;
 }
 
-function formatTokens(count: number): string {
-	if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-	if (count >= 1_000) return `${Math.round(count / 1_000)}k`;
-	return String(count);
-}
-
-/**
- * How full the context is after the last turn. Worth showing continuously:
- * running out of context is what explains a long session suddenly behaving
- * differently, and it's invisible until it bites.
- */
-/**
- * Absolute token counts, not a share of the window.
- *
- * The thresholds used to be 70% and 90% of whatever the model reported. On a
- * 1M window that meant no warning at all until 700k, by which point the useful
- * moment to act — before the next long turn — is gone. These are the numbers
- * the user actually steers by.
- */
-const CONTEXT_WARN_TOKENS = 400_000;
-const CONTEXT_DANGER_TOKENS = 750_000;
-
-function ContextChip({
-	usage,
-	compact,
-}: {
-	usage: SessionUsage;
-	/** Side-by-side panes: the count alone, no "/ 1M" denominator. */
-	compact?: boolean;
-}) {
-	const { contextTokens, contextWindow } = usage;
-	return (
-		<span
-			className={cn(
-				"tabular-nums",
-				contextTokens >= CONTEXT_DANGER_TOKENS
-					? "text-destructive"
-					: contextTokens >= CONTEXT_WARN_TOKENS
-						? "text-warning"
-						: "text-muted-foreground/70",
-			)}
-			title={
-				contextWindow
-					? `${contextTokens.toLocaleString()} of ${contextWindow.toLocaleString()} context tokens used`
-					: `${contextTokens.toLocaleString()} context tokens used`
-			}
-		>
-			{formatTokens(contextTokens)}
-			{contextWindow && !compact ? ` / ${formatTokens(contextWindow)}` : ""}
-		</span>
-	);
-}
-
-function SessionHeader({
-	timeline,
-	limits,
-	paneCount,
-}: {
-	timeline: SessionTimeline;
-	limits?: UsageLimits | null;
-	paneCount?: number;
-}) {
-	const compact = (paneCount ?? 1) > 1;
-	const { metaStrip } = useSkinTokens();
-	const header = timeline.header;
-	const running = timeline.status === "streaming";
-	// Renderer is a browser context — no node:path. Basename by hand (win + posix).
-	const folder = header?.cwd
-		? (header.cwd
-				.replace(/[/\\]+$/, "")
-				.split(/[/\\]/)
-				.pop() ?? undefined)
-		: undefined;
-	const connectedMcp =
-		header?.mcpServers.filter((s) => s.status === "connected").length ?? 0;
-
-	/*
-	 * No strip at all. Everything it carried that was worth keeping has a better
-	 * home: the folder is in the title row beside the pane's name, and the
-	 * context fraction sits with the engine label in the composer, where you are
-	 * already looking when you decide whether to send another turn.
-	 */
-	if (metaStrip === "none") return null;
-
-	return (
-		<div className="flex h-11 shrink-0 items-center gap-2 overflow-hidden border-b border-border px-4 text-xs">
-			{running ? (
-				<Loader2 className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
-			) : (
-				<span
-					className={cn(
-						"size-1.5 shrink-0 rounded-full",
-						timeline.status === "error" ? "bg-destructive" : "bg-success",
-					)}
-				/>
-			)}
-			<span className="truncate font-medium text-foreground">
-				{folder ?? "Session"}
-			</span>
-
-			{/*
-			 * IN THE LAYOUT FLOW, not floated over it.
-			 *
-			 * This used to be `absolute inset-x-0` with `justify-center`, to centre
-			 * the account and its limits in the header. Being out of flow meant
-			 * nothing reserved room for it and nothing pushed it aside, so the
-			 * moment the header ran short — which is any time panes are side by
-			 * side — it printed straight over the folder name on the left and the
-			 * context count on the right. Centring was not worth an unreadable
-			 * header. `min-w-0` lets it shrink instead of forcing an overflow.
-			 */}
-			<div className="flex min-w-0 shrink items-center">
-				<SessionUsageStrip
-					limits={limits}
-					costUsd={timeline.costUsd}
-					compact={compact}
-				/>
-			</div>
-
-			<div className="min-w-2 flex-1" />
-			{/*
-			 * No rate-limit chip. It restated, in a yellow tag, what the usage strip
-			 * two inches to the left already shows continuously and more precisely —
-			 * and it overlapped that strip while doing it.
-			 */}
-			{timeline.usage ? (
-				<span className="shrink-0">
-					<ContextChip usage={timeline.usage} compact={compact} />
-				</span>
-			) : null}
-			{header ? (
-				// The CLI's own name for the mode, not the one the user picked from —
-				// the composer says "Auto", so a header reading "bypassPermissions"
-				// looks like a different setting entirely.
-				<span className="shrink-0 text-muted-foreground/70">
-					{SESSION_MODES.find((m) => m.id === header.permissionMode)?.label ??
-						header.permissionMode}
-				</span>
-			) : null}
-			{/* The MCP count is the least urgent thing here, so it is the first to
-			 * go when panes are sharing the width. */}
-			{connectedMcp > 0 && !compact ? (
-				<span
-					className="shrink-0 text-muted-foreground/70"
-					title={`${connectedMcp} MCP server${connectedMcp === 1 ? "" : "s"} connected: ${
-						header?.mcpServers
-							.filter((s) => s.status === "connected")
-							.map((s) => s.name)
-							.join(", ") ?? ""
-					}`}
-				>
-					· {connectedMcp} MCP server{connectedMcp === 1 ? "" : "s"}
-				</span>
-			) : null}
-		</div>
-	);
-}
-
-/**
- * Openers for an empty session.
- *
- * A blank composer asks the user to invent a first move, which is the moment a
- * session is most likely to be abandoned. These are deliberately COMPLETE
- * prompts rather than fragments: clicking one starts the turn, because the
- * composer seeds its text from the draft store only on mount and prefilling
- * after that would need state plumbing this doesn't earn.
- *
- * Kept generic on purpose — nothing here reads the workspace, so a suggestion
- * can't be wrong about what the repo contains.
- */
-const STARTER_PROMPTS = [
-	"Explain this codebase",
-	"What changed on this branch?",
-	"Run /review on my current changes",
-] as const;
-
-/** Within this many px of the bottom still counts as "following along". */
+/** Within this many px of the bottom still counts as following along. */
 const STICK_THRESHOLD = 80;
 
-/**
- * Follow the stream, but only while the user is already at the bottom. Scroll
- * up to read something and the view stays put instead of yanking you back down
- * on every token.
- */
-function useStickToBottom() {
+function useStickToBottom(timeline: SessionTimeline, restoring: boolean) {
 	const ref = useRef<HTMLDivElement>(null);
 	const stickRef = useRef(true);
 
-	// No dependency list on purpose: this component only re-renders when the
-	// timeline actually changed, and every one of those renders is a moment to
-	// re-pin. Writing scrollTop while already at the bottom is a no-op.
+	// Pane focus also re-renders this view. Only new conversation content should
+	// move it: scrolling between pointer-down and click can move a tool approval.
 	useEffect(() => {
+		void timeline;
+		void restoring;
 		const el = ref.current;
 		if (!el || !stickRef.current) return;
 		el.scrollTop = el.scrollHeight;
-	});
+	}, [timeline, restoring]);
 
 	const onScroll = () => {
 		const el = ref.current;
@@ -273,6 +78,8 @@ function useStickToBottom() {
 }
 
 export function SessionView({
+	fast,
+	onFastChange,
 	timeline,
 	mode,
 	effort,
@@ -286,44 +93,37 @@ export function SessionView({
 	pinnedAccountId,
 	accountConfigDir,
 	draftKey,
-	limits,
-	paneCount,
-	isActive,
 	onRestart,
 	restoring = false,
 }: SessionViewProps) {
+	const claudeIcon = usePresetIcon("claude");
 	// Restoring outranks empty: a conversation being read off disk is not an
 	// empty one, and offering "Explain this codebase" over a session with a
 	// hundred messages in it is actively wrong, not just premature.
 	const isEmpty =
 		!restoring &&
 		timeline.items.length === 0 &&
+		!timeline.permissions?.length &&
 		timeline.status !== "streaming";
-	const { ref: scrollRef, onScroll } = useStickToBottom();
-	const claudeIcon = usePresetIcon("claude");
+	const { ref: scrollRef, onScroll } = useStickToBottom(timeline, restoring);
 
 	return (
-		// `relative`: the composer floats over the timeline rather than docking
-		// under it, so the conversation keeps the full pane width behind it.
-		<div className="relative flex h-full w-full flex-col bg-background">
-			<SessionHeader
-				timeline={timeline}
-				limits={limits}
-				paneCount={paneCount}
-			/>
+		// The dock reserves the real composer height, including long prompts.
+		<div className="relative flex h-full min-h-0 w-full flex-col bg-background">
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}
 				className="min-h-0 flex-1 overflow-y-auto"
+				style={{ scrollBehavior: "auto" }}
 			>
 				{isEmpty ? (
-					<div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
-						{/* Claude's own mark, not a generic sparkle — this pane IS Claude
-						    Code, and the reference leads with the logo. */}
-						{claudeIcon ? (
-							<img src={claudeIcon} alt="" className="size-10 opacity-90" />
-						) : (
-							<Sparkles className="size-8 text-muted-foreground/40" />
+					<div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-6 py-6 text-center">
+						{claudeIcon && (
+							<img
+								src={claudeIcon}
+								alt="Claude"
+								className="size-10 opacity-90"
+							/>
 						)}
 						<p className="text-sm text-muted-foreground">
 							Start a Claude Code session
@@ -332,7 +132,11 @@ export function SessionView({
 							Ask to make changes, @mention files, or run /commands.
 						</p>
 						<div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-							{STARTER_PROMPTS.map((prompt) => (
+							{[
+								"Explain this codebase",
+								"What changed on this branch?",
+								"Run /review on my current changes",
+							].map((prompt) => (
 								<button
 									key={prompt}
 									type="button"
@@ -351,6 +155,12 @@ export function SessionView({
 					<SessionTranscriptSkeleton />
 				) : (
 					<SessionTimelineView timeline={timeline} onInterrupt={onInterrupt} />
+				)}
+				{draftKey && (
+					<SessionPermissionRequests
+						sessionKey={draftKey}
+						requests={timeline.permissions ?? []}
+					/>
 				)}
 				{timeline.status === "error" && onRestart ? (
 					// A dead session isn't a dead pane: the conversation is still on disk,
@@ -385,28 +195,11 @@ export function SessionView({
 						</span>
 					</div>
 				) : null}
-				{/*
-				 * The composer's footprint, as a spacer rather than padding on the
-				 * scroller: without it the last row of a finished turn sits under the
-				 * card and can't be scrolled to, but padding would also push the
-				 * empty state off-centre, since it centres inside the content box.
-				 */}
-				{isEmpty ? null : <div className="h-32 shrink-0" />}
 			</div>
-			{/*
-			 * A fade where the conversation runs under the composer, so text
-			 * dissolves instead of being guillotined by the card's edge. Tall enough
-			 * to cover the gap the composer floats over; pointer-events-none so it
-			 * never eats a click meant for the last row.
-			 */}
-			<div className="pointer-events-none absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-background via-background/85 to-transparent" />
-
-			{/*
-			 * No usage banner above the composer. It appeared over the box you were
-			 * about to type in, to tell you a percentage the header already shows —
-			 * a dismissible interruption that repeated itself every session.
-			 */}
 			<SessionComposer
+				model={timeline.header?.model}
+				fast={fast}
+				onFastChange={onFastChange}
 				status={timeline.status}
 				slashCommands={timeline.header?.slashCommands ?? []}
 				mode={mode}
@@ -421,7 +214,6 @@ export function SessionView({
 				pinnedAccountId={pinnedAccountId}
 				draftKey={draftKey}
 			/>
-			<SessionHintBar isActive={isActive === true} />
 		</div>
 	);
 }

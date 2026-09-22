@@ -13,6 +13,10 @@ import { useHotkey } from "renderer/hotkeys";
 import { resolveV2PresetIconKey } from "renderer/lib/preset-icon-key";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
+import {
+	sessionFromPane,
+	useFocusedSession,
+} from "renderer/stores/focused-session";
 import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
 import { useStore } from "zustand";
@@ -55,7 +59,7 @@ import { useWorkspaceHotkeys } from "./hooks/useWorkspaceHotkeys";
 import { useWorkspacePaneOpeners } from "./hooks/useWorkspacePaneOpeners";
 import { WorkspaceGitStatusProvider } from "./providers/WorkspaceGitStatusProvider";
 import { FileDocumentStoreProvider } from "./state/fileDocumentStore";
-import type { FilePaneData, PaneViewerData } from "./types";
+import type { FilePaneData, PaneViewerData, SessionPaneData } from "./types";
 import type { V2WorkspaceUrlOpenTarget } from "./utils/openUrlInV2Workspace";
 
 interface WorkspaceSearch {
@@ -266,8 +270,36 @@ function V2WorkspaceContent() {
 	usePickElementConsumer({ store });
 	const launcher = useV2TerminalLauncher();
 	const { activeHostUrl } = useLocalHostService();
-	const tools = useToolPanels(workspaceId, activeHostUrl, launcher);
+	const tools = useToolPanels(workspaceId, activeHostUrl, launcher, () => {
+		const pane = store.getState().getActivePane()?.pane;
+		return pane?.kind === "session"
+			? {
+					provider: (pane.data as SessionPaneData).provider,
+					cwd: (pane.data as SessionPaneData).cwd,
+				}
+			: {};
+	});
 	const toolState = useStore(tools.state);
+	useEffect(() => {
+		const update = () => {
+			const target =
+				tools.state.getState().focus === "main" ? store : tools.store;
+			const session = sessionFromPane(target.getState().getActivePane()?.pane);
+			// Files/browser tools keep the last agent's limits visible.
+			if (session) useFocusedSession.getState().set(session);
+		};
+		update();
+		const cleanups = [
+			store.subscribe(update),
+			tools.store.subscribe(update),
+			tools.state.subscribe(update),
+		];
+		return () => {
+			for (const cleanup of cleanups) cleanup();
+			useFocusedSession.getState().set(null);
+		};
+	}, [store, tools]);
+
 	useEffect(
 		() =>
 			store.subscribe((next, previous) => {
@@ -367,12 +399,16 @@ function V2WorkspaceContent() {
 	 * changes.
 	 */
 	const newTabActionsRef = useRef<NewTabPaneActions | null>(null);
+	const reviewCodexChanges = useCallback(() => {
+		void tools.open("right", "changes");
+	}, [tools]);
 	const basePaneRegistry = usePaneRegistry({
 		onOpenFile: openFilePaneFromTreeClick,
 		onRevealPath: revealPath,
 		launcher,
 		store,
 		newTabActionsRef,
+		onReviewChanges: reviewCodexChanges,
 		workspaceCwd: workspaceCwdQuery.data?.worktreePath,
 	});
 	const paneRegistry = useMemo<PaneRegistry<PaneViewerData>>(
@@ -435,19 +471,27 @@ function V2WorkspaceContent() {
 	 */
 	const canOpenAsPane = useCallback(
 		(preset: V2TerminalPresetRow) =>
-			resolveV2PresetIconKey(preset, agentConfigs ?? []) === "claude",
+			["claude", "codex"].includes(
+				resolveV2PresetIconKey(preset, agentConfigs ?? []) ?? "",
+			),
 		[agentConfigs],
 	);
 
 	const runPresetOrSession = useCallback(
 		(preset: V2TerminalPresetRow, options?: { target?: PresetOpenTarget }) => {
 			if (canOpenAsPane(preset)) {
-				addSessionTab(options);
+				addSessionTab({
+					...options,
+					provider:
+						resolveV2PresetIconKey(preset, agentConfigs ?? []) === "codex"
+							? "codex"
+							: "claude",
+				});
 				return;
 			}
 			return executePreset(preset, options);
 		},
-		[addSessionTab, canOpenAsPane, executePreset],
+		[addSessionTab, canOpenAsPane, executePreset, agentConfigs],
 	);
 
 	/**
@@ -461,12 +505,18 @@ function V2WorkspaceContent() {
 			options?: { target?: PresetOpenTarget },
 		) => {
 			if (mode === "pane") {
-				addSessionTab(options);
+				addSessionTab({
+					...options,
+					provider:
+						resolveV2PresetIconKey(preset, agentConfigs ?? []) === "codex"
+							? "codex"
+							: "claude",
+				});
 				return;
 			}
 			return executePreset(preset, options);
 		},
-		[addSessionTab, executePreset],
+		[addSessionTab, executePreset, agentConfigs],
 	);
 
 	const handleQuickOpen = useCallback(

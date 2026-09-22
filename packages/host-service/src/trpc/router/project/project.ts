@@ -31,6 +31,28 @@ import {
 } from "./utils/resolve-repo";
 
 export const projectRouter = router({
+	rename: protectedProcedure
+		.input(
+			z.object({
+				projectId: z.string().uuid(),
+				name: z.string().trim().min(1).max(120),
+			}),
+		)
+		.mutation(({ ctx, input }) => {
+			const project = ctx.db
+				.update(projects)
+				.set({ name: input.name })
+				.where(eq(projects.id, input.projectId))
+				.returning({ id: projects.id, name: projects.name })
+				.get();
+			if (!project)
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message: "Project is not set up on this host",
+				});
+			return project;
+		}),
+
 	list: protectedProcedure.query(({ ctx }) => {
 		return ctx.db
 			.select({

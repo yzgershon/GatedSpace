@@ -83,7 +83,7 @@ export function PaneTitleEditor({
 					// biome-ignore lint/a11y/noStaticElementInteractions: the pane menu provides keyboard rename
 					<span
 						className={cn(
-							"truncate text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors duration-150",
+							"truncate gs-pane-title text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors duration-150",
 							isActive ? "text-foreground" : "text-muted-foreground",
 						)}
 						title={title}
@@ -108,7 +108,7 @@ export function PaneTitleEditor({
 			value={draft}
 			aria-label="Rename pane"
 			className={cn(
-				"min-w-0 flex-1 bg-transparent text-[length:var(--gs-pane-title-size,14px)] font-medium outline-none",
+				"min-w-0 flex-1 bg-transparent gs-pane-title text-[length:var(--gs-pane-title-size,14px)] font-medium outline-none",
 				"rounded-sm border border-border px-1 py-0 text-foreground",
 			)}
 			onChange={(event) => setDraft(event.target.value)}

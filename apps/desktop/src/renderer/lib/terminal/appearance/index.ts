@@ -59,6 +59,8 @@ export const DEFAULT_TERMINAL_FONT_FAMILIES = [
 	"Hack Nerd Font",
 	"FiraCode Nerd Font",
 	"CaskaydiaCove Nerd Font",
+	"Cascadia Mono",
+	"Consolas",
 	"Menlo",
 	"Monaco",
 	"Courier New",

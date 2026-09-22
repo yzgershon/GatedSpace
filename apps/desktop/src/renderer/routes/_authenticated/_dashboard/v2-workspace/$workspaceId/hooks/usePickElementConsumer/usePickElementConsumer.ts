@@ -14,11 +14,12 @@
 import type { Pane, WorkspaceStore } from "@superset/panes";
 import { toast } from "@superset/ui/sonner";
 import { useEffect, useRef } from "react";
+import { appendCodexDraftText } from "renderer/lib/codex-session/draft";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { usePickElementIntent } from "renderer/stores/pick-element-intent";
 import { formatPickedElement, type PickedElement } from "shared/element-picker";
 import type { StoreApi } from "zustand/vanilla";
-import type { PaneViewerData } from "../../types";
+import type { PaneViewerData, SessionPaneData } from "../../types";
 import { appendSessionDraftText } from "../usePaneRegistry/components/ClaudeSessionPane";
 import {
 	resolveTarget,
@@ -102,7 +103,10 @@ export function usePickElementConsumer({
 					toast.error("Couldn't read that element");
 					return;
 				}
-				appendSessionDraftText(target.paneId, formatPickedElement(result));
+				const pane = store.getState().getPane(target.paneId)?.pane;
+				if ((pane?.data as SessionPaneData)?.provider === "codex")
+					appendCodexDraftText(target.paneId, formatPickedElement(result));
+				else appendSessionDraftText(target.paneId, formatPickedElement(result));
 				toast.success("Element added to the session");
 			})
 			.catch((error: unknown) => {

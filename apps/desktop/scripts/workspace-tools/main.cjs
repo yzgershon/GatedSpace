@@ -218,8 +218,9 @@ app
 		);
 		let term = await run("toolsTest.snapshotTerminal()");
 		assert.deepEqual({ cols: term.cols, rows: term.rows }, term.proposed);
-		assert.deepEqual(term.viewport, [0, 0, ...term.buffer]);
-		pass("Real xterm fits the bottom panel and preserves the GPU viewport fix");
+		if (term.buffer) assert.deepEqual(term.viewport, [0, 0, ...term.buffer]);
+		else assert.equal(term.domRows, term.rows);
+		pass("Real xterm fits the bottom panel with correctly sized renderer rows");
 		assert.equal(
 			await run(
 				"document.querySelectorAll('.gs-tool-main [data-focused=\"true\"]').length",
@@ -351,8 +352,9 @@ app
 		await wait(600);
 		term = await run("toolsTest.snapshotTerminal()");
 		assert.deepEqual({ cols: term.cols, rows: term.rows }, term.proposed);
-		assert.deepEqual(term.viewport, [0, 0, ...term.buffer]);
-		pass("Reopening restores the terminal with correct canvas dimensions");
+		if (term.buffer) assert.deepEqual(term.viewport, [0, 0, ...term.buffer]);
+		else assert.equal(term.domRows, term.rows);
+		pass("Reopening restores the terminal with correct renderer dimensions");
 		const dirty = await run(
 			'toolsTest.tools.add("right",{kind:"file",data:{filePath:"C:/test.txt",mode:"editor"}})',
 		);

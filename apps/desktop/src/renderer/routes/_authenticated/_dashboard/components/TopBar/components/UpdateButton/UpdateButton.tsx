@@ -1,9 +1,8 @@
 /**
  * One click from "a newer build exists" to running it.
  *
- * Sits immediately left of the open-in-file-explorer button. Invisible until
- * there is actually something to install, so the top bar does not carry a
- * permanently dim control that does nothing 99% of the time.
+ * Always offers a manual check; a completed personal installer adds a badge
+ * and changes the action to install and restart.
  *
  * The dot is the same green the tab status dots use for "done, go look". A
  * finished build is exactly that, and reusing the colour means the window has
@@ -20,6 +19,7 @@ import {
 	AlertDialogTitle,
 } from "@superset/ui/alert-dialog";
 import { Button } from "@superset/ui/button";
+import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { ArrowDownToLine } from "lucide-react";
 import { useState } from "react";
@@ -61,15 +61,24 @@ export function UpdateButton() {
 			retry: false,
 		},
 	);
-	const installPersonal = electronTrpc.autoUpdate.installPersonal.useMutation();
+	const installPersonal = electronTrpc.autoUpdate.installPersonal.useMutation({
+		onError: (error) => toast.error(`Update failed: ${error.message}`),
+	});
 
-	if (!update) return null;
+	const check = electronTrpc.autoUpdate.checkInteractive.useMutation({
+		onError: (error) => toast.error(`Update check failed: ${error.message}`),
+	});
+	const pending = installPersonal.isPending || check.isPending;
 
 	const install = () => {
-		installPersonal.mutate({ installerPath: update.installerPath });
+		if (update) installPersonal.mutate({ installerPath: update.installerPath });
 	};
 
 	const onClick = () => {
+		if (!update) {
+			check.mutate();
+			return;
+		}
 		const busy = streamingSessionCount();
 		// Installing quits the app, and any Claude Code session running INSIDE
 		// GatedSpace dies with it, mid-turn, losing whatever it was part-way
@@ -87,9 +96,11 @@ export function UpdateButton() {
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button
-						aria-label={`Update to ${update.version}`}
+						aria-label={
+							update ? `Update to ${update.version}` : "Check for updates"
+						}
 						className="no-drag relative size-8 shrink-0 text-muted-foreground hover:text-foreground"
-						disabled={installPersonal.isPending}
+						disabled={pending}
 						onClick={onClick}
 						size="icon"
 						variant="ghost"
@@ -102,11 +113,9 @@ export function UpdateButton() {
 						 * together at 16px.
 						 */}
 						<ArrowDownToLine
-							className={
-								installPersonal.isPending ? "size-4 animate-pulse" : "size-4"
-							}
+							className={pending ? "size-4 animate-pulse" : "size-4"}
 						/>
-						{!installPersonal.isPending && (
+						{update && !pending && (
 							<span className="absolute top-1 right-1 flex size-[7px]">
 								<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
 								<span className="relative inline-flex size-[7px] rounded-full border border-background bg-green-500" />
@@ -117,7 +126,9 @@ export function UpdateButton() {
 				<TooltipContent side="bottom" showArrow={false}>
 					{installPersonal.isPending
 						? "Installing…"
-						: `Update to ${update.version} — quits, installs, reopens`}
+						: update
+							? `Update to ${update.version} — quits, installs, reopens`
+							: "Check for updates"}
 				</TooltipContent>
 			</Tooltip>
 
@@ -130,7 +141,7 @@ export function UpdateButton() {
 								: `${busySessions} sessions are still working`}
 						</AlertDialogTitle>
 						<AlertDialogDescription>
-							Installing {update.version} closes GatedSpace, and any agent
+							Installing {update?.version} closes GatedSpace, and any agent
 							running inside it stops mid-turn. Their transcripts are kept, but
 							whatever they were part-way through will not finish.
 						</AlertDialogDescription>

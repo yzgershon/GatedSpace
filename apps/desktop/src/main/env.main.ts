@@ -32,6 +32,7 @@ export const env = createEnv({
 		// auto-updates: a locally built app must never be replaced by a
 		// published release behind its developer's back.
 		NEXT_PUBLIC_RELEASE_BUILD: z.string().optional(),
+		GATEDSPACE_PERSONAL: z.string().optional(),
 	},
 
 	runtimeEnv: {
@@ -51,6 +52,7 @@ export const env = createEnv({
 		RELAY_URL: process.env.RELAY_URL,
 		NEXT_PUBLIC_LOCAL_ONLY: process.env.NEXT_PUBLIC_LOCAL_ONLY,
 		NEXT_PUBLIC_RELEASE_BUILD: process.env.NEXT_PUBLIC_RELEASE_BUILD,
+		GATEDSPACE_PERSONAL: process.env.GATEDSPACE_PERSONAL,
 	},
 	emptyStringAsUndefined: true,
 	// Only allow skipping validation in development (never in production)

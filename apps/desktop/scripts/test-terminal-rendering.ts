@@ -15,11 +15,19 @@ import { build as buildFixture } from "vite";
 
 const baseline = process.argv.includes("--baseline");
 const atlasBaseline = process.argv.includes("--atlas-baseline");
+const dom = process.argv.includes("--dom");
+const mouseBaseline = process.argv.includes("--mouse-baseline");
 const directory = resolve(import.meta.dir, "terminal-rendering");
 const output = resolve(
 	import.meta.dir,
 	"../../../.tmp/terminal-rendering",
-	baseline ? "baseline" : atlasBaseline ? "atlas-baseline" : "fixed",
+	dom
+		? "dom"
+		: baseline
+			? "baseline"
+			: atlasBaseline
+				? "atlas-baseline"
+				: "fixed",
 );
 await mkdir(output, { recursive: true });
 await buildFixture({
@@ -52,6 +60,8 @@ await buildFixture({
 			name: "isolate-terminal-test-ipc",
 			enforce: "pre",
 			load(id) {
+				if (mouseBaseline && /[/\\]mouse-coordinates\.ts$/.test(id))
+					return "export const installTerminalMouseCoordinates = () => () => {};";
 				if (/[/\\]renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
 					return "export const electronTrpcClient = {settings: {getTerminalCopyOnSelect: {query: async () => false}}, keyboardLayout: {changes: {subscribe: () => ({unsubscribe() {}})}}};";
 				if (baseline && /[/\\]webgl-viewport\.ts$/.test(id))
@@ -85,6 +95,7 @@ html,body { margin:0; height:100%; background:#151110 }
 const env: NodeJS.ProcessEnv = {
 	...process.env,
 	GS_TERMINAL_TEST_OUTPUT: output,
+	GS_TERMINAL_RENDERER: dom ? "dom" : "webgl",
 };
 delete env.ELECTRON_RUN_AS_NODE;
 const child = spawn(String(electron), [resolve(output, "main.cjs")], {

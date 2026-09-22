@@ -32,12 +32,12 @@ describe("formatAgentResumeCommand", () => {
 		);
 	});
 
-	test("codex has NO fork, and refuses rather than resuming in place", () => {
+	test("codex forks without resuming the original in place", () => {
 		// Quietly downgrading a fork to a plain resume would put a second writer
 		// on a live session — the exact hazard the caller asked to avoid.
-		expect(
-			formatAgentResumeCommand("codex", "abc-123", { fork: true }),
-		).toBeNull();
+		expect(formatAgentResumeCommand("codex", "abc-123", { fork: true })).toBe(
+			"codex fork abc-123",
+		);
 	});
 
 	test("an unknown agent or a missing id yields nothing", () => {

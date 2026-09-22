@@ -34,7 +34,7 @@ const TURNS = [
 /** The conversation column only. Excludes the header and composer. */
 export function SessionTranscriptSkeleton() {
 	return (
-		<div className="flex w-full flex-col px-4 py-4">
+		<div className="mx-auto flex w-full max-w-[890px] flex-col px-8 py-8">
 			{TURNS.map((turn, index) => (
 				<div
 					// Static list — the index IS the identity here, there is no data.
@@ -48,12 +48,14 @@ export function SessionTranscriptSkeleton() {
 					 * and `--border` are all the same value, so inventing opacities
 					 * here produced bars fainter than every other skeleton in the app.
 					 */}
-					<Skeleton className={cn("h-5 rounded-md", turn.prompt)} />
+					<Skeleton
+						className={cn("ml-auto h-10 max-w-[75%] rounded-2xl", turn.prompt)}
+					/>
 					<div className="mt-3 flex flex-col gap-2">
 						{turn.lines.map((line) => (
 							<Skeleton
 								key={line}
-								className={cn("h-3.5 rounded bg-accent/55", line)}
+								className={cn("h-3.5 rounded-full bg-accent/55", line)}
 							/>
 						))}
 					</div>
@@ -72,9 +74,14 @@ export function SessionTranscriptSkeleton() {
  */
 export function SessionPaneSkeleton({ className }: { className?: string }) {
 	return (
-		<div className={cn("relative flex min-h-0 flex-1 flex-col", className)}>
-			<div className="flex h-11 shrink-0 items-center gap-2 border-b border-border px-4">
-				<Skeleton className="size-1.5 rounded-full" />
+		<div
+			className={cn(
+				"relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
+				className,
+			)}
+		>
+			<div className="flex h-[58px] shrink-0 items-center gap-3 border-b border-border/40 px-5">
+				<Skeleton className="size-5 rounded-md" />
 				<Skeleton className="h-3.5 w-28 rounded" />
 				<div className="flex-1" />
 				<Skeleton className="h-3.5 w-16 rounded bg-accent/55" />

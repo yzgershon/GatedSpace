@@ -309,9 +309,8 @@ export function Pane<TData>({
 
 	const isDropTarget = isOver && canDrop;
 
-	// Expand/restore control: only meaningful when the tab has more than one
-	// pane. Maximizing renders just this pane fullscreen (see Tab.tsx).
-	const paneCount = Object.keys(tab.panes).length;
+	// Keep expand/restore available on every pane as the layout changes.
+	// Maximizing renders just this pane (see Tab.tsx).
 	const isMaximized = tab.maximizedPaneId === pane.id;
 	// Resolved once and shared: the header fills with it and the active-pane
 	// ring below traces it, so the two cannot drift apart. They previously did —
@@ -333,58 +332,55 @@ export function Pane<TData>({
 			header={menuHeader}
 		/>
 	);
-	const maximizeControl =
-		paneCount > 1 && !definition?.hideMaximizeControl ? (
-			<button
-				type="button"
-				title={isMaximized ? "Restore" : "Expand"}
-				aria-label={isMaximized ? "Restore pane" : "Expand pane"}
-				className="flex size-[var(--gs-pane-action-size,20px)] items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-				onMouseDown={(e) => e.stopPropagation()}
-				onClick={(e) => {
-					e.stopPropagation();
-					store
-						.getState()
-						.toggleMaximizePane({ tabId: tab.id, paneId: pane.id });
-				}}
-			>
-				{isMaximized ? (
-					<svg
-						width="13"
-						height="13"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M4 14h6v6" />
-						<path d="M20 10h-6V4" />
-						<path d="M14 10l7-7" />
-						<path d="M3 21l7-7" />
-					</svg>
-				) : (
-					<svg
-						width="13"
-						height="13"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						aria-hidden="true"
-					>
-						<path d="M15 3h6v6" />
-						<path d="M9 21H3v-6" />
-						<path d="M21 3l-7 7" />
-						<path d="M3 21l7-7" />
-					</svg>
-				)}
-			</button>
-		) : null;
+	const maximizeControl = !definition?.hideMaximizeControl ? (
+		<button
+			type="button"
+			title={isMaximized ? "Restore" : "Expand"}
+			aria-label={isMaximized ? "Restore pane" : "Expand pane"}
+			className="flex size-[var(--gs-pane-action-size,20px)] items-center justify-center rounded text-muted-foreground/60 transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+			onMouseDown={(e) => e.stopPropagation()}
+			onClick={(e) => {
+				e.stopPropagation();
+				store.getState().toggleMaximizePane({ tabId: tab.id, paneId: pane.id });
+			}}
+		>
+			{isMaximized ? (
+				<svg
+					width="13"
+					height="13"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M4 14h6v6" />
+					<path d="M20 10h-6V4" />
+					<path d="M14 10l7-7" />
+					<path d="M3 21l7-7" />
+				</svg>
+			) : (
+				<svg
+					width="13"
+					height="13"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					strokeWidth="2"
+					strokeLinecap="round"
+					strokeLinejoin="round"
+					aria-hidden="true"
+				>
+					<path d="M15 3h6v6" />
+					<path d="M9 21H3v-6" />
+					<path d="M21 3l-7 7" />
+					<path d="M3 21l7-7" />
+				</svg>
+			)}
+		</button>
+	) : null;
 
 	return (
 		<PaneContextMenu

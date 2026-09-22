@@ -42,10 +42,83 @@ app
 				`[renderer] ${details.message} (${details.sourceId}:${details.lineNumber})`,
 			);
 		});
-		await window.loadFile(path.join(output, "index.html"));
+		const dom = process.env.GS_TERMINAL_RENDERER === "dom";
+		await window.loadFile(path.join(output, "index.html"), {
+			query: { renderer: dom ? "dom" : "webgl" },
+		});
 		const run = (expression) =>
 			window.webContents.executeJavaScript(`terminalSmoke.${expression}`);
-		async function check(name, { corners = true, webgl = true } = {}) {
+		async function checkSelection(name, scrollback = false) {
+			current = name;
+			await run(`selectionScene(${scrollback})`);
+			const start = await run("selectionPoint(7, 16)");
+			const end = await run("selectionPoint(18, 16)");
+			window.webContents.sendInputEvent({
+				type: "mouseDown",
+				...start,
+				button: "left",
+				clickCount: 1,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			window.webContents.sendInputEvent({
+				type: "mouseMove",
+				...end,
+				button: "left",
+				modifiers: ["leftButtonDown"],
+			});
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			window.webContents.sendInputEvent({
+				type: "mouseUp",
+				...end,
+				button: "left",
+				clickCount: 1,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			const selected = await run("selectionResult()");
+			console.log(name, { start, end, selected });
+			assert.equal(
+				selected.text,
+				"alpha bravo",
+				`${name}: mouse selected wrong characters`,
+			);
+			assert.equal(
+				selected.position.start.y,
+				selected.viewport + 16,
+				`${name}: mouse selected wrong row`,
+			);
+			// Double-click exercises word selection through the same real input path.
+			const word = await run("selectionPoint(15, 20)");
+			window.webContents.sendInputEvent({
+				type: "mouseDown",
+				...word,
+				button: "left",
+				clickCount: 2,
+			});
+			window.webContents.sendInputEvent({
+				type: "mouseUp",
+				...word,
+				button: "left",
+				clickCount: 2,
+			});
+			await new Promise((resolve) => setTimeout(resolve, 40));
+			assert.equal(
+				(await run("selectionResult()")).text,
+				"bravo",
+				`${name}: double-click selected wrong word`,
+			);
+			results.push({ name, ...selected });
+			window.webContents.sendInputEvent({ type: "mouseMove", x: 1250, y: 5 });
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			await run("endSelection()");
+		}
+		async function selectionSuite() {
+			for (const zoom of [0.85, 1, 1.2]) {
+				await run(`start(${zoom})`);
+				await checkSelection(`pointer-selection-${zoom}`);
+				await checkSelection(`scrollback-selection-${zoom}`, true);
+			}
+		}
+		async function check(name, { corners = true, webgl = !dom } = {}) {
 			current = name;
 			const state = await run("snapshot()");
 			const screenshot = await window.webContents.capturePage();
@@ -130,6 +203,29 @@ app
 		await check("alternate-screen");
 		await run("repaintPreservesStyle()");
 		await check("repaint-preserves-style");
+		if (dom) {
+			const caret = await run("caretStability()");
+			assert.equal(
+				caret.movedDuringSynchronizedOutput,
+				false,
+				"Caret moved through partial TUI frames",
+			);
+			assert.equal(caret.cursorCount, 1, "Expected exactly one visible cursor");
+			assert.equal(
+				caret.smoothScrollDuration,
+				0,
+				"TUI cursor and viewport must move together",
+			);
+			results.push({ name: "caret-stability-and-throughput", ...caret });
+			const shot = await window.webContents.capturePage();
+			fs.writeFileSync(
+				path.join(output, "terminal-text-and-caret.png"),
+				shot.toPNG(),
+			);
+			await selectionSuite();
+			finish();
+			return;
+		}
 		await run("loseContext(true)");
 		await check("context-restored");
 		await run("loseContext(false)");
@@ -162,6 +258,7 @@ app
 			"Refreshing one terminal must not corrupt either sibling's glyphs",
 		);
 		results.push({ name: current, changedBytes });
+		await selectionSuite();
 		finish();
 	})
 	.catch(finish);

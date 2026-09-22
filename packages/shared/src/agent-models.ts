@@ -74,6 +74,7 @@ export const AGENT_MODEL_SUPPORT: readonly AgentModelSupport[] = [
 		presetId: "codex",
 		modelFlag: "--model",
 		models: [
+			{ id: "gpt-6-astra", label: "GPT-6 Astra" },
 			{ id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
 			{ id: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
 			{ id: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
@@ -250,6 +251,7 @@ export function buildAgentEffortArgs(
 	presetId: string,
 	effort: string | undefined,
 ): string[] {
+	if (!effort && presetId === "codex") effort = "xhigh";
 	if (!effort) return [];
 	const support = getAgentEffortSupport(presetId);
 	if (!support) return [];

@@ -14,18 +14,33 @@
  * the renderer is wired in a later increment; this module is transport only.
  */
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import { unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
 	type ClaudeStreamEvent,
 	parseStreamLine,
 	type UserImagePayload,
 } from "shared/claude-session/events";
 import { sanitizePresetArgs } from "shared/claude-session/preset-args";
+import { agentBrowserMcp } from "../browser/agent-browser-mcp";
+import {
+	agentBrowserService,
+	browserInstructions,
+} from "../browser/agent-browser-service";
 import { getClaudeProfile } from "../claude-profile";
+import { ensureSecureDir, writeSecureFile } from "../secure-file";
+import { withFastSettings } from "./fast-settings";
 import { NdjsonLineBuffer } from "./ndjson-line-buffer";
-import { resolveExecutable } from "./resolve-executable";
+import { PermissionRequests } from "./permission-requests";
+import { resolveNativeClaude } from "./resolve-native";
 
 export interface ClaudeSessionOptions {
+	workspaceId?: string;
+	sessionKey?: string;
+	fast?: boolean;
 	/** Working directory for the session (the workspace/worktree path). */
 	cwd: string;
 	/** Model id, e.g. "claude-opus-4-8". Omit to use the CLI default. */
@@ -87,6 +102,13 @@ export class ClaudeSessionTransport extends EventEmitter {
 	private readonly stderrBuffer = new NdjsonLineBuffer();
 	private started = false;
 	private disposed = false;
+	private queued: string[] = [];
+	private browserDispose?: () => void;
+	private browserConfig?: string;
+	private permissions = new PermissionRequests(
+		(value) => this.writeStdin(value),
+		(event) => this.emit("event", event),
+	);
 
 	constructor(private readonly options: ClaudeSessionOptions) {
 		super();
@@ -101,10 +123,17 @@ export class ClaudeSessionTransport extends EventEmitter {
 			"stream-json",
 			"--include-partial-messages",
 			"--verbose",
+			"--permission-prompt-tool",
+			"stdio",
 		];
 		if (this.options.model) args.push("--model", this.options.model);
 		if (this.options.permissionMode)
-			args.push("--permission-mode", this.options.permissionMode);
+			args.push(
+				"--permission-mode",
+				this.options.permissionMode === "manual"
+					? "default"
+					: this.options.permissionMode,
+			);
 		if (this.options.resumeSessionId) {
 			args.push("--resume", this.options.resumeSessionId);
 			if (this.options.forkSession) args.push("--fork-session");
@@ -116,7 +145,8 @@ export class ClaudeSessionTransport extends EventEmitter {
 				}),
 			);
 		}
-		return args;
+		// Explicit per-process setting enables /fast in headless mode without changing user defaults.
+		return withFastSettings(args, this.options.cwd, this.options.fast ?? false);
 	}
 
 	private buildEnv(): NodeJS.ProcessEnv {
@@ -134,18 +164,58 @@ export class ClaudeSessionTransport extends EventEmitter {
 	start(): void {
 		if (this.started || this.disposed) return;
 		this.started = true;
+		void this.spawnSession().catch((error: Error) => {
+			this.cleanupBrowser();
+			if (!this.disposed) this.emit("error", error);
+		});
+	}
+	private async spawnSession() {
+		const args = this.buildArgs();
+		if (this.options.workspaceId && this.options.sessionKey) {
+			const key = `claude:${this.options.sessionKey}`;
+			agentBrowserService.register(key, this.options.workspaceId);
+			this.browserDispose = () => agentBrowserService.unregister(key);
+			const bridge = await agentBrowserMcp.connect(key);
+			if (this.disposed) {
+				bridge.dispose();
+				return;
+			}
+			this.browserDispose = () => {
+				bridge.dispose();
+				agentBrowserService.unregister(key);
+			};
+			const directory = join(tmpdir(), `gatedspace-browser-${process.pid}`);
+			ensureSecureDir(directory);
+			this.browserConfig = join(directory, `${randomUUID()}.json`);
+			writeSecureFile(
+				this.browserConfig,
+				JSON.stringify({
+					mcpServers: {
+						gatedspace_browser: {
+							type: "http",
+							url: bridge.url,
+							headers: { Authorization: `Bearer ${bridge.token}` },
+						},
+					},
+				}),
+			);
+			args.push(
+				"--mcp-config",
+				this.browserConfig,
+				"--append-system-prompt",
+				browserInstructions(key),
+			);
+		}
 
 		// Resolve PATH ourselves so a real claude.exe spawns with NO shell. That
 		// matters now that agent presets feed user-configured args into argv: a
 		// shell would interpret `&&` and friends inside an argument instead of
-		// passing them through. Only an npm .cmd shim still needs one.
-		const { command, needsShell } = resolveExecutable(
-			this.options.binary ?? "claude",
-		);
-		this.child = spawn(command, this.buildArgs(), {
+		// passing them through. Npm shims resolve to their Node entry point.
+		const executable = resolveNativeClaude(this.options.binary ?? "claude");
+		this.child = spawn(executable.command, [...executable.args, ...args], {
 			cwd: this.options.cwd,
-			env: this.buildEnv(),
-			shell: needsShell,
+			env: { ...this.buildEnv(), ...executable.env },
+			shell: false,
 			windowsHide: true,
 		}) as ChildProcessWithoutNullStreams;
 
@@ -163,14 +233,32 @@ export class ClaudeSessionTransport extends EventEmitter {
 		});
 		this.child.on("error", (err) => this.emit("error", err));
 		this.child.on("exit", (code, signal) => {
+			this.cleanupBrowser();
 			for (const line of this.stdoutBuffer.flush()) this.handleStdoutLine(line);
+			this.permissions.clear();
 			this.emit("exit", { code, signal });
 		});
+		for (const line of this.queued.splice(0)) this.child.stdin.write(line);
+		this.child.stdin.on("error", (error: Error) => {
+			if (!this.disposed) this.emit("error", error);
+		});
+	}
+	private cleanupBrowser() {
+		this.browserDispose?.();
+		this.browserDispose = undefined;
+		if (this.browserConfig) {
+			try {
+				unlinkSync(this.browserConfig);
+			} catch {}
+			this.browserConfig = undefined;
+		}
 	}
 
 	private handleStdoutLine(line: string): void {
 		if (!line.trim()) return;
 		const event = parseStreamLine(line);
+		if (this.permissions.handle(event)) return;
+		if (event?.type === "result") this.permissions.clear();
 		if (event) this.emit("event", event);
 		else this.emit("parseError", line);
 	}
@@ -210,28 +298,44 @@ export class ClaudeSessionTransport extends EventEmitter {
 	 * does not settle.
 	 */
 	interrupt(): void {
+		this.permissions.clear();
 		this.writeStdin({
 			type: "control_request",
+			request_id: randomUUID(),
 			request: { subtype: "interrupt" },
 		});
 	}
 
+	answerPermission(id: string, allow: boolean) {
+		this.permissions.answer(id, allow);
+	}
+
 	private writeStdin(payload: unknown): void {
-		if (!this.child || this.child.stdin.destroyed) return;
-		this.child.stdin.write(`${JSON.stringify(payload)}\n`);
+		if (this.disposed) return;
+		const line = `${JSON.stringify(payload)}\n`;
+		if (!this.child) {
+			this.queued.push(line);
+			return;
+		}
+		if (!this.child.stdin.destroyed) this.child.stdin.write(line);
 	}
 
 	/** True while the child process is alive. */
 	get isRunning(): boolean {
 		return (
-			this.child !== null && this.child.exitCode === null && !this.disposed
+			this.started &&
+			(!this.child || this.child.exitCode === null) &&
+			!this.disposed
 		);
 	}
 
 	/** Terminate the process and release listeners. Safe to call repeatedly. */
 	dispose(): void {
 		if (this.disposed) return;
+		this.permissions.clear();
 		this.disposed = true;
+		this.cleanupBrowser();
+		this.queued = [];
 		if (this.child && this.child.exitCode === null) {
 			try {
 				this.child.stdin.end();

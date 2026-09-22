@@ -22,6 +22,7 @@ import {
 	restartSession,
 	sendSessionMessage,
 	setSessionEffort,
+	setSessionFast,
 	setSessionMode,
 	subscribeSession,
 } from "./sessionStore";
@@ -74,6 +75,7 @@ export function useClaudeSession({
 	// to the session that's already running.
 	useEffect(() => {
 		ensureSession(paneKey, {
+			workspaceId,
 			cwd,
 			model,
 			configDir,
@@ -85,6 +87,7 @@ export function useClaudeSession({
 		});
 	}, [
 		paneKey,
+		workspaceId,
 		cwd,
 		model,
 		configDir,
@@ -111,7 +114,14 @@ export function useClaudeSession({
 		[paneKey],
 	);
 
+	const setFast = useCallback(
+		(fast: boolean) => setSessionFast(paneKey, fast),
+		[paneKey],
+	);
+
 	return {
+		fast: snapshot.fast,
+		setFast,
 		timeline: snapshot.timeline,
 		mode: snapshot.mode,
 		effort: snapshot.effort,

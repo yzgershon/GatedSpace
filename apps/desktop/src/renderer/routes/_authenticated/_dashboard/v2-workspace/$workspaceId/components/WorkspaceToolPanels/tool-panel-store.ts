@@ -6,7 +6,7 @@ import {
 } from "@superset/panes";
 import { sanitizePaneLayout } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal/schema";
 import { createStore } from "zustand/vanilla";
-import type { PaneViewerData } from "../../types";
+import type { PaneViewerData, SessionPaneData } from "../../types";
 
 export type ToolPlacement = "right" | "bottom";
 export type ToolKind = "files" | "changes" | "browser" | "terminal" | "session";
@@ -57,11 +57,13 @@ export function createToolPanels({
 	storage,
 	createTerminal,
 	cwd,
+	getSessionData,
 }: {
 	key: string;
 	storage?: Pick<Storage, "getItem" | "setItem">;
 	createTerminal: () => Promise<string>;
 	cwd?: string;
+	getSessionData?: () => SessionPaneData;
 }) {
 	let layout: WorkspaceState<PaneViewerData> = {
 		version: 1,
@@ -156,7 +158,7 @@ export function createToolPanels({
 				: kind === "browser"
 					? { url: "about:blank" }
 					: kind === "session"
-						? { cwd }
+						? (getSessionData?.() ?? { cwd })
 						: {};
 		add(
 			side,

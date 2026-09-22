@@ -318,7 +318,19 @@ export interface LocalNoticeEvent {
 	fatal?: boolean;
 }
 
+export interface ClaudePermissionRequest {
+	id: string;
+	tool: string;
+	input: Record<string, unknown>;
+}
+
+export interface LocalPermissionsEvent {
+	type: "local_permissions";
+	requests: ClaudePermissionRequest[];
+}
+
 export type ClaudeStreamEvent =
+	| LocalPermissionsEvent
 	| LocalNoticeEvent
 	| LocalUserMessageEvent
 	| SystemInitEvent

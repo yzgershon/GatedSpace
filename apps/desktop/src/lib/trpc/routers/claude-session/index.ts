@@ -18,6 +18,8 @@ import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
 const startInput = z.object({
+	workspaceId: z.string().optional(),
+	fast: z.boolean().optional(),
 	key: z.string(),
 	cwd: z.string(),
 	model: z.string().optional(),
@@ -54,7 +56,9 @@ export const createClaudeSessionRouter = () => {
 			 */
 			const configDir = input.configDir ?? resolveActiveConfigDir();
 			claudeSessionManager.start(input.key, {
+				workspaceId: input.workspaceId,
 				cwd: input.cwd,
+				fast: input.fast,
 				model: input.model,
 				permissionMode: input.permissionMode,
 				resumeSessionId: input.resumeSessionId,
@@ -77,7 +81,9 @@ export const createClaudeSessionRouter = () => {
 			// back to the default has to say which account that turned out to be.
 			const configDir = input.configDir ?? resolveActiveConfigDir();
 			claudeSessionManager.restart(input.key, {
+				workspaceId: input.workspaceId,
 				cwd: input.cwd,
+				fast: input.fast,
 				model: input.model,
 				permissionMode: input.permissionMode,
 				resumeSessionId: input.resumeSessionId,
@@ -144,12 +150,21 @@ export const createClaudeSessionRouter = () => {
 					// digits, dashes and a `[1m]` suffix.
 					command: z
 						.string()
-						.regex(/^\/(context|usage|model)(\s+[\w.[\]-]+)?$/),
+						.regex(
+							/^\/(?:(context|usage|model)(\s+[\w.[\]-]+)?|fast (on|off))$/,
+						),
 				}),
 			)
 			.mutation(({ input }) =>
 				claudeSessionManager.runCommand(input.key, input.command),
 			),
+
+		answerPermission: publicProcedure
+			.input(z.object({ key: z.string(), id: z.string(), allow: z.boolean() }))
+			.mutation(({ input }) => {
+				claudeSessionManager.answerPermission(input.key, input.id, input.allow);
+				return { ok: true };
+			}),
 
 		interrupt: publicProcedure
 			.input(z.object({ key: z.string() }))

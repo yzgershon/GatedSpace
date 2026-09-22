@@ -30,7 +30,7 @@ export function TerminalSessionTitle({
 					aria-label="Terminal sessions"
 					title={title}
 					className={cn(
-						"flex min-w-0 items-center gap-1.5 rounded py-1 text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors hover:bg-muted hover:text-foreground",
+						"flex min-w-0 items-center gap-1.5 rounded py-1 gs-pane-title text-[length:var(--gs-pane-title-size,14px)] font-medium transition-colors hover:bg-muted hover:text-foreground",
 						isActive ? "text-foreground" : "text-muted-foreground",
 					)}
 					onMouseDown={(event) => event.stopPropagation()}
