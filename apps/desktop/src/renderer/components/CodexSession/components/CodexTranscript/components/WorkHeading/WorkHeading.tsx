@@ -1,13 +1,15 @@
-import { Check, ChevronRight, CircleAlert, Pause } from "lucide-react";
+import { ChevronRight, CircleAlert, Pause } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { CodexTurn } from "shared/codex-session/types";
 import { formatDuration } from "../../activity";
+import { ActivityWords } from "./ActivityWords";
 
 /** Keep the clock local: ticking must not rerender markdown or large tool results. */
 export function WorkHeading({
 	active,
 	waiting,
 	label,
+	messageCount,
 	timing,
 	open,
 	controls,
@@ -16,6 +18,7 @@ export function WorkHeading({
 	active: boolean;
 	waiting: boolean;
 	label: string;
+	messageCount: number;
 	timing?: CodexTurn;
 	open: boolean;
 	controls: string;
@@ -65,27 +68,32 @@ export function WorkHeading({
 			data-motion={animate ? "running" : "paused"}
 			aria-expanded={open}
 			aria-controls={controls}
+			title={
+				!active && duration !== undefined
+					? `Worked for ${formatDuration(duration)}`
+					: undefined
+			}
 			onClick={onToggle}
 		>
-			{active && !waiting ? (
-				<span
-					className="codex-work-symbol codex-thinking-wave"
-					aria-hidden="true"
-				>
-					<i />
-					<i />
-					<i />
-					<i />
-				</span>
-			) : waiting ? (
+			{waiting ? (
 				<Pause className="codex-work-symbol" size={16} />
-			) : failed || stopped ? (
+			) : !active && (failed || stopped) ? (
 				<CircleAlert className="codex-work-symbol" size={16} />
-			) : (
-				<Check className="codex-work-symbol" size={16} />
-			)}
-			<span className="codex-work-label" aria-live="polite" aria-atomic="true">
-				<span key={waiting ? "waiting" : active ? label : "settled"}>
+			) : null}
+			<span className="codex-work-label">
+				{active && !waiting && (
+					<ActivityWords
+						key={`activity-${label}`}
+						label={label}
+						animate={animate}
+					/>
+				)}
+				<span
+					className={active && !waiting ? "sr-only" : undefined}
+					aria-live="polite"
+					aria-atomic="true"
+					key="accessible-status"
+				>
 					{waiting
 						? "Waiting for your response"
 						: active
@@ -94,9 +102,9 @@ export function WorkHeading({
 								? "Run failed"
 								: stopped
 									? "Stopped"
-									: "Worked"}
-					{!active && !waiting && duration !== undefined
-						? ` for ${formatDuration(duration)}`
+									: `${messageCount} previous ${messageCount === 1 ? "message" : "messages"}`}
+					{!active && (failed || stopped) && messageCount > 0
+						? ` · ${messageCount} previous ${messageCount === 1 ? "message" : "messages"}`
 						: ""}
 				</span>
 			</span>

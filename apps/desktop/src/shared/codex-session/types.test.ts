@@ -2,6 +2,27 @@ import { describe, expect, test } from "bun:test";
 import { normalizeCodexItem } from "./types";
 
 describe("Codex activity normalization", () => {
+	test("user images retain previews and local history paths separately from prompt text", () => {
+		const item = normalizeCodexItem(
+			{
+				id: "images",
+				type: "userMessage",
+				content: [
+					{ type: "text", text: "Check these screenshots" },
+					{ type: "image", url: "data:image/png;base64,YWJj" },
+					{ type: "localImage", path: "C:/work/screenshot.png" },
+					{ type: "image", url: "javascript:alert(1)" },
+				],
+			},
+			"turn",
+		);
+		expect(item).toMatchObject({
+			text: "Check these screenshots",
+			images: ["data:image/png;base64,YWJj"],
+			imagePaths: ["C:/work/screenshot.png"],
+		});
+		expect(item?.text).not.toContain("Attached image");
+	});
 	test("preserves shell output, exit zero and measured duration", () => {
 		const item = normalizeCodexItem(
 			{

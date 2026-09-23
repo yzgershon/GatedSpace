@@ -1,6 +1,7 @@
 import { workspaceTrpc } from "@superset/workspace-client";
 import { CodexSession } from "renderer/components/CodexSession/CodexSession";
 import { useWorkspaceHostTarget } from "renderer/hooks/host-service/useWorkspaceHostUrl";
+import type { CodexTurnReview } from "shared/codex-session/review";
 
 export function CodexSessionPane(props: {
 	paneId: string;
@@ -12,7 +13,7 @@ export function CodexSessionPane(props: {
 	paneCount: number;
 	isActive: boolean;
 	onSessionId: (id: string) => void;
-	onReviewChanges?: () => void;
+	onReviewChanges?: (review: CodexTurnReview) => void;
 }) {
 	const workspace = workspaceTrpc.workspace.get.useQuery(
 		{ id: props.workspaceId },

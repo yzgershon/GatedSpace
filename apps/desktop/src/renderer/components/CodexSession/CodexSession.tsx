@@ -6,6 +6,7 @@ import {
 	subscribeCodexSession,
 } from "renderer/lib/codex-session/store";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import type { CodexTurnReview } from "shared/codex-session/review";
 import { CodexComposer } from "./components/CodexComposer/CodexComposer";
 import { CodexTranscript } from "./components/CodexTranscript/CodexTranscript";
 import "./codex-session.css";
@@ -18,7 +19,7 @@ export interface CodexSessionProps {
 	resumeSessionId?: string;
 	forkSession?: boolean;
 	onSessionId: (id: string) => void;
-	onReviewChanges?: () => void;
+	onReviewChanges?: (review: CodexTurnReview) => void;
 }
 export function CodexSession(props: CodexSessionProps) {
 	const { paneId, cwd, model, resumeSessionId, forkSession, workspaceId } =

@@ -12,36 +12,33 @@ export function ActivityGroup({
 	items: CodexItem[];
 	active: boolean;
 }) {
-	const [open, setOpen] = useState(true);
+	const [open, setOpen] = useState(false);
 	const reduced = useReducedMotion();
 	const id = useId();
-	const multiple = items.length > 1;
 	const Icon = items.some((i) => i.activityType === "fileChange")
 		? Pencil
 		: SquareTerminal;
 	return (
 		<div className="codex-action-group">
-			{multiple && (
-				<button
-					type="button"
-					className="codex-group-heading"
-					aria-expanded={open}
-					aria-controls={id}
-					onClick={() => setOpen(!open)}
-				>
-					<Icon size={16} />
-					<span>{groupLabel(items)}</span>
-					<ChevronRight
-						size={13}
-						className={`codex-disclosure ${open ? "is-open" : ""}`}
-					/>
-				</button>
-			)}
+			<button
+				type="button"
+				className="codex-group-heading"
+				aria-expanded={open}
+				aria-controls={id}
+				onClick={() => setOpen(!open)}
+			>
+				<Icon size={16} />
+				<span>{groupLabel(items)}</span>
+				<ChevronRight
+					size={13}
+					className={`codex-disclosure ${open ? "is-open" : ""}`}
+				/>
+			</button>
 			<AnimatePresence initial={false}>
-				{(open || !multiple) && (
+				{open && (
 					<motion.div
 						id={id}
-						className={`codex-reveal ${multiple ? "codex-group-rows" : ""}`}
+						className="codex-reveal codex-group-rows"
 						initial={{ height: 0, opacity: 0 }}
 						animate={{ height: "auto", opacity: 1 }}
 						exit={{ height: 0, opacity: 0 }}

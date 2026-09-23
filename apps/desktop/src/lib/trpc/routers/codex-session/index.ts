@@ -37,6 +37,16 @@ export const createCodexSessionRouter = () =>
 				manager.command(input.key, input.command, input.args),
 			),
 		liveSessionIds: publicProcedure.query(() => manager.liveIds()),
+		attachment: publicProcedure
+			.input(
+				keyInput.extend({
+					itemId: z.string().min(1),
+					index: z.number().int().min(0).max(100),
+				}),
+			)
+			.query(({ input }) =>
+				manager.attachment(input.key, input.itemId, input.index),
+			),
 		send: publicProcedure
 			.input(
 				keyInput.extend({

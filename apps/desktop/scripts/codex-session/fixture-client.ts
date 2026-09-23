@@ -3,6 +3,8 @@ import type { CodexSessionState } from "../../src/shared/codex-session/types";
 const states = new Map<string, CodexSessionState>();
 const listeners = new Map<string, Set<(value: CodexSessionState) => void>>();
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
+const submittedAnswers: unknown[] = [];
+Object.assign(window, { submittedAnswers });
 const publish = (key: string) => {
 	const value = states.get(key);
 	if (value)
@@ -55,6 +57,27 @@ function state(key: string): CodexSessionState {
 				title: "Read WorkspaceToolPanels.tsx and 3 related files",
 				text: "Panel state is shared by the workspace.",
 				status: "completed",
+			},
+			{
+				id: "file-change",
+				turnId: "one",
+				kind: "activity",
+				title: "Edited files",
+				activityType: "fileChange",
+				text: "",
+				status: "completed",
+				changes: [
+					{
+						path: "panels.ts",
+						kind: "update",
+						diff: "@@ -1 +1 @@\n-resetPanel()\n+restorePanel()",
+					},
+					{
+						path: "panel.css",
+						kind: "update",
+						diff: "@@ -1 +1 @@\n-transition: none;\n+transition: width 180ms ease-out;",
+					},
+				],
 			},
 			{
 				id: "assistant",
@@ -139,7 +162,11 @@ export const electronTrpcClient = {
 			},
 		},
 		send: {
-			mutate: async (input: { key: string; text: string }) => {
+			mutate: async (input: {
+				key: string;
+				text: string;
+				images?: string[];
+			}) => {
 				const s = state(input.key);
 				if (input.text === "simulate failure")
 					throw new Error("Connection unavailable. Your draft is safe.");
@@ -149,6 +176,7 @@ export const electronTrpcClient = {
 					kind: "user",
 					title: "",
 					text: input.text,
+					images: input.images,
 				});
 				s.status = "working";
 				s.turnId = "two";
@@ -197,11 +225,16 @@ export const electronTrpcClient = {
 			},
 		},
 		answer: {
-			mutate: async ({ key }: { key: string }) => {
-				const s = state(key);
-				s.approvals = [];
-				s.status = "idle";
-				publish(key);
+			mutate: async (input: {
+				key: string;
+				id: string;
+				allow: boolean;
+				answers: Record<string, string>;
+			}) => {
+				submittedAnswers.push(input);
+				const s = state(input.key);
+				s.approvals = s.approvals.filter((a) => a.id !== input.id);
+				publish(input.key);
 			},
 		},
 	},

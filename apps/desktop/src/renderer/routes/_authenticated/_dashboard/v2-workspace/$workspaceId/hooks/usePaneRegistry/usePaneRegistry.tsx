@@ -34,6 +34,7 @@ import { terminalRuntimeRegistry } from "renderer/lib/terminal/terminal-runtime-
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { getV2NotificationSourcesForPane } from "renderer/stores/v2-notifications";
+import type { CodexTurnReview } from "shared/codex-session/review";
 import type { StoreApi } from "zustand/vanilla";
 import { V2NotificationStatusIndicator } from "../../components/V2NotificationStatusIndicator";
 import {
@@ -138,7 +139,7 @@ interface UsePaneRegistryOptions {
 	 * `renderPane`, which runs long after the page body has finished.
 	 */
 	workspaceCwd?: string;
-	onReviewChanges?: () => void;
+	onReviewChanges?: (review: CodexTurnReview) => void;
 	newTabActionsRef?: React.RefObject<NewTabPaneActions | null>;
 }
 

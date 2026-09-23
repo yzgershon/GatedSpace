@@ -1,3 +1,4 @@
+import { displayCommand } from "shared/codex-session/command";
 import type {
 	CodexItem,
 	CodexSessionState,
@@ -105,7 +106,7 @@ export function activityKind(item: CodexItem) {
 export function activityLabel(item: CodexItem, running = false): string {
 	switch (activityKind(item)) {
 		case "commandExecution":
-			return `${running ? "Running" : "Ran"} ${item.command || item.title || "command"}`;
+			return `${running ? "Running" : "Ran"} ${displayCommand(item.command || item.title || "command")}`;
 		case "fileChange": {
 			const count = item.changes?.length;
 			return `${running ? "Editing" : "Edited"} ${count ? `${count} ${count === 1 ? "file" : "files"}` : "files"}`;

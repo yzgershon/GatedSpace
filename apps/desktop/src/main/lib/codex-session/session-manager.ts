@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { basename } from "node:path";
+import { open } from "node:fs/promises";
+import { basename, extname } from "node:path";
 import {
 	defaultCodexEffort,
 	mentionedSkills,
@@ -23,6 +24,7 @@ import {
 	browserInstructions,
 } from "../browser/agent-browser-service";
 import { resolveCodexProject } from "./projects";
+import type { AsyncQuestionInput } from "./questions";
 import { CodexRpcError, CodexTransport } from "./transport";
 
 export interface StartCodexSession {
@@ -44,8 +46,10 @@ export class CodexSessionManager extends EventEmitter {
 		{ id: string | number; key: string; method: string }
 	>();
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
+	private answering = new Set<string>();
 	constructor(readonly transport = new CodexTransport()) {
 		super();
+		transport.askUser = (input) => this.queueQuestion(input);
 		transport.on("notification", (message) =>
 			this.notification(record(message)),
 		);
@@ -271,14 +275,18 @@ export class CodexSessionManager extends EventEmitter {
 							: "thread/resume"
 						: "thread/start",
 					{
-						...(input.workspaceId
-							? {
-									developerInstructions: browserInstructions(
-										`codex:${input.key}`,
-									),
-								}
-							: {}),
-						config: { model_reasoning_effort: effort },
+						developerInstructions: [
+							input.workspaceId
+								? browserInstructions(`codex:${input.key}`)
+								: "",
+							`For user questions use the gatedspace_browser.request_user_input_async MCP tool with session=${JSON.stringify(`codex:${input.key}`)}. It displays clickable choices and an Other field while you continue independent work. The user's selection arrives as a new message automatically. Do not write questions or option lists in plain chat when this tool can present them. Native request_user_input is also supported for blocking questions. Never treat a queued question, default selection or elapsed time as an answer or permission.`,
+						]
+							.filter(Boolean)
+							.join("\n\n"),
+						config: {
+							model_reasoning_effort: effort,
+							"features.default_mode_request_user_input": true,
+						},
 						...(projectId ? { projectId } : {}),
 						...(id
 							? { threadId: id, excludeTurns: true }
@@ -345,28 +353,47 @@ export class CodexSessionManager extends EventEmitter {
 	) {
 		for (const turn of legacyTurns) this.rememberTurn(state, turn);
 		try {
-			const page = record(
-				await this.transport.request("thread/items/list", {
-					threadId: state.threadId,
-					limit: 100,
-					sortDirection: "desc",
-					cursor: earlier ? state.historyCursor : null,
-				}),
-			);
-			const items = list(page.data)
+			// The CLI caps each request at 100 items. Fetch three pages per UI
+			// load so tool-heavy sessions don't require repeated button clicks.
+			const entries: unknown[] = [];
+			let cursor = earlier ? state.historyCursor : null;
+			for (let batch = 0; batch < 3; batch++) {
+				const page = record(
+					await this.transport.request("thread/items/list", {
+						threadId: state.threadId,
+						limit: 100,
+						sortDirection: "desc",
+						cursor,
+					}),
+				);
+				entries.push(...list(page.data));
+				const next = text(page.nextCursor) || null;
+				if (next && next === cursor)
+					throw new Error(
+						"Codex history did not advance. Try loading earlier messages again.",
+					);
+				cursor = next;
+				if (!cursor) break;
+			}
+			const seen = new Set<string>();
+			const items = entries
 				.map((v) => {
 					const e = record(v);
 					return normalizeCodexItem(e.item, text(e.turnId));
 				})
 				.filter((v): v is CodexItem => v !== null)
+				.filter((item) => {
+					if (seen.has(item.id)) return false;
+					seen.add(item.id);
+					return true;
+				})
 				.reverse();
+			const existing = new Set(state.items.map((item) => item.id));
 			state.items = earlier
-				? [
-						...items,
-						...state.items.filter((v) => !items.some((i) => i.id === v.id)),
-					]
+				? [...items.filter((item) => !existing.has(item.id)), ...state.items]
 				: items;
-			state.historyCursor = text(page.nextCursor) || null;
+			// Commit the cursor and items together, only after the batch succeeds.
+			state.historyCursor = cursor;
 		} catch (error) {
 			if (
 				!(error instanceof CodexRpcError) ||
@@ -408,6 +435,37 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("Connect Codex before sending a message.");
 		return state;
 	}
+	async attachment(key: string, itemId: string, index: number) {
+		// The renderer selects an attachment already recorded in this pane. It cannot request arbitrary paths.
+		const path = this.require(key).items.find((item) => item.id === itemId)
+			?.imagePaths?.[index];
+		const mime =
+			path &&
+			(
+				{
+					".png": "image/png",
+					".jpg": "image/jpeg",
+					".jpeg": "image/jpeg",
+					".webp": "image/webp",
+					".gif": "image/gif",
+				} as Record<string, string>
+			)[extname(path).toLowerCase()];
+		if (!path || !mime)
+			throw new Error("This image attachment is unavailable.");
+		const file = await open(path, "r");
+		try {
+			const stat = await file.stat();
+			if (!stat.isFile() || stat.size > 20_000_000)
+				throw new Error("Image preview exceeds the size limit.");
+			const bytes = await file.readFile();
+			return {
+				name: basename(path),
+				source: `data:${mime};base64,${bytes.toString("base64")}`,
+			};
+		} finally {
+			await file.close();
+		}
+	}
 	async send(input: {
 		key: string;
 		text: string;
@@ -434,9 +492,8 @@ export class CodexSessionManager extends EventEmitter {
 			turnId: "",
 			kind: "user",
 			title: "User message",
-			text: [input.text, ...(input.images ?? []).map(() => "[Attached image]")]
-				.filter(Boolean)
-				.join("\n\n"),
+			text: input.text,
+			images: input.images,
 			startedAt: state.workingSince,
 		};
 		state.items.push(optimistic);
@@ -598,9 +655,22 @@ export class CodexSessionManager extends EventEmitter {
 				(turn.status === "interrupted"
 					? "Stopped. You can continue below."
 					: null);
-			state.approvals = [];
+			state.approvals = state.approvals.filter(
+				(approval) => approval.isBlocking === false,
+			);
 			for (const [id, request] of this.requests) {
-				if (request.key === state.key) this.requests.delete(id);
+				if (
+					request.key === state.key &&
+					!state.approvals.some((a) => a.id === id)
+				)
+					this.requests.delete(id);
+			}
+		}
+		if (method === "serverRequest/resolved") {
+			const token = `${typeof p.requestId}:${p.requestId}`;
+			if (this.requests.get(token)?.key === state.key) {
+				this.requests.delete(token);
+				state.approvals = state.approvals.filter((a) => a.id !== token);
 			}
 		}
 		if (method === "error") {
@@ -613,7 +683,18 @@ export class CodexSessionManager extends EventEmitter {
 		}
 		if (method === "thread/name/updated")
 			state.title = text(p.threadName) || state.title;
-		if (method === "turn/diff/updated") state.diff = text(p.diff);
+		if (method === "turn/diff/updated") {
+			state.diff = text(p.diff);
+			if (turnId) {
+				state.turns ??= [];
+				let turn = state.turns.find((entry) => entry.id === turnId);
+				if (!turn) {
+					turn = { id: turnId, status: "inProgress" };
+					state.turns.push(turn);
+				}
+				turn.diff = state.diff;
+			}
+		}
 		if (method === "thread/tokenUsage/updated") {
 			const usage = record(p.tokenUsage);
 			const last = record(usage.last);
@@ -694,6 +775,7 @@ export class CodexSessionManager extends EventEmitter {
 					: (previous?.completedAt ??
 						(fallback && status !== "inProgress" ? Date.now() : undefined)),
 			durationMs: finiteNumber(turn.durationMs) ?? previous?.durationMs,
+			diff: text(turn.diff) || previous?.diff,
 		};
 		if (previous) Object.assign(previous, next);
 		else turns.push(next);
@@ -736,6 +818,12 @@ export class CodexSessionManager extends EventEmitter {
 			previous?.completedAt ??
 			(lifecycle === "completed" ? Date.now() : undefined);
 		if (previous && !item.text) item.text = previous.text;
+		if (
+			previous?.images?.length &&
+			!item.images?.length &&
+			!item.imagePaths?.length
+		)
+			item.images = previous.images;
 		if (index < 0) state.items.push(item);
 		else state.items[index] = item;
 	}
@@ -760,27 +848,127 @@ export class CodexSessionManager extends EventEmitter {
 			return;
 		}
 		const token = `${typeof id}:${id}`;
+		if (this.requests.has(token)) return;
 		this.requests.set(token, { id, key: state.key, method });
 		state.approvals.push({
 			id: token,
 			method,
+			turnId: text(p.turnId),
+			isBlocking:
+				!method.endsWith("requestUserInput") || p.isBlocking !== false,
 			title: method.endsWith("requestUserInput")
 				? "Codex needs your input"
 				: "Approval needed",
 			detail:
 				text(p.reason) ||
 				text(p.command) ||
-				"Allow Codex to make the requested change?",
+				(method.endsWith("requestUserInput")
+					? ""
+					: "Allow Codex to make the requested change?"),
 			questions: list(p.questions).map((v) => {
 				const q = record(v);
 				return {
 					id: text(q.id),
-					question: text(q.question),
-					options: list(q.options).map((o) => text(record(o).label)),
+					question: text(q.question) || text(q.title),
+					options: list(q.options).map((o) => text(o) || text(record(o).label)),
+					descriptions: list(q.options).map((o) => text(record(o).description)),
+					secret: q.isSecret === true,
 				};
 			}),
 		});
 		this.publish(state);
+	}
+	private queueQuestion(input: AsyncQuestionInput) {
+		const key = input.session.replace(/^codex:/, "");
+		const state = this.require(key);
+		if (state.status !== "working")
+			throw new Error("Questions must belong to an active Codex task.");
+		const id = `question:${randomUUID()}`;
+		const method = "gatedspace/requestUserInput";
+		this.requests.set(id, { id, key, method });
+		state.approvals.push({
+			id,
+			method,
+			title: "Codex needs your input",
+			detail: "",
+			isBlocking: false,
+			turnId: state.turnId ?? "",
+			questions: input.questions.map((q, index) => ({
+				id: String(index),
+				question: q.title,
+				options: q.options ?? [],
+			})),
+		});
+		this.publish(state);
+		return id;
+	}
+	private async deliverQuestionAnswer(
+		state: CodexSessionState,
+		id: string,
+		answers: Record<string, string>,
+	) {
+		if (this.answering.has(id))
+			throw new Error("This answer is already being sent.");
+		this.answering.add(id);
+		const card = state.approvals.find((a) => a.id === id);
+		const message =
+			card?.questions
+				.map((q) => `Question: ${q.question}\nAnswer: ${answers[q.id]}`)
+				.join("\n\n") ?? "";
+		const input = [{ type: "text", text: message, text_elements: [] }];
+		try {
+			await this.turnStarts.get(state.key);
+			let delivered = false;
+			if (state.status === "working" && state.turnId) {
+				try {
+					await this.transport.request("turn/steer", {
+						threadId: state.threadId,
+						expectedTurnId: state.turnId,
+						input,
+					});
+					delivered = true;
+				} catch (error) {
+					// Completion may race a click. Retry as a new turn only after the
+					// server has told us this turn ended; ambiguous errors stay retryable.
+					if (
+						state.turnId ||
+						!/no active turn|not active|turn.*completed/i.test(String(error))
+					)
+						throw error;
+				}
+			}
+			if (!delivered) {
+				const previousStatus = state.status;
+				if (previousStatus !== "idle")
+					throw new Error("Reconnect the session before sending your answer.");
+				state.status = "working";
+				state.workingSince = Date.now();
+				this.publish(state);
+				try {
+					// Omit permission/model overrides: preserve the session's settings.
+					const started = this.transport.request("turn/start", {
+						threadId: state.threadId,
+						input,
+					});
+					this.turnStarts.set(state.key, started);
+					const result = record(await started);
+					if (state.status === "working")
+						state.turnId = text(record(result.turn).id) || state.turnId;
+					this.rememberTurn(state, result.turn, "inProgress");
+				} catch (error) {
+					state.status = previousStatus;
+					state.workingSince = undefined;
+					throw error;
+				} finally {
+					this.turnStarts.delete(state.key);
+				}
+			}
+			this.requests.delete(id);
+			state.approvals = state.approvals.filter((a) => a.id !== id);
+		} finally {
+			this.answering.delete(id);
+			this.publish(state);
+		}
 	}
 	answer(
 		key: string,
@@ -792,6 +980,19 @@ export class CodexSessionManager extends EventEmitter {
 		if (!pending || pending.key !== key)
 			throw new Error("This request is no longer pending.");
 		const state = this.require(key);
+		const approval = state.approvals.find((a) => a.id === id);
+		if (
+			pending.method.endsWith("requestUserInput") &&
+			(!approval?.questions.length ||
+				approval.questions.some((q) => !answers?.[q.id]?.trim()) ||
+				Object.keys(answers ?? {}).some(
+					(name) => !approval.questions.some((q) => q.id === name),
+				))
+		) {
+			throw new Error("Answer each question before sending.");
+		}
+		if (pending.method === "gatedspace/requestUserInput")
+			return this.deliverQuestionAnswer(state, id, answers ?? {});
 		const result = pending.method.endsWith("requestUserInput")
 			? {
 					answers: Object.fromEntries(
@@ -814,7 +1015,8 @@ export class CodexSessionManager extends EventEmitter {
 		if (state.status === "working") await this.interrupt(key).catch(() => {});
 		for (const [id, request] of this.requests)
 			if (request.key === key) {
-				this.transport.reject(request.id, "Pane closed");
+				if (request.method !== "gatedspace/requestUserInput")
+					this.transport.reject(request.id, "Pane closed");
 				this.requests.delete(id);
 			}
 		this.sessions.delete(key);

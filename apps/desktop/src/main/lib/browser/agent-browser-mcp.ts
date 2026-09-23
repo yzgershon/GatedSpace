@@ -4,7 +4,9 @@ import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
 	CallToolRequestSchema,
+	type CallToolResult,
 	ListToolsRequestSchema,
+	type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import {
@@ -14,15 +16,22 @@ import {
 } from "./agent-browser-service";
 
 /** Loopback-only, per-process credentials. Nothing is written to a user's global MCP config. */
+interface AdditionalTool {
+	definition: Tool;
+	run: (input: unknown) => Promise<CallToolResult> | CallToolResult;
+}
 class AgentBrowserMcp {
 	private server?: Server;
 	private starting?: Promise<string>;
-	private tokens = new Map<string, string>();
+	private tokens = new Map<
+		string,
+		{ scope: string; tools: AdditionalTool[] }
+	>();
 	private async url() {
 		if (!this.starting)
 			this.starting = new Promise<string>((resolve, reject) => {
 				const server = createServer((req, res) => {
-					const scope = this.tokens.get(
+					const connection = this.tokens.get(
 						(req.headers.authorization ?? "").replace(/^Bearer /, ""),
 					);
 					const address = server.address();
@@ -30,7 +39,7 @@ class AgentBrowserMcp {
 						address && typeof address === "object"
 							? `127.0.0.1:${address.port}`
 							: "";
-					if (req.headers.origin || req.headers.host !== host || !scope) {
+					if (req.headers.origin || req.headers.host !== host || !connection) {
 						res.writeHead(403).end();
 						return;
 					}
@@ -65,29 +74,37 @@ class AgentBrowserMcp {
 								{ capabilities: { tools: {} } },
 							);
 							mcp.setRequestHandler(ListToolsRequestSchema, async () => ({
-								tools: browserTools.map(([name, description]) => ({
-									name,
-									description,
-									inputSchema: z.toJSONSchema(browserInput) as {
-										type: "object";
-									},
-									annotations: {
-										readOnlyHint: [
-											"browser_snapshot",
-											"browser_screenshot",
-											"browser_console",
-										].includes(name),
-										openWorldHint: true,
-									},
-								})),
+								tools: [
+									...browserTools.map(([name, description]) => ({
+										name,
+										description,
+										inputSchema: z.toJSONSchema(browserInput) as {
+											type: "object";
+										},
+										annotations: {
+											readOnlyHint: [
+												"browser_snapshot",
+												"browser_screenshot",
+												"browser_console",
+											].includes(name),
+											openWorldHint: true,
+										},
+									})),
+									...connection.tools.map((tool) => tool.definition),
+								],
 							}));
-							mcp.setRequestHandler(CallToolRequestSchema, async (request) =>
-								agentBrowserService.run(
-									scope,
+							mcp.setRequestHandler(CallToolRequestSchema, async (request) => {
+								const additional = connection.tools.find(
+									(tool) => tool.definition.name === request.params.name,
+								);
+								if (additional)
+									return additional.run(request.params.arguments ?? {});
+								return agentBrowserService.run(
+									connection.scope,
 									request.params.name,
 									request.params.arguments ?? {},
-								),
-							);
+								);
+							});
 							const transport = new StreamableHTTPServerTransport({
 								sessionIdGenerator: undefined,
 								enableJsonResponse: true,
@@ -121,10 +138,10 @@ class AgentBrowserMcp {
 			});
 		return this.starting;
 	}
-	async connect(scope: string) {
+	async connect(scope: string, tools: AdditionalTool[] = []) {
 		const url = await this.url();
 		const token = randomBytes(32).toString("hex");
-		this.tokens.set(token, scope);
+		this.tokens.set(token, { scope, tools });
 		return {
 			url,
 			token,

@@ -14,6 +14,7 @@ export interface CodexItem {
 	input?: string;
 	url?: string;
 	images?: string[];
+	imagePaths?: string[];
 	changes?: { path: string; diff: string; kind: string }[];
 	exitCode?: number;
 	durationMs?: number;
@@ -26,11 +27,15 @@ export interface CodexTurn {
 	startedAt?: number;
 	completedAt?: number;
 	durationMs?: number;
+	/** Net changes supplied for this turn, never a workspace-wide diff. */
+	diff?: string;
 }
 export interface CodexQuestion {
 	id: string;
 	question: string;
 	options: string[];
+	descriptions?: string[];
+	secret?: boolean;
 }
 export interface CodexApproval {
 	id: string;
@@ -38,6 +43,8 @@ export interface CodexApproval {
 	title: string;
 	detail: string;
 	questions: CodexQuestion[];
+	isBlocking?: boolean;
+	turnId?: string;
 }
 export interface CodexModel {
 	id: string;
@@ -129,17 +136,20 @@ export function normalizeCodexItem(
 		.replace(/^./, (c) => c.toUpperCase());
 	if (kind === "user") {
 		body = list(item.content)
-			.map((part) => {
-				const p = record(part);
-				return (
-					text(p.text) ||
-					(p.type === "image" || p.type === "localImage"
-						? "[Attached image]"
-						: "")
-				);
-			})
+			.map((part) => text(record(part).text))
 			.filter(Boolean)
 			.join("\n\n");
+		extra.images = list(item.content).flatMap((part) => {
+			const p = record(part);
+			const url = text(p.url) || text(p.image_url);
+			return /^(data:image\/(png|jpeg|webp|gif);base64,|https:\/\/)/i.test(url)
+				? [url]
+				: [];
+		});
+		extra.imagePaths = list(item.content).flatMap((part) => {
+			const p = record(part);
+			return p.type === "localImage" && text(p.path) ? [text(p.path)] : [];
+		});
 	}
 	if (type === "reasoning") {
 		title = "Reasoning summary";
@@ -196,11 +206,8 @@ export function normalizeCodexItem(
 			content.body || (item.error ? JSON.stringify(item.error, null, 2) : "");
 		if (!body && record(item.result).structuredContent)
 			body = JSON.stringify(record(item.result).structuredContent, null, 2);
-		if (
-			text(item.server) === "gatedspace_browser" ||
-			/^browser_/.test(extra.tool)
-		)
-			extra.activityType = "browser";
+		if (/^browser_/.test(extra.tool)) extra.activityType = "browser";
+		if (extra.tool === "request_user_input_async") title = "Asked a question";
 	}
 	if (type === "webSearch") {
 		title = "Searched the web";

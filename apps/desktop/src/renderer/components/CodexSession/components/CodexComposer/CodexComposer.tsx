@@ -7,6 +7,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
@@ -330,22 +331,18 @@ export function CodexComposer({
 			)}
 			<div className="session-composer">
 				{images.length > 0 && (
-					<div className="codex-attachments">
+					<fieldset className="session-images" aria-label="Attached images">
 						{images.map((image, index) => (
-							<span key={`${image.name}:${index}`}>
-								<img src={image.url} alt={image.name} />
-								<button
-									type="button"
-									aria-label={`Remove ${image.name}`}
-									onClick={() =>
-										setImages((prev) => prev.filter((_, i) => i !== index))
-									}
-								>
-									<X size={13} />
-								</button>
-							</span>
+							<ComposerImage
+								key={`${image.name}:${index}`}
+								name={image.name}
+								source={image.url}
+								onRemove={() =>
+									setImages((prev) => prev.filter((_, i) => i !== index))
+								}
+							/>
 						))}
-					</div>
+					</fieldset>
 				)}
 				<div className="session-input">
 					<span aria-hidden="true">›</span>

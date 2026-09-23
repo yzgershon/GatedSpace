@@ -1,3 +1,4 @@
+import type { CodexTurnReview } from "shared/codex-session/review";
 export interface FilePaneData {
 	filePath: string;
 	mode: "editor" | "diff" | "preview";
@@ -109,7 +110,12 @@ export interface CommentPaneData {
 	line?: number;
 }
 
+export interface CodexReviewPaneData {
+	review: CodexTurnReview;
+}
+
 export type PaneViewerData =
+	| CodexReviewPaneData
 	| FilePaneData
 	| TerminalPaneData
 	| ChatPaneData

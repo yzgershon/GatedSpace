@@ -3,10 +3,16 @@ import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
+import { z } from "zod";
 import { version } from "../../../../package.json";
 import { record, text } from "../../../shared/codex-session/types";
 import { agentBrowserMcp } from "../browser/agent-browser-mcp";
 import { resolveExecutable } from "../claude-session/resolve-executable";
+import {
+	type AsyncQuestionInput,
+	asyncQuestionDescription,
+	asyncQuestionInput,
+} from "./questions";
 import { resolveNativeCodex } from "./resolve-native";
 
 export class CodexRpcError extends Error {
@@ -67,6 +73,7 @@ export function resolveCodexExecutable() {
 }
 
 export class CodexTransport extends EventEmitter {
+	askUser?: (input: AsyncQuestionInput) => string;
 	private child: ChildProcessWithoutNullStreams | null = null;
 	private ready: Promise<void> | null = null;
 	private sequence = 0;
@@ -95,7 +102,34 @@ export class CodexTransport extends EventEmitter {
 	}
 	private async connect(generation: number) {
 		const executable = this.executable();
-		const bridge = await agentBrowserMcp.connect("codex");
+		const bridge = await agentBrowserMcp.connect("codex", [
+			{
+				definition: {
+					name: "request_user_input_async",
+					description: asyncQuestionDescription,
+					inputSchema: z.toJSONSchema(asyncQuestionInput) as { type: "object" },
+					annotations: { readOnlyHint: true, openWorldHint: false },
+				},
+				run: (input) => {
+					if (!this.askUser)
+						throw new Error("No GatedSpace session is connected.");
+					const requestId = this.askUser(asyncQuestionInput.parse(input));
+					return {
+						content: [
+							{
+								type: "text",
+								text: JSON.stringify({
+									requestId,
+									status: "awaiting_user",
+									message:
+										"Question displayed. Continue independent work. The user's reply will arrive as a new message. No answer or approval has been given yet.",
+								}),
+							},
+						],
+					};
+				},
+			},
+		]);
 		if (generation !== this.generation) {
 			bridge.dispose();
 			throw new Error("Codex connection was cancelled.");

@@ -1,3 +1,8 @@
+import { useStore } from "zustand";
+import { CodexTurnReview } from "../../src/renderer/components/CodexSession/components/CodexTurnReview";
+import { openTaskReview } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/task-review-tab";
+import { createToolPanels } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/tool-panel-store";
+import type { PaneViewerData } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import "../../src/renderer/globals.css";
 import {
 	createWorkspaceStore,
@@ -22,6 +27,7 @@ import { WorkspaceLoadingState } from "../../src/renderer/routes/_authenticated/
 import { useThemeStore } from "../../src/renderer/stores/theme";
 import { emptyTimeline } from "../../src/shared/claude-session/timeline";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
+import { navigatorCodexItems } from "./navigator-fixture";
 import { UsageFixture } from "./UsageFixture";
 
 for (const [key, value] of Object.entries(draculaTheme.ui))
@@ -97,6 +103,49 @@ function ClaudeFixture() {
 		/>
 	);
 }
+const tools = createToolPanels({
+	key: "fixture-review",
+	createTerminal: async () => "fixture-terminal",
+});
+const reviewRegistry: PaneRegistry<PaneViewerData> = {
+	"codex-review": {
+		getTitle: () => "Review",
+		renderPane: ({ pane }) =>
+			"review" in pane.data ? (
+				<CodexTurnReview review={pane.data.review} />
+			) : null,
+	},
+};
+function FixtureWorkspace() {
+	useEffect(() => tools.connect(), []);
+	const right = useStore(tools.state, (s) => s.right);
+	return (
+		<div style={{ display: "flex", height: "100%", minWidth: 0 }}>
+			<div style={{ flex: 1, minWidth: 0 }}>
+				<Workspace store={workspace} registry={registry} showTabBar={false} />
+			</div>
+			{right.open && (
+				<aside
+					aria-label="Review sidebar"
+					style={{
+						width: "45%",
+						minWidth: 0,
+						borderLeft: "1px solid var(--border)",
+						display: "flex",
+						flexDirection: "column",
+					}}
+				>
+					<button type="button" onClick={() => tools.setOpen("right", false)}>
+						Close review
+					</button>
+					<div style={{ flex: 1, minHeight: 0 }}>
+						<Workspace store={tools.store} registry={reviewRegistry} />
+					</div>
+				</aside>
+			)}
+		</div>
+	);
+}
 const registry: PaneRegistry<Record<string, never>> = {
 	codex: {
 		getTitle: () => "Codex",
@@ -107,6 +156,9 @@ const registry: PaneRegistry<Record<string, never>> = {
 				paneId={ctx.pane.id}
 				cwd="C:\\Dev\\superset"
 				onSessionId={() => {}}
+				onReviewChanges={(review) => {
+					openTaskReview(tools, review);
+				}}
 			/>
 		),
 	},
@@ -143,6 +195,11 @@ Object.assign(window, {
 				.toggleMaximizePane({ tabId: "codex-layout", paneId: "fixture" }),
 	},
 });
+if (location.search.includes("navigator")) {
+	(
+		window as unknown as { setCodexActivityFixture(patch: unknown): void }
+	).setCodexActivityFixture({ items: navigatorCodexItems });
+}
 createRoot(container).render(
 	<QueryClientProvider client={new QueryClient()}>
 		<TooltipProvider>
@@ -152,7 +209,7 @@ createRoot(container).render(
 				) : location.search.includes("loading") ? (
 					<WorkspaceLoadingState />
 				) : (
-					<Workspace store={workspace} registry={registry} showTabBar={false} />
+					<FixtureWorkspace />
 				)}
 			</DndProvider>
 		</TooltipProvider>

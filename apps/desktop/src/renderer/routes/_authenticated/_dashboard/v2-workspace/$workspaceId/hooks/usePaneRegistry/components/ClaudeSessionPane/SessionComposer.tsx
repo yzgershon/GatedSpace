@@ -12,6 +12,7 @@ import {
 	type ClaudeAccount,
 	useClaudeAccounts,
 } from "renderer/components/ClaudeAccountSwap";
+import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
@@ -21,7 +22,6 @@ import {
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionStatus } from "shared/claude-session/timeline";
 import { prepareImage } from "./composer-images";
-import { ImageChip } from "./ImageChip";
 import { SlashPalette } from "./SlashPalette";
 import {
 	getSessionDraft,
@@ -471,31 +471,28 @@ export function SessionComposer({
 					</div>
 				) : null}
 
-				{images.length > 0 || imageError ? (
-					<div className="flex flex-wrap items-center gap-1.5 px-3 pt-3">
+				{images.length > 0 && (
+					<fieldset className="session-images" aria-label="Attached images">
 						{images.map((image, index) => (
-							<ImageChip
-								key={`${image.name}-${index}`}
-								attachment={image}
-								// Row height here: you just picked the image, so a preview
-								// tile shows you what you are already looking at and takes
-								// the height out of the conversation to do it.
-								compact
-								// The composer still holds the full payload, so expanding here
-								// shows what will actually be sent rather than the preview.
-								fullSource={`data:${image.mediaType};base64,${image.data}`}
+							<ComposerImage
+								key={`${image.name}:${index}`}
+								name={image.name}
+								source={`data:${image.mediaType};base64,${image.data}`}
 								onRemove={() =>
 									setImages((current) => current.filter((_, i) => i !== index))
 								}
 							/>
 						))}
-						{imageError ? (
-							<span className="select-text cursor-text text-[11.5px] text-destructive">
-								{imageError}
-							</span>
-						) : null}
-					</div>
-				) : null}
+					</fieldset>
+				)}
+				{imageError && (
+					<p
+						className="px-4 pt-3 text-xs text-destructive select-text cursor-text"
+						role="alert"
+					>
+						{imageError}
+					</p>
+				)}
 
 				<div className="session-input">
 					<span aria-hidden="true">›</span>

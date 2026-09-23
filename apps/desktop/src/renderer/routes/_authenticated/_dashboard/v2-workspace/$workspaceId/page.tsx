@@ -5,6 +5,7 @@ import { Folder, GitCompareArrows, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuickOpenStore } from "renderer/commandPalette/ui/QuickOpen/quickOpenStore";
+import { CodexTurnReview } from "renderer/components/CodexSession/components/CodexTurnReview";
 import { CommandPalette } from "renderer/components/CommandPalette";
 import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useV2AgentConfigs } from "renderer/hooks/useV2AgentConfigs";
@@ -19,6 +20,7 @@ import {
 } from "renderer/stores/focused-session";
 import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
+import type { CodexTurnReview as TaskReview } from "shared/codex-session/review";
 import { useStore } from "zustand";
 import { useWorkspace } from "../providers/WorkspaceProvider";
 import { BackgroundTerminalsButton } from "./components/BackgroundTerminalsButton";
@@ -32,6 +34,7 @@ import { WorkspaceMissingWorktreeState } from "./components/WorkspaceMissingWork
 import { WorkspaceToolPanels } from "./components/WorkspaceToolPanels";
 import { ChangesTool } from "./components/WorkspaceToolPanels/components/ChangesTool/ChangesTool";
 import { FilesTool } from "./components/WorkspaceToolPanels/components/FilesTool/FilesTool";
+import { openTaskReview } from "./components/WorkspaceToolPanels/task-review-tab";
 import { mainPaneMinimum } from "./components/WorkspaceToolPanels/tool-panel-store";
 import { useToolPanels } from "./components/WorkspaceToolPanels/useToolPanels";
 import { useBrowserShellInteractionPassthrough } from "./hooks/useBrowserShellInteractionPassthrough";
@@ -399,9 +402,12 @@ function V2WorkspaceContent() {
 	 * changes.
 	 */
 	const newTabActionsRef = useRef<NewTabPaneActions | null>(null);
-	const reviewCodexChanges = useCallback(() => {
-		void tools.open("right", "changes");
-	}, [tools]);
+	const reviewCodexChanges = useCallback(
+		(review: TaskReview) => {
+			openTaskReview(tools, review);
+		},
+		[tools],
+	);
 	const basePaneRegistry = usePaneRegistry({
 		onOpenFile: openFilePaneFromTreeClick,
 		onRevealPath: revealPath,
@@ -693,6 +699,15 @@ function V2WorkspaceContent() {
 						onSearch={handleQuickOpen}
 					/>
 				),
+			},
+			"codex-review": {
+				getTitle: () => "Review",
+				getTabIcon: () => <GitCompareArrows className="size-4" />,
+				hideMaximizeControl: true,
+				renderPane: ({ pane }) =>
+					"review" in pane.data ? (
+						<CodexTurnReview review={pane.data.review} />
+					) : null,
 			},
 			changes: {
 				getTitle: () => "Changes",

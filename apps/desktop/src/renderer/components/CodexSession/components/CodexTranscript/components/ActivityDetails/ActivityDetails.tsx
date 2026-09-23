@@ -1,5 +1,6 @@
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
+import { displayCommand } from "shared/codex-session/command";
 import type { CodexItem } from "shared/codex-session/types";
 
 export function ActivityDetails({
@@ -12,9 +13,8 @@ export function ActivityDetails({
 	const [copied, setCopied] = useState(false);
 	const [copyError, setCopyError] = useState(false);
 	const [expandedImage, setExpandedImage] = useState<string | null>(null);
-	const content = [item.command, item.input, item.text]
-		.filter(Boolean)
-		.join("\n\n");
+	const command = item.command ? displayCommand(item.command) : "";
+	const content = [command, item.input, item.text].filter(Boolean).join("\n\n");
 	return (
 		<div className="codex-tool-details">
 			<div className="codex-tool-bar">
@@ -55,9 +55,22 @@ export function ActivityDetails({
 					Copy failed. Select the output to copy it.
 				</p>
 			)}
-			{item.cwd && <div className="codex-tool-directory">{item.cwd}</div>}
-			{item.command && (
-				<pre className="codex-tool-command">$ {item.command}</pre>
+			{command && (
+				<section
+					className="codex-shell-scroll"
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: keyboard users can scroll long command output.
+					tabIndex={0}
+					aria-label="Command and output"
+				>
+					<pre className="codex-shell-content">
+						<span className="codex-shell-command">$ {command}</span>
+						{"\n\n"}
+						<span className="codex-shell-output">
+							{item.text ||
+								(running ? "Waiting for output…" : "No text output.")}
+						</span>
+					</pre>
+				</section>
 			)}
 			{item.input && (
 				<details className="codex-tool-input">
@@ -92,9 +105,9 @@ export function ActivityDetails({
 						</pre>
 					</div>
 				))
-			) : item.text ? (
+			) : !command && item.text ? (
 				<pre className="codex-tool-output">{item.text}</pre>
-			) : (
+			) : !command ? (
 				<p className="codex-tool-empty">
 					{running
 						? "Waiting for output…"
@@ -102,7 +115,7 @@ export function ActivityDetails({
 							? ""
 							: "No text output."}
 				</p>
-			)}
+			) : null}
 			{item.images?.length ? (
 				<div className="codex-tool-images">
 					{item.images.map((src) => (
