@@ -22,12 +22,12 @@
  * releases for a one-line CSS fix. Bump the last part for each change worth
  * confirming on the device.
  */
-export const MOBILE_BRIDGE_PAGE_VERSION = "1.3.0";
+export const MOBILE_BRIDGE_PAGE_VERSION = "1.4.0";
 
 export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
 	name: "GatedSpace",
 	short_name: "GatedSpace",
-	description: "Drive your Claude sessions from your phone",
+	description: "Continue Claude and Codex sessions from your phone",
 	// standalone, not fullscreen: fullscreen hides the status bar too, which
 	// costs the clock and battery for no gain on a page that is mostly text.
 	display: "standalone",

@@ -277,4 +277,51 @@ button.danger {
 .hint { padding: 8px 2px 0; font-size: 12px; color: var(--muted); }
 .hint.warn { color: var(--warning); }
 .err { color: var(--danger); padding: 14px 0; }
+
+/* Mobile conversations: quiet surfaces, readable hierarchy, generous touch targets. */
+main { max-width: 860px; margin: 0 auto; padding-bottom: calc(160px + env(safe-area-inset-bottom)); }
+header h1 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+button, input, select, textarea { font: inherit; }
+button { touch-action: manipulation; }
+button:focus-visible, summary:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+input[type=search], select { width: 100%; min-height: 46px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--fg); padding: 10px 14px; margin: 8px 0; }
+.agent-filters { display: flex; gap: 8px; margin: 10px 0 22px; }
+.agent-filters button { flex: 1; min-height: 44px; border-radius: 10px; background: transparent; color: var(--muted); border: 1px solid transparent; }
+.agent-filters button[aria-pressed=true] { background: var(--card); color: var(--fg); border-color: var(--accent); }
+button.row { width: 100%; text-align: left; color: var(--fg); min-height: 76px; padding: 14px; margin: 8px 0; border-radius: 14px; }
+.row[data-provider=codex] .pip { background: #a79aff; }
+.row[data-provider=claude] .pip { background: #d97757; }
+.connection { position: sticky; top: 56px; z-index: 4; margin: 0; padding: 10px 18px; background: var(--card); border-bottom: 1px solid var(--border); font-size: 13px; color: var(--warning); }
+.turn { margin: 24px 0; min-width: 0; }
+.turn.you { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-left: 28px; }
+.turn .who { margin-bottom: 7px; font-size: 11px; font-weight: 650; letter-spacing: .04em; color: var(--muted); }
+.message-text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; font-size: 15px; }
+details.activity { margin: 8px 0; color: var(--muted); border-left: 1px solid var(--border); padding-left: 12px; }
+details.activity summary { min-height: 42px; padding: 10px 0; font-size: 13px; overflow-wrap: anywhere; cursor: pointer; }
+details.activity pre { max-height: 300px; overflow: auto; font: 12px/1.6 ui-monospace, monospace; background: var(--card); padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.message-images { display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; }
+.message-images button { flex: none; max-width: 140px; min-height: 64px; padding: 0; overflow: hidden; border-radius: 12px; }
+.message-images img { display: block; width: 108px; height: 82px; object-fit: cover; }
+.image-dialog { max-width: 95vw; max-height: 92dvh; padding: 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 16px; }
+.image-dialog img { display: block; max-width: 88vw; max-height: 75dvh; object-fit: contain; margin-top: 12px; }
+.image-dialog::backdrop { background: #000b; backdrop-filter: blur(6px); }
+.thinking-word { display: inline-block; margin: 20px 0; font-size: 14px; font-weight: 550; background: linear-gradient(110deg,var(--muted) 30%,var(--fg) 48%,var(--muted) 65%); background-size: 250% 100%; background-clip: text; color: transparent; animation: mobile-working 2.5s linear infinite; }
+@keyframes mobile-working { to { background-position: -250% 0; } }
+.question-card { border: 1px solid var(--border); background: var(--card); border-radius: 16px; padding: 16px; margin: 18px 0; }
+.question-card h2 { font-size: 16px; margin: 0 0 10px; }
+.question-card button { min-height: 44px; margin: 5px 4px 5px 0; }
+.question-card .answer-choice { display: block; width: 100%; text-align: left; padding: 12px 14px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); }
+.question-card .answer-choice[aria-pressed=true] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 12%, var(--bg)); }
+.question-card input { width: 100%; margin: 10px 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 12px; }
+.question-card pre { max-height: 180px; overflow: auto; white-space: pre-wrap; font-size: 12px; }
+.question-card summary { padding: 10px 0; cursor: pointer; }
+#composer { border-top: 1px solid var(--border); padding: 12px 12px calc(12px + env(safe-area-inset-bottom)); gap: 8px; }
+#input { font-size: 16px; border-radius: 16px; min-width: 0; }
+#stop { background: var(--card); color: var(--fg); font-size: 12px; padding: 8px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } .thinking-word { background: none; color: var(--muted); } }
+
+#shelf { bottom: var(--composer-height, 76px); }
+.attachment-preview { padding: 0; min-height: 54px; background: none; }
+.turn + .turn { border-top: none; }
+.turn + .turn.you { border: 1px solid var(--border); }
 `;

@@ -8,7 +8,7 @@ import { Badge } from "@superset/ui/badge";
 import { Button } from "@superset/ui/button";
 import { Spinner } from "@superset/ui/spinner";
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { FaGithub } from "react-icons/fa";
 import { FcGoogle } from "react-icons/fc";
 import { env } from "renderer/env.renderer";
@@ -47,6 +47,7 @@ function readLastUsedMethod(): AuthMethod | null {
 
 function SignInPage() {
 	const signInMutation = electronTrpc.auth.signIn.useMutation();
+	const recoverBackend = electronTrpc.auth.recoverLocalBackend.useMutation();
 	const persistToken = electronTrpc.auth.persistToken.useMutation();
 	const navigate = useNavigate();
 	const [isLoadingDev, setIsLoadingDev] = useState(false);
@@ -54,13 +55,16 @@ function SignInPage() {
 	const [lastUsedMethod, setLastUsedMethod] = useState(readLastUsedMethod);
 	const { hasLocalToken, isPending, session } = useSessionRecovery();
 
-	// GatedSpace: the packaged app runs against the local backend, whose
-	// OAuth providers are placeholders — the dev account is the real sign-in.
-	// Show it whenever the API is local, not only in dev builds.
+	// Local workspace recovery and the separately hosted Sync account have
+	// different sessions. Never send local users to placeholder OAuth providers.
 	const apiIsLocal = /^https?:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(
 		env.NEXT_PUBLIC_API_URL,
 	);
 	const showDevSignIn = env.NODE_ENV === "development" || apiIsLocal;
+	const recoverLocal = recoverBackend.mutate;
+	useEffect(() => {
+		if (apiIsLocal && hasLocalToken && !session?.user) recoverLocal();
+	}, [apiIsLocal, hasLocalToken, session?.user, recoverLocal]);
 
 	// Local-only mode has a static session — there's nothing to sign into
 	if (isLocalMode()) {
@@ -94,7 +98,17 @@ function SignInPage() {
 	const signIn = (provider: AuthProvider) => {
 		track("auth_started", { provider });
 		rememberLastUsedMethod(provider);
-		signInMutation.mutate({ provider });
+		setDevError(null);
+		signInMutation.mutate(
+			{ provider },
+			{
+				onSuccess: (result) => {
+					if (!result.success)
+						setDevError(result.error ?? "Sign-in could not start.");
+				},
+				onError: (error) => setDevError(error.message),
+			},
+		);
 	};
 
 	const signInAsDev = async () => {
@@ -105,6 +119,7 @@ function SignInPage() {
 		const postAuth = async (path: string, body: Record<string, unknown>) => {
 			const response = await fetch(`${env.NEXT_PUBLIC_API_URL}${path}`, {
 				method: "POST",
+				signal: AbortSignal.timeout(10_000),
 				headers: { "Content-Type": "application/json" },
 				credentials: "omit",
 				body: JSON.stringify(body),
@@ -146,6 +161,7 @@ function SignInPage() {
 		};
 
 		try {
+			if (apiIsLocal) await recoverBackend.mutateAsync();
 			let result = await postAuthWhenLocalBackendIsReady(
 				"/api/auth/sign-in/email",
 				{
@@ -215,7 +231,9 @@ function SignInPage() {
 						<p className="text-sm text-muted-foreground">
 							{hasLocalToken
 								? "Restoring your session"
-								: "Sign in to get started"}
+								: apiIsLocal
+									? "Open your saved workspace on this computer"
+									: "Sign in to get started"}
 						</p>
 					</div>
 
@@ -229,8 +247,8 @@ function SignInPage() {
 								disabled={isLoadingDev}
 							>
 								{isLoadingDev
-									? "Signing in..."
-									: "Sign in as Local Admin (dev)"}
+									? "Opening your workspace…"
+									: "Open this computer"}
 								{lastUsedMethod === "dev" && lastUsedBadge}
 							</Button>
 						)}
@@ -238,6 +256,26 @@ function SignInPage() {
 							<p className="text-xs text-destructive text-center select-text cursor-text">
 								{devError}
 							</p>
+						)}
+						{apiIsLocal && hasLocalToken && (
+							<Button
+								variant="ghost"
+								disabled={recoverBackend.isPending}
+								onClick={() =>
+									recoverLocal(undefined, {
+										onSuccess: (result) =>
+											setDevError(
+												result.error ??
+													(result.state === "starting"
+														? "Starting local services. Your saved session will reconnect automatically."
+														: "Services are ready. Restoring your saved session…"),
+											),
+										onError: (error) => setDevError(error.message),
+									})
+								}
+							>
+								Retry local services
+							</Button>
 						)}
 						{isLocalOnlyBuild() && (
 							<Button
@@ -252,29 +290,38 @@ function SignInPage() {
 								Use GatedSpace without an account
 							</Button>
 						)}
-						<Button
-							variant="outline"
-							size="lg"
-							onClick={() => signIn("github")}
-							className="w-full gap-3"
-							disabled={signInMutation.isPending}
-						>
-							<FaGithub className="size-5" />
-							Continue with GitHub
-							{lastUsedMethod === "github" && lastUsedBadge}
-						</Button>
+						{apiIsLocal ? (
+							<p className="text-sm leading-relaxed text-muted-foreground text-center">
+								To connect your PCs, open Settings → Account → GatedSpace Sync.
+								Sign in there with Google or GitHub.
+							</p>
+						) : (
+							<>
+								<Button
+									variant="outline"
+									size="lg"
+									onClick={() => signIn("github")}
+									className="w-full gap-3"
+									disabled={signInMutation.isPending}
+								>
+									<FaGithub className="size-5" />
+									Continue with GitHub
+									{lastUsedMethod === "github" && lastUsedBadge}
+								</Button>
 
-						<Button
-							variant="outline"
-							size="lg"
-							onClick={() => signIn("google")}
-							className="w-full gap-3"
-							disabled={signInMutation.isPending}
-						>
-							<FcGoogle className="size-5" />
-							Continue with Google
-							{lastUsedMethod === "google" && lastUsedBadge}
-						</Button>
+								<Button
+									variant="outline"
+									size="lg"
+									onClick={() => signIn("google")}
+									className="w-full gap-3"
+									disabled={signInMutation.isPending}
+								>
+									<FcGoogle className="size-5" />
+									Continue with Google
+									{lastUsedMethod === "google" && lastUsedBadge}
+								</Button>
+							</>
+						)}
 					</div>
 
 					<p className="mt-8 text-xs text-muted-foreground/70 text-center max-w-xs">

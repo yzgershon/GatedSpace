@@ -46,6 +46,7 @@ import {
 	MOBILE_BRIDGE_PAGE_VERSION,
 	MOBILE_BRIDGE_SERVICE_WORKER,
 } from "./pwa-assets";
+import { mobileSessionRouter } from "./session-api";
 import {
 	startTailscaleServe,
 	stopTailscaleServe,
@@ -202,13 +203,17 @@ function parseImages(value: unknown): UserImagePayload[] {
 	return images;
 }
 
-class MobileBridge {
+export class MobileBridge {
 	private server: Server | null = null;
 	private token = "";
 	private address = "";
 	private port = 0;
 	private mode: BridgeBindingMode = DEFAULT_BRIDGE_BINDING_MODE;
 	private lastError: string | undefined;
+	private startPending: Promise<BridgeStatus> | undefined;
+	private restoreTimer: ReturnType<typeof setTimeout> | undefined;
+	private stopGeneration = 0;
+	private restoreAttempts = 0;
 	/**
 	 * Set only in `tailscale-serve` mode, where Tailscale fronts the bridge with
 	 * a real certificate and the phone talks to a DNS name on 443 rather than to
@@ -229,20 +234,38 @@ class MobileBridge {
 	 * returns once someone opens the app's UI on the machine they are away from.
 	 */
 	async restore(): Promise<BridgeStatus> {
+		const generation = this.stopGeneration;
 		const state = readBridgeState();
 		if (!state.enabled) return this.status();
-		const status = await this.start(state.mode);
-		if (!status.running) {
-			console.warn("[mobile-bridge] Could not restore on launch", {
-				mode: state.mode,
-				error: status.error,
-			});
+		let status: BridgeStatus;
+		try {
+			status = await this.start(state.mode);
+		} catch {
+			this.lastError = "Mobile access could not start. Retrying automatically.";
+			status = this.status();
+		}
+		if (status.running) {
+			this.restoreAttempts = 0;
+			clearTimeout(this.restoreTimer);
+		}
+		if (!status.running && generation === this.stopGeneration) {
+			clearTimeout(this.restoreTimer);
+			this.restoreTimer = setTimeout(
+				() => {
+					void this.restore();
+				},
+				Math.min(60_000, 5_000 * 2 ** Math.min(this.restoreAttempts++, 4)),
+			);
+			this.restoreTimer.unref();
 		}
 		return status;
 	}
 
 	status(): BridgeStatus {
-		if (!this.server) {
+		if (
+			!this.server ||
+			(this.mode === "tailscale-serve" && !this.publicOrigin)
+		) {
 			return {
 				running: false,
 				...(this.lastError && { error: this.lastError }),
@@ -259,8 +282,25 @@ class MobileBridge {
 		};
 	}
 
-	async start(mode: BridgeBindingMode): Promise<BridgeStatus> {
+	start(mode: BridgeBindingMode): Promise<BridgeStatus> {
+		if (this.startPending) return this.startPending;
+		this.startPending = this.startOnce(mode)
+			.catch(() => {
+				this.teardown();
+				this.lastError =
+					"Mobile access could not start. Retrying automatically.";
+				return this.status();
+			})
+			.finally(() => {
+				this.startPending = undefined;
+			});
+		return this.startPending;
+	}
+
+	private async startOnce(mode: BridgeBindingMode): Promise<BridgeStatus> {
 		if (this.server) return this.status();
+		const generation = this.stopGeneration;
+		this.mode = mode;
 
 		const binding = resolveBinding(mode, networkInterfaces());
 		if ("error" in binding) {
@@ -290,6 +330,10 @@ class MobileBridge {
 			return this.status();
 		}
 
+		if (generation !== this.stopGeneration) {
+			this.teardown();
+			return this.status();
+		}
 		const bound = this.server.address();
 		this.mode = mode;
 		// The DISPLAY address, not the bind address: LAN binds 0.0.0.0, which is
@@ -301,6 +345,11 @@ class MobileBridge {
 
 		if (mode === "tailscale-serve") {
 			const served = await startTailscaleServe(this.port);
+			if (generation !== this.stopGeneration) {
+				this.teardown();
+				if (served.url) await stopTailscaleServe();
+				return this.status();
+			}
 			if (served.error || !served.url) {
 				// Close the listener rather than leaving it up on loopback: the user
 				// asked for an HTTPS link, and silently running an unreachable HTTP
@@ -319,6 +368,9 @@ class MobileBridge {
 	}
 
 	async stop(): Promise<BridgeStatus> {
+		this.stopGeneration++;
+		clearTimeout(this.restoreTimer);
+		await this.startPending?.catch(() => undefined);
 		const wasServing = this.teardown();
 		if (wasServing) {
 			// Tailscale's serve config outlives this process, so leaving it in
@@ -355,6 +407,8 @@ class MobileBridge {
 	 * await — `exitImmediately` calls `app.exit(0)` on the next line.
 	 */
 	stopSync(): BridgeStatus {
+		this.stopGeneration++;
+		clearTimeout(this.restoreTimer);
 		if (this.teardown()) stopTailscaleServeSync();
 		return this.status();
 	}
@@ -461,7 +515,16 @@ class MobileBridge {
 			"/api/sessions/:key/send",
 			express.json({ limit: MAX_PROMPT_BYTES }),
 		);
+		app.use(
+			"/api/mobile/:provider/:key/send",
+			express.json({ limit: MAX_PROMPT_BYTES }),
+		);
 		app.use("/api", express.json({ limit: MAX_CONTROL_JSON_BYTES }));
+		app.use("/api", (_req, res, next) => {
+			res.setHeader("Cache-Control", "no-store");
+			next();
+		});
+		app.use("/api/mobile", mobileSessionRouter());
 
 		app.get("/api/sessions", (_req, res) => {
 			// `listSessions`, NOT `getLiveSessionIds`: the latter returns Claude's

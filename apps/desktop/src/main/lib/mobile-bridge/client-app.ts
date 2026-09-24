@@ -1,3 +1,4 @@
+import { MOBILE_SESSION_CLIENT_JS } from "./session-client";
 /**
  * The phone app's behaviour.
  *
@@ -47,33 +48,29 @@ $("ver").textContent = "v__PAGE_VERSION__";
 var tab = "sessions";      // sessions | usage | settings
 var current = null;        // open session key, when reading a conversation
 var timer = null;
-var eventLimit = 200;      // how much of the open conversation to fetch
 var themes = [];
 var themeId = localStorage.getItem("gs-theme") || "";
 
 function api(path, options) {
-  return fetch("/api" + path, Object.assign(
-    { headers: { "x-bridge-token": TOKEN, "content-type": "application/json" } },
-    options || {}
-  )).then(function (r) {
-    if (r.status === 401) {
-      // The desktop rotated the token, so what is saved here can only fail from
-      // now on. Dropping it means the next tap on a fresh link pairs cleanly
-      // rather than being ignored in favour of the dead one.
-      localStorage.removeItem("bridge-token");
-      throw new Error("This phone is no longer paired. Open the link from GatedSpace again.");
-    }
-    if (!r.ok) throw new Error("Request failed (" + r.status + ")");
-    return r.json();
-  });
+  var generation = viewGeneration, controller = new AbortController();
+  var deadline = setTimeout(function () { controller.abort(); }, options && options.method === "POST" ? 120000 : 15000);
+  return fetch("/api" + path, Object.assign({
+    headers: { "x-bridge-token": TOKEN, "content-type": "application/json" }, signal: controller.signal
+  }, options || {})).then(function (r) {
+    return r.json().catch(function () { return {}; }).then(function (data) {
+      if (r.status === 401) {
+        localStorage.removeItem("bridge-token"); TOKEN = "";
+        throw new Error("This phone is no longer paired. Open the link from GatedSpace settings again.");
+      }
+      if (!r.ok) throw new Error(data.error || "Request failed (" + r.status + ")");
+      if ((!options || !options.method || options.method === "GET") && generation !== viewGeneration) throw new Error("View changed.");
+      return data;
+    });
+  }).finally(function () { clearTimeout(deadline); });
 }
-
 function fail(message) {
-  main.innerHTML = "";
-  var p = document.createElement("p");
-  p.className = "err";
-  p.textContent = message;
-  main.appendChild(p);
+  if (message === "View changed.") return;
+  networkMessage(message);
 }
 
 /* ---------------------------------------------------------------- theming */
@@ -123,10 +120,10 @@ function loadThemes() {
 /* ------------------------------------------------------------------ views */
 
 function setTab(next) {
+  saveDraft(); viewGeneration++; networkMessage("");
   tab = next;
   current = null;
   clearInterval(timer); timer = null;
-  clearInterval(thinkTimer); thinkTimer = null;
   composer.hidden = true;
   back.hidden = true;
   hint.hidden = true;
@@ -167,7 +164,8 @@ function sectionHeader(label, count) {
 }
 
 function sessionRow(name, sub, running, onOpen) {
-  var row = document.createElement("div");
+  var row = document.createElement("button");
+  row.type = "button";
   row.className = "row";
   var pip = document.createElement("span");
   pip.className = "pip" + (running ? " run" : "");
@@ -195,111 +193,6 @@ function sessionRow(name, sub, running, onOpen) {
  * type that could point somewhere unintended, and nothing to mistype on a phone
  * keyboard either.
  */
-function renderNewSession() {
-  title.textContent = "New session";
-  main.innerHTML = '<p class="muted">Loading…</p>';
-  back.hidden = false;
-  tabs.hidden = true;
-  api("/workspaces").then(function (data) {
-    var list = data.workspaces || [];
-    main.innerHTML = "";
-    if (!list.length) {
-      var none = document.createElement("p");
-      none.className = "muted";
-      none.textContent = "No workspaces open on the desktop.";
-      main.appendChild(none);
-      return;
-    }
-
-    var box = document.createElement("textarea");
-    box.className = "newprompt";
-    box.rows = 4;
-    box.placeholder = "What should it work on?";
-    main.appendChild(box);
-
-    main.appendChild(sectionHeader("Where"));
-    var chosen = list[0].id;
-    var rows = [];
-    list.forEach(function (w) {
-      var row = sessionRow(w.name, w.project, false, null);
-      row.className = "row pick" + (w.id === chosen ? " sel" : "");
-      row.onclick = function () {
-        chosen = w.id;
-        rows.forEach(function (r) { r.className = "row pick"; });
-        row.className = "row pick sel";
-      };
-      rows.push(row);
-      main.appendChild(row);
-    });
-
-    var go = document.createElement("button");
-    go.className = "primary";
-    go.textContent = "Start";
-    go.onclick = function () {
-      var text = box.value.trim();
-      if (!text) { box.focus(); return; }
-      // Disabled for the whole round trip: a second tap would start a second
-      // session, and the first one would be left running with nothing watching
-      // it.
-      go.disabled = true;
-      go.textContent = "Starting…";
-      api("/sessions", {
-        method: "POST",
-        body: JSON.stringify({ workspaceId: chosen, text: text })
-      }).then(function (res) {
-        openSession(res.key);
-      }).catch(function (e) {
-        go.disabled = false;
-        go.textContent = "Start";
-        fail(e.message);
-      });
-    };
-    main.appendChild(go);
-  }).catch(function (e) { fail(e.message); });
-}
-
-function renderSessions() {
-  title.textContent = "Sessions";
-  main.innerHTML = '<p class="muted">Loading…</p>';
-  newBtn.hidden = false;
-  Promise.all([api("/sessions"), api("/history").catch(function () { return { sessions: [] }; })])
-    .then(function (results) {
-      var live = results[0].sessions || [];
-      var past = results[1].sessions || [];
-      // A session that is running is shown ONCE, under Active. Without this the
-      // same conversation appears in both lists and the counts lie.
-      var liveIds = {};
-      live.forEach(function (s) { if (s.sessionId) liveIds[s.sessionId] = true; });
-
-      main.innerHTML = "";
-      main.appendChild(sectionHeader("Active", live.length));
-      if (!live.length) {
-        var none = document.createElement("p");
-        none.className = "muted";
-        none.textContent = "Nothing running right now.";
-        main.appendChild(none);
-      }
-      live.forEach(function (s) {
-        main.appendChild(sessionRow(s.title, s.running ? "Running" : "Idle", s.running,
-          function () { openSession(s.key); }));
-      });
-
-      var shown = past.filter(function (s) { return !liveIds[s.sessionId]; });
-      main.appendChild(sectionHeader("History", shown.length));
-      if (!shown.length) {
-        var e = document.createElement("p");
-        e.className = "muted";
-        e.textContent = "No past sessions yet.";
-        main.appendChild(e);
-        return;
-      }
-      shown.forEach(function (s) {
-        main.appendChild(sessionRow(s.title || "Untitled session", relTime(s.modifiedAt || s.updatedAt), false, null));
-      });
-    })
-    .catch(function (e) { fail(e.message); });
-}
-
 function relTime(value) {
   if (!value) return "";
   var then = typeof value === "number" ? value : Date.parse(value);
@@ -313,20 +206,21 @@ function relTime(value) {
 }
 
 function renderUsage() {
-  title.textContent = "Usage";
-  main.innerHTML = '<p class="muted">Loading…</p>';
-  api("/usage").then(function (data) {
-    var accounts = data.accounts || [];
-    main.innerHTML = "";
-    if (!accounts.length) {
-      var e = document.createElement("p");
-      e.className = "empty";
-      e.textContent = "No Claude accounts configured.";
-      main.appendChild(e);
-      return;
-    }
-    accounts.forEach(function (a) { main.appendChild(usageCard(a)); });
-  }).catch(function (e) { fail(e.message); });
+  title.textContent = "Usage"; main.replaceChildren();
+  ["Codex", "Claude"].forEach(function(provider) {
+    main.appendChild(sectionHeader(provider));
+    var box = document.createElement("div"); box.textContent = "Loading..."; box.className = "muted"; main.appendChild(box);
+    api(provider === "Codex" ? "/mobile/usage/codex" : "/usage").then(function(data) {
+      box.replaceChildren();
+      if (provider === "Codex") {
+        box.appendChild(usageCard({label:"Codex", limits:data, windows:data.window ? [{name:data.window.description,pct:data.window.usedPercent,resets:data.window.resets}] : []}));
+      } else {
+        var accounts = data.accounts || [];
+        if (!accounts.length) box.textContent = "No Claude accounts configured.";
+        accounts.forEach(function(account) { box.appendChild(usageCard(account)); });
+      }
+    }).catch(function(e) { if (e.message !== "View changed.") box.textContent = e.message; });
+  });
 }
 
 function usageCard(account) {
@@ -353,7 +247,7 @@ function usageCard(account) {
   // recorded yet" while the desktop showed real numbers. client-html.test.ts
   // now pins them against the server's own output.
   var limits = account.limits || {};
-  var windows = [
+  var windows = account.windows || [
     { name: "Session", pct: limits.fiveHourPercent, resets: limits.fiveHourResets },
     { name: "Week", pct: limits.weeklyPercent, resets: limits.weeklyResets }
   ].filter(function (w) { return typeof w.pct === "number"; });
@@ -446,7 +340,7 @@ function renderSettings() {
     main.appendChild(opt);
   });
 
-  main.appendChild(sectionHeader("Account"));
+  main.appendChild(sectionHeader("Claude accounts"));
   var accountBox = document.createElement("div");
   accountBox.className = "muted";
   accountBox.textContent = "Loading…";
@@ -704,40 +598,6 @@ if ("serviceWorker" in navigator) {
 
 // Only the shapes worth reading on a phone. Tool calls and stream deltas are
 // noise at this size — the question being answered is "what is it saying".
-function renderEvents(events) {
-  var turns = [];
-  events.forEach(function (ev) {
-    if (ev.type === "local_user_message") {
-      turns.push({ who: "You", text: ev.text || "" });
-    } else if (ev.type === "assistant" && ev.message && ev.message.content) {
-      var text = ev.message.content
-        .filter(function (b) { return b.type === "text"; })
-        .map(function (b) { return b.text; })
-        .join("");
-      if (text.trim()) turns.push({ who: "Claude", text: text });
-    } else if (ev.type === "user" && typeof (ev.message || {}).content === "string") {
-      turns.push({ who: "You", text: ev.message.content });
-    }
-  });
-  if (!turns.length) return null;
-  var frag = document.createDocumentFragment();
-  // No cap here. The SERVER decides how much of the conversation to send, and
-  // trimming again on this side hid history that had already been fetched —
-  // which is what made a long session appear to begin partway through.
-  turns.forEach(function (t) {
-    var div = document.createElement("div");
-    div.className = "turn" + (t.who === "You" ? " you" : "");
-    var who = document.createElement("div");
-    who.className = "who";
-    who.textContent = t.who;
-    var pre = document.createElement("pre");
-    pre.textContent = t.text;
-    div.appendChild(who); div.appendChild(pre);
-    frag.appendChild(div);
-  });
-  return frag;
-}
-
 /**
  * How full the conversation's context window is.
  *
@@ -793,120 +653,8 @@ function formatTokens(n) {
  * So: the mark alone, cycling the SAME frames the desktop uses, in the theme
  * accent. One glyph answers the question and costs one line.
  */
-var SPINNER_FRAMES = ["·", "✢", "✳", "∗", "✻", "✽"];
-var thinkTimer = null;
-
-function thinkingRow() {
-  var row = document.createElement("div");
-  row.className = "thinking";
-  var mark = document.createElement("span");
-  mark.className = "mark";
-  mark.textContent = SPINNER_FRAMES[0];
-  row.appendChild(mark);
-
-  clearInterval(thinkTimer);
-  // 120ms is the desktop's cadence, so the two read as the same animation.
-  var frame = 0;
-  thinkTimer = setInterval(function () {
-    // Stop as soon as the row leaves the document, or the interval outlives
-    // the render that created it and keeps firing against a detached node.
-    if (!mark.isConnected) { clearInterval(thinkTimer); thinkTimer = null; return; }
-    frame = (frame + 1) % SPINNER_FRAMES.length;
-    mark.textContent = SPINNER_FRAMES[frame];
-  }, 120);
-  return row;
-}
-
-function refresh() {
-  if (!current) return;
-  api("/sessions/" + encodeURIComponent(current) + "/events?limit=" + eventLimit).then(function (data) {
-    dot.className = "dot" + (data.running ? " on" : "");
-    var atBottom = window.innerHeight + window.scrollY >= document.body.scrollHeight - 80;
-    main.innerHTML = "";
-
-    var ctx = contextBar(data.context);
-    if (ctx) main.appendChild(ctx);
-
-    if (data.truncated) {
-      // The conversation goes back further than what was sent. Fetching more
-      // is a tap rather than automatic: over cellular, silently pulling a
-      // megabyte because someone opened a session is not a favour.
-      var more = document.createElement("button");
-      more.className = "earlier";
-      more.textContent = "Show earlier messages";
-      more.onclick = function () {
-        eventLimit = Math.min(eventLimit * 4, 4000);
-        more.disabled = true;
-        more.textContent = "Loading…";
-        refresh();
-      };
-      main.appendChild(more);
-    }
-
-    var content = renderEvents(data.events);
-    if (content) main.appendChild(content);
-    else {
-      var e = document.createElement("p");
-      e.className = "muted";
-      e.textContent = "Nothing yet.";
-      main.appendChild(e);
-    }
-    // Driven by "thinking", not "running". The latter means the CLI process is
-    // alive, which for a session pane is the entire time it is open — the mark
-    // used to pulse forever because of it.
-    if (data.thinking) main.appendChild(thinkingRow());
-    else { clearInterval(thinkTimer); thinkTimer = null; }
-    if (atBottom) window.scrollTo(0, document.body.scrollHeight);
-  }).catch(function (e) { fail(e.message); });
-}
-
-function openSession(id) {
-  current = id;
-  // Images staged for one conversation must not follow you into another.
-  pending = [];
-  renderShelf();
-  // Back to the cheap default for each session opened, so one long scroll-back
-  // does not make every later session pull its whole history.
-  eventLimit = 200;
-  title.textContent = "Session";
-  back.hidden = false;
-  composer.hidden = false;
-  tabs.hidden = true;
-  newBtn.hidden = true;
-  main.innerHTML = '<p class="muted">Loading…</p>';
-  refresh();
-  clearInterval(timer);
-  // Polling, not a socket: a phone that sleeps and wakes reconnects a poll for
-  // free, whereas a dropped socket needs reconnect logic for the same result.
-  timer = setInterval(refresh, 2500);
-}
-
 back.onclick = function () { setTab("sessions"); };
 newBtn.onclick = function () { renderNewSession(); };
-
-function send() {
-  var text = input.value.trim();
-  // An image on its own is a valid message — "look at this" is the whole point
-  // of sending a screenshot.
-  if ((!text && !pending.length) || !current) return;
-  sendBtn.disabled = true;
-  var images = pending;
-  api("/sessions/" + encodeURIComponent(current) + "/send", {
-    method: "POST",
-    body: JSON.stringify({ text: text, images: images })
-  }).then(function () {
-    input.value = "";
-    input.style.height = "auto";
-    // Cleared only on success. A failed send that emptied the shelf would mean
-    // re-picking the screenshots.
-    pending = [];
-    renderShelf();
-    setTimeout(refresh, 300);
-  }).catch(function (e) { fail(e.message); })
-    .then(function () { sendBtn.disabled = false; });
-}
-
-sendBtn.onclick = send;
 
 function autosize() {
   input.style.height = "auto";
@@ -990,9 +738,13 @@ function renderShelf() {
     remove.textContent = "×";
     remove.onclick = function () {
       pending.splice(index, 1);
-      renderShelf();
+      renderShelf(); saveDraft();
     };
-    chip.appendChild(img); chip.appendChild(remove);
+    var preview = document.createElement("button"); preview.className = "attachment-preview";
+    preview.setAttribute("aria-label", "Preview " + image.name);
+    preview.onclick = function () { showImage("data:" + image.mediaType + ";base64," + image.data, image.name); };
+    preview.appendChild(img);
+    chip.appendChild(preview); chip.appendChild(remove);
     shelf.appendChild(chip);
   });
 }
@@ -1015,10 +767,15 @@ fileInput.onchange = function () {
     showHint("Only the first " + room + " images were added.", true);
   }
 
+  var attachmentSession = draftKey(), attachmentGeneration = viewGeneration;
   attachBtn.disabled = true;
   Promise.all(files.slice(0, room).map(readImage)).then(function (images) {
-    pending = pending.concat(images);
-    renderShelf();
+    if (attachmentGeneration !== viewGeneration) {
+      var oldDraft = drafts[attachmentSession]; if (oldDraft) oldDraft.images = oldDraft.images.concat(images).slice(0, MAX_ATTACHMENTS);
+      return;
+    }
+    pending = pending.concat(images).slice(0, MAX_ATTACHMENTS);
+    renderShelf(); saveDraft();
   }).catch(function (e) {
     showHint(e.message, true);
   }).then(function () {
@@ -1047,6 +804,8 @@ function showHint(message, warn) {
   hint.className = warn ? "hint warn" : "hint";
   hint.hidden = false;
 }
+
+${MOBILE_SESSION_CLIENT_JS}
 
 /* ------------------------------------------------------------------- boot */
 

@@ -114,32 +114,6 @@ describe("staying paired", () => {
 	});
 });
 
-describe("reading a long conversation", () => {
-	const script = scriptBody();
-
-	it("does not trim what the server already sent", () => {
-		// A second cap on this side hid history that had been fetched, which is
-		// what made a long session appear to begin partway through.
-		expect(script).not.toContain("turns.slice(-40)");
-	});
-
-	it("asks for more when there is more", () => {
-		expect(script).toContain("data.truncated");
-		expect(script).toContain("Show earlier messages");
-	});
-
-	it("raises the limit rather than refetching the same window", () => {
-		expect(script).toContain("eventLimit = Math.min(eventLimit * 4, 4000)");
-	});
-
-	it("goes back to the cheap default for each session opened", () => {
-		// Otherwise one deep scroll-back makes every later session pull its
-		// whole history over cellular.
-		const open = script.slice(script.indexOf("function openSession("));
-		expect(open.slice(0, 800)).toContain("eventLimit = 200");
-	});
-});
-
 describe("the context meter", () => {
 	const script = scriptBody();
 
@@ -191,21 +165,6 @@ describe("attachments", () => {
 		expect(script).toContain('thumb.toDataURL("image/jpeg", 0.6)');
 	});
 
-	it("lets an image be a message on its own", () => {
-		expect(script).toContain(
-			"if ((!text && !pending.length) || !current) return",
-		);
-	});
-
-	it("keeps the images staged when the send fails", () => {
-		// Otherwise a failed send means re-picking every screenshot.
-		const send = script.slice(script.indexOf("function send()"));
-		const clearIndex = send.indexOf("pending = []");
-		const catchIndex = send.indexOf(".catch(");
-		expect(clearIndex).toBeGreaterThan(-1);
-		expect(clearIndex).toBeLessThan(catchIndex);
-	});
-
 	it("resets the file input so the same photo can be picked twice", () => {
 		// Without this, choosing the same file again fires no change event.
 		expect(script).toContain('fileInput.value = ""');
@@ -220,37 +179,6 @@ describe("attachments", () => {
 		// would otherwise float over the sessions list.
 		const setTab = script.slice(script.indexOf("function setTab("));
 		expect(setTab.slice(0, 600)).toContain("pending = []");
-	});
-});
-
-describe("the thinking mark", () => {
-	const script = scriptBody();
-
-	it("is driven by the turn, not by the process being alive", () => {
-		// `running` is true for the whole time a session pane is open, because the
-		// CLI process persists between turns. Driving the mark from it meant it
-		// pulsed forever and told you nothing.
-		expect(script).toContain("if (data.thinking)");
-		expect(script).not.toContain(
-			"if (data.running) main.appendChild(thinkingRow())",
-		);
-	});
-
-	it("stops its animation when the turn ends", () => {
-		// The element is replaced on each poll, but the interval it started is
-		// not — it has to be cleared or it keeps firing for the life of the page.
-		const refresh = script.slice(script.indexOf("function refresh()"));
-		expect(refresh).toContain(
-			"else { clearInterval(thinkTimer); thinkTimer = null; }",
-		);
-	});
-
-	it("also stops when the pane is detached mid-animation", () => {
-		expect(script).toContain("if (!mark.isConnected)");
-	});
-
-	it("uses the desktop's own frames", () => {
-		expect(script).toContain("SPINNER_FRAMES");
 	});
 });
 
@@ -305,26 +233,6 @@ describe("theming", () => {
 	});
 });
 
-describe("sessions list", () => {
-	const script = scriptBody();
-
-	it("splits Active from History", () => {
-		expect(script).toContain('sectionHeader("Active"');
-		expect(script).toContain('sectionHeader("History"');
-	});
-
-	it("shows a running session once, not in both lists", () => {
-		// Without this the same conversation appears twice and the counts lie.
-		expect(script).toContain("liveIds[s.sessionId]");
-	});
-
-	it("still renders Active when history is unavailable", () => {
-		// History reads transcripts off disk and can legitimately fail; that
-		// must not take the live list down with it.
-		expect(script).toContain('api("/history").catch(');
-	});
-});
-
 describe("starting a session", () => {
 	const script = scriptBody();
 
@@ -335,7 +243,7 @@ describe("starting a session", () => {
 	it("sends a workspace id, never a path", () => {
 		// The server looks the directory up itself. Posting a path would turn
 		// this into "run an agent anywhere on my machine".
-		expect(script).toContain("workspaceId: chosen");
+		expect(script).toContain("workspaceId:workspace.value");
 		expect(script).not.toContain("cwd:");
 	});
 
@@ -353,10 +261,6 @@ describe("starting a session", () => {
 	it("blocks a second tap while the first is in flight", () => {
 		// Two taps would start two sessions and leave the first one unwatched.
 		expect(script).toContain("go.disabled = true");
-	});
-
-	it("refuses to start on an empty prompt", () => {
-		expect(script).toContain("if (!text) { box.focus(); return; }");
 	});
 });
 

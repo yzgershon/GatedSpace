@@ -19,6 +19,14 @@
 		"./stripe": {
 			"types": "./src/stripe.ts",
 			"default": "./src/stripe.ts"
+		},
+		"./provider-config": {
+			"types": "./src/provider-config.ts",
+			"default": "./src/provider-config.ts"
+		},
+		"./desktop-callback": {
+			"types": "./src/desktop-callback.ts",
+			"default": "./src/desktop-callback.ts"
 		}
 	},
 	"scripts": {

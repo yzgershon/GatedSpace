@@ -6,6 +6,7 @@ import { observable } from "@trpc/server/observable";
 import { shell } from "electron";
 import { env } from "main/env.main";
 import { getHostServiceCoordinator } from "main/lib/host-service-coordinator";
+import { recoverLocalBackend } from "main/lib/local-backend-recovery";
 import { PLATFORM, PROTOCOL_SCHEME } from "shared/constants";
 import { env as sharedEnv } from "shared/env.shared";
 import { z } from "zod";
@@ -20,6 +21,7 @@ import {
 
 export const createAuthRouter = () => {
 	return router({
+		recoverLocalBackend: publicProcedure.mutation(() => recoverLocalBackend()),
 		getStoredToken: publicProcedure.query(() => loadToken()),
 
 		getDeviceInfo: publicProcedure.query(() => ({
@@ -75,6 +77,24 @@ export const createAuthRouter = () => {
 			.input(z.object({ provider: z.enum(AUTH_PROVIDERS) }))
 			.mutation(async ({ input }) => {
 				try {
+					const availability = await fetch(
+						`${env.NEXT_PUBLIC_API_URL}/api/auth/desktop/providers`,
+						{ signal: AbortSignal.timeout(10_000) },
+					);
+					if (availability.ok) {
+						const providers = (await availability.json()) as Record<
+							string,
+							boolean
+						>;
+						if (!providers[input.provider])
+							throw new Error(
+								`${input.provider === "google" ? "Google" : "GitHub"} sign-in is not configured on this server. Its OAuth application credentials must be configured first.`,
+							);
+					} else if (availability.status !== 404) {
+						throw new Error(
+							"The sign-in service is unavailable. Restore the local services and try again.",
+						);
+					}
 					const state = crypto.randomBytes(32).toString("base64url");
 					stateStore.set(state, Date.now());
 
@@ -90,8 +110,8 @@ export const createAuthRouter = () => {
 					connectUrl.searchParams.set("provider", input.provider);
 					connectUrl.searchParams.set("state", state);
 					connectUrl.searchParams.set("protocol", PROTOCOL_SCHEME);
-					// Only send local_callback on Linux where deep links are unreliable
-					if (PLATFORM.IS_LINUX) {
+					// Windows installers can compete for the same URI handler; use this running app's receiver.
+					if (PLATFORM.IS_LINUX || PLATFORM.IS_WINDOWS) {
 						connectUrl.searchParams.set(
 							"local_callback",
 							`http://127.0.0.1:${sharedEnv.DESKTOP_NOTIFICATIONS_PORT}/auth/callback`,

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useRef } from "react";
+import { env } from "renderer/env.renderer";
 import { useOnlineStatus } from "renderer/hooks/useOnlineStatus";
 import { authClient, getAuthToken } from "renderer/lib/auth-client";
 
@@ -87,7 +88,14 @@ export function useSessionRecovery() {
 			// forever (15s flat), and a synchronized fleet of such clients can trip
 			// Vercel's DDoS mitigation.
 			clearTimer();
-			const delay = nextRecoveryDelayMs(attemptRef.current);
+			const local = /^https?:\/\/(localhost|127\.0\.0\.1)([:/]|$)/.test(
+				env.NEXT_PUBLIC_API_URL,
+			);
+			const delay = local
+				? attemptRef.current < 90
+					? 3_000
+					: null
+				: nextRecoveryDelayMs(attemptRef.current);
 			if (isMountedRef.current && !session?.user && delay !== null) {
 				timerRef.current = window.setTimeout(() => {
 					void retrySessionRecovery();

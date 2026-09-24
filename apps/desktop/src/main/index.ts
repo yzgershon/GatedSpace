@@ -33,6 +33,7 @@ import { installBundledCliShim } from "./lib/bundled-cli";
 import { flushCostStore } from "./lib/claude-session/cost-store";
 import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
 import { codexSessionManager } from "./lib/codex-session/session-manager";
+import { startSyncScheduler } from "./lib/continuity";
 import { crashSentinel } from "./lib/crash-sentinel";
 import { applyDevInstanceIsolation } from "./lib/dev-instance-isolation";
 import { resolveDevWorkspaceName } from "./lib/dev-workspace-name";
@@ -40,6 +41,7 @@ import { setWorkspaceDockIcon } from "./lib/dock-icon";
 import { loadWebviewBrowserExtension } from "./lib/extensions";
 import { getHostServiceCoordinator } from "./lib/host-service-coordinator";
 import { listKnownOrganizationIds } from "./lib/host-service-manifest";
+import { recoverLocalBackend } from "./lib/local-backend-recovery";
 import { localDb } from "./lib/local-db";
 import { isLocalOnlyBuild, LOCAL_ORG_ID } from "./lib/local-mode";
 import { requestLocalNetworkAccess } from "./lib/local-network-permission";
@@ -98,7 +100,7 @@ if (process.defaultApp) {
 }
 
 async function processDeepLink(url: string): Promise<void> {
-	console.log("[main] Processing deep link:", url);
+	console.log("[main] Processing deep link");
 
 	const authParams = parseAuthDeepLink(url);
 	if (authParams) {
@@ -451,7 +453,9 @@ if (!gotTheLock) {
 		// awaited: the phone must be able to reach this machine without anyone
 		// opening a settings page on it, and a slow Tailscale handshake should
 		// not hold up the window appearing.
+		void recoverLocalBackend();
 		void mobileBridge.restore();
+		startSyncScheduler();
 		registerWithMacOSNotificationCenter();
 		requestAppleEventsAccess();
 		requestLocalNetworkAccess();

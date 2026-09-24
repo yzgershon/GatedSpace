@@ -20,26 +20,17 @@ interface SidebarPanelState {
 	activePanel: SidebarPanel;
 	/** False hides the panel entirely, leaving just the rail. */
 	panelOpen: boolean;
-	/**
-	 * Show a panel. Selecting the one already showing TOGGLES it, which is how
-	 * every activity bar behaves — the icon you just clicked is the obvious way
-	 * to get the space back.
-	 */
+	/** Select a destination; collapsing belongs to the dedicated sidebar toggle. */
 	selectPanel: (panel: SidebarPanel) => void;
 	setPanelOpen: (open: boolean) => void;
 }
 
 export const useSidebarPanelStore = create<SidebarPanelState>()(
 	persist(
-		(set, get) => ({
+		(set) => ({
 			activePanel: "workspaces",
 			panelOpen: true,
 			selectPanel: (panel) => {
-				const { activePanel, panelOpen } = get();
-				if (panel === activePanel && panelOpen) {
-					set({ panelOpen: false });
-					return;
-				}
 				set({ activePanel: panel, panelOpen: true });
 			},
 			setPanelOpen: (open) => set({ panelOpen: open }),
@@ -56,15 +47,16 @@ export const useSidebarPanelStore = create<SidebarPanelState>()(
 					state?.activePanel &&
 					!(SIDEBAR_PANELS as readonly string[]).includes(state.activePanel)
 				) {
-					return { ...state, activePanel: "workspaces" as SidebarPanel };
+					return {
+						...state,
+						activePanel: "workspaces" as SidebarPanel,
+						panelOpen: true,
+					};
 				}
-				return state as SidebarPanelState;
+				return { ...state, panelOpen: true } as SidebarPanelState;
 			},
-			// Bumped with the "testing" removal. `migrate` only runs when the stored
-			// version differs, so leaving this at 2 would strand anyone whose saved
-			// panel was "testing": no branch matches, and the rail shows nothing
-			// selected over an empty column.
-			version: 3,
+			// Restore sidebars hidden by the old repeated-click behavior once.
+			version: 4,
 		},
 	),
 );

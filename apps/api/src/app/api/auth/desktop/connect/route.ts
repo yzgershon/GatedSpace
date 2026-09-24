@@ -1,3 +1,6 @@
+import { desktopCallbackTarget } from "@superset/auth/desktop-callback";
+import { env as authEnv } from "@superset/auth/env";
+import { configuredAuthProviders } from "@superset/auth/provider-config";
 import { auth } from "@superset/auth/server";
 import { NextResponse } from "next/server";
 
@@ -17,28 +20,27 @@ export async function GET(request: Request) {
 	if (provider !== "google" && provider !== "github") {
 		return new Response("Invalid provider", { status: 400 });
 	}
+	if (!configuredAuthProviders(authEnv)[provider]) {
+		return Response.json(
+			{
+				error: `${provider === "google" ? "Google" : "GitHub"} sign-in is not configured on this GatedSpace server. Configure its OAuth application credentials first.`,
+			},
+			{ status: 503 },
+		);
+	}
 
 	const successUrl = new URL(`${env.NEXT_PUBLIC_WEB_URL}/auth/desktop/success`);
 	successUrl.searchParams.set("desktop_state", state);
-	if (protocol) {
-		successUrl.searchParams.set("desktop_protocol", protocol);
-	}
-	if (localCallback) {
-		try {
-			const callbackUrl = new URL(localCallback);
-			const isLoopback =
-				callbackUrl.protocol === "http:" &&
-				(callbackUrl.hostname === "127.0.0.1" ||
-					callbackUrl.hostname === "localhost");
-			if (isLoopback && callbackUrl.pathname === "/auth/callback") {
-				successUrl.searchParams.set(
-					"desktop_local_callback",
-					callbackUrl.toString(),
-				);
-			}
-		} catch {
-			// Ignore invalid callback URLs and continue with deep-link flow.
-		}
+	try {
+		const target = desktopCallbackTarget(protocol ?? undefined, localCallback);
+		successUrl.searchParams.set("desktop_protocol", target.protocol);
+		if (target.localCallback)
+			successUrl.searchParams.set(
+				"desktop_local_callback",
+				target.localCallback,
+			);
+	} catch {
+		return new Response("Invalid desktop callback", { status: 400 });
 	}
 
 	const result = await auth.api.signInSocial({

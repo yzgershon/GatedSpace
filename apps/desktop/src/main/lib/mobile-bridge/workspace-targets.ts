@@ -1,5 +1,11 @@
+import { join } from "node:path";
 import { projects, workspaces, worktrees } from "@superset/local-db";
+import Database from "better-sqlite3";
 import { eq, isNull } from "drizzle-orm";
+import {
+	listKnownOrganizationIds,
+	manifestDir,
+} from "../host-service-manifest";
 
 import { localDb } from "../local-db";
 
@@ -22,6 +28,30 @@ export interface BridgeWorkspaceTarget {
 }
 
 export function listBridgeWorkspaceTargets(): BridgeWorkspaceTarget[] {
+	// Current workspaces live in the per-organization host database. Read-only:
+	// this bridge must not run migrations or take ownership of the host's DB.
+	const current: BridgeWorkspaceTarget[] = [];
+	for (const organization of listKnownOrganizationIds()) {
+		let db: Database.Database | undefined;
+		try {
+			db = new Database(join(manifestDir(organization), "host.db"), {
+				readonly: true,
+				fileMustExist: true,
+				timeout: 250,
+			});
+			current.push(
+				...(db
+					.prepare(`SELECT w.id, COALESCE(NULLIF(w.name, ''), w.branch, 'Workspace') AS name,
+				COALESCE(p.name, p.repo_name, p.repo_path) AS project, w.worktree_path AS cwd
+				FROM workspaces w JOIN projects p ON p.id = w.project_id`)
+					.all() as BridgeWorkspaceTarget[]),
+			);
+		} catch {
+			/* A host still starting/migrating will be listed on the next request. */
+		} finally {
+			db?.close();
+		}
+	}
 	const rows = localDb
 		.select({
 			id: workspaces.id,
@@ -37,7 +67,7 @@ export function listBridgeWorkspaceTargets(): BridgeWorkspaceTarget[] {
 		.where(isNull(workspaces.deletingAt))
 		.all();
 
-	return rows.flatMap((row) => {
+	const legacy = rows.flatMap((row) => {
 		// A worktree workspace whose worktree row is missing has no directory to
 		// run in. Offering it would produce a session that dies on spawn with an
 		// error the phone has no good way to explain.
@@ -53,4 +83,6 @@ export function listBridgeWorkspaceTargets(): BridgeWorkspaceTarget[] {
 			},
 		];
 	});
+	const seen = new Set(current.map((target) => target.id));
+	return [...current, ...legacy.filter((target) => !seen.has(target.id))];
 }

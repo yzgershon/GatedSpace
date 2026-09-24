@@ -1,0 +1,36 @@
+:root {
+	--background: #282a36;
+	--foreground: #f8f8f2;
+	--muted: #333540;
+	--muted-foreground: #a5a5b3;
+	--border: #424450;
+	--input: #424450;
+	--primary: #ff79c6;
+	--primary-foreground: #20212b;
+	--ring: #bd93f9;
+	--destructive: #ff6868;
+	--accent: #373945;
+}
+body {
+	margin: 0;
+	overflow: auto;
+	font-family: Inter, "Segoe UI", sans-serif;
+	user-select: text;
+	min-width: 0;
+}
+.preview-shell {
+	max-width: 800px;
+	margin: 0 auto;
+	padding: 44px 32px 80px;
+}
+.preview-shell nav a,
+.preview-shell nav button {
+	color: #c5b0e9;
+	text-decoration: none;
+	cursor: pointer;
+}
+@media (max-width: 500px) {
+	.preview-shell {
+		padding: 24px 18px 60px;
+	}
+}

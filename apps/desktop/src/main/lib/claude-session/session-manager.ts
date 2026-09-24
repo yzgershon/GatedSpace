@@ -509,6 +509,10 @@ class ClaudeSessionManager extends EventEmitter {
 		return this.sessions.get(key)?.isRunning ?? false;
 	}
 
+	isBusy(key: string): boolean {
+		return this.busy.has(key);
+	}
+
 	/** Everything a fresh subscriber needs to rebuild the timeline. */
 	getBufferedEvents(key: string): ClaudeStreamEvent[] {
 		return this.buffers.get(key) ?? [];

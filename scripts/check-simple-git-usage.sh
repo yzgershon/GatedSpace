@@ -21,6 +21,13 @@ report_violation() {
 }
 
 COMMON_EXCLUDES=(
+	# Only inspect source. Windows release archives can contain hundreds of MB
+	# of embedded JavaScript and make the multiline import check exhaust memory.
+	--glob '*.{ts,tsx,js,jsx,mjs,cjs}'
+	--glob '!**/node_modules/**'
+	--glob '!**/release*/**'
+	--glob '!**/dist/**'
+	--glob '!**/.next/**'
 	--glob '!**/*.test.ts'
 	--glob '!**/*.bench.ts'
 	--glob '!**/test/**'

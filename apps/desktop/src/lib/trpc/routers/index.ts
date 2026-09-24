@@ -12,6 +12,7 @@ import { createClaudeSessionRouter } from "./claude-session";
 import { createClaudeSessionsRouter } from "./claude-sessions";
 import { createCodexSessionRouter } from "./codex-session";
 import { createConfigRouter } from "./config";
+import { createContinuityRouter } from "./continuity";
 import { createDeviceRouter } from "./device";
 import { createDiagnosticsRouter } from "./diagnostics";
 import { createExternalRouter } from "./external";
@@ -62,6 +63,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		settings: createSettingsRouter(),
 		system: createSystemRouter(),
 		config: createConfigRouter(),
+		continuity: createContinuityRouter(),
 		device: createDeviceRouter(),
 		diagnostics: createDiagnosticsRouter(),
 		mobileBridge: createMobileBridgeRouter(),

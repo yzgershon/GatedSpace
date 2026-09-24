@@ -35,6 +35,10 @@
 		"./utils": {
 			"types": "./src/utils/index.ts",
 			"default": "./src/utils/index.ts"
+		},
+		"./schema/continuity": {
+			"types": "./src/schema/continuity.ts",
+			"default": "./src/schema/continuity.ts"
 		}
 	},
 	"scripts": {

@@ -59,6 +59,7 @@ const realAuthClient = createAuthClient({
 		jwtClient(),
 	],
 	fetchOptions: {
+		timeout: 15_000,
 		credentials: "include",
 		onRequest: async (context) => {
 			const token = getAuthToken();

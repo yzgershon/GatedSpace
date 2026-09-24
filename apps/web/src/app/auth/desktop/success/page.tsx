@@ -1,3 +1,4 @@
+import { desktopCallbackTarget } from "@superset/auth/desktop-callback";
 import { auth } from "@superset/auth/server";
 import { db } from "@superset/db/client";
 import { sessions } from "@superset/db/schema/auth";
@@ -16,7 +17,7 @@ export default async function DesktopSuccessPage({
 }) {
 	const {
 		desktop_state: state,
-		desktop_protocol = "superset",
+		desktop_protocol = "gatedspace",
 		desktop_local_callback: localCallbackBase,
 	} = await searchParams;
 
@@ -28,6 +29,17 @@ export default async function DesktopSuccessPage({
 					Please try signing in again from the desktop app.
 				</p>
 			</div>
+		);
+	}
+
+	let target: ReturnType<typeof desktopCallbackTarget>;
+	try {
+		target = desktopCallbackTarget(desktop_protocol, localCallbackBase);
+	} catch {
+		return (
+			<p className="p-8 text-foreground">
+				Invalid desktop callback. Start sign-in again from GatedSpace.
+			</p>
 		);
 	}
 
@@ -79,9 +91,9 @@ export default async function DesktopSuccessPage({
 		activeOrganizationId: session.session.activeOrganizationId,
 		updatedAt: now,
 	});
-	const desktopUrl = `${desktop_protocol}://auth/callback?token=${encodeURIComponent(token)}&expiresAt=${encodeURIComponent(expiresAt.toISOString())}&state=${encodeURIComponent(state)}`;
-	const localCallbackUrl = localCallbackBase
-		? `${localCallbackBase}?token=${encodeURIComponent(token)}&expiresAt=${encodeURIComponent(expiresAt.toISOString())}&state=${encodeURIComponent(state)}`
+	const desktopUrl = `${target.protocol}://auth/callback?token=${encodeURIComponent(token)}&expiresAt=${encodeURIComponent(expiresAt.toISOString())}&state=${encodeURIComponent(state)}`;
+	const localCallbackUrl = target.localCallback
+		? `${target.localCallback}?token=${encodeURIComponent(token)}&expiresAt=${encodeURIComponent(expiresAt.toISOString())}&state=${encodeURIComponent(state)}`
 		: undefined;
 
 	return (

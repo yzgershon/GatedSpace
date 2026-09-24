@@ -155,6 +155,22 @@
 		"./session-lock": {
 			"types": "./src/session-lock.ts",
 			"default": "./src/session-lock.ts"
+		},
+		"./continuity": {
+			"types": "./src/continuity/protocol.ts",
+			"default": "./src/continuity/protocol.ts"
+		},
+		"./continuity/crypto": {
+			"types": "./src/continuity/crypto.ts",
+			"default": "./src/continuity/crypto.ts"
+		},
+		"./continuity/client": {
+			"types": "./src/continuity/client.ts",
+			"default": "./src/continuity/client.ts"
+		},
+		"./continuity/device-sign-in": {
+			"types": "./src/continuity/device-sign-in.ts",
+			"default": "./src/continuity/device-sign-in.ts"
 		}
 	},
 	"scripts": {

@@ -99,7 +99,14 @@ export async function handleAuthCallback(params: {
 	expiresAt: string;
 	state: string;
 }): Promise<{ success: boolean; error?: string }> {
-	if (!stateStore.has(params.state)) {
+	const createdAt = stateStore.get(params.state);
+	if (
+		!createdAt ||
+		Date.now() - createdAt > 10 * 60 * 1000 ||
+		!Number.isFinite(Date.parse(params.expiresAt)) ||
+		Date.parse(params.expiresAt) <= Date.now()
+	) {
+		stateStore.delete(params.state);
 		return { success: false, error: "Invalid or expired auth session" };
 	}
 	stateStore.delete(params.state);

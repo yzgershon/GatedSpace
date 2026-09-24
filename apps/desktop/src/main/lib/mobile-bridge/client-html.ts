@@ -13,7 +13,7 @@
  *
  * The token is read from the URL and then REMOVED from the address bar, so it
  * does not sit in browser history or get shoulder-read. It lives in
- * sessionStorage, not localStorage: closing the tab should end the session.
+ * localStorage so an installed phone app stays paired across launches.
  *
  * NO VOICE. In-app dictation was removed on 2026-08-08: it spent a button in a
  * one-row composer, and it only ever worked over an HTTPS link because the
@@ -54,6 +54,7 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
   <button class="iconbtn" id="new" hidden aria-label="New session">+</button>
 </header>
 
+<p id="connection" class="connection" role="status" hidden></p>
 <main id="main"><p class="muted">Loading…</p></main>
 
 <p class="hint" id="hint" hidden></p>
@@ -75,11 +76,12 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
       <path d="M12 5v14M5 12h14"/>
     </svg>
   </button>
-  <textarea id="input" rows="1" placeholder="Send a prompt…" enterkeyhint="send"></textarea>
+  <textarea id="input" aria-label="Message" rows="1" placeholder="Send a prompt…" enterkeyhint="send"></textarea>
   <!-- An arrow, not the word "Send". On a phone the composer is one row and
        every character of that button is width the prompt does not get. The mic
        that used to sit here is gone for the same reason: the keyboard has its
        own dictation key, which works in more places than ours did. -->
+  <button id="stop" aria-label="Stop response" hidden>Stop</button>
   <button id="send" aria-label="Send">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>

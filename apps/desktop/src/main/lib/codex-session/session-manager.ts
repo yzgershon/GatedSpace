@@ -73,6 +73,10 @@ export class CodexSessionManager extends EventEmitter {
 			s.threadId ? [s.threadId] : [],
 		);
 	}
+	/** Shared by desktop and the paired phone; never resumes a second writer. */
+	listSessions() {
+		return [...this.sessions.values()];
+	}
 	private publish(state: CodexSessionState) {
 		if (this.timers.has(state.key)) return;
 		this.timers.set(

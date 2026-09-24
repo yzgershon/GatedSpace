@@ -3,6 +3,7 @@ import type { SettingsSection } from "renderer/stores/settings-state";
 
 export const SETTING_ITEM_ID = {
 	ACCOUNT_PROFILE: "account-profile",
+	ACCOUNT_SYNC: "account-sync",
 	ACCOUNT_SIGNOUT: "account-signout",
 
 	ORGANIZATION_LOGO: "organization-logo",
@@ -117,6 +118,7 @@ export type SettingVariant = "v1" | "v2" | "shared";
 
 export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.ACCOUNT_PROFILE]: "shared",
+	[SETTING_ITEM_ID.ACCOUNT_SYNC]: "shared",
 	[SETTING_ITEM_ID.ACCOUNT_SIGNOUT]: "shared",
 
 	[SETTING_ITEM_ID.ORGANIZATION_LOGO]: "shared",
@@ -217,6 +219,24 @@ export function isItemAllowedForVariant(
 }
 
 export const SETTINGS_ITEMS: SettingsItem[] = [
+	{
+		id: SETTING_ITEM_ID.ACCOUNT_SYNC,
+		section: "account",
+		title: "GatedSpace Sync",
+		description:
+			"Connect PCs and transfer encrypted conversations and projects",
+		keywords: [
+			"sync",
+			"synchronization",
+			"laptop",
+			"omen",
+			"recovery key",
+			"transfer",
+			"google",
+			"github",
+			"continuity",
+		],
+	},
 	{
 		id: SETTING_ITEM_ID.ACCOUNT_PROFILE,
 		section: "account",

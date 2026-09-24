@@ -87,28 +87,42 @@ function Wait-ForCondition {
 }
 
 function Test-DockerEngine {
+	param([ValidateRange(100, 10000)][int]$TimeoutMilliseconds = 10000)
 	$probe = $null
+	$started = $false
 	try {
-		$startArguments = @{
-			FilePath = $dockerCli
-			ArgumentList = @("info", "--format", "{{.ServerVersion}}")
-			WindowStyle = "Hidden"
-			RedirectStandardOutput = $dockerProbeOutLog
-			RedirectStandardError = $dockerProbeErrLog
-			PassThru = $true
-		}
-		$probe = Start-Process @startArguments
-		if (-not $probe.WaitForExit(10000)) {
+		# Windows PowerShell 5.1 Start-Process -PassThru can return a Process
+		# whose ExitCode stays null after WaitForExit. Start it through .NET so
+		# we retain the process handle and read its actual exit code.
+		$startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+		$startInfo.FileName = $dockerCli
+		$startInfo.Arguments = 'info --format "{{.ServerVersion}}"'
+		$startInfo.UseShellExecute = $false
+		$startInfo.CreateNoWindow = $true
+		$startInfo.RedirectStandardOutput = $true
+		$startInfo.RedirectStandardError = $true
+		$probe = [System.Diagnostics.Process]::new()
+		$probe.StartInfo = $startInfo
+		$started = $probe.Start()
+		if (-not $started) { return $false }
+		$output = $probe.StandardOutput.ReadToEndAsync()
+		$errors = $probe.StandardError.ReadToEndAsync()
+		if (-not $probe.WaitForExit($TimeoutMilliseconds)) {
 			$probe.Kill()
-			$probe.WaitForExit()
+			$null = $probe.WaitForExit(5000)
+			Set-Content -LiteralPath $dockerProbeErrLog -Value "Docker readiness probe timed out."
 			return $false
 		}
+		Set-Content -LiteralPath $dockerProbeOutLog -Value $output.GetAwaiter().GetResult()
+		Set-Content -LiteralPath $dockerProbeErrLog -Value $errors.GetAwaiter().GetResult()
 		return $probe.ExitCode -eq 0
 	} catch {
-		if ($probe -and -not $probe.HasExited) {
+		if ($started -and $probe -and -not $probe.HasExited) {
 			$probe.Kill()
 		}
 		return $false
+	} finally {
+		if ($probe) { $probe.Dispose() }
 	}
 }
 
@@ -128,9 +142,13 @@ function Start-DockerEngine {
 }
 
 function Wait-ForAutoStartDataServices {
-	if (-not (Get-Process -Name "Docker Desktop" -ErrorAction SilentlyContinue)) {
-		Write-LauncherLog "Starting Docker Desktop for auto-start containers."
-		Start-Process -FilePath $dockerDesktop -WindowStyle Hidden | Out-Null
+	Start-DockerEngine
+	# An engine can be ready with stopped/missing containers after Windows boots.
+	# Compose up is idempotent and preserves existing database volumes.
+	$missingPorts = @($dataServicePorts | Where-Object { -not (Test-LocalPort -Port $_) })
+	if ($missingPorts.Count -gt 0) {
+		Write-LauncherLog "Restoring data services for unavailable ports: $($missingPorts -join ', ')."
+		Start-DataServices
 	}
 
 	Write-LauncherLog "Waiting for Docker Desktop to restore the GatedSpace data containers."
@@ -314,7 +332,7 @@ function Start-ApplicationServices {
 
 function Test-AuthenticationApi {
 	try {
-		$response = Invoke-WebRequest -Uri "http://localhost:3001/api/auth/get-session" -UseBasicParsing -TimeoutSec 5
+		$response = Invoke-WebRequest -Uri "http://localhost:3001/api/health/ready" -UseBasicParsing -TimeoutSec 5
 		return $response.StatusCode -eq 200
 	} catch {
 		return $false
@@ -354,8 +372,6 @@ function Start-GatedSpaceApp {
 
 $requiredPaths = if ($AppOnly) {
 	@($gatedSpaceExe)
-} elseif ($UseDockerAutoStart) {
-	@($dockerDesktop, $bun)
 } else {
 	@($dockerCli, $dockerDesktop, $bun, $composeFile, $envFile)
 }

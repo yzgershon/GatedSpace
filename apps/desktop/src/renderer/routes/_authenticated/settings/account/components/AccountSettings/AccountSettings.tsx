@@ -19,6 +19,7 @@ import {
 	type SettingItemId,
 } from "../../../utils/settings-search";
 import { ProfileSkeleton } from "./components/ProfileSkeleton";
+import { SyncSettings } from "./components/SyncSettings";
 
 interface AccountSettingsProps {
 	visibleItems?: SettingItemId[] | null;
@@ -112,7 +113,10 @@ export function AccountSettings({ visibleItems }: AccountSettingsProps) {
 				</p>
 			</div>
 
-			<div className="space-y-3">
+			{isItemVisible(SETTING_ITEM_ID.ACCOUNT_SYNC, visibleItems) && (
+				<SyncSettings />
+			)}
+			<div className="mt-8 space-y-3">
 				{showProfile &&
 					(!isReady && !user ? (
 						<ProfileSkeleton />
