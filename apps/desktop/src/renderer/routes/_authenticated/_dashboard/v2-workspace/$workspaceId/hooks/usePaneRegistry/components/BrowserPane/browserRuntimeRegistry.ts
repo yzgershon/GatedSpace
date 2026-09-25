@@ -1,5 +1,11 @@
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import type {
+	BrowserPreviewConfig,
+	BrowserPreviewMode,
+	BrowserPreviewOrientation,
+} from "shared/browser-preview";
 import type { BrowserLoadError } from "shared/tabs-types";
+import { previewLayout } from "./preview-layout";
 import { sanitizeUrl } from "./sanitizeUrl";
 
 export interface BrowserRuntimeState {
@@ -10,6 +16,7 @@ export interface BrowserRuntimeState {
 	error: BrowserLoadError | null;
 	canGoBack: boolean;
 	canGoForward: boolean;
+	previewScale: number;
 }
 
 export interface PersistableBrowserState {
@@ -18,21 +25,8 @@ export interface PersistableBrowserState {
 	faviconUrl: string | null;
 }
 
-/**
- * Optional device-viewport emulation for a hosted webview. When set, the guest
- * lays out at `contentWidth` CSS px and is CSS-scaled (origin top-left) to fit
- * the placeholder's on-screen width — DevTools "fit" behaviour — scrolling
- * vertically. `null` (the default) keeps the webview sized 1:1 to its
- * placeholder, so browser *panes* are unaffected.
- */
-export interface BrowserRuntimeViewport {
-	/** CSS px the guest lays out at (e.g. 375 mobile, 1280 desktop). */
-	contentWidth: number;
-	/** Center in leftover space (mobile 1:1) vs. left-align (scaled desktop). */
-	center: boolean;
-}
-
 interface RegistryEntry {
+	paneId: string;
 	webview: Electron.WebviewTag;
 	state: BrowserRuntimeState;
 	onPersist: ((state: PersistableBrowserState) => void) | null;
@@ -40,8 +34,11 @@ interface RegistryEntry {
 	detachHandlers: () => void;
 	placeholder: HTMLElement | null;
 	resizeObserver: ResizeObserver | null;
-	/** Device-viewport emulation, or null for 1:1 (panes). */
-	viewport: BrowserRuntimeViewport | null;
+	preview: BrowserPreviewConfig;
+	previewApplied: string | null;
+	previewPending: boolean;
+	registered: boolean;
+	visibilityObserver: MutationObserver | null;
 	visible: boolean;
 	/** True while the page has been discarded (navigated to about:blank). */
 	suspended: boolean;
@@ -59,6 +56,7 @@ const EMPTY_STATE: BrowserRuntimeState = Object.freeze({
 	error: null,
 	canGoBack: false,
 	canGoForward: false,
+	previewScale: 1,
 });
 
 const ROOT_CONTAINER_ID = "browser-runtime-root";
@@ -177,46 +175,61 @@ class BrowserRuntimeRegistryImpl {
 
 	private updateLayout(entry: RegistryEntry) {
 		if (!entry.placeholder) return;
-		const rect = entry.placeholder.getBoundingClientRect();
-		const w = entry.webview;
-		const vp = entry.viewport;
-		// Webviews live in a fixed overlay, outside the React panel's overflow
-		// clipping. Keep that overlay inside its animated workspace area too.
-		const clip = entry.placeholder
-			.closest("[data-browser-clip]")
-			?.getBoundingClientRect();
-		const clipScale = vp ? Math.min(1, rect.width / vp.contentWidth) : 1;
-		if (clip && clipScale > 0) {
-			const top = Math.max(0, clip.top - rect.top) / clipScale;
-			const right = Math.max(0, rect.right - clip.right) / clipScale;
-			const bottom = Math.max(0, rect.bottom - clip.bottom) / clipScale;
-			const left = Math.max(0, clip.left - rect.left) / clipScale;
-			w.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px)`;
-		} else w.style.clipPath = "";
-
-		if (!vp) {
-			// 1:1 with the placeholder — the only path browser panes ever take.
-			w.style.transform = "";
-			w.style.transformOrigin = "";
-			w.style.top = `${rect.top}px`;
-			w.style.left = `${rect.left}px`;
-			w.style.width = `${rect.width}px`;
-			w.style.height = `${rect.height}px`;
-			return;
+		const placeholder = entry.placeholder;
+		const clips = [{ left: 0, top: 0, width: innerWidth, height: innerHeight }];
+		for (
+			let parent = placeholder.parentElement;
+			parent;
+			parent = parent.parentElement
+		) {
+			if (parent.hasAttribute("data-browser-clip"))
+				clips.push(parent.getBoundingClientRect());
 		}
+		const layout = previewLayout(
+			placeholder.getBoundingClientRect(),
+			clips,
+			entry.preview.mode,
+			entry.preview.orientation,
+		);
+		const visible =
+			layout.visible &&
+			!placeholder.closest('[inert], [hidden], [aria-hidden="true"]') &&
+			getComputedStyle(placeholder).visibility !== "hidden";
+		entry.webview.style.visibility = visible ? "visible" : "hidden";
+		entry.webview.style.pointerEvents =
+			visible && !this.isPointerPassthroughActive() ? "auto" : "none";
+		Object.assign(entry.webview.style, {
+			transform: "",
+			top: `${layout.top}px`,
+			left: `${layout.left}px`,
+			width: `${Math.max(0, layout.width)}px`,
+			height: `${Math.max(0, layout.height)}px`,
+			clipPath: layout.clipPath,
+		});
+		entry.preview.scale = Math.max(0.01, layout.scale);
+		this.setState(entry.paneId, { previewScale: layout.scale });
+		if (visible) this.syncPreview(entry);
+	}
 
-		// Device-viewport emulation: lay out at contentWidth CSS px and CSS-scale
-		// to fit the placeholder width (never scaling up past 1:1), scrolling
-		// vertically. `center` puts the mobile viewport's gutters on both sides.
-		const scale = Math.min(1, rect.width / vp.contentWidth);
-		const scaledWidth = vp.contentWidth * scale;
-		const offsetX = vp.center ? Math.max(0, (rect.width - scaledWidth) / 2) : 0;
-		w.style.transformOrigin = "top left";
-		w.style.transform = `scale(${scale})`;
-		w.style.top = `${rect.top}px`;
-		w.style.left = `${rect.left + offsetX}px`;
-		w.style.width = `${vp.contentWidth}px`;
-		w.style.height = `${rect.height / scale}px`;
+	private async syncPreview(entry: RegistryEntry) {
+		if (!entry.registered || entry.previewPending) return;
+		const config = { ...entry.preview };
+		const key = JSON.stringify(config);
+		if (entry.previewApplied === key) return;
+		entry.previewPending = true;
+		try {
+			const applied = await electronTrpcClient.browser.setPreview.mutate({
+				paneId: entry.paneId,
+				...config,
+			});
+			if (applied.success) entry.previewApplied = key;
+		} catch (error) {
+			console.error("[browserRuntimeRegistry] preview failed:", error);
+		} finally {
+			entry.previewPending = false;
+			if (entry.placeholder && key !== JSON.stringify(entry.preview))
+				void this.syncPreview(entry);
+		}
 	}
 
 	private notify(paneId: string) {
@@ -332,6 +345,7 @@ class BrowserRuntimeRegistryImpl {
 		webview.src = sanitizeUrl(initialUrl);
 
 		const entry: RegistryEntry = {
+			paneId,
 			webview,
 			state: { ...EMPTY_STATE, currentUrl: initialUrl },
 			onPersist: null,
@@ -339,7 +353,11 @@ class BrowserRuntimeRegistryImpl {
 			detachHandlers: () => {},
 			placeholder: null,
 			resizeObserver: null,
-			viewport: null,
+			preview: { mode: "responsive", orientation: "portrait", scale: 1 },
+			previewApplied: null,
+			previewPending: false,
+			registered: false,
+			visibilityObserver: null,
 			visible: false,
 			suspended: false,
 			suspendedUrl: null,
@@ -362,15 +380,22 @@ class BrowserRuntimeRegistryImpl {
 		};
 		webview.addEventListener("focus", handleFocus);
 
-		const handleDomReady = () => {
+		const handleDomReady = async () => {
 			const webContentsId = webview.getWebContentsId();
-			if (entry.webContentsId !== webContentsId) {
-				entry.webContentsId = webContentsId;
-				electronTrpcClient.browser.register
-					.mutate({ paneId, webContentsId })
-					.catch((err) => {
-						console.error("[browserRuntimeRegistry] register failed:", err);
+			try {
+				if (entry.webContentsId !== webContentsId || !entry.registered) {
+					entry.registered = false;
+					await electronTrpcClient.browser.register.mutate({
+						paneId,
+						webContentsId,
 					});
+					entry.webContentsId = webContentsId;
+					entry.registered = true;
+				}
+				entry.previewApplied = null;
+				this.updateLayout(entry);
+			} catch (error) {
+				console.error("[browserRuntimeRegistry] register failed:", error);
 			}
 		};
 
@@ -541,12 +566,25 @@ class BrowserRuntimeRegistryImpl {
 			if (entry) this.updateLayout(entry);
 		});
 		observer.observe(placeholder);
-		const clipContainer = placeholder.closest("[data-browser-clip]");
-		if (clipContainer) observer.observe(clipContainer);
+		entry.visibilityObserver?.disconnect();
+		const visibilityObserver = new MutationObserver(() => {
+			if (entry) this.updateLayout(entry);
+		});
+		for (
+			let parent = placeholder.parentElement;
+			parent;
+			parent = parent.parentElement
+		) {
+			if (parent.hasAttribute("data-browser-clip")) observer.observe(parent);
+			visibilityObserver.observe(parent, {
+				attributes: true,
+				attributeFilter: ["inert", "hidden", "aria-hidden", "data-expanded"],
+			});
+		}
+		entry.visibilityObserver = visibilityObserver;
 		entry.resizeObserver = observer;
 
 		this.updateLayout(entry);
-		entry.webview.style.visibility = "visible";
 		this.applyPointerPassthrough();
 	}
 
@@ -557,6 +595,8 @@ class BrowserRuntimeRegistryImpl {
 		entry.placeholder = null;
 		entry.resizeObserver?.disconnect();
 		entry.resizeObserver = null;
+		entry.visibilityObserver?.disconnect();
+		entry.visibilityObserver = null;
 		entry.visible = false;
 		entry.webview.style.visibility = "hidden";
 		// Free the page after a grace period so idle background panes stop
@@ -569,6 +609,7 @@ class BrowserRuntimeRegistryImpl {
 		if (!entry) return;
 		this.clearSuspendTimer(entry);
 		entry.resizeObserver?.disconnect();
+		entry.visibilityObserver?.disconnect();
 		entry.detachHandlers();
 		entry.webview.remove();
 		this.entries.delete(paneId);
@@ -584,15 +625,14 @@ class BrowserRuntimeRegistryImpl {
 		});
 	}
 
-	/**
-	 * Set (or clear, with `null`) device-viewport emulation for a hosted webview
-	 * and re-lay it out immediately. Used by the sidebar Browser tab's
-	 * mobile/desktop switch; panes never call this, so they stay 1:1.
-	 */
-	setViewport(paneId: string, viewport: BrowserRuntimeViewport | null): void {
+	setPreview(
+		paneId: string,
+		mode: BrowserPreviewMode,
+		orientation: BrowserPreviewOrientation,
+	): void {
 		const entry = this.entries.get(paneId);
 		if (!entry) return;
-		entry.viewport = viewport;
+		entry.preview = { mode, orientation, scale: entry.preview.scale };
 		this.updateLayout(entry);
 	}
 

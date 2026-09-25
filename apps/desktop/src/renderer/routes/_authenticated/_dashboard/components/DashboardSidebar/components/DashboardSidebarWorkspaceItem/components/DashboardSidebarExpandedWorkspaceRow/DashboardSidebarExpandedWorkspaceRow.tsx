@@ -8,7 +8,6 @@ import {
 } from "react";
 import { HiMiniMinus, HiMiniXMark } from "react-icons/hi2";
 import { RenameInput } from "renderer/components/WorkspaceSidebar/RenameInput";
-import type { DiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { HotkeyLabel } from "renderer/hotkeys";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import type { ActivePaneStatus } from "shared/tabs-types";
@@ -16,7 +15,6 @@ import type {
 	DashboardSidebarWorkspace,
 	DashboardSidebarWorkspacePullRequest,
 } from "../../../../types";
-import { DashboardSidebarWorkspaceDiffStats } from "../DashboardSidebarWorkspaceDiffStats";
 import { DashboardSidebarWorkspaceIcon } from "../DashboardSidebarWorkspaceIcon";
 
 const PR_STATE_LABEL: Record<
@@ -37,7 +35,6 @@ interface DashboardSidebarExpandedWorkspaceRowProps
 	isRenaming: boolean;
 	renameValue: string;
 	shortcutLabel?: string;
-	diffStats: DiffStats | null;
 	workspaceStatus?: ActivePaneStatus | null;
 	isInSection?: boolean;
 	onClick?: () => void;
@@ -60,7 +57,6 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 			isRenaming,
 			renameValue,
 			shortcutLabel,
-			diffStats,
 			workspaceStatus = null,
 			isInSection = false,
 			onClick,
@@ -272,19 +268,10 @@ export const DashboardSidebarExpandedWorkspaceRow = forwardRef<
 						)}
 
 						<div className="col-start-2 row-start-1 grid h-5 shrink-0 items-center justify-items-end [&>*]:col-start-1 [&>*]:row-start-1">
-							{creationStatusText ? (
+							{creationStatusText && (
 								<span className="text-[11px] text-muted-foreground">
 									{creationStatusText}
 								</span>
-							) : (
-								diffStats &&
-								(diffStats.additions > 0 || diffStats.deletions > 0) && (
-									<DashboardSidebarWorkspaceDiffStats
-										additions={diffStats.additions}
-										deletions={diffStats.deletions}
-										isActive={isActive}
-									/>
-								)
 							)}
 							{!isPending && (
 								<div className="hidden items-center justify-end gap-1.5 group-hover:flex">

@@ -118,6 +118,14 @@ export function usePersistentWebview(options: UsePersistentWebviewOptions) {
 			browserRuntimeRegistry.detach(paneId);
 		};
 	}, [paneId, persist]);
+	const data = isPaneCtxOptions(options)
+		? (options.ctx.pane.data as BrowserPaneData)
+		: undefined;
+	const mode = data?.previewMode ?? "responsive";
+	const orientation = data?.previewOrientation ?? "portrait";
+	useEffect(() => {
+		browserRuntimeRegistry.setPreview(paneId, mode, orientation);
+	}, [paneId, mode, orientation]);
 
 	useEffect(() => {
 		const newWindowSub = electronTrpcClient.browser.onNewWindow.subscribe(

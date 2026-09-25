@@ -87,7 +87,7 @@ async function createEventDrivenScenario(
 
 	const gitOpLog: GitOpLog[] = [];
 	const filesystem = new WorkspaceFilesystemManager({ db: host.db as HostDb });
-	const gitWatcher = new GitWatcher(host.db as HostDb, filesystem);
+	const gitWatcher = new GitWatcher(host.db as HostDb);
 
 	const manager = new PullRequestRuntimeManager({
 		db: host.db as HostDb,

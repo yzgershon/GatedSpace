@@ -14,6 +14,8 @@
  * to the right card. `parent_tool_use_id` is preserved on every item so the
  * renderer can group subagent work under the Task call that spawned it.
  */
+import type { SessionFileChange } from "../session-changes";
+import { claudeFileChange } from "./changes";
 import type {
 	AssistantContentBlock,
 	ClaudePermissionRequest,
@@ -68,6 +70,7 @@ export interface ToolItem {
 	input: Record<string, unknown>;
 	status: ToolStatus;
 	output?: string;
+	fileChange?: SessionFileChange;
 	parentToolUseId: string | null;
 }
 /** GatedSpace explaining itself in the transcript, not part of the chat. */
@@ -409,7 +412,12 @@ function mergeIntoFinal(
 		final.kind === "tool" &&
 		existing.output !== undefined
 	) {
-		return { ...final, status: existing.status, output: existing.output };
+		return {
+			...final,
+			status: existing.status,
+			output: existing.output,
+			fileChange: existing.fileChange,
+		};
 	}
 	return final;
 }
@@ -771,6 +779,14 @@ export function applyEvent(
 								...item,
 								status: block.is_error ? "error" : "success",
 								output: toolResultOutput(block),
+								fileChange: block.is_error
+									? undefined
+									: claudeFileChange(
+											item,
+											toolResults.length === 1
+												? event.tool_use_result
+												: undefined,
+										),
 							}
 						: item,
 				);

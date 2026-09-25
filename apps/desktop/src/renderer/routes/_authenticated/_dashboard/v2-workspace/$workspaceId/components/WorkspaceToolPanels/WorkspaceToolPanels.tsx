@@ -49,6 +49,19 @@ export function WorkspaceToolPanels({
 }) {
 	const panels = useStore(tools.state);
 	const tabs = useStore(tools.store, (s) => s.tabs);
+	// The pane's own maximize action must also expand its enclosing tool panel.
+	// Keep the other surfaces mounted, and leave the saved dock sizes untouched.
+	const expanded = ([panels.focus, "right", "bottom"] as const).find(
+		(side) =>
+			side !== "main" &&
+			panels[side].open &&
+			tabs.some(
+				(tab) =>
+					tab.id === panels[side].activeTabId &&
+					tab.maximizedPaneId &&
+					tab.panes[tab.maximizedPaneId],
+			),
+	);
 	const [bounds, setBounds] = useState({ width: 1200, height: 800 });
 	const [resizing, setResizing] = useState(false);
 	const [present, setPresent] = useState({
@@ -108,14 +121,16 @@ export function WorkspaceToolPanels({
 		<div
 			key={side}
 			role="separator"
-			tabIndex={panels[side].open ? 0 : -1}
+			tabIndex={panels[side].open && !expanded ? 0 : -1}
 			aria-label={`Resize ${side} panel`}
 			aria-orientation={side === "right" ? "vertical" : "horizontal"}
 			aria-valuenow={Math.round(side === "right" ? rightSize : bottomSize)}
 			aria-valuemin={180}
 			aria-valuemax={Math.round(side === "right" ? rightMax : bottomMax)}
 			className={`gs-tool-resize gs-tool-resize-${side}`}
-			style={{ visibility: panels[side].open ? "visible" : "hidden" }}
+			style={{
+				visibility: panels[side].open && !expanded ? "visible" : "hidden",
+			}}
 			onDoubleClick={() => tools.resize(side, panelDefaults[side])}
 			onKeyDown={(event) => {
 				const step =
@@ -204,6 +219,7 @@ export function WorkspaceToolPanels({
 				renderContent={(renderTab) => (
 					<div
 						ref={root}
+						data-expanded={expanded}
 						className={`gs-tool-workspace ${resizing ? "gs-tool-workspace-resizing" : ""}`}
 						style={
 							{
@@ -214,6 +230,8 @@ export function WorkspaceToolPanels({
 					>
 						<div
 							className="gs-tool-main"
+							inert={!!expanded}
+							aria-hidden={!!expanded}
 							data-browser-clip
 							onPointerDownCapture={() => tools.focus("main")}
 							onFocusCapture={() => tools.focus("main")}
@@ -232,6 +250,8 @@ export function WorkspaceToolPanels({
 									key={side}
 									className={`gs-tool-slot gs-tool-slot-${side}`}
 									data-open={panels[side].open}
+									inert={!!expanded && expanded !== side}
+									aria-hidden={!!expanded && expanded !== side}
 									data-browser-clip
 								>
 									{renderHandle(side)}

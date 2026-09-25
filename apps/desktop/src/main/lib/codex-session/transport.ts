@@ -8,6 +8,7 @@ import { version } from "../../../../package.json";
 import { record, text } from "../../../shared/codex-session/types";
 import { agentBrowserMcp } from "../browser/agent-browser-mcp";
 import { resolveExecutable } from "../claude-session/resolve-executable";
+import { computerUseTools } from "../computer-use/tools";
 import {
 	type AsyncQuestionInput,
 	asyncQuestionDescription,
@@ -103,6 +104,7 @@ export class CodexTransport extends EventEmitter {
 	private async connect(generation: number) {
 		const executable = this.executable();
 		const bridge = await agentBrowserMcp.connect("codex", [
+			...computerUseTools,
 			{
 				definition: {
 					name: "request_user_input_async",

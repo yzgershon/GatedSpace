@@ -1,4 +1,5 @@
-import { ArrowUpRight, FileDiff } from "lucide-react";
+import { ArrowUpRight, ChevronDown, FileDiff } from "lucide-react";
+import { useId, useState } from "react";
 import type { CodexTurnReview } from "shared/codex-session/review";
 
 export function TurnChanges({
@@ -8,6 +9,10 @@ export function TurnChanges({
 	review: CodexTurnReview;
 	onReview: (review: CodexTurnReview) => void;
 }) {
+	const [expanded, setExpanded] = useState(false);
+	const listId = useId();
+	const hasMore = review.files.length > 3;
+	const visibleFiles = expanded ? review.files : review.files.slice(0, 3);
 	return (
 		<section
 			className="codex-turn-changes"
@@ -35,8 +40,12 @@ export function TurnChanges({
 					Review <ArrowUpRight size={14} />
 				</button>
 			</header>
-			<div className="codex-changes-files">
-				{review.files.map((file) => (
+			<div
+				id={listId}
+				className="codex-changes-files"
+				data-collapsed={hasMore && !expanded}
+			>
+				{visibleFiles.map((file) => (
 					<button
 						type="button"
 						key={file.path}
@@ -51,6 +60,20 @@ export function TurnChanges({
 					</button>
 				))}
 			</div>
+			{hasMore && (
+				<button
+					type="button"
+					className="codex-changes-expand"
+					aria-expanded={expanded}
+					aria-controls={listId}
+					onClick={() => setExpanded(!expanded)}
+				>
+					{expanded
+						? "Show fewer files"
+						: `Show all ${review.files.length} files`}
+					<ChevronDown size={14} />
+				</button>
+			)}
 		</section>
 	);
 }

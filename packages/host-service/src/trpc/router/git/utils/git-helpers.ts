@@ -1,48 +1,10 @@
-import { copyFile, mkdtemp, open, realpath, rm, stat } from "node:fs/promises";
+import { copyFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
-import {
-	BINARY_SNIFF_BYTES,
-	isBinaryMediaFile,
-} from "@superset/shared/media-files";
+import { isAbsolute, join, resolve } from "node:path";
 import type { SimpleGit } from "simple-git";
 import { resolveUpstream } from "../../../../runtime/git/refs";
 import { createUserSimpleGit } from "../../../../runtime/git/simple-git";
 import type { Branch, ChangedFile, FileStatus } from "../types";
-
-// Skip line counting for files larger than this — anything over a MB
-// of "source" is almost certainly a data file or accidental binary,
-// and the LOC signal isn't useful for it.
-const MAX_UNTRACKED_LINE_COUNT_SIZE = 1 * 1024 * 1024;
-
-// Cap parallel file I/O so a workspace with thousands of untracked
-// files (e.g. fresh checkout with un-gitignored build artifacts)
-// doesn't exhaust the process file-descriptor limit.
-const UNTRACKED_IO_CONCURRENCY = 64;
-
-// Chunk size for streaming untracked files when counting lines. Bounds
-// per-file memory to this × UNTRACKED_IO_CONCURRENCY instead of the full
-// file size, and comfortably covers the 8KB binary sniff window.
-const UNTRACKED_READ_CHUNK_SIZE = 64 * 1024;
-
-async function mapWithConcurrency<T>(
-	items: T[],
-	limit: number,
-	fn: (item: T) => Promise<void>,
-): Promise<void> {
-	let next = 0;
-	const workers = Array.from(
-		{ length: Math.min(limit, items.length) },
-		async () => {
-			while (true) {
-				const i = next++;
-				if (i >= items.length) return;
-				await fn(items[i] as T);
-			}
-		},
-	);
-	await Promise.all(workers);
-}
 
 /** Map git's single-letter status codes to GitHub-aligned FileStatus */
 export function mapGitStatus(code: string): FileStatus {
@@ -246,106 +208,6 @@ export async function buildBranch(
 		lastCommitHash,
 		lastCommitDate,
 	};
-}
-
-function isPathWithinWorktree(
-	worktreePath: string,
-	candidate: string,
-): boolean {
-	const relativePath = relative(worktreePath, candidate);
-	if (relativePath === "") return true;
-	return (
-		relativePath !== ".." &&
-		!relativePath.startsWith(`..${sep}`) &&
-		!isAbsolute(relativePath)
-	);
-}
-
-/**
- * Untracked files don't appear in `git diff --numstat` (they're not in
- * the index). The only batch-friendly way to get their line counts is
- * to read them directly — `git diff --no-index` requires a subprocess
- * per file, and `git add -N` would mutate the index inside a read.
- */
-export async function countUntrackedFileLines(
-	worktreePath: string,
-	files: ChangedFile[],
-): Promise<void> {
-	if (files.length === 0) return;
-
-	let worktreeReal: string;
-	try {
-		worktreeReal = await realpath(worktreePath);
-	} catch {
-		return;
-	}
-
-	await mapWithConcurrency(files, UNTRACKED_IO_CONCURRENCY, async (file) => {
-		try {
-			const absolutePath = resolve(worktreePath, file.path);
-			if (!isPathWithinWorktree(worktreePath, absolutePath)) return;
-
-			const fileReal = await realpath(absolutePath);
-			if (!isPathWithinWorktree(worktreeReal, fileReal)) return;
-
-			const stats = await stat(fileReal);
-			if (!stats.isFile()) {
-				return;
-			}
-
-			if (isBinaryMediaFile(file.path)) {
-				file.isBinary = true;
-				file.additions = 0;
-				file.deletions = 0;
-				return;
-			}
-
-			// Stream the file in fixed-size chunks rather than slurping it:
-			// readFile would pin the whole file in memory (×UNTRACKED_IO_CONCURRENCY)
-			// and, read as utf-8, would turn binary into U+FFFDs and report a
-			// bogus line count. We reuse one buffer, sniff the first 8KB for NULs
-			// (git's binary heuristic), and tally newlines as we go.
-			const handle = await open(fileReal, "r");
-			try {
-				const buf = Buffer.allocUnsafe(UNTRACKED_READ_CHUNK_SIZE);
-				let { bytesRead } = await handle.read(buf, 0, buf.length, 0);
-
-				const sniffEnd = Math.min(bytesRead, BINARY_SNIFF_BYTES);
-				for (let i = 0; i < sniffEnd; i++) {
-					if (buf[i] === 0) {
-						file.isBinary = true;
-						file.additions = 0;
-						file.deletions = 0;
-						return;
-					}
-				}
-
-				// Over the budget: skip the LOC signal without reading the rest.
-				if (stats.size > MAX_UNTRACKED_LINE_COUNT_SIZE) {
-					return;
-				}
-
-				let newlines = 0;
-				let lastByte = -1;
-				let offset = 0;
-				while (bytesRead > 0) {
-					for (let i = 0; i < bytesRead; i++) {
-						if (buf[i] === 0x0a) newlines++;
-					}
-					lastByte = buf[bytesRead - 1] ?? lastByte;
-					offset += bytesRead;
-					({ bytesRead } = await handle.read(buf, 0, buf.length, offset));
-				}
-				// Match `content.split(/\r?\n/)`: a trailing newline doesn't add a
-				// line, but a final non-empty line without one does. (\r\n shares
-				// the \n, so counting \n bytes is equivalent.)
-				file.additions =
-					lastByte === -1 ? 0 : lastByte === 0x0a ? newlines : newlines + 1;
-			} finally {
-				await handle.close();
-			}
-		} catch {}
-	});
 }
 
 export interface DetectedRename {

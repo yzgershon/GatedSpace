@@ -4,6 +4,7 @@ import {
 	type BrowserAdapter,
 } from "./agent-browser-service";
 import { browserManager } from "./browser-manager";
+import { browserInputPoint } from "./browser-preview";
 
 // An isolated world keeps our element map separate from scripts on the website.
 const WORLD = 1005;
@@ -83,10 +84,11 @@ const adapter: BrowserAdapter = {
 				],
 			};
 		} else if (tool === "browser_click") {
-			const point = (await script(
+			const pagePoint = (await script(
 				paneId,
 				`(() => { ${element(input.ref)} e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect(); const x=r.x+r.width/2, y=r.y+r.height/2; const hit=document.elementFromPoint(x,y); if (!hit || (!e.contains(hit) && !hit.contains(e))) throw new Error('Element is covered; take a new snapshot.'); return { x:Math.round(x), y:Math.round(y) }; })()`,
 			)) as { x: number; y: number };
+			const point = browserInputPoint(wc, pagePoint);
 			wc.sendInputEvent({
 				type: "mouseDown",
 				...point,

@@ -6,6 +6,8 @@ import {
 	type BrowserOpenRequest,
 } from "main/lib/browser/agent-browser-service";
 import { browserManager } from "main/lib/browser/browser-manager";
+import { applyBrowserPreview } from "main/lib/browser/browser-preview";
+import { BROWSER_PREVIEW_MODES } from "shared/browser-preview";
 import { BROWSER_SCRIPT_NAMES, getBrowserScript } from "shared/browser-scripts";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
@@ -55,6 +57,22 @@ export const createBrowserRouter = () => {
 			.input(z.object({ paneId: z.string() }))
 			.mutation(({ input }) => {
 				browserManager.unregister(input.paneId);
+				return { success: true };
+			}),
+
+		setPreview: publicProcedure
+			.input(
+				z.object({
+					paneId: z.string(),
+					mode: z.enum(BROWSER_PREVIEW_MODES),
+					orientation: z.enum(["portrait", "landscape"]),
+					scale: z.number().finite().min(0.01).max(1),
+				}),
+			)
+			.mutation(({ input }) => {
+				const wc = browserManager.getWebContents(input.paneId);
+				if (!wc || wc.isDestroyed()) return { success: false };
+				applyBrowserPreview(wc, input);
 				return { success: true };
 			}),
 

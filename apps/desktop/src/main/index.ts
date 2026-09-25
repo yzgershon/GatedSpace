@@ -33,6 +33,8 @@ import { installBundledCliShim } from "./lib/bundled-cli";
 import { flushCostStore } from "./lib/claude-session/cost-store";
 import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
 import { codexSessionManager } from "./lib/codex-session/session-manager";
+import { installComputerUseLifecycle } from "./lib/computer-use/lifecycle";
+import { computerUseService } from "./lib/computer-use/service";
 import { startSyncScheduler } from "./lib/continuity";
 import { crashSentinel } from "./lib/crash-sentinel";
 import { applyDevInstanceIsolation } from "./lib/dev-instance-isolation";
@@ -263,6 +265,7 @@ app.on("before-quit", async (event) => {
 
 	isQuitting = true;
 	try {
+		await computerUseService.stop();
 		codexSessionManager.dispose();
 		getHostServiceCoordinator().stopAll();
 		if (isDev || forceFullCleanup) {
@@ -386,6 +389,7 @@ if (!gotTheLock) {
 
 	(async () => {
 		await app.whenReady();
+		installComputerUseLifecycle();
 		markStartup("electron ready");
 
 		// Before any window or webview exists: the Browser pane and webviews

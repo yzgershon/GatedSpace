@@ -15,7 +15,9 @@ import {
 	Folder,
 	GitCompareArrows,
 	Globe,
+	Maximize2,
 	MessageSquare,
+	Minimize2,
 	PanelBottom,
 	PanelRight,
 	Plus,
@@ -59,6 +61,8 @@ export function ToolPanel({
 }) {
 	const { setNodeRef, isOver } = useDroppable({ id: `dock-${side}` });
 	const displayedTabs = useAnimatedTabs(tabs);
+	const active = tabs.find((tab) => tab.id === activeTabId);
+	const maximized = !!active?.maximizedPaneId;
 	async function close(tab: Tab<PaneViewerData>) {
 		for (const pane of Object.values(tab.panes)) {
 			const guard = registry[pane.kind]?.onBeforeClose;
@@ -129,6 +133,30 @@ export function ToolPanel({
 						))}
 					</DropdownMenuContent>
 				</DropdownMenu>
+				<button
+					type="button"
+					className="gs-tool-icon"
+					disabled={!active}
+					title={`${maximized ? "Restore" : "Expand"} ${side} panel`}
+					aria-label={`${maximized ? "Restore" : "Expand"} ${side} panel`}
+					onClick={() => {
+						if (!active) return;
+						const paneId =
+							active.maximizedPaneId ??
+							active.activePaneId ??
+							Object.keys(active.panes)[0];
+						if (paneId)
+							tools.store
+								.getState()
+								.toggleMaximizePane({ tabId: active.id, paneId });
+					}}
+				>
+					{maximized ? (
+						<Minimize2 className="size-4" />
+					) : (
+						<Maximize2 className="size-4" />
+					)}
+				</button>
 				<button
 					type="button"
 					className="gs-tool-icon"

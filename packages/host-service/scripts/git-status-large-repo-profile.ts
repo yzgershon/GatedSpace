@@ -442,7 +442,7 @@ async function runEventBusScenario(
 
 	const db = createSingleWorkspaceDb(workspaceId, options.repoPath);
 	const filesystem = new WorkspaceFilesystemManager({ db });
-	const gitWatcher = new GitWatcher(db, filesystem);
+	const gitWatcher = new GitWatcher(db);
 	const eventBus = new EventBus({ db, filesystem, gitWatcher });
 	const refreshPromises: Array<Promise<unknown>> = [];
 	let gitChangedEvents = 0;

@@ -9,7 +9,9 @@ import type { BrowserPaneData, PaneViewerData } from "../../../../types";
 import { browserRuntimeRegistry } from "./browserRuntimeRegistry";
 import { BrowserErrorOverlay } from "./components/BrowserErrorOverlay";
 import { BrowserOverflowMenu } from "./components/BrowserOverflowMenu";
+import { BrowserPreviewControls } from "./components/BrowserPreviewControls/BrowserPreviewControls";
 import { BrowserToolbar } from "./components/BrowserToolbar";
+import "./browser-preview.css";
 import { usePersistentWebview } from "./hooks/usePersistentWebview";
 
 function getSingleBrowserPane(
@@ -48,30 +50,47 @@ export function BrowserPane({ ctx }: BrowserPaneProps) {
 	const paneId = ctx.pane.id;
 	const state = useBrowserState(paneId);
 	const { placeholderRef, reload } = usePersistentWebview({ paneId, ctx });
+	const data = ctx.pane.data as BrowserPaneData;
+	const mode = data.previewMode ?? "responsive";
+	const orientation = data.previewOrientation ?? "portrait";
 
 	const isBlankPage = !state.currentUrl || state.currentUrl === "about:blank";
 
 	return (
-		<div className="relative flex flex-1 h-full">
-			<div ref={placeholderRef} className="w-full h-full" style={{ flex: 1 }} />
-			{state.error && !state.isLoading && (
-				<BrowserErrorOverlay error={state.error} onRetry={reload} />
-			)}
-			{isBlankPage && !state.isLoading && !state.error && (
-				<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background pointer-events-none">
-					<GlobeIcon className="size-10 text-muted-foreground/30" />
-					<div className="text-center">
-						<p className="text-sm font-medium text-muted-foreground/50">
-							Browser
-						</p>
-						<p className="mt-1 text-xs text-muted-foreground/30">
-							Enter a URL above, or instruct an agent to navigate
-							<br />
-							and use the browser
-						</p>
+		<div className="relative flex flex-1 h-full min-h-0 min-w-0 flex-col">
+			<BrowserPreviewControls
+				mode={mode}
+				orientation={orientation}
+				scale={state.previewScale}
+				onChange={(previewMode, previewOrientation) =>
+					ctx.actions.updateData({ ...data, previewMode, previewOrientation })
+				}
+			/>
+			<div
+				className="gs-browser-stage"
+				data-device={mode !== "responsive"}
+				data-browser-clip
+			>
+				<div ref={placeholderRef} data-browser-placeholder />
+				{state.error && !state.isLoading && (
+					<BrowserErrorOverlay error={state.error} onRetry={reload} />
+				)}
+				{isBlankPage && !state.isLoading && !state.error && (
+					<div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-background pointer-events-none">
+						<GlobeIcon className="size-10 text-muted-foreground/30" />
+						<div className="text-center">
+							<p className="text-sm font-medium text-muted-foreground/50">
+								Browser
+							</p>
+							<p className="mt-1 text-xs text-muted-foreground/30">
+								Enter a URL above, or instruct an agent to navigate
+								<br />
+								and use the browser
+							</p>
+						</div>
 					</div>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 }

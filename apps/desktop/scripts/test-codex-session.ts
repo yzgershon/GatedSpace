@@ -90,6 +90,61 @@ const port = (server.address() as { port: number }).port;
 const browser = await chromium.launch({ channel: "chrome", headless: true });
 const checks: string[] = [];
 const errors: string[] = [];
+async function checkComputerControl(
+	page: Awaited<ReturnType<typeof browser.newPage>>,
+) {
+	await page.goto(`http://127.0.0.1:${port}/?paired`);
+	await page
+		.getByRole("button", { name: "Computer control", exact: true })
+		.click();
+	await page
+		.getByRole("button", { name: "Enable for this pane", exact: true })
+		.click();
+	await page.getByText("Enabled for this pane", { exact: true }).waitFor();
+	await page.keyboard.press("Escape");
+	await page.locator(".computer-control-panel").waitFor({ state: "detached" });
+	await page.getByText("Computer ready", { exact: true }).waitFor();
+	await page
+		.getByRole("button", { name: "Stop computer control", exact: true })
+		.click();
+	await page
+		.getByText("Computer ready", { exact: true })
+		.waitFor({ state: "detached" });
+	checks.push(
+		"computer-control toggle and persistent Stop button work with real production UI",
+	);
+	await page.setViewportSize({ width: 380, height: 800 });
+	await page
+		.getByRole("button", { name: "Computer control", exact: true })
+		.click();
+	const controlBounds = await page
+		.locator(".computer-control-panel")
+		.boundingBox();
+	if (
+		!controlBounds ||
+		controlBounds.x < 0 ||
+		controlBounds.x + controlBounds.width > 380
+	)
+		throw Error("Computer controls are clipped in a narrow pane");
+	await page.screenshot({
+		path: resolve(output, "computer-control-narrow.png"),
+	});
+	await page
+		.getByRole("button", { name: "Enable for this pane", exact: true })
+		.click();
+	await page.keyboard.press("Escape");
+	await page.locator(".computer-control-panel").waitFor({ state: "detached" });
+	const stopBounds = await page
+		.getByRole("button", { name: "Stop computer control", exact: true })
+		.boundingBox();
+	if (!stopBounds || stopBounds.x < 0 || stopBounds.x + stopBounds.width > 380)
+		throw Error("Stop is clipped");
+	await page
+		.getByRole("button", { name: "Stop computer control", exact: true })
+		.click();
+	checks.push("computer enable menu and Stop remain accessible at 380px");
+	await page.setViewportSize({ width: 1440, height: 1000 });
+}
 try {
 	const page = await browser.newPage({
 		viewport: { width: 1440, height: 1000 },
@@ -134,6 +189,20 @@ try {
 				`${name}: collapsed or clipped Codex view ${JSON.stringify(geometry)}`,
 			);
 		checks.push(name);
+	}
+	if (process.env.COMPUTER_CONTROL_ONLY === "1") {
+		await checkComputerControl(page);
+		if (errors.length) throw Error(errors.join("\n"));
+		const result = { ok: true, checks, errors };
+		await writeFile(
+			resolve(output, "computer-results.json"),
+			JSON.stringify(result, null, 2),
+		);
+		console.log(JSON.stringify(result));
+		await browser.close();
+		server.closeAllConnections();
+		server.close();
+		process.exit(0);
 	}
 	await checkPaneLayout("production pane fills its content wrapper");
 	const theme = await page.evaluate(() =>
@@ -336,7 +405,7 @@ try {
 			fade: getComputedStyle(node).maskImage,
 		}));
 		if (
-			Math.abs(dimensions.height / dimensions.line - 10.55) > 0.1 ||
+			Math.abs(dimensions.height / dimensions.line - 6.55) > 0.1 ||
 			dimensions.scrollHeight <= dimensions.height ||
 			dimensions.fade === "none"
 		)
@@ -362,7 +431,7 @@ try {
 	await page.getByRole("slider", { name: "Reasoning effort" }).press("Escape");
 	checks.push(
 		"Claude Focus composer, command palette and shared model/mode controls work",
-		"both composers cap at ten lines and fade overflow",
+		"both composers cap at six lines and fade overflow",
 		"long prompt typing preserves caret",
 		"Codex Focus menu and both Fast toggles work",
 	);
@@ -492,6 +561,7 @@ try {
 	checks.push(
 		"Claude tool permission displays details and submits an explicit approval",
 	);
+	await checkComputerControl(page);
 	await page.goto(`http://127.0.0.1:${port}/?loading`);
 	const loader = page.getByLabel("Loading workspace");
 	await loader.waitFor();

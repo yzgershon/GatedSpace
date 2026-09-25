@@ -80,7 +80,7 @@ async function setup(workspaceCount: number): Promise<BenchScenario> {
 
 	const counter: OpCounter = { count: 0 };
 	const filesystem = new WorkspaceFilesystemManager({ db: host.db as HostDb });
-	const gitWatcher = new GitWatcher(host.db as HostDb, filesystem);
+	const gitWatcher = new GitWatcher(host.db as HostDb);
 	const manager = new PullRequestRuntimeManager({
 		db: host.db as HostDb,
 		git: async (worktreePath: string) =>

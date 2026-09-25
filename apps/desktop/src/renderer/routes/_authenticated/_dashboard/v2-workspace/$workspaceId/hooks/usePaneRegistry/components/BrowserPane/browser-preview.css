@@ -1,0 +1,58 @@
+.gs-browser-preview-controls {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 36px;
+	flex-shrink: 0;
+	padding: 4px 10px;
+	border-bottom: 1px solid var(--border);
+	color: var(--muted-foreground);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+.gs-browser-preview-controls select {
+	min-width: 0;
+	max-width: 130px;
+	background: var(--background);
+	color: var(--foreground);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 3px 4px;
+}
+.gs-browser-preview-controls button {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+}
+.gs-browser-preview-controls button:hover {
+	background: var(--muted);
+	color: var(--foreground);
+}
+.gs-browser-preview-controls :focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+.gs-browser-preview-dimensions {
+	white-space: nowrap;
+}
+.gs-browser-preview-fit {
+	margin-left: auto;
+	white-space: nowrap;
+}
+.gs-browser-stage {
+	position: relative;
+	flex: 1;
+	min-height: 0;
+	min-width: 0;
+	overflow: hidden;
+}
+.gs-browser-stage[data-device="true"] {
+	padding: 12px;
+	background: color-mix(in srgb, var(--background) 70%, var(--muted));
+}
+.gs-browser-stage > [data-browser-placeholder] {
+	width: 100%;
+	height: 100%;
+}

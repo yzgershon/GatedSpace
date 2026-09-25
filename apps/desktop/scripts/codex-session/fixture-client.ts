@@ -1,4 +1,14 @@
 import type { CodexSessionState } from "../../src/shared/codex-session/types";
+import type { ComputerUseState } from "../../src/shared/computer-use";
+
+let computer: ComputerUseState = { phase: "off" };
+const computerListeners = new Set<(s: ComputerUseState) => void>();
+const publishComputer = (next: ComputerUseState) => {
+	computer = next;
+	for (const listener of computerListeners) listener(next);
+	return next;
+};
+Object.assign(window, { setComputerFixture: publishComputer });
 
 const states = new Map<string, CodexSessionState>();
 const listeners = new Map<string, Set<(value: CodexSessionState) => void>>();
@@ -104,6 +114,21 @@ export const electronTrpcClient = {
 		},
 	},
 	codexSession: {
+		computerStream: {
+			subscribe: (
+				_input: unknown,
+				handlers: { onData: (s: ComputerUseState) => void },
+			) => {
+				computerListeners.add(handlers.onData);
+				handlers.onData(computer);
+				return { unsubscribe: () => computerListeners.delete(handlers.onData) };
+			},
+		},
+		computerEnable: {
+			mutate: async ({ key }: { key: string }) =>
+				publishComputer({ phase: "ready", owner: `codex:${key}` }),
+		},
+		computerStop: { mutate: async () => publishComputer({ phase: "off" }) },
 		skills: {
 			query: async () => [
 				{

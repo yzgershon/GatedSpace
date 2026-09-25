@@ -55,8 +55,29 @@
 }
 .codex-changes-files {
 	border-top: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent);
-	max-height: 240px;
-	overflow-y: auto;
+}
+.codex-changes-files[data-collapsed="true"] > button:last-child {
+	mask-image: linear-gradient(to bottom, black 5%, transparent 100%);
+}
+.codex-changes-files[data-collapsed="true"] > button:last-child:focus-visible {
+	mask-image: none;
+}
+.codex-changes-expand {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 6px;
+	width: 100%;
+	padding: 8px 12px 12px;
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+.codex-changes-expand:hover {
+	color: var(--foreground);
+	background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.codex-changes-expand[aria-expanded="true"] svg {
+	transform: rotate(180deg);
 }
 .codex-changes-files > button {
 	width: 100%;

@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
 import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
 import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
+import { claudeTaskChanges } from "shared/claude-session/changes";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionTimeline } from "shared/claude-session/timeline";
 import { ResumeWithAccount } from "./ResumeWithAccount";
@@ -97,6 +98,10 @@ export function SessionView({
 	restoring = false,
 }: SessionViewProps) {
 	const claudeIcon = usePresetIcon("claude");
+	const changes = useMemo(
+		() => claudeTaskChanges(timeline.items),
+		[timeline.items],
+	);
 	// Restoring outranks empty: a conversation being read off disk is not an
 	// empty one, and offering "Explain this codebase" over a session with a
 	// hundred messages in it is actively wrong, not just premature.
@@ -197,6 +202,7 @@ export function SessionView({
 				) : null}
 			</div>
 			<SessionComposer
+				changes={changes}
 				model={timeline.header?.model}
 				fast={fast}
 				onFastChange={onFastChange}

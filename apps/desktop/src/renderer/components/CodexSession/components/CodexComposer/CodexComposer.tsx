@@ -3,12 +3,14 @@ import { ArrowUp, Paperclip, Square, X } from "lucide-react";
 import {
 	type SetStateAction,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	useSyncExternalStore,
 } from "react";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
+import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
 	getCodexDraft,
@@ -16,12 +18,14 @@ import {
 	updateCodexDraft,
 } from "renderer/lib/codex-session/draft";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { codexTaskChanges } from "shared/codex-session/changes";
 import { defaultCodexEffort } from "shared/codex-session/controls";
 import type {
 	CodexModel,
 	CodexPermission,
 	CodexSessionState,
 } from "shared/codex-session/types";
+import { ComputerControl } from "../ComputerControl/ComputerControl";
 import { CODEX_COMMANDS, parseCodexCommand } from "./commands";
 
 export function CodexComposer({
@@ -83,6 +87,7 @@ export function CodexComposer({
 	const selected = models.find((m) => m.id === model);
 	const effort = chosenEffort || state?.effort || defaultCodexEffort(selected);
 	const working = state?.status === "working";
+	const changes = useMemo(() => codexTaskChanges(state), [state]);
 	const before = draft.slice(0, caret);
 	const skillToken = before.match(/(?:^|\s)\$([\w.:-]*)$/);
 	const slashToken = before.match(/^\/(\S*)$/);
@@ -285,6 +290,7 @@ export function CodexComposer({
 	};
 	return (
 		<div className="session-composer-area">
+			<SessionChangesPill changes={changes} provider="codex" />
 			{notice && (
 				<output className="codex-command-notice">
 					{notice}
@@ -440,6 +446,7 @@ export function CodexComposer({
 					>
 						<Paperclip size={18} />
 					</button>
+					<ComputerControl paneId={paneId} />
 					<SessionComposerSettings
 						provider="Codex"
 						model={model}

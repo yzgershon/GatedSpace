@@ -25,7 +25,10 @@ import { SessionPaneIcon } from "../../src/renderer/routes/_authenticated/_dashb
 import { SessionView } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionView";
 import { WorkspaceLoadingState } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/components/WorkspaceLoadingState";
 import { useThemeStore } from "../../src/renderer/stores/theme";
-import { emptyTimeline } from "../../src/shared/claude-session/timeline";
+import {
+	emptyTimeline,
+	type TimelineItem,
+} from "../../src/shared/claude-session/timeline";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
 import { navigatorCodexItems } from "./navigator-fixture";
 import { UsageFixture } from "./UsageFixture";
@@ -50,6 +53,13 @@ workspace.getState().addTab({
 	panes: [{ id: "fixture", kind: "codex", data: {} }],
 });
 function ClaudeFixture() {
+	const [items, setItems] = useState<TimelineItem[]>([]);
+	useEffect(() => {
+		const update = (event: Event) =>
+			setItems((event as CustomEvent<TimelineItem[]>).detail);
+		window.addEventListener("fixture-claude-items", update);
+		return () => window.removeEventListener("fixture-claude-items", update);
+	}, []);
 	const [permissions, setPermissions] = useState(
 		location.search.includes("permission")
 			? [
@@ -73,6 +83,7 @@ function ClaudeFixture() {
 	const timeline = useMemo(
 		() => ({
 			...emptyTimeline(),
+			items,
 			permissions,
 			header: {
 				sessionId: "claude-fixture",
@@ -85,7 +96,7 @@ function ClaudeFixture() {
 				mcpServers: [],
 			},
 		}),
-		[permissions, mode],
+		[permissions, mode, items],
 	);
 	return (
 		<SessionView

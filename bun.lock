@@ -115,7 +115,7 @@
     },
     "apps/desktop": {
       "name": "@superset/desktop",
-      "version": "1.18.25",
+      "version": "1.18.30",
       "dependencies": {
         "@agentclientprotocol/claude-agent-acp": "0.56.0",
         "@ai-sdk/anthropic": "3.0.64",
@@ -646,7 +646,7 @@
     },
     "packages/cli": {
       "name": "@superset/cli",
-      "version": "1.18.25",
+      "version": "1.18.30",
       "dependencies": {
         "@clack/prompts": "0.10.1",
         "@superset/cli-framework": "workspace:*",
@@ -741,7 +741,7 @@
     },
     "packages/host-service": {
       "name": "@superset/host-service",
-      "version": "1.18.25",
+      "version": "1.18.30",
       "dependencies": {
         "@agentclientprotocol/claude-agent-acp": "0.56.0",
         "@agentclientprotocol/sdk": "1.2.0",

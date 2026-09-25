@@ -1,7 +1,6 @@
 import { Popover, PopoverAnchor, PopoverContent } from "@superset/ui/popover";
 import type { RefObject } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useDiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { useDashboardSidebarHover } from "../../providers/DashboardSidebarHoverProvider";
 import { DashboardSidebarWorkspaceHoverCardContent } from "../DashboardSidebarWorkspaceItem/components/DashboardSidebarWorkspaceHoverCardContent";
 import "./DashboardSidebarHoverCardOverlay.css";
@@ -27,7 +26,6 @@ export function DashboardSidebarHoverCardOverlay({
 	virtualRef.current = anchorElement;
 
 	const open = hoveredId !== null && payload !== null && !contextMenuOpen;
-	const diffStats = useDiffStats(hoveredId ?? "");
 
 	// Suppress the transform transition until Radix has placed the popover at
 	// its real anchor — otherwise the initial jump from the off-screen measuring
@@ -71,7 +69,6 @@ export function DashboardSidebarHoverCardOverlay({
 				>
 					<DashboardSidebarWorkspaceHoverCardContent
 						workspace={payload.workspace}
-						diffStats={diffStats}
 						onEditBranchClick={payload.onEditBranchClick}
 					/>
 				</PopoverContent>

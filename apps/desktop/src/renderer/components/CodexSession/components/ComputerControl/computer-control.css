@@ -1,0 +1,80 @@
+.computer-control {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+}
+.computer-control[data-active="true"] .computer-control-trigger {
+	color: var(--primary);
+}
+.computer-control-live {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	color: var(--muted-foreground);
+	min-width: 0;
+}
+.computer-control-live span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	max-width: 130px;
+}
+.computer-control-live button {
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	color: var(--primary);
+}
+.computer-control-panel {
+	width: min(340px, calc(100vw - 32px));
+	padding: 18px;
+	font-size: 13px;
+	line-height: 1.55;
+}
+.computer-control-panel strong {
+	font-size: 14px;
+	font-weight: 600;
+}
+.computer-control-panel p {
+	margin: 10px 0;
+}
+.computer-control-panel .computer-control-hint,
+.computer-control-panel small {
+	color: var(--muted-foreground);
+}
+.computer-control-panel small {
+	display: block;
+	margin-top: 12px;
+	font-size: 11px;
+}
+.computer-control-action {
+	display: block;
+	width: 100%;
+	padding: 8px 12px;
+	border-radius: 9px;
+	border: 1px solid var(--border);
+	background: var(--secondary);
+	margin-top: 14px;
+	font-weight: 500;
+}
+.computer-control-action:hover {
+	background: var(--accent);
+}
+.computer-control-error {
+	color: var(--destructive);
+	overflow-wrap: anywhere;
+}
+.computer-control button:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: 2px;
+}
+@container (max-width: 430px) {
+	.computer-control-live span {
+		max-width: 64px;
+	}
+}

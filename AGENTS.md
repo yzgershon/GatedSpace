@@ -90,6 +90,21 @@ desktop <version> <commit>` provisions one from a commit. Full upstream runbook:
 > keep a specific installer, copy that one `.exe` somewhere; do not fork the
 > output directory.
 
+## Installer workflow preference
+
+The user wants coding to continue while installers build. For future installer work:
+
+- Finish the relevant checks and commit all completed changes for the requested task before starting the build. Stage explicit paths; preserve unrelated work and secrets.
+- Run the installer build in the background from that exact committed snapshot (an isolated checkout or a CI commit), so further edits in the working checkout cannot change the build. Do not race jobs that share build or release outputs; keep the standard release-directory policy above.
+- Continue independent coding while it builds. Later changes belong to the next build.
+- Record the version, source commit, build job/process, log/status paths, and remaining verification in the untracked `HANDOFF.md`. After a restart or compaction, inspect that status before starting another build.
+- Notify the user when the installers are finished and verified, or when a build fails. Set up a supported completion notification when launching a detached job; do not claim a queued build is ready.
+- Keep the user's current personal/public scope. Background building does not authorize a public release or interrupting the running app to install an update.
+
+## Design skill preference
+
+For UI and UX work, use **UI UX Pro Max** and **Awesome DESIGN.md** as the primary design skills. Read their installed SKILL.md files when applying them: use UI UX Pro Max for usability, layout, accessibility, and component guidance; use relevant Awesome DESIGN.md references for visual direction. Adapt them to GatedSpace's existing theme and the user's references. Other design skills are supplementary when relevant, rather than the default starting point. Tell the user which skills are being applied.
+
 ## Code Quality
 
 **Biome runs at root level** (not per-package) for speed:

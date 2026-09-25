@@ -38,7 +38,7 @@ export function GrowingTextarea({
 		const resize = () => {
 			const line = Number.parseFloat(getComputedStyle(node).lineHeight);
 			measure.value = value || " ";
-			node.style.height = `${Math.min(Math.max(line * minRows, measure.scrollHeight), line * 10.55)}px`;
+			node.style.height = `${Math.min(Math.max(line * minRows, measure.scrollHeight), line * 6.55)}px`;
 			updateEdges(node);
 		};
 		resize();

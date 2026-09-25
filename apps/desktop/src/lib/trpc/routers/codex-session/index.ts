@@ -1,12 +1,35 @@
 import { observable } from "@trpc/server/observable";
 import { codexSessionManager as manager } from "main/lib/codex-session/session-manager";
+import { enableComputerUse } from "main/lib/computer-use/lifecycle";
+import { computerUseService } from "main/lib/computer-use/service";
 import type { CodexSessionState } from "shared/codex-session/types";
+import type { ComputerUseState } from "shared/computer-use";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
 const keyInput = z.object({ key: z.string().min(1).max(200) });
 export const createCodexSessionRouter = () =>
 	router({
+		computerState: publicProcedure.query(() => computerUseService.get()),
+		computerEnable: publicProcedure.input(keyInput).mutation(({ input }) => {
+			if (!manager.get(input.key))
+				throw new Error("Open a Codex session first.");
+			return enableComputerUse(input.key);
+		}),
+		computerStop: publicProcedure.mutation(async () => {
+			await computerUseService.stop();
+			return computerUseService.get();
+		}),
+		computerStream: publicProcedure.subscription(() =>
+			observable<ComputerUseState>((emit) => {
+				const listener = (state: ComputerUseState) => emit.next(state);
+				computerUseService.on("change", listener);
+				emit.next(computerUseService.get());
+				return () => {
+					computerUseService.off("change", listener);
+				};
+			}),
+		),
 		start: publicProcedure
 			.input(
 				keyInput.extend({

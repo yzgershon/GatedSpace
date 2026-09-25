@@ -13,7 +13,8 @@ import { useWorkspaceEvent } from "../useWorkspaceEvent";
  * else) receive the query result as data and do not re-fetch.
  *
  * `git:changed` is already debounced server-side in `GitWatcher` and covers
- * both `.git/` metadata writes and worktree file edits.
+ * `.git/` metadata writes (commit, stage, checkout, fetch). Worktree file
+ * edits are not watched — they're picked up on window focus.
  */
 export function useGitStatus(workspaceId: string, enabled = true) {
 	const utils = workspaceTrpc.useUtils();

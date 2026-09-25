@@ -80,6 +80,8 @@ export interface BrowserPaneData {
 	url: string;
 	pageTitle?: string;
 	faviconUrl?: string | null;
+	previewMode?: "responsive" | "desktop" | "galaxy-s24";
+	previewOrientation?: "portrait" | "landscape";
 }
 
 export interface DevtoolsPaneData {

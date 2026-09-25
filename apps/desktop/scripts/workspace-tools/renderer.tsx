@@ -28,12 +28,14 @@ import {
 	type TerminalRuntime,
 } from "../../src/renderer/lib/terminal/terminal-runtime";
 import { WorkspaceToolPanels } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels";
+import { openAgentBrowserTab } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/agent-browser-tab";
 import {
 	createToolPanels,
 	mainPaneMinimum,
 } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/tool-panel-store";
 import { useDefaultContextMenuActions } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/useDefaultContextMenuActions";
 import { useDefaultPaneActions } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/useDefaultPaneActions";
+import { BrowserPane } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/BrowserPane";
 import { browserRuntimeRegistry } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/browserRuntimeRegistry";
 import { SessionAccountChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionAccountChip";
 import { SessionFolderChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionFolderChip";
@@ -119,26 +121,6 @@ function Terminal({ ctx }: { ctx: RendererContext<PaneViewerData> }) {
 		/>
 	);
 }
-function Browser({ ctx }: { ctx: RendererContext<PaneViewerData> }) {
-	const container = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		if (container.current)
-			browserRuntimeRegistry.attach(
-				ctx.pane.id,
-				container.current,
-				"about:blank",
-				() => {},
-			);
-		return () => browserRuntimeRegistry.detach(ctx.pane.id);
-	}, [ctx.pane.id]);
-	return (
-		<div
-			ref={container}
-			data-browser={ctx.pane.id}
-			className="h-full min-h-0 w-full bg-background"
-		/>
-	);
-}
 const registry: PaneRegistry<PaneViewerData> = {
 	session: {
 		getTitle: () => "Claude",
@@ -199,7 +181,7 @@ const registry: PaneRegistry<PaneViewerData> = {
 	browser: {
 		getTitle: () => "New tab",
 		getTabIcon: () => <Globe />,
-		renderPane: (ctx) => <Browser ctx={ctx} />,
+		renderPane: (ctx) => <BrowserPane ctx={ctx} />,
 		onAfterClose: (pane) => {
 			disposed.push(pane.id);
 			browserRuntimeRegistry.destroy(pane.id);
@@ -329,6 +311,8 @@ Object.assign(window, {
 	toolsTest: {
 		hotkeyCalls,
 		tools,
+		browserRuntimeRegistry,
+		openAgentBrowserTab,
 		main,
 		disposed,
 		runtimes,

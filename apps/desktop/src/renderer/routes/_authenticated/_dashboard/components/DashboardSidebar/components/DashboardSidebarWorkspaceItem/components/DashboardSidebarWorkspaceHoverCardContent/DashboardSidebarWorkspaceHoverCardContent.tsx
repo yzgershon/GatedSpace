@@ -8,7 +8,6 @@ import {
 	LuPencil,
 	LuTriangleAlert,
 } from "react-icons/lu";
-import type { DiffStats } from "renderer/hooks/host-service/useDiffStats";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import type { DashboardSidebarWorkspace } from "../../../../types";
 import { ChecksList } from "./components/ChecksList";
@@ -19,13 +18,11 @@ import { ReviewStatus } from "./components/ReviewStatus";
 
 interface DashboardSidebarWorkspaceHoverCardContentProps {
 	workspace: DashboardSidebarWorkspace;
-	diffStats: DiffStats | null;
 	onEditBranchClick?: (branchName: string) => void;
 }
 
 export function DashboardSidebarWorkspaceHoverCardContent({
 	workspace,
-	diffStats,
 	onEditBranchClick,
 }: DashboardSidebarWorkspaceHoverCardContentProps) {
 	const {
@@ -134,12 +131,6 @@ export function DashboardSidebarWorkspaceHoverCardContent({
 									/>
 								)}
 						</div>
-						{diffStats && (
-							<div className="flex items-center gap-1.5 text-xs font-mono shrink-0">
-								<span className="text-emerald-500">+{diffStats.additions}</span>
-								<span className="text-destructive">-{diffStats.deletions}</span>
-							</div>
-						)}
 					</div>
 
 					<p className="text-xs leading-relaxed line-clamp-2">

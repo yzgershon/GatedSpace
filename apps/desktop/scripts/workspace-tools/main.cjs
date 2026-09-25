@@ -1,9 +1,26 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, ipcMain, webContents } = require("electron");
 const fs = require("node:fs");
 const path = require("node:path");
 const assert = require("node:assert/strict");
 const output = process.env.GS_TOOLS_TEST_OUTPUT;
 if (!output) throw Error("Use test-workspace-tools.ts");
+const {
+	applyBrowserPreview,
+	installAgentBrowserAdapter,
+	agentBrowserService,
+} = require(path.join(output, "browser-preview.cjs"));
+const guests = new Map();
+globalThis.testBrowserWebContents = (id) => webContents.fromId(guests.get(id));
+installAgentBrowserAdapter();
+ipcMain.handle("fixture:register", (_event, value) => {
+	guests.set(value.paneId, value.webContentsId);
+});
+ipcMain.handle("fixture:preview", (_event, value) => {
+	const guest = webContents.fromId(guests.get(value.paneId));
+	if (!guest || guest.isDestroyed()) return { success: false };
+	applyBrowserPreview(guest, value);
+	return { success: true };
+});
 app.setPath("userData", path.join(output, `profile-${process.pid}`));
 app.commandLine.appendSwitch("force-device-scale-factor", "1");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
@@ -59,6 +76,7 @@ app
 			useContentSize: true,
 			show: false,
 			webPreferences: {
+				preload: path.join(output, "preload.cjs"),
 				backgroundThrottling: false,
 				webviewTag: true,
 				offscreen: true,
@@ -470,6 +488,18 @@ app
 		pass(
 			"Closing the last right tab restores the chooser and Side session opens the requested tool",
 		);
+		await require(path.join(output, "preview-checks.cjs"))({
+			win,
+			run,
+			wait,
+			click,
+			capture,
+			pass,
+			guests,
+			webContents,
+			browserAdapter: agentBrowserService.adapter,
+			output,
+		});
 		clearTimeout(timeout);
 		await finish();
 	})

@@ -169,6 +169,7 @@ export default defineConfig({
 			rollupOptions: {
 				input: {
 					index: resolve("src/preload/index.ts"),
+					"computer-overlay": resolve("src/preload/computer-overlay.ts"),
 				},
 			},
 		},
@@ -280,6 +281,7 @@ export default defineConfig({
 
 				input: {
 					index: resolve("src/renderer/index.html"),
+					"computer-overlay": resolve("src/renderer/computer-overlay.html"),
 				},
 			},
 		},

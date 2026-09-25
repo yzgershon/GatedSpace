@@ -3,7 +3,6 @@ import type { Branch, ChangedFile } from "../types";
 import { scheduleBaseRefFetch } from "./base-ref-freshness";
 import {
 	buildBranch,
-	countUntrackedFileLines,
 	detectUnstagedRenames,
 	getChangedFilesForDiff,
 	mapGitStatus,
@@ -128,7 +127,10 @@ export async function getGitStatusSnapshot({
 			});
 		}
 	}
-	await countUntrackedFileLines(worktreePath, untrackedFiles);
+	// Untracked files deliberately report 0/0. Counting their lines meant
+	// opening and reading every untracked file on each refresh, which in a
+	// workspace with thousands of them (e.g. a parent folder of many projects)
+	// pinned a core and drained the battery.
 
 	const hasDeletions = unstaged.some((file) => file.status === "deleted");
 	const renames = await detectUnstagedRenames(

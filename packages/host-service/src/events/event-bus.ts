@@ -82,7 +82,6 @@ export class EventBus {
 			this.broadcast({
 				type: "git:changed",
 				workspaceId: event.workspaceId,
-				...(event.paths !== undefined ? { paths: event.paths } : {}),
 			});
 		});
 

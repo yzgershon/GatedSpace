@@ -23,6 +23,8 @@ import {
 	agentBrowserService,
 	browserInstructions,
 } from "../browser/agent-browser-service";
+import { computerUseService } from "../computer-use/service";
+import { computerUseInstructions } from "../computer-use/tools";
 import { resolveCodexProject } from "./projects";
 import type { AsyncQuestionInput } from "./questions";
 import { CodexRpcError, CodexTransport } from "./transport";
@@ -55,6 +57,7 @@ export class CodexSessionManager extends EventEmitter {
 		);
 		transport.on("request", (message) => this.approval(record(message)));
 		transport.on("disconnected", (error: Error) => {
+			void computerUseService.stop();
 			for (const state of this.sessions.values()) {
 				state.status = "error";
 				state.error = error.message;
@@ -280,6 +283,7 @@ export class CodexSessionManager extends EventEmitter {
 						: "thread/start",
 					{
 						developerInstructions: [
+							computerUseInstructions(input.key),
 							input.workspaceId
 								? browserInstructions(`codex:${input.key}`)
 								: "",
@@ -575,6 +579,7 @@ export class CodexSessionManager extends EventEmitter {
 		}
 	}
 	async interrupt(key: string) {
+		computerUseService.release(`codex:${key}`);
 		// Stop/close can arrive before turn/start has returned its turn ID.
 		await this.turnStarts.get(key)?.catch(() => {});
 		const state = this.require(key);
@@ -1013,6 +1018,7 @@ export class CodexSessionManager extends EventEmitter {
 		this.publish(state);
 	}
 	async close(key: string) {
+		computerUseService.release(`codex:${key}`);
 		await this.starts.get(key)?.catch(() => {});
 		const state = this.get(key);
 		if (!state) return;
@@ -1033,6 +1039,7 @@ export class CodexSessionManager extends EventEmitter {
 				.catch(() => {});
 	}
 	dispose() {
+		void computerUseService.stop();
 		for (const key of this.sessions.keys())
 			agentBrowserService.unregister(`codex:${key}`);
 		for (const timer of this.timers.values()) clearTimeout(timer);

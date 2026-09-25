@@ -16,7 +16,11 @@ test("agent previews open in the shared right panel, reopen once, and preserve o
 	const id = tools.state.getState().right.activeTabId;
 	expect(
 		tools.store.getState().tabs.find((t) => t.id === id)?.panes[request.paneId],
-	).toMatchObject({ kind: "browser", data: { url: request.url } });
+	).toMatchObject({
+		kind: "browser",
+		data: { url: request.url, previewMode: "desktop" },
+	});
+	expect(tools.state.getState().right.size).toBe(720);
 	await tools.toggle("right");
 	openAgentBrowserTab(tools, request);
 	expect(tools.state.getState().right).toMatchObject({

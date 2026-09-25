@@ -18,6 +18,8 @@ import { createIPCHandler } from "trpc-electron/main";
 import { productName } from "~/package.json";
 import { appState } from "../lib/app-state";
 import { browserManager } from "../lib/browser/browser-manager";
+import { ComputerUseOverlay } from "../lib/computer-use/overlay";
+import { computerUseService } from "../lib/computer-use/service";
 import { attachEditContextMenu } from "../lib/edit-context-menu";
 import { createApplicationMenu } from "../lib/menu";
 import { pushService } from "../lib/mobile-bridge/push";
@@ -45,6 +47,7 @@ import { getWorkspaceRuntimeRegistry } from "../lib/workspace-runtime";
 
 // Singleton IPC handler to prevent duplicate handlers on window reopen (macOS)
 let ipcHandler: ReturnType<typeof createIPCHandler> | null = null;
+let computerOverlay: ComputerUseOverlay | null = null;
 
 function getWorkspaceNameFromDb(workspaceId: string | undefined): string {
 	if (!workspaceId) return "Workspace";
@@ -240,6 +243,17 @@ export async function MainWindow() {
 			windows: [window],
 		});
 	}
+
+	if (!computerOverlay) {
+		computerOverlay = new ComputerUseOverlay((overlay) =>
+			ipcHandler?.attachWindow(overlay),
+		);
+	}
+	window.once("closed", () => {
+		void computerUseService.stop();
+		computerOverlay?.dispose();
+		computerOverlay = null;
+	});
 
 	const server = notificationsApp.listen(
 		env.DESKTOP_NOTIFICATIONS_PORT,

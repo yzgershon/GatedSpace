@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws://localhost:*; object-src 'none'; base-uri 'none'" />
+		<title>GatedSpace computer control</title>
+	</head>
+	<body>
+		<div id="control-border" aria-hidden="true"></div>
+		<main id="control-toolbar" aria-label="GatedSpace computer control">
+			<div class="control-mark" aria-hidden="true"><svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+			<div class="control-copy">
+				<div class="control-brand">CODEX <span>·</span> GATEDSPACE</div>
+				<div id="control-status" role="status">Connecting to Windows…</div>
+			</div>
+			<kbd title="Emergency stop">Ctrl Alt Shift Esc</kbd>
+			<button id="control-stop" type="button" aria-label="Stop computer control"><span aria-hidden="true"></span> Stop</button>
+		</main>
+		<script type="module" src="/computer-overlay.ts"></script>
+	</body>
+</html>

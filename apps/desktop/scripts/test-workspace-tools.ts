@@ -55,7 +55,7 @@ await build({
 			enforce: "pre",
 			load(id) {
 				if (/[/\\]renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
-					return `const noop = { mutate: async () => {}, query: async () => false, subscribe: () => ({ unsubscribe() {} }) }; export const electronTrpcClient = { settings:{getTerminalCopyOnSelect:noop}, keyboardLayout:{changes:noop}, browser:{register:noop,unregister:noop}, browserHistory:{upsert:noop}, external:{openInApp:{mutate:async value=>{window.folderOpened=value}}} };`;
+					return `const noop = { mutate: async () => {}, query: async () => false, subscribe: () => ({ unsubscribe() {} }) }; export const electronTrpcClient = { uiState:{theme:{get:noop,set:noop}}, settings:{getTerminalCopyOnSelect:noop}, keyboardLayout:{changes:noop}, browser:{register:{mutate: v=>window.previewTest?.register(v)},setPreview:{mutate:v=>window.previewTest?.apply(v)},unregister:noop,onNewWindow:noop,onContextMenuAction:noop,onClosePane:noop,onReloadPane:noop}, browserHistory:{upsert:noop}, external:{openInApp:{mutate:async value=>{window.folderOpened=value}}} };`;
 				if (/[/\\]ClaudeAccountSwap[/\\]index\.ts$/.test(id))
 					return 'export const useClaudeAccounts = () => ({accounts:[{label:"Yish",configDir:"account-a"},{label:"Robbie",configDir:"account-b"}]});';
 				if (/[/\\]ClaudeSessionPane[/\\]sessionStore\.ts$/.test(id))
@@ -67,6 +67,54 @@ await build({
 await writeFile(
 	resolve(output, "main.cjs"),
 	await readFile(resolve(directory, previewCheck ? "preview.cjs" : "main.cjs")),
+);
+const browserSource = resolve(import.meta.dir, "../src/main/lib/browser");
+const nativeEntry = resolve(output, "native-entry.ts");
+await writeFile(
+	nativeEntry,
+	`export { applyBrowserPreview } from ${JSON.stringify(resolve(browserSource, "browser-preview.ts"))};
+export { installAgentBrowserAdapter } from ${JSON.stringify(resolve(browserSource, "agent-browser-adapter.ts"))};
+export { agentBrowserService } from ${JSON.stringify(resolve(browserSource, "agent-browser-service.ts"))};`,
+);
+const native = await Bun.build({
+	entrypoints: [nativeEntry],
+	target: "node",
+	format: "cjs",
+	external: ["electron"],
+	tsconfig: resolve(import.meta.dir, "../tsconfig.json"),
+	plugins: [
+		{
+			name: "isolated-browser-registry",
+			setup(builder) {
+				builder.onLoad({ filter: /[/\\]browser-manager\.ts$/ }, () => ({
+					contents:
+						"export const browserManager = { getWebContents: id => globalThis.testBrowserWebContents(id), getConsoleLogs: () => [] };",
+					loader: "js",
+				}));
+				builder.onLoad({ filter: /[/\\]agent-browser-service\.ts$/ }, () => ({
+					contents: "export const agentBrowserService = { adapter: null };",
+					loader: "js",
+				}));
+			},
+		},
+	],
+});
+if (!native.success) throw new Error(native.logs.join("\n"));
+await writeFile(
+	resolve(output, "browser-preview.cjs"),
+	await native.outputs[0].text(),
+);
+await writeFile(
+	resolve(output, "preload.cjs"),
+	`const {contextBridge,ipcRenderer}=require('electron');contextBridge.exposeInMainWorld('previewTest',{register:v=>ipcRenderer.invoke('fixture:register',v),apply:v=>ipcRenderer.invoke('fixture:preview',v)});`,
+);
+await writeFile(
+	resolve(output, "page.html"),
+	await readFile(resolve(directory, "preview-page.html")),
+);
+await writeFile(
+	resolve(output, "preview-checks.cjs"),
+	await readFile(resolve(directory, "preview-checks.cjs")),
 );
 // The app loads its Tailwind base before lazy route CSS. This single-bundle
 // fixture must declare the same layer order before dependency styles.

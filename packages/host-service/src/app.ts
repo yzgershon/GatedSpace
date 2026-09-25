@@ -108,10 +108,10 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 	const execGh: ExecGh = options.execGh ?? defaultExecGh;
 
 	const filesystem = new WorkspaceFilesystemManager({ db });
-	// GitWatcher is the single source of truth for `.git/` and worktree fs
-	// activity per workspace. Both EventBus (broadcasts to clients) and the
-	// pull-requests runtime (event-driven branch sync) subscribe to it.
-	const gitWatcher = new GitWatcher(db, filesystem);
+	// GitWatcher is the single source of truth for `.git/` activity per
+	// workspace. Both EventBus (broadcasts to clients) and the pull-requests
+	// runtime (event-driven branch sync) subscribe to it.
+	const gitWatcher = new GitWatcher(db);
 	gitWatcher.start();
 	const pullRequestRuntime = new PullRequestRuntimeManager({
 		db,

@@ -14,6 +14,7 @@ import {
 } from "renderer/components/ClaudeAccountSwap";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
+import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
 	matchSwapCandidate,
@@ -21,6 +22,7 @@ import {
 } from "shared/claude-account/swap-command";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionStatus } from "shared/claude-session/timeline";
+import type { SessionChangeSummary } from "shared/session-changes";
 import { prepareImage } from "./composer-images";
 import { SlashPalette } from "./SlashPalette";
 import {
@@ -90,6 +92,7 @@ export interface FileMention {
 }
 
 interface SessionComposerProps {
+	changes?: SessionChangeSummary | null;
 	model?: string;
 	fast?: boolean;
 	onFastChange?: (fast: boolean) => Promise<void>;
@@ -170,6 +173,7 @@ const MODEL_CHOICES: { id: string; label: string; description: string }[] = [
 ];
 
 export function SessionComposer({
+	changes,
 	model = "Claude",
 	fast = false,
 	onFastChange,
@@ -386,6 +390,7 @@ export function SessionComposer({
 
 	return (
 		<div className="session-composer-area">
+			<SessionChangesPill changes={changes} provider="claude" />
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target is
 			    a region, not a control; the same files go in via the + button,
 			    which is the keyboard-reachable path. */}

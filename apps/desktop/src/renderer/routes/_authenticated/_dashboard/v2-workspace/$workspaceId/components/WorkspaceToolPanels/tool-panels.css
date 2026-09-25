@@ -17,6 +17,22 @@
 	transition: none;
 	user-select: none;
 }
+.gs-tool-workspace[data-expanded="right"] {
+	grid-template-columns: 0 minmax(0, 1fr);
+	grid-template-rows: minmax(0, 1fr) 0;
+}
+.gs-tool-workspace[data-expanded="bottom"] {
+	grid-template-columns: minmax(0, 1fr) 0;
+	grid-template-rows: 0 minmax(0, 1fr);
+}
+.gs-tool-workspace[data-expanded] > [inert] {
+	visibility: hidden;
+	padding: 0;
+}
+.gs-tool-workspace[data-expanded="right"] > .gs-tool-slot-right,
+.gs-tool-workspace[data-expanded="bottom"] > .gs-tool-slot-bottom {
+	padding: 18px;
+}
 .gs-tool-main {
 	grid-area: main;
 	display: flex;
