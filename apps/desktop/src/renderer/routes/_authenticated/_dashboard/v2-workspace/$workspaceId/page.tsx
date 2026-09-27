@@ -23,7 +23,6 @@ import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications
 import type { CodexTurnReview as TaskReview } from "shared/codex-session/review";
 import { useStore } from "zustand";
 import { useWorkspace } from "../providers/WorkspaceProvider";
-import { BackgroundTerminalsButton } from "./components/BackgroundTerminalsButton";
 import { TabPaneList } from "./components/TabPaneList";
 import { TabRail } from "./components/TabRail";
 import { V2NotificationStatusIndicator } from "./components/V2NotificationStatusIndicator";
@@ -576,10 +575,6 @@ function V2WorkspaceContent() {
 	const { onSidebarResizeDragging, onWorkspaceInteractionStateChange } =
 		useBrowserShellInteractionPassthrough({ sidebarOpen });
 
-	// TopBar slot for the background-shells chip. It renders here via portal so
-	// it keeps this page's context (pane store, workspace providers) while
-	// appearing up in the TopBar beside the open-in button.
-	const shellsSlotEl = useSlotElement("workspace-topbar-shells-slot");
 	// TopBar slot for the group switcher, which IS the whole tab strip when
 	// `tabStrip` is "switcher". Portaled for the same reason as the rest: it
 	// needs this page's pane store.
@@ -855,14 +850,6 @@ function V2WorkspaceContent() {
 							/>
 						</div>,
 						tabsSlotEl,
-					)}
-				{shellsSlotEl &&
-					createPortal(
-						<BackgroundTerminalsButton
-							store={store}
-							workspaceId={workspaceId}
-						/>,
-						shellsSlotEl,
 					)}
 				{/*
 				 * The run button needs the top bar whenever the presets row is not

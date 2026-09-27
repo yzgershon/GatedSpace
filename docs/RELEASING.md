@@ -114,6 +114,32 @@ those — CI produces them from the `ship` snapshot.
 ---
 
 ## Before you commit anything for a release
+
+### Persistent background build status
+
+Launch detached installer workers through `bun scripts/release/report-build.ts run
+--file <job.json> -- powershell.exe -NoProfile -File <worker.ps1>` (hidden window on
+Windows). The wrapper maintains a heartbeat and reports a failed worker even if
+its own error handler is skipped. The TopBar build chip watches these records in
+`~/.superset/build-status`; ready/error notifications survive app restarts until
+dismissed. No repository or network polling is used. Heartbeats older than two
+minutes show Needs attention, never an indefinite Building state.
+
+The job JSON contains `id` (unique safe filename, including attempt if retried),
+`version`, `channel` (`personal` or `public`), `architectures` (`arm64`/`x64`),
+`sourceCommit`, `stage` (`building`, `verifying`, `ready`, `failed`), `message`,
+`updatedAt` (UTC ISO timestamp), `verified` and `published`. An optional `url` may
+point to a GatedSpace GitHub workflow or versioned release. Keep secrets and raw
+logs out of these records; use short user-facing messages.
+
+At each phase, the worker updates its job JSON and runs
+`bun scripts/release/report-build.ts report --file <job.json>`. Write `ready` only
+after installer/package/checksum/update-discovery verification. Public jobs also
+require successful publication and public-download checks (`published: true`).
+The wrapper treats exit zero without a verified ready record as an error. Build
+from the committed snapshot, keep logs and receipts, and record those paths in
+HANDOFF.md. Reporting does not install or publish anything by itself.
+
 - `bun run lint` must exit 0 (run a repo-wide `biome check` after formatting). The
   lint script treats warnings as errors.
 - Typecheck the affected packages, e.g. `bun x turbo typecheck --filter=@superset/desktop`.
@@ -122,6 +148,21 @@ those — CI produces them from the `ship` snapshot.
   recent commits — another session may have work in flight. If you find uncommitted
   work that isn't yours, preserve it on a branch (`git checkout -b wip-<thing>`,
   commit the explicit files, `git checkout windows-port`) rather than discarding it.
+
+### Local packaging and Windows file locks
+
+Keep the reusable installer checkout outside workspaces open in GatedSpace, for
+example `%LOCALAPPDATA%/GatedSpaceBuild/installer`. Continue using its standard
+`apps/desktop/release` directory; do not override the output directory. Verify the
+installer there before copying the installer and update metadata to the personal
+update folder.
+
+If packaging cannot replace `win-arm64-unpacked/resources/app.asar`, inspect the
+lock holder before retrying. The running installed host service can hold a build
+archive open. Do not terminate that service during an active session. Recover in
+an isolated checkout at the same source commit and record the failed attempt,
+retry, and any deferred cleanup in `HANDOFF.md`. Preserve the dependency checkout
+while another build uses junctions to it.
 
 ## Where to ship FROM
 Ship from the primary checkout at `C:\Dev\superset` on `windows-port`. GatedSpace

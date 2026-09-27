@@ -1,0 +1,82 @@
+.workspace-topbar {
+	display: grid;
+	grid-template-columns: minmax(max-content, 1fr) auto minmax(0, 1fr);
+	/* Keep the row within the padded header height. An auto row takes the
+	   46px controls' minimum height and shifts their center below the band. */
+	grid-template-rows: minmax(0, 1fr);
+	align-items: center;
+	column-gap: 12px;
+	container: workspace-topbar / inline-size;
+}
+.workspace-topbar:has(#workspace-topbar-presets-slot:empty) {
+	grid-template-columns: minmax(0, 1fr) auto;
+}
+.topbar-left {
+	display: flex;
+	align-items: center;
+	height: 100%;
+	min-width: 0;
+}
+.topbar-build-slot {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	min-width: 120px;
+	padding-inline: 8px;
+	container: topbar-build / inline-size;
+}
+.topbar-presets {
+	display: flex;
+	align-items: center;
+	width: max-content;
+	max-width: 42vw;
+	min-width: 0;
+}
+.topbar-presets > * {
+	max-width: 100%;
+}
+.topbar-actions {
+	justify-content: flex-end;
+	min-width: 0;
+}
+.topbar-actions > :not(#workspace-topbar-tabs-slot) {
+	flex-shrink: 0;
+}
+#workspace-topbar-tabs-slot {
+	max-width: 30vw;
+	flex-shrink: 1;
+}
+/* Reserve room for the brand, build status and window controls when zoomed
+   or resized. The existing preset strip remains horizontally scrollable. */
+@container workspace-topbar (max-width: 1300px) {
+	.topbar-presets {
+		max-width: 220px;
+	}
+	.topbar-presets [data-preset-index] button {
+		padding-inline: 8px;
+	}
+	.topbar-presets [data-preset-index] button > span {
+		display: none;
+	}
+}
+@container workspace-topbar (max-width: 1000px) {
+	.topbar-build-slot {
+		min-width: 52px;
+	}
+}
+@container topbar-build (max-width: 175px) {
+	.build-status-label {
+		display: none;
+	}
+	.build-status-compact-label {
+		display: inline;
+	}
+}
+@container topbar-build (max-width: 120px) {
+	.build-status-compact-label,
+	.build-status-count,
+	.build-status-chip > svg:last-child {
+		display: none;
+	}
+}

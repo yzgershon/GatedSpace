@@ -1,0 +1,188 @@
+.build-status-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	height: 30px;
+	padding: 0 10px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	background: color-mix(in srgb, var(--foreground) 4%, transparent);
+	color: var(--muted-foreground);
+	font-size: 12px;
+	font-weight: 500;
+	white-space: nowrap;
+	cursor: pointer;
+	transition:
+		background 140ms ease,
+		border-color 140ms ease;
+}
+.build-status-chip:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.build-status-chip:focus-visible,
+.build-status-popover button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 3px;
+}
+.build-status-chip[data-stage="ready"] > svg:first-child {
+	color: var(--primary);
+}
+.build-status-chip[data-stage="failed"] > svg:first-child,
+.build-status-job[data-stage="failed"] .build-status-phase {
+	color: var(--destructive);
+}
+.build-status-count {
+	font-size: 10px;
+	background: var(--accent);
+	color: var(--foreground);
+	padding: 0 4px;
+	border-radius: 4px;
+}
+.build-status-working {
+	animation: build-status-breathe 1.8s ease-in-out infinite;
+}
+.build-status-compact-label {
+	display: none;
+}
+.build-status-popover {
+	width: min(370px, calc(100vw - 24px));
+	padding: 0;
+	overflow: hidden;
+	border-radius: 14px;
+	background: var(--popover);
+}
+.build-status-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 16px 18px;
+	border-bottom: 1px solid var(--border);
+	font-size: 13px;
+	font-weight: 600;
+}
+.build-status-heading > :last-child {
+	color: var(--muted-foreground);
+	font-weight: 400;
+	font-size: 11px;
+}
+.build-status-jobs {
+	max-height: min(
+		480px,
+		var(--radix-popover-content-available-height, 480px) -
+		60px
+	);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.build-status-job {
+	padding: 16px 18px;
+}
+.build-status-job + .build-status-job {
+	border-top: 1px solid var(--border);
+}
+.build-status-job-title {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	font-size: 14px;
+}
+.build-status-job-title strong {
+	font-weight: 600;
+}
+.build-status-channel {
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 1px 5px;
+	font-size: 10px;
+	color: var(--muted-foreground);
+}
+.build-status-dismiss {
+	display: grid;
+	place-items: center;
+	margin-left: auto;
+	width: 26px;
+	height: 26px;
+	border-radius: 6px;
+	cursor: pointer;
+	color: var(--muted-foreground);
+}
+.build-status-dismiss:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.build-status-phase {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 12px;
+	margin-top: 10px;
+}
+.build-status-architectures {
+	margin-left: auto;
+	color: var(--muted-foreground);
+	font-size: 11px;
+}
+.build-status-job p {
+	font-size: 12px;
+	line-height: 1.6;
+	margin: 8px 0 14px;
+	color: var(--muted-foreground);
+	overflow-wrap: anywhere;
+}
+.build-status-job footer {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+	font-size: 10px;
+	color: var(--muted-foreground);
+}
+.build-status-job footer button {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	font-size: 11px;
+	cursor: pointer;
+	color: var(--foreground);
+}
+.build-status-job footer button:hover {
+	text-decoration: underline;
+}
+.build-status-hint {
+	font-size: 11px;
+	color: var(--muted-foreground);
+	margin-top: 12px;
+}
+.build-status-error {
+	padding: 16px;
+	font-size: 12px;
+	line-height: 1.6;
+	overflow-wrap: anywhere;
+}
+@keyframes build-status-breathe {
+	0%,
+	100% {
+		opacity: 0.5;
+	}
+	50% {
+		opacity: 1;
+	}
+}
+@media (max-width: 1400px) {
+	.build-status-label {
+		display: none;
+	}
+	.build-status-compact-label {
+		display: inline;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.build-status-working,
+	.build-status-popover {
+		animation: none;
+	}
+	.build-status-chip {
+		transition: none;
+	}
+}

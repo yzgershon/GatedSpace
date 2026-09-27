@@ -99,6 +99,7 @@ The user wants coding to continue while installers build. For future installer w
 - Continue independent coding while it builds. Later changes belong to the next build.
 - Record the version, source commit, build job/process, log/status paths, and remaining verification in the untracked `HANDOFF.md`. After a restart or compaction, inspect that status before starting another build.
 - Notify the user when the installers are finished and verified, or when a build fails. Set up a supported completion notification when launching a detached job; do not claim a queued build is ready.
+- Use `scripts/release/report-build.ts run` for detached installer workers and report their phases as documented in `docs/RELEASING.md`. This feeds the persistent top-bar build indicator; a Windows balloon notification alone is insufficient. Report Ready only after verification (and publication/download checks for public builds).
 - Keep the user's current personal/public scope. Background building does not authorize a public release or interrupting the running app to install an update.
 
 ## Design skill preference

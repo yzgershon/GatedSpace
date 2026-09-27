@@ -155,6 +155,7 @@ export function V2PresetBarItem({
 							<Button
 								variant="ghost"
 								size="sm"
+								aria-label={label}
 								/*
 								 * 40px inside the surface's 3px padding = the 46px row every
 								 * other surface in the bar is on. One label size (15px) and

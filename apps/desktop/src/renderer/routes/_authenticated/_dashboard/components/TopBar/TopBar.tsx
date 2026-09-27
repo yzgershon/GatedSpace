@@ -13,6 +13,7 @@ import { useWorkspaceSidebarStore } from "renderer/stores/workspace-sidebar-stat
 import { NavigationControls } from "../NavigationControls";
 import { SidebarToggle } from "../SidebarToggle";
 import { AppBrandMark } from "./components/AppBrandMark";
+import { BuildStatus } from "./components/BuildStatus/BuildStatus";
 import { OpenInMenuButton } from "./components/OpenInMenuButton";
 import { OrganizationDropdown } from "./components/OrganizationDropdown";
 import { ResourceConsumption } from "./components/ResourceConsumption";
@@ -20,6 +21,7 @@ import { UpdateButton } from "./components/UpdateButton";
 import { V2WorkspaceOpenInButton } from "./components/V2WorkspaceOpenInButton";
 import { V2WorkspaceTitle } from "./components/V2WorkspaceTitle";
 import { WindowControls } from "./components/WindowControls";
+import "./top-bar.css";
 
 export function TopBar() {
 	const matchRoute = useMatchRoute();
@@ -70,7 +72,7 @@ export function TopBar() {
 	return (
 		<div
 			className={cn(
-				"drag gap-2 h-12 w-full flex items-center justify-between relative",
+				"workspace-topbar drag h-12 w-full relative",
 				/*
 				 * The bar's contents centre in the WHOLE band above the cards, not
 				 * in the bar's own 48px box.
@@ -108,108 +110,68 @@ export function TopBar() {
 			)}
 			style={barStyle}
 		>
-			<div
-				className="flex items-center h-full shrink-0"
-				style={{ paddingLeft: trafficLightInset }}
-			>
-				{!sidebarHostsChrome &&
-					(chromeInTopBar ? (
-						/*
-						 * Name, build, collapse, search — and nothing else.
-						 *
-						 * Back/forward/history are gone on purpose. This is a window
-						 * full of panes, not a browser: there is no history stack worth
-						 * stepping through, and the three controls were the widest thing
-						 * in the corner while being the least used.
-						 */
-						<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
-							<AppBrandMark />
-							<SidebarToggle />
-							{isV2WorkspaceRoute && v2WorkspaceId && (
-								<button
-									type="button"
-									aria-label="Search files"
-									title="Search files"
-									// size-10 and an 18px glyph, matching the sidebar toggle
-									// beside it and the two surfaces across the bar. It was
-									// size-9 with a 20px glyph — the only control up here that
-									// was both smaller and heavier than its neighbours.
-									className="no-drag flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-									onClick={() =>
-										openQuickOpenFor({ workspaceId: v2WorkspaceId })
-									}
-								>
-									<LuSearch className="size-5" strokeWidth={1.5} />
-								</button>
-							)}
-						</ZoomStable>
-					) : (
-						<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
-							<SidebarToggle />
-							<NavigationControls />
-							{!isV2CloudEnabled && <ResourceConsumption surface="v1" />}
-						</ZoomStable>
-					))}
-			</div>
-
-			{/*
-			 * Centre slot for the agent presets under the Liquid Glass layout.
-			 * They portal in from the workspace page so they keep that page's
-			 * context (pane store, launcher, workspace providers) while appearing
-			 * up here — the same trick the run button already uses.
-			 *
-			 * `empty:hidden` so the flex gap does not double while nothing is
-			 * portaled in, which is every non-workspace route.
-			 */}
-			{/*
-			 * The background-shells chip, on the LEFT.
-			 *
-			 * It used to sit beside the open-in button, where it appeared and
-			 * disappeared as builds started and finished — and every time it did, it
-			 * changed the width of the right-hand cluster and shifted the tab rail
-			 * sideways under the cursor. A readout that moves the controls next to
-			 * it is worse than one that is slightly further from them.
-			 */}
-			{isV2WorkspaceRoute && (
+			<div className="topbar-left">
 				<div
-					id="workspace-topbar-shells-slot"
-					className="no-drag flex shrink-0 items-center empty:hidden"
-				/>
-			)}
+					className="topbar-brand flex items-center h-full shrink-0"
+					style={{ paddingLeft: trafficLightInset }}
+				>
+					{!sidebarHostsChrome &&
+						(chromeInTopBar ? (
+							/*
+							 * Name, build, collapse, search — and nothing else.
+							 *
+							 * Back/forward/history are gone on purpose. This is a window
+							 * full of panes, not a browser: there is no history stack worth
+							 * stepping through, and the three controls were the widest thing
+							 * in the corner while being the least used.
+							 */
+							<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
+								<AppBrandMark />
+								<SidebarToggle />
+								{isV2WorkspaceRoute && v2WorkspaceId && (
+									<button
+										type="button"
+										aria-label="Search files"
+										title="Search files"
+										// size-10 and an 18px glyph, matching the sidebar toggle
+										// beside it and the two surfaces across the bar. It was
+										// size-9 with a 20px glyph — the only control up here that
+										// was both smaller and heavier than its neighbours.
+										className="no-drag flex size-10 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+										onClick={() =>
+											openQuickOpenFor({ workspaceId: v2WorkspaceId })
+										}
+									>
+										<LuSearch className="size-5" strokeWidth={1.5} />
+									</button>
+								)}
+							</ZoomStable>
+						) : (
+							<ZoomStable enabled={isMac} className="flex items-center gap-1.5">
+								<SidebarToggle />
+								<NavigationControls />
+								{!isV2CloudEnabled && <ResourceConsumption surface="v1" />}
+							</ZoomStable>
+						))}
+				</div>
+
+				{isV2WorkspaceRoute && v2WorkspaceId && !chromeInTopBar && (
+					<div className="min-w-0 overflow-hidden">
+						<V2WorkspaceTitle workspaceId={v2WorkspaceId} />
+					</div>
+				)}
+				<div className="topbar-build-slot">
+					<BuildStatus />
+				</div>
+			</div>
+			{/* In-flow columns reserve space for all three groups. The build chip
+			    centers in the gap between the brand controls and the launcher. */}
 			<div
-				/*
-				 * `inset-0` plus the same padding, rather than leaning on the static
-				 * position of an absolutely-positioned flex child. That static
-				 * position DOES follow `align-items` per spec, but it is the kind of
-				 * rule that is easy to break by accident and impossible to see
-				 * breaking — spelling the box out costs nothing and cannot drift
-				 * from the row it is supposed to line up with.
-				 */
-				className="no-drag pointer-events-auto absolute inset-0 mx-auto flex w-fit items-center justify-center pt-[calc(var(--gs-pane-inset,0px)*2)] empty:hidden"
+				className="no-drag topbar-presets empty:hidden"
 				id="workspace-topbar-presets-slot"
 			/>
-			<div className="flex min-w-0 flex-1 items-center justify-start gap-2 pl-2">
-				{isV2WorkspaceRoute && v2WorkspaceId ? (
-					chromeInTopBar ? /*
-					 * Nothing here any more.
-					 *
-					 * This slot held the breadcrumb, then the group switcher pill.
-					 * The breadcrumb named the workspace you had just clicked in the
-					 * sidebar next to a branch you had just chosen — two facts you
-					 * already knew. The pill named the group you were already in and
-					 * hid every other one behind a click.
-					 *
-					 * The tab rail answers both, and it lives on the far side of the
-					 * presets where there is room for it to expand. Left of centre it
-					 * would have grown rightward into the launcher.
-					 */
-					null : (
-						<V2WorkspaceTitle workspaceId={v2WorkspaceId} />
-					)
-				) : null}
-			</div>
 
-			<div className="flex items-center gap-3 h-full pr-4 shrink-0">
+			<div className="topbar-actions flex items-center gap-3 h-full pr-4">
 				{!isOnline && (
 					<div className="no-drag flex items-center gap-1.5 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
 						<HiOutlineWifi className="size-3.5" />
@@ -217,58 +179,11 @@ export function TopBar() {
 					</div>
 				)}
 				<UpdateButton />
-				{/*
-				 * Portal target for the background-shells chip (see v2-workspace
-				 * page). It sits immediately before the open-in button because
-				 * "something is running in this workspace" and "open this workspace
-				 * in a file explorer" are the same kind of fact: about the
-				 * workspace, not about whichever tab happens to be in front.
-				 *
-				 * empty:hidden keeps the flex gap from doubling while nothing is
-				 * portaled in, which is every non-workspace route and every
-				 * workspace with nothing running.
-				 */}
-				{/*
-				 * Portal target for the tab rail.
-				 *
-				 * Anchored RIGHT so expanding a tab grows leftward into the empty
-				 * middle instead of shoving the window controls sideways.
-				 *
-				 * The max-width is what stops it reaching the presets. That launcher
-				 * is `absolute inset-x-0 mx-auto w-fit` on purpose — centred against
-				 * the whole bar so it cannot be shifted by either side — and an
-				 * absolutely positioned element does not participate in flow, so
-				 * nothing here can push it out of the way. With enough groups the
-				 * rail simply slid underneath it. Capping the rail and letting it
-				 * scroll keeps the launcher centred AND stops the collision; the
-				 * scrollbar is hidden because a visible one in a 28px rail is worse
-				 * than the overflow it reports.
-				 *
-				 * NO `justify-end` here, and that is a bug fix rather than a taste
-				 * call. In a scroll container, content that overflows a
-				 * `justify-end` flex row is pushed off the START edge, and the
-				 * scroll range does not extend to reach it — the first tabs become
-				 * permanently unreachable rather than merely off-screen. The slot
-				 * already sits on the right because the cluster around it does; it
-				 * does not need to align its own contents there too.
-				 *
-				 * `vw`, NOT `%`. A percentage max-width resolves against the
-				 * CONTAINING BLOCK, which here is the small right-hand cluster, not
-				 * the window — so `34%` came out around 100px and sliced a single
-				 * tab in half. The intent was always "about a third of the window",
-				 * and only a viewport unit says that.
-				 *
-				 * It is an inline style rather than a Tailwind arbitrary value
-				 * because this cap is the only thing standing between the rail and
-				 * the centred launcher, and this repo has shipped three builds where
-				 * a class Tailwind never emitted left the markup correct and the rule
-				 * absent. A style attribute cannot be scanned away.
-				 */}
+				{/* Tabs shrink and scroll inside the reserved right column. */}
 				{isV2WorkspaceRoute && (
 					<div
 						id="workspace-topbar-tabs-slot"
 						className="no-drag flex min-w-0 items-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] empty:hidden [&::-webkit-scrollbar]:hidden"
-						style={{ maxWidth: "30vw" }}
 					/>
 				)}
 				{/*
