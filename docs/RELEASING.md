@@ -68,6 +68,11 @@ Flags: `--dry-run` (plan only, touches nothing), `--no-publish` (leave a draft),
 - `ship` watches the **Release Desktop App** workflow, NOT **CI**. The CI/lint
   workflow may be red from pre-existing, unrelated files — that does **not** block
   the release and is not yours to fix mid-ship.
+- Keep the root `node-gyp` override at a Visual Studio 2026-compatible version.
+  GitHub's `windows-11-arm` runner now supplies VS 2026; the `node-gyp` 11.x
+  dependency selected by `@electron/rebuild` 4.0.3 cannot detect it. The pinned
+  override is consumed on a fresh install; an existing Bun store can retain an
+  older nested link, so validate dependency changes from a clean install.
 - If a ship fails partway (transient push error, etc.) it is safe to **re-run the
   same `bun run ship <version>`** — it skips work already done and finishes. For a
   clean slate instead, `git reset --soft HEAD~1` the bump commit before retrying.

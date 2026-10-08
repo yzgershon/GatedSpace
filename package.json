@@ -66,6 +66,7 @@
 		"axios": "1.14.0",
 		"hono": "4.12.25",
 		"kysely": "0.28.17",
+		"node-gyp": "13.1.0",
 		"shell-quote": "1.8.4"
 	},
 	"trustedDependencies": [
