@@ -8,6 +8,7 @@ import {
 	normalizeCodexLimits,
 	normalizeCodexSkills,
 } from "../../../shared/codex-session/controls";
+import { questionChoices } from "../../../shared/codex-session/question-choices";
 import {
 	type CodexItem,
 	type CodexModel,
@@ -25,6 +26,9 @@ import {
 } from "../browser/agent-browser-service";
 import { computerUseService } from "../computer-use/service";
 import { computerUseInstructions } from "../computer-use/tools";
+import { sessionEvents } from "../notifications/session-events";
+import { sessionNames, sessionNamingInstructions } from "../session-names";
+import type { SessionNameStore } from "../session-names/store";
 import { resolveCodexProject } from "./projects";
 import type { AsyncQuestionInput } from "./questions";
 import { CodexRpcError, CodexTransport } from "./transport";
@@ -49,8 +53,42 @@ export class CodexSessionManager extends EventEmitter {
 	>();
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
 	private answering = new Set<string>();
-	constructor(readonly transport = new CodexTransport()) {
+	private recoveredQuestions = new Set<string>();
+	private mirroredNames = new Map<string, string>();
+	private readonly refreshNames = () => {
+		for (const [key, value] of Object.entries(this.names.read().names)) {
+			if (!key.startsWith("codex:") || key.startsWith("codex:pending:"))
+				continue;
+			if (this.mirroredNames.get(key) === value.title) continue;
+			this.mirroredNames.set(key, value.title);
+			void this.transport
+				.request("thread/name/set", {
+					threadId: key.slice(6),
+					name: value.title,
+				})
+				.catch(() => {});
+		}
+		for (const state of this.sessions.values()) {
+			const title = this.names.get({
+				provider: "codex",
+				id: state.threadId ?? undefined,
+				key: state.key,
+			});
+			if (title && title !== state.title) this.publish(state);
+		}
+	};
+	constructor(
+		readonly transport = new CodexTransport(),
+		private readonly names: SessionNameStore = sessionNames,
+	) {
 		super();
+		this.mirroredNames = new Map(
+			Object.entries(names.read().names).map(([key, value]) => [
+				key,
+				value.title,
+			]),
+		);
+		names.on("change", this.refreshNames);
 		transport.askUser = (input) => this.queueQuestion(input);
 		transport.on("notification", (message) =>
 			this.notification(record(message)),
@@ -81,6 +119,23 @@ export class CodexSessionManager extends EventEmitter {
 		return [...this.sessions.values()];
 	}
 	private publish(state: CodexSessionState) {
+		state.title =
+			this.names.get({
+				provider: "codex",
+				id: state.threadId ?? undefined,
+				key: state.key,
+			}) ?? state.title;
+		if (state.threadId)
+			sessionEvents.bind(state.key, state.threadId, state.title);
+		if (state.approvals.length) sessionEvents.status(state.key, "attention");
+		else if (state.status === "working")
+			sessionEvents.status(state.key, "working");
+		else if (state.error) sessionEvents.status(state.key, "error");
+		else if (
+			state.status === "idle" &&
+			sessionEvents.get(state.key)?.status !== "completed"
+		)
+			sessionEvents.status(state.key, "idle");
 		if (this.timers.has(state.key)) return;
 		this.timers.set(
 			state.key,
@@ -155,6 +210,7 @@ export class CodexSessionManager extends EventEmitter {
 		return rows.map((t) => ({
 			sessionId: text(t.id),
 			title:
+				this.names.get({ provider: "codex", id: text(t.id) }) ||
 				text(t.name) ||
 				text(t.preview).split("\n")[0]?.slice(0, 120) ||
 				"Codex session",
@@ -168,7 +224,9 @@ export class CodexSessionManager extends EventEmitter {
 		}));
 	}
 	async rename(threadId: string, name: string) {
-		await this.transport.request("thread/name/set", { threadId, name });
+		this.names.rename({ provider: "codex", id: threadId }, name);
+		for (const state of this.sessions.values())
+			if (state.threadId === threadId) this.publish(state);
 	}
 	async readSummary(threadId: string) {
 		const thread = record(
@@ -184,6 +242,7 @@ export class CodexSessionManager extends EventEmitter {
 		return {
 			sessionId: threadId,
 			title:
+				this.names.get({ provider: "codex", id: threadId }) ||
 				text(thread.name) ||
 				text(thread.preview).split("\n")[0]?.slice(0, 120) ||
 				"Codex session",
@@ -209,8 +268,13 @@ export class CodexSessionManager extends EventEmitter {
 		return started;
 	}
 	private async open(input: StartCodexSession): Promise<CodexSessionState> {
+		sessionEvents.open(input.key, "codex", input.workspaceId);
 		if (input.workspaceId)
-			agentBrowserService.register(`codex:${input.key}`, input.workspaceId);
+			agentBrowserService.register(
+				`codex:${input.key}`,
+				input.workspaceId,
+				input.cwd,
+			);
 		const previous = this.get(input.key);
 		const id = previous?.threadId || input.resumeSessionId;
 		const state: CodexSessionState = {
@@ -283,6 +347,7 @@ export class CodexSessionManager extends EventEmitter {
 						: "thread/start",
 					{
 						developerInstructions: [
+							sessionNamingInstructions(`codex:${input.key}`),
 							computerUseInstructions(input.key),
 							input.workspaceId
 								? browserInstructions(`codex:${input.key}`)
@@ -322,6 +387,13 @@ export class CodexSessionManager extends EventEmitter {
 							),
 						);
 			}
+			if (state.threadId) {
+				this.names.open(
+					{ provider: "codex", id: state.threadId },
+					!id || !!input.forkSession,
+				);
+				this.names.bind("codex", input.key, state.threadId);
+			}
 			state.title =
 				text(thread.name) ||
 				text(thread.preview).split("\n")[0]?.slice(0, 80) ||
@@ -330,6 +402,11 @@ export class CodexSessionManager extends EventEmitter {
 			state.effort = effort;
 			if (id) await this.history(state, false, list(thread.turns));
 			state.status = "idle";
+			// Only restore the last conversation message; never resurrect an older question.
+			const lastMessage = state.items
+				.filter((item) => item.kind !== "activity")
+				.at(-1);
+			if (lastMessage) this.recoverQuestion(state, lastMessage);
 			this.publish(state);
 			return state;
 		} catch (error) {
@@ -491,10 +568,12 @@ export class CodexSessionManager extends EventEmitter {
 			);
 		state.error = null;
 		state.status = "working";
+		sessionEvents.work(input.key, "starting");
 		state.workingSince = Date.now();
 		state.diff = "";
 		// The app-server can acknowledge a turn long before echoing its user item.
 		// Keep the submitted prompt in the main-process snapshot across tab switches.
+		this.clearRecoveredQuestions(state);
 		const optimistic: CodexItem = {
 			id: `local-user-${randomUUID()}`,
 			turnId: "",
@@ -547,14 +626,18 @@ export class CodexSessionManager extends EventEmitter {
 					settings: {
 						model: input.model || state.model,
 						reasoning_effort: input.effort || state.effort,
-						developer_instructions: null,
+						developer_instructions: `Use gatedspace_browser.request_user_input_async with session="codex:${input.key}" for questions and choices. A question written as chat text is not a question card. Continue independent work after asking; await the user reply for dependent decisions.`,
 					},
 				},
 			});
 			this.turnStarts.set(input.key, started);
 			const result = record(await started);
+			this.names.firstPrompt({ provider: "codex", key: input.key }, input.text);
 			const startedId = text(record(result.turn).id);
-			if (state.status === "working") state.turnId = startedId || state.turnId;
+			if (state.status === "working") {
+				state.turnId = startedId || state.turnId;
+				if (startedId) sessionEvents.bindTurn(state.key, startedId);
+			}
 			this.rememberTurn(state, result.turn, "inProgress");
 			optimistic.turnId ||= startedId || state.turnId || "";
 			for (const item of list(record(result.turn).items))
@@ -578,7 +661,42 @@ export class CodexSessionManager extends EventEmitter {
 			this.turnStarts.delete(input.key);
 		}
 	}
+	async steer(input: { key: string; text: string; images?: string[] }) {
+		await this.turnStarts.get(input.key);
+		const state = this.require(input.key);
+		if (state.status !== "working" || !state.turnId)
+			throw new Error(
+				"This turn has finished. Resume the queue to send a new turn.",
+			);
+		const turnId = state.turnId;
+		const optimistic: CodexItem = {
+			id: `local-user-${randomUUID()}`,
+			turnId,
+			kind: "user",
+			title: "User message",
+			text: input.text,
+			images: input.images,
+		};
+		// Insert before requesting so an early server echo replaces this item.
+		state.items.push(optimistic);
+		this.publish(state);
+		try {
+			await this.transport.request("turn/steer", {
+				threadId: state.threadId,
+				expectedTurnId: turnId,
+				input: [
+					{ type: "text", text: input.text, text_elements: [] },
+					...(input.images ?? []).map((url) => ({ type: "image", url })),
+				],
+			});
+		} catch (error) {
+			state.items = state.items.filter((item) => item.id !== optimistic.id);
+			this.publish(state);
+			throw error;
+		}
+	}
 	async interrupt(key: string) {
+		sessionEvents.status(key, "idle");
 		computerUseService.release(`codex:${key}`);
 		// Stop/close can arrive before turn/start has returned its turn ID.
 		await this.turnStarts.get(key)?.catch(() => {});
@@ -595,6 +713,7 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("Wait for Codex to finish before running this command.");
 		state.status = "working";
 		state.error = null;
+		sessionEvents.work(key, "starting");
 		state.workingSince = Date.now();
 		this.publish(state);
 		try {
@@ -614,6 +733,7 @@ export class CodexSessionManager extends EventEmitter {
 			const result = record(await started);
 			if (state.status === "working")
 				state.turnId = text(record(result.turn).id) || state.turnId;
+			if (state.turnId) sessionEvents.bindTurn(state.key, state.turnId);
 			this.rememberTurn(state, result.turn, "inProgress");
 			this.publish(state);
 		} catch (error) {
@@ -637,6 +757,7 @@ export class CodexSessionManager extends EventEmitter {
 		const turnId = text(p.turnId) || state.turnId || "";
 		if (method === "turn/started") {
 			state.turnId = text(record(p.turn).id);
+			sessionEvents.bindTurn(state.key, state.turnId || "starting");
 			state.status = "working";
 			state.workingSince ??= Date.now();
 			this.rememberTurn(state, p.turn, "inProgress");
@@ -649,6 +770,9 @@ export class CodexSessionManager extends EventEmitter {
 		}
 		if (method === "turn/completed") {
 			const turn = record(p.turn);
+			// A delayed completion for an older turn must not stop/notify a newer turn.
+			if (state.turnId && text(turn.id) && state.turnId !== text(turn.id))
+				return;
 			for (const item of list(turn.items))
 				this.upsert(state, item, text(turn.id) || turnId, "completed");
 			this.rememberTurn(
@@ -674,6 +798,12 @@ export class CodexSessionManager extends EventEmitter {
 				)
 					this.requests.delete(id);
 			}
+			sessionEvents.finish(
+				state.key,
+				text(turn.id) || turnId,
+				turn.status === "completed" && !turn.error,
+				state.approvals.length > 0,
+			);
 		}
 		if (method === "serverRequest/resolved") {
 			const token = `${typeof p.requestId}:${p.requestId}`;
@@ -835,6 +965,41 @@ export class CodexSessionManager extends EventEmitter {
 			item.images = previous.images;
 		if (index < 0) state.items.push(item);
 		else state.items[index] = item;
+		if (
+			lifecycle === "completed" &&
+			state.status === "working" &&
+			(!state.turnId || state.turnId === turnId)
+		)
+			this.recoverQuestion(state, item);
+	}
+	private recoverQuestion(state: CodexSessionState, item: CodexItem) {
+		if (item.kind !== "assistant") return;
+		const token = `reply:${state.key}:${item.id}`;
+		if (this.recoveredQuestions.has(token)) return;
+		const question = questionChoices(item.text);
+		if (!question || state.approvals.some((a) => a.questions.length > 0))
+			return;
+		this.recoveredQuestions.add(token);
+		this.requests.set(token, {
+			id: token,
+			key: state.key,
+			method: "gatedspace/requestUserInput",
+		});
+		state.approvals.push({
+			id: token,
+			method: "gatedspace/requestUserInput",
+			title: "Choose a reply",
+			detail: "",
+			turnId: item.turnId,
+			isBlocking: false,
+			sourceItemId: item.id,
+			questions: [{ id: "0", ...question }],
+		});
+	}
+	private clearRecoveredQuestions(state: CodexSessionState) {
+		for (const approval of state.approvals)
+			if (approval.sourceItemId) this.requests.delete(approval.id);
+		state.approvals = state.approvals.filter((a) => !a.sourceItemId);
 	}
 	private approval(message: Record<string, unknown>) {
 		const p = record(message.params);
@@ -858,6 +1023,7 @@ export class CodexSessionManager extends EventEmitter {
 		}
 		const token = `${typeof id}:${id}`;
 		if (this.requests.has(token)) return;
+		this.clearRecoveredQuestions(state);
 		this.requests.set(token, { id, key: state.key, method });
 		state.approvals.push({
 			id: token,
@@ -892,6 +1058,7 @@ export class CodexSessionManager extends EventEmitter {
 		const state = this.require(key);
 		if (state.status !== "working")
 			throw new Error("Questions must belong to an active Codex task.");
+		this.clearRecoveredQuestions(state);
 		const id = `question:${randomUUID()}`;
 		const method = "gatedspace/requestUserInput";
 		this.requests.set(id, { id, key, method });
@@ -951,6 +1118,7 @@ export class CodexSessionManager extends EventEmitter {
 				if (previousStatus !== "idle")
 					throw new Error("Reconnect the session before sending your answer.");
 				state.status = "working";
+				sessionEvents.work(state.key, "starting");
 				state.workingSince = Date.now();
 				this.publish(state);
 				try {
@@ -963,6 +1131,7 @@ export class CodexSessionManager extends EventEmitter {
 					const result = record(await started);
 					if (state.status === "working")
 						state.turnId = text(record(result.turn).id) || state.turnId;
+					if (state.turnId) sessionEvents.bindTurn(state.key, state.turnId);
 					this.rememberTurn(state, result.turn, "inProgress");
 				} catch (error) {
 					state.status = previousStatus;
@@ -990,6 +1159,12 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("This request is no longer pending.");
 		const state = this.require(key);
 		const approval = state.approvals.find((a) => a.id === id);
+		if (approval?.sourceItemId && !allow) {
+			this.requests.delete(id);
+			state.approvals = state.approvals.filter((a) => a.id !== id);
+			this.publish(state);
+			return;
+		}
 		if (
 			pending.method.endsWith("requestUserInput") &&
 			(!approval?.questions.length ||
@@ -1020,6 +1195,7 @@ export class CodexSessionManager extends EventEmitter {
 	async close(key: string) {
 		computerUseService.release(`codex:${key}`);
 		await this.starts.get(key)?.catch(() => {});
+		sessionEvents.close(key);
 		const state = this.get(key);
 		if (!state) return;
 		if (state.status === "working") await this.interrupt(key).catch(() => {});
@@ -1030,6 +1206,9 @@ export class CodexSessionManager extends EventEmitter {
 				this.requests.delete(id);
 			}
 		this.sessions.delete(key);
+		for (const token of this.recoveredQuestions)
+			if (token.startsWith(`reply:${key}:`))
+				this.recoveredQuestions.delete(token);
 		agentBrowserService.unregister(`codex:${key}`);
 		clearTimeout(this.timers.get(key));
 		this.timers.delete(key);
@@ -1039,11 +1218,15 @@ export class CodexSessionManager extends EventEmitter {
 				.catch(() => {});
 	}
 	dispose() {
+		this.names.off("change", this.refreshNames);
 		void computerUseService.stop();
-		for (const key of this.sessions.keys())
+		for (const key of this.sessions.keys()) {
+			sessionEvents.close(key);
 			agentBrowserService.unregister(`codex:${key}`);
+		}
 		for (const timer of this.timers.values()) clearTimeout(timer);
 		this.timers.clear();
+		this.recoveredQuestions.clear();
 		this.transport.dispose();
 	}
 }

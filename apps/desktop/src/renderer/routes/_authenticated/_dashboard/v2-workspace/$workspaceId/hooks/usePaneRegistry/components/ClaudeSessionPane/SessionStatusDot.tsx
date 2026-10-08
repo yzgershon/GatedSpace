@@ -20,6 +20,7 @@ import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 
 const LABELS: Record<string, string> = {
 	working: "Working",
+	permission: "Waiting for your reply",
 	review: "Finished, not yet read",
 	error: "Failed",
 };
@@ -36,9 +37,9 @@ export function SessionStatusDot({ paneId }: { paneId: string }) {
 		<span
 			className={cn(
 				"size-[7px] shrink-0 rounded-full",
-				status === "working" && "animate-pulse bg-warning",
+				status === "working" && "motion-safe:animate-pulse bg-warning",
 				status === "review" && "bg-success",
-				status === "error" && "bg-destructive",
+				(status === "error" || status === "permission") && "bg-destructive",
 			)}
 			title={label}
 			aria-label={label}

@@ -18,7 +18,10 @@ import {
 	sessionFromPane,
 	useFocusedSession,
 } from "renderer/stores/focused-session";
-import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
+import type {
+	PaneLaunchTarget,
+	PresetLaunchOptions,
+} from "renderer/stores/tabs/preset-launch";
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
 import type { CodexTurnReview as TaskReview } from "shared/codex-session/review";
 import { useStore } from "zustand";
@@ -67,6 +70,7 @@ import type { V2WorkspaceUrlOpenTarget } from "./utils/openUrlInV2Workspace";
 interface WorkspaceSearch {
 	terminalId?: string;
 	chatSessionId?: string;
+	sessionPaneId?: string;
 	focusRequestId?: string;
 	openUrl?: string;
 	openUrlTarget?: V2WorkspaceUrlOpenTarget;
@@ -91,6 +95,7 @@ export const Route = createFileRoute(
 	validateSearch: (raw: Record<string, unknown>): WorkspaceSearch => ({
 		terminalId: parseNonEmptyString(raw.terminalId),
 		chatSessionId: parseNonEmptyString(raw.chatSessionId),
+		sessionPaneId: parseNonEmptyString(raw.sessionPaneId),
 		focusRequestId: parseNonEmptyString(raw.focusRequestId),
 		openUrl: parseNonEmptyString(raw.openUrl),
 		openUrlTarget: parseOpenUrlTarget(raw.openUrlTarget),
@@ -130,6 +135,7 @@ function V2WorkspaceContent() {
 	const {
 		terminalId,
 		chatSessionId,
+		sessionPaneId,
 		focusRequestId,
 		openUrl,
 		openUrlTarget,
@@ -265,6 +271,10 @@ function V2WorkspaceContent() {
 		store,
 		(state) => state.tabs.find((tab) => tab.id === state.activeTabId)?.layout,
 	);
+	const mainExpanded = useStore(store, (state) => {
+		const tab = state.tabs.find((tab) => tab.id === state.activeTabId);
+		return !!(tab?.maximizedPaneId && tab.panes[tab.maximizedPaneId]);
+	});
 	useClearActivePaneAttention({ store });
 	useRunCommandIntentConsumer({ store, workspaceId });
 	useSendPageToSessionConsumer({ store });
@@ -363,6 +373,17 @@ function V2WorkspaceContent() {
 		matchedPresets,
 		resolvePresetCommands,
 	});
+	// biome-ignore lint/correctness/useExhaustiveDependencies: a new notification click must focus the same pane again.
+	useEffect(() => {
+		if (!sessionPaneId) return;
+		const layout = store.getState();
+		const tab = layout.tabs.find(
+			(tab) => tab.panes[sessionPaneId]?.kind === "session",
+		);
+		if (!tab) return;
+		layout.setActiveTab(tab.id);
+		layout.setActivePane({ tabId: tab.id, paneId: sessionPaneId });
+	}, [store, sessionPaneId, focusRequestId]);
 	useConsumeAutomationRunLink({
 		store,
 		workspaceId,
@@ -400,7 +421,9 @@ function V2WorkspaceContent() {
 	 * openers without the registry having to be rebuilt when one of them
 	 * changes.
 	 */
-	const newTabActionsRef = useRef<NewTabPaneActions | null>(null);
+	const newTabActionsRef = useRef<
+		((target: PaneLaunchTarget) => NewTabPaneActions) | null
+	>(null);
 	const reviewCodexChanges = useCallback(
 		(review: TaskReview) => {
 			openTaskReview(tools, review);
@@ -483,7 +506,7 @@ function V2WorkspaceContent() {
 	);
 
 	const runPresetOrSession = useCallback(
-		(preset: V2TerminalPresetRow, options?: { target?: PresetOpenTarget }) => {
+		(preset: V2TerminalPresetRow, options?: PresetLaunchOptions) => {
 			if (canOpenAsPane(preset)) {
 				addSessionTab({
 					...options,
@@ -507,7 +530,7 @@ function V2WorkspaceContent() {
 		(
 			preset: V2TerminalPresetRow,
 			mode: "pane" | "terminal",
-			options?: { target?: PresetOpenTarget },
+			options?: PresetLaunchOptions,
 		) => {
 			if (mode === "pane") {
 				addSessionTab({
@@ -639,31 +662,22 @@ function V2WorkspaceContent() {
 	 * would launch the wrong preset. Writing during render is safe because
 	 * nothing reads it until a pane renders.
 	 */
-	newTabActionsRef.current = {
-		agents: emptyStateAgents,
-		/*
-		 * `active-pane`, not `active-tab`.
-		 *
-		 * The launcher is opened by the pane header's `+`, which has already split
-		 * the layout to make room for it. `active-tab` is only a preference and
-		 * the agent presets ship `executionMode: "new-tab"`, which overruled it —
-		 * so picking Codex opened Codex in a NEW GROUP and left the freshly split
-		 * pane empty, undoing the split that was the point of the gesture.
-		 */
-		onLaunchAgent: (preset) => {
-			void runPresetOrSession(preset, { target: "active-pane" });
-		},
-		onLaunchAgentAs: (preset, mode) => {
-			void launchAgentAs(preset, mode, { target: "active-pane" });
-		},
-		canOpenAsPane,
-		onLaunchAll: launchAllAgents,
-		onOpenTerminal: () => {
-			void addTerminalTab();
-		},
-		onOpenBrowser: addBrowserTab,
-		onOpenQuickOpen: handleQuickOpen,
-		onOpenSessions: openClaudeSessions,
+	newTabActionsRef.current = (paneTarget) => {
+		const options: PresetLaunchOptions = { target: "active-pane", paneTarget };
+		return {
+			agents: emptyStateAgents,
+			onLaunchAgent: (preset) => runPresetOrSession(preset, options),
+			onLaunchAgentAs: (preset, mode) => launchAgentAs(preset, mode, options),
+			canOpenAsPane,
+			onLaunchAll: async () => {
+				for (const preset of emptyStateAgents)
+					await runPresetOrSession(preset, options);
+			},
+			onOpenTerminal: () => addTerminalTab(options),
+			onOpenBrowser: () => addBrowserTab(options),
+			onOpenQuickOpen: handleQuickOpen,
+			onOpenSessions: openClaudeSessions,
+		};
 	};
 
 	const workspaceRunButton = (
@@ -757,6 +771,7 @@ function V2WorkspaceContent() {
 						key={`${activeHostUrl ?? "local"}:${workspaceId}`}
 						tools={tools}
 						mainMinimum={mainPaneMinimum(mainLayout, paneGap / 2)}
+						mainExpanded={mainExpanded}
 						registry={toolRegistry}
 						paneActions={toolPaneActions}
 						contextMenuActions={defaultContextMenuActions}

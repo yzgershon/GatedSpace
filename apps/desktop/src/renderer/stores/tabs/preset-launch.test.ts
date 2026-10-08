@@ -98,6 +98,17 @@ describe("buildFocusedTerminalCommand", () => {
 });
 
 describe("getPresetLaunchPlan", () => {
+	it("keeps a sequential preset in the chosen empty pane", () => {
+		expect(
+			getPresetLaunchPlan({
+				mode: "sequential",
+				target: "active-pane",
+				commandCount: 3,
+				hasActiveTab: true,
+				hasActiveTerminal: false,
+			}),
+		).toBe("active-tab-single");
+	});
 	it("uses active tab split mode for active-tab target + split-pane + multiple commands", () => {
 		expect(
 			getPresetLaunchPlan({

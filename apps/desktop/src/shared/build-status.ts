@@ -48,6 +48,13 @@ export function isBuildUrl(value: string): boolean {
 export type BuildJob = z.infer<typeof buildJobSchema>;
 export const isBuildActive = (job: BuildJob) =>
 	job.stage === "building" || job.stage === "verifying";
+/** History stays in the popover. An old failure must not mask a new running/ready job. */
+export function primaryBuild(jobs: BuildJob[]) {
+	const recent = [...jobs].sort((a, b) =>
+		b.updatedAt.localeCompare(a.updatedAt),
+	);
+	return recent.find(isBuildActive) ?? recent[0];
+}
 export const buildRevision = (job: BuildJob) => `${job.updatedAt}:${job.stage}`;
 export const BUILD_STAGE_LABELS = {
 	building: "Building",

@@ -38,7 +38,9 @@ describe("the service worker", () => {
 		// A push that resolves without showing a notification is a permission
 		// browsers take back.
 		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain('"GatedSpace"');
-		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain("An agent needs you.");
+		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain(
+			"Open GatedSpace for the latest session status.",
+		);
 		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain(".catch(");
 	});
 
@@ -57,4 +59,83 @@ describe("the service worker", () => {
 	it("collapses repeats onto one notification", () => {
 		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain('tag: "gatedspace-agent"');
 	});
+});
+
+function workerFixture() {
+	const listeners = new Map<
+		string,
+		(event: { waitUntil: (promise: Promise<unknown>) => void }) => void
+	>();
+	const shown: Array<{
+		title: string;
+		options: {
+			body: string;
+			renotify: boolean;
+			data: { noticeId?: string; sessionKey?: string };
+		};
+	}> = [];
+	let notice: unknown = null;
+	const self = {
+		location: { href: "https://example.test/sw.js?t=test" },
+		addEventListener: (
+			name: string,
+			callback: (event: {
+				waitUntil: (promise: Promise<unknown>) => void;
+			}) => void,
+		) => listeners.set(name, callback),
+		registration: {
+			getNotifications: async () =>
+				shown.slice(-1).map((n) => ({ data: n.options.data })),
+			showNotification: async (
+				title: string,
+				options: (typeof shown)[number]["options"],
+			) => {
+				shown.push({ title, options });
+			},
+		},
+	};
+	new Function("self", "fetch", MOBILE_BRIDGE_SERVICE_WORKER)(
+		self,
+		async () => ({ ok: true, json: async () => notice }),
+	);
+	return {
+		shown,
+		async push(value: unknown) {
+			notice = value;
+			let pending: Promise<unknown> = Promise.resolve();
+			const handler = listeners.get("push");
+			if (!handler) throw new Error("Missing push handler");
+			handler({
+				waitUntil: (promise) => {
+					pending = promise;
+				},
+			});
+			await pending;
+		},
+	};
+}
+it("push delivery shows the session title and does not re-alert for duplicate wakes", async () => {
+	const w = workerFixture();
+	const notice = {
+		id: "turn-1",
+		title: "Jarvis - Complete",
+		body: "Finished its response",
+		sessionKey: "pane-jarvis",
+	};
+	await w.push(notice);
+	await w.push(notice);
+	expect(w.shown[0]?.title).toBe("Jarvis - Complete");
+	expect(w.shown[0]?.options.renotify).toBe(true);
+	expect(w.shown[1]?.options.renotify).toBe(false);
+	expect(w.shown[1]?.options.data.sessionKey).toBe("pane-jarvis");
+	await w.push({ ...notice, id: "turn-2" });
+	expect(w.shown[2]?.options.renotify).toBe(true);
+});
+it("a stale or invalidated wake cannot claim the session finished", async () => {
+	const w = workerFixture();
+	await w.push(null);
+	expect(w.shown[0]?.title).toBe("GatedSpace");
+	expect(w.shown[0]?.options.body).toBe(
+		"Open GatedSpace for the latest session status.",
+	);
 });

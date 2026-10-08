@@ -16,6 +16,15 @@ import { quote } from "shell-quote";
  * new tab undoes the split that was the whole reason for the gesture.
  */
 export type PresetOpenTarget = "new-tab" | "active-tab" | "active-pane";
+export interface PaneLaunchTarget {
+	tabId: string;
+	paneId: string;
+}
+export interface PresetLaunchOptions {
+	target?: PresetOpenTarget;
+	/** The chooser that requested this launch, retained across async creation. */
+	paneTarget?: PaneLaunchTarget;
+}
 export type PresetMode = ExecutionMode;
 
 export type PresetLaunchPlan =
@@ -56,6 +65,7 @@ export function getPresetLaunchPlan({
 		if (wantsActiveTab && hasActiveTerminal) {
 			return "active-terminal";
 		}
+		if (target === "active-pane" && hasActiveTab) return "active-tab-single";
 		return "new-tab-single";
 	}
 

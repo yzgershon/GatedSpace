@@ -103,3 +103,12 @@ describe("deriveSessionPaneStatus", () => {
 		).toBe("idle");
 	});
 });
+
+it("questions take priority over an already-seen completion", () => {
+	expect(
+		deriveSessionPaneStatus({
+			activity: activity("attention", "turn-1"),
+			seenTurn: "turn-1",
+		}),
+	).toBe("permission");
+});

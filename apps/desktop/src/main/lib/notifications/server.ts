@@ -9,6 +9,7 @@ import { HOOK_PROTOCOL_VERSION } from "../terminal/env";
 import { mapEventType } from "./map-event-type";
 import { shouldRejectOrigin } from "./origin-guard";
 import { resolvePaneId } from "./resolve-pane-id";
+import { sessionEvents } from "./session-events";
 
 // Re-export types for backwards compatibility
 export type {
@@ -107,6 +108,21 @@ app.get("/hook/complete", (req, res) => {
 		return res.json({ success: true, ignored: true });
 	}
 
+	// A native pane's own transport is the only completion authority. This
+	// also catches older hooks already installed before the process marker existed.
+	if (
+		sessionEvents.owns(
+			typeof paneId === "string" ? paneId : undefined,
+			typeof sessionId === "string" ? sessionId : undefined,
+		) ||
+		sessionEvents.owns(
+			undefined,
+			typeof hookSessionId === "string" ? hookSessionId : undefined,
+		)
+	) {
+		res.json({ success: true, ignored: true });
+		return;
+	}
 	const resolvedPaneId = resolvePaneId(
 		paneId as string | undefined,
 		tabId as string | undefined,
@@ -114,11 +130,15 @@ app.get("/hook/complete", (req, res) => {
 		sessionId as string | undefined,
 	);
 
+	if (sessionEvents.owns(resolvedPaneId) || (!resolvedPaneId && !terminalId)) {
+		return res.json({ success: true, ignored: true });
+	}
 	const event: AgentLifecycleEvent = {
 		paneId: resolvedPaneId,
 		tabId: tabId as string | undefined,
 		workspaceId: workspaceId as string | undefined,
 		terminalId: terminalId as string | undefined,
+		sessionId: sessionId as string | undefined,
 		eventType: mappedEventType,
 		...(typeof eventType === "string" ? { sourceEventType: eventType } : {}),
 	};

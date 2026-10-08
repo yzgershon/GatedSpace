@@ -29,6 +29,8 @@ import { createPortsRouter } from "./ports";
 import { createProjectsRouter } from "./projects";
 import { createResourceMetricsRouter } from "./resource-metrics";
 import { createRingtoneRouter } from "./ringtone";
+import { createSessionNamesRouter } from "./session-names";
+import { createSessionQueueRouter } from "./session-queue";
 import { createSettingsRouter } from "./settings";
 import { createSystemRouter } from "./system";
 import { createTerminalRouter } from "./terminal";
@@ -43,6 +45,8 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		claudeSessions: createClaudeSessionsRouter(),
 		claudeSession: createClaudeSessionRouter(),
 		codexSession: createCodexSessionRouter(),
+		sessionQueue: createSessionQueueRouter(),
+		sessionNames: createSessionNamesRouter(),
 		analytics: createAnalyticsRouter(),
 		browser: createBrowserRouter(),
 		browserHistory: createBrowserHistoryRouter(),

@@ -719,3 +719,38 @@
 	letter-spacing: -0.015em;
 	line-height: 1.35;
 }
+
+/* Pulse the status ring, leaving the agent mark steady and legible. */
+.gs-agent-status-ring {
+	position: relative;
+}
+.gs-agent-status-working {
+	box-shadow: none;
+}
+.gs-agent-status-working::after {
+	content: "";
+	position: absolute;
+	inset: -2px;
+	border: 2px solid var(--warning);
+	border-radius: 7px;
+	pointer-events: none;
+	animation: gs-agent-breathe 2s ease-in-out infinite;
+}
+@keyframes gs-agent-breathe {
+	0%,
+	100% {
+		opacity: 0.5;
+		transform: scale(0.97);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1.07);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gs-agent-status-working::after {
+		animation: none;
+		opacity: 1;
+		transform: none;
+	}
+}

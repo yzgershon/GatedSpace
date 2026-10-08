@@ -86,6 +86,7 @@ self.addEventListener("activate", function (event) {
 });
 
 var TOKEN = new URL(self.location.href).searchParams.get("t") || "";
+var lastNoticeId = null;
 
 self.addEventListener("push", function (event) {
   event.waitUntil(
@@ -94,7 +95,10 @@ self.addEventListener("push", function (event) {
       .catch(function () { return null; })
       .then(function (notice) {
         var title = (notice && notice.title) || "GatedSpace";
-        var body = (notice && notice.body) || "An agent needs you.";
+        var body = (notice && notice.body) || "Open GatedSpace for the latest session status.";
+        return self.registration.getNotifications({ tag: "gatedspace-agent" }).then(function (existing) {
+        var duplicate = Boolean(notice && notice.id && (lastNoticeId === notice.id || existing.some(function (n) { return n.data && n.data.noticeId === notice.id; })));
+        lastNoticeId = notice && notice.id;
         return self.registration.showNotification(title, {
           body: body,
           icon: "/icon.svg",
@@ -102,8 +106,9 @@ self.addEventListener("push", function (event) {
           // Same tag for everything: a phone left alone for an hour should
           // show the latest state, not a stack of twenty.
           tag: "gatedspace-agent",
-          renotify: true,
-          data: { sessionKey: (notice && notice.sessionKey) || null }
+          renotify: !duplicate,
+          data: { sessionKey: (notice && notice.sessionKey) || null, noticeId: notice && notice.id }
+        });
         });
       })
   );

@@ -65,11 +65,13 @@ function idsWithPrefix(
 export function useV2SourcesNotificationStatus(
 	workspaceId: string,
 	sources: Iterable<V2NotificationSourceInput>,
+	keepCompleted = false,
 ): ActivePaneStatus | null {
 	const terminalStatuses = useTerminalAgentStatuses(workspaceId);
 	const sourceList = [...sources];
 	const sessionStatuses = useSessionPaneStatuses(
 		idsWithPrefix(sourceList, SESSION_PREFIX),
+		keepCompleted,
 	);
 	return getHighestPriorityStatus([
 		...idsWithPrefix(sourceList, TERMINAL_PREFIX).map((terminalId) =>

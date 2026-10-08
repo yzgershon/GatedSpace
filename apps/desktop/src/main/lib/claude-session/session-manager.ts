@@ -27,6 +27,9 @@ import type {
 	UserImagePayload,
 } from "shared/claude-session/events";
 import { SUPERSET_HOME_DIR } from "../app-environment";
+import { ClaudeTurnNotifications } from "../notifications/claude-turn-notifications";
+import { sessionEvents } from "../notifications/session-events";
+import { sessionNames } from "../session-names";
 import { getSessionCost, recordSessionCost } from "./cost-store";
 import { resolveResumeClaim } from "./resume-claim";
 import { canResumeUnderConfigDir } from "./transcript";
@@ -123,6 +126,7 @@ class ClaudeSessionManager extends EventEmitter {
 	 */
 	private readonly costThisRun = new Map<string, number>();
 	private seq = 0;
+	private turnNotifications = new ClaudeTurnNotifications(sessionEvents);
 
 	/** Put a line of our own explanation into the session's transcript. */
 	private notice(key: string, text: string, fatal = false): void {
@@ -159,6 +163,8 @@ class ClaudeSessionManager extends EventEmitter {
 	/** Spawn a session for `key`. No-op if one already exists for that key. */
 	start(key: string, opts: ClaudeSessionOptions): void {
 		if (this.sessions.has(key)) return;
+		sessionEvents.open(key, "claude", opts.workspaceId);
+		this.turnNotifications.clear(key);
 
 		/*
 		 * A `/swap` onto an account that cannot see this session's transcript.
@@ -216,6 +222,14 @@ class ClaudeSessionManager extends EventEmitter {
 		// two writers can't overwrite each other's transcript.
 		const blocked = Boolean(blockedBy) || blockedByExternal === true;
 		const options = blocked ? { ...opts, forkSession: true } : opts;
+		sessionNames.open(
+			{
+				provider: "claude",
+				key,
+				id: options.forkSession ? undefined : options.resumeSessionId,
+			},
+			!options.resumeSessionId || !!options.forkSession,
+		);
 		// A fork's real id is only known at init, so claim nothing until then.
 		if (claim) this.sessionIds.set(key, claim);
 		else this.sessionIds.delete(key);
@@ -246,6 +260,8 @@ class ClaudeSessionManager extends EventEmitter {
 			if (!isCurrent()) return;
 			if (event.type === "system" && event.subtype === "init") {
 				this.sessionIds.set(key, event.session_id);
+				sessionNames.bind("claude", key, event.session_id);
+				sessionEvents.bind(key, event.session_id);
 				// A fresh session's id — and a fork's — is only knowable here, so
 				// this is the only chance to claim it. Unconditional because the id
 				// is newly minted: nothing else can hold it, and a refusal would
@@ -278,6 +294,7 @@ class ClaudeSessionManager extends EventEmitter {
 				}
 				return;
 			}
+			this.turnNotifications.event(key, event);
 			this.record(key, event);
 			this.emit(`event:${key}`, event);
 		});
@@ -293,6 +310,8 @@ class ClaudeSessionManager extends EventEmitter {
 		});
 		transport.on("exit", (info: SessionExitInfo) => {
 			if (!isCurrent()) return;
+			this.turnNotifications.clear(key);
+			sessionEvents.status(key, info.code ? "error" : "idle");
 			this.emit(`exit:${key}`, info);
 			this.sessions.delete(key);
 			// Nothing is writing this transcript any more, so stop claiming it.
@@ -312,6 +331,8 @@ class ClaudeSessionManager extends EventEmitter {
 		});
 		transport.on("error", (err: Error) => {
 			if (!isCurrent()) return;
+			this.turnNotifications.clear(key);
+			sessionEvents.status(key, "error");
 			this.emit(`error:${key}`, err);
 			// Spawn failures land here — a preset pointing at a binary that isn't
 			// there is the likely cause, and it's invisible without this.
@@ -400,7 +421,10 @@ class ClaudeSessionManager extends EventEmitter {
 		images: UserImagePayload[] = [],
 	): void {
 		const transport = this.sessions.get(key);
-		if (!transport) return;
+		if (!transport)
+			throw new Error(
+				"This Claude session is disconnected. Reopen it before sending.",
+			);
 
 		const oversized = images.filter((i) => i.data.length > MAX_IMAGE_BASE64);
 		const usable = images.filter((i) => i.data.length <= MAX_IMAGE_BASE64);
@@ -415,7 +439,9 @@ class ClaudeSessionManager extends EventEmitter {
 			);
 		}
 
+		transport.sendUserMessage(text, usable);
 		if (!silent) {
+			sessionNames.firstPrompt({ provider: "claude", key }, text);
 			const event: ClaudeStreamEvent = {
 				type: "local_user_message",
 				id: `u-${key}-${this.seq++}`,
@@ -429,13 +455,13 @@ class ClaudeSessionManager extends EventEmitter {
 						}
 					: {}),
 			};
+			this.turnNotifications.sent(key, event.id, text);
 			this.record(key, event);
 			this.emit(`event:${key}`, event);
 		}
 		// Busy from the moment we write, not from the first event back: a capture
 		// opened in that gap would still land on the turn we just started.
 		if (!silent) this.busy.add(key);
-		transport.sendUserMessage(text, usable);
 	}
 
 	/** Close an open capture, handing the caller whatever came back. */
@@ -479,6 +505,8 @@ class ClaudeSessionManager extends EventEmitter {
 	}
 
 	interrupt(key: string): void {
+		this.turnNotifications.clear(key);
+		sessionEvents.status(key, "idle");
 		this.sessions.get(key)?.interrupt();
 	}
 
@@ -490,6 +518,8 @@ class ClaudeSessionManager extends EventEmitter {
 
 	/** Terminate and forget the session for `key`, transcript included. */
 	stop(key: string): void {
+		this.turnNotifications.clear(key);
+		sessionEvents.close(key);
 		// Let go of a capture before the process does: its caller is awaiting a
 		// promise that nothing will ever settle once the transport is gone.
 		this.resolveCapture(key, null);
@@ -572,6 +602,10 @@ class ClaudeSessionManager extends EventEmitter {
 
 	/** Tear everything down (app shutdown). */
 	disposeAll(): void {
+		for (const key of this.sessions.keys()) {
+			this.turnNotifications.clear(key);
+			sessionEvents.close(key);
+		}
 		for (const transport of this.sessions.values()) transport.dispose();
 		this.sessions.clear();
 		// After `sessions.clear()`, so the same-pid sweep sees nothing as live

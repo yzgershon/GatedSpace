@@ -3,6 +3,8 @@ import {
 	normalizeCodexItem,
 	record,
 } from "../../../shared/codex-session/types";
+import { sessionEvents } from "../notifications/session-events";
+import { SessionNameStore } from "../session-names/store";
 import { CodexSessionManager } from "./session-manager";
 import { CodexRpcError, CodexTransport } from "./transport";
 
@@ -120,10 +122,37 @@ class FakeTransport extends CodexTransport {
 const managers: CodexSessionManager[] = [];
 const fixture = () => {
 	const transport = new FakeTransport();
-	const manager = new CodexSessionManager(transport);
+	const names = new SessionNameStore({
+		load: () => ({ names: {}, aliases: {} }),
+		save: () => {},
+		legacy: () => null,
+		mirror: () => {},
+		generate: async () => null,
+	});
+	const manager = new CodexSessionManager(transport, names);
 	managers.push(manager);
-	return { manager, transport };
+	return { manager, transport, names };
 };
+
+test("a pane rename refreshes live Codex state and the CLI's saved title", async () => {
+	const { manager, transport, names } = fixture();
+	const state = await manager.start({ key: "rename-pane", cwd: "/workspace" });
+	names.rename({ provider: "codex", key: "rename-pane" }, "Fix session titles");
+	expect(manager.get("rename-pane")?.title).toBe("Fix session titles");
+	expect(
+		transport.calls.some(
+			(call) =>
+				call.method === "thread/name/set" &&
+				call.params.threadId === state.threadId &&
+				call.params.name === "Fix session titles",
+		),
+	).toBe(true);
+	transport.emit("notification", {
+		method: "thread/name/updated",
+		params: { threadId: state.threadId, threadName: "First prompt copied" },
+	});
+	expect(manager.get("rename-pane")?.title).toBe("Fix session titles");
+});
 afterEach(() => {
 	for (const manager of managers.splice(0)) manager.dispose();
 });
@@ -193,6 +222,143 @@ describe("native Codex session lifecycle", () => {
 				questions: [{ title: "Question" }],
 			}),
 		).toThrow();
+	});
+	test("resume restores only the latest unanswered choice question", async () => {
+		for (const answered of [false, true]) {
+			const { manager, transport } = fixture();
+			const question = {
+				turnId: "old-turn",
+				item: {
+					id: "question",
+					type: "agentMessage",
+					text: "Which format?\n- Widescreen\n- Vertical",
+				},
+			};
+			transport.historyEntries = answered
+				? [
+						{
+							turnId: "next-turn",
+							item: {
+								id: "reply",
+								type: "userMessage",
+								content: [{ type: "text", text: "Widescreen" }],
+							},
+						},
+						question,
+					]
+				: [question];
+			const state = await manager.start({
+				key: "restored",
+				cwd: "/workspace",
+				resumeSessionId: "original-id",
+			});
+			expect(state.approvals).toHaveLength(answered ? 0 : 1);
+			expect(
+				transport.calls.some(
+					(c) => c.method === "turn/start" || c.method === "turn/steer",
+				),
+			).toBe(false);
+		}
+	});
+	test("plain-text choice questions become clickable, survive completion and send only the clicked reply", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({ key: "choice", cwd: "/workspace" });
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "choose-turn", status: "inProgress" },
+			},
+		});
+		const item = {
+			id: "choice-text",
+			type: "agentMessage",
+			text: "I recommend widescreen.\n\nWhich format do you want?\n- Widescreen 16:9\n- Vertical 9:16 like Filtrsoft",
+		};
+		const event = {
+			method: "item/completed",
+			params: { threadId: state.threadId, turnId: "choose-turn", item },
+		};
+		transport.emit("notification", event);
+		transport.emit("notification", event);
+		expect(state.approvals).toHaveLength(1);
+		expect(state.approvals[0]).toMatchObject({
+			sourceItemId: "choice-text",
+			isBlocking: false,
+			questions: [
+				{ options: ["Widescreen 16:9", "Vertical 9:16 like Filtrsoft"] },
+			],
+		});
+		expect(
+			transport.calls.filter((c) => c.method === "turn/steer"),
+		).toHaveLength(0);
+		transport.emit("notification", {
+			method: "turn/completed",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "choose-turn", status: "completed", items: [item] },
+			},
+		});
+		const id = state.approvals[0].id;
+		await manager.answer("choice", id, true, {
+			"0": "Vertical 9:16 like Filtrsoft",
+		});
+		expect(transport.calls.at(-1)).toMatchObject({
+			method: "turn/start",
+			params: {
+				input: [
+					{
+						text: "Question: Which format do you want?\nAnswer: Vertical 9:16 like Filtrsoft",
+					},
+				],
+			},
+		});
+		expect(state.approvals).toHaveLength(0);
+		expect(() =>
+			manager.answer("choice", id, true, { "0": "Widescreen 16:9" }),
+		).toThrow("no longer pending");
+	});
+	test("structured question supersedes inferred choices; dismissing inference sends nothing", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({ key: "fallback", cwd: "/workspace" });
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "t", status: "inProgress" },
+			},
+		});
+		const emit = (id: string) =>
+			transport.emit("notification", {
+				method: "item/completed",
+				params: {
+					threadId: state.threadId,
+					turnId: "t",
+					item: {
+						id,
+						type: "agentMessage",
+						text: "Which layout?\n- Wide\n- Tall",
+					},
+				},
+			});
+		emit("first");
+		const dismissed = state.approvals[0].id;
+		await manager.answer("fallback", dismissed, false);
+		expect(state.approvals).toHaveLength(0);
+		expect(
+			transport.calls.filter((c) => c.method === "turn/steer"),
+		).toHaveLength(0);
+		emit("second");
+		const replaced = state.approvals[0].id;
+		transport.askUser?.({
+			session: "codex:fallback",
+			questions: [{ title: "Which layout?", options: ["Wide", "Tall"] }],
+		});
+		expect(state.approvals).toHaveLength(1);
+		expect(state.approvals[0].sourceItemId).toBeUndefined();
+		expect(() =>
+			manager.answer("fallback", replaced, true, { "0": "Wide" }),
+		).toThrow("no longer pending");
 	});
 	test("async questions survive completion, validate answers and resolve exactly once", async () => {
 		const { manager, transport } = fixture();
@@ -414,6 +580,47 @@ describe("native Codex session lifecycle", () => {
 		expect(manager.get("optimistic")?.items).toHaveLength(1);
 		expect(manager.get("optimistic")?.items[0].id).toBe("server-user");
 	});
+	test("queued steering reconciles an early echo and rolls back rejected delivery", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({ key: "steer", cwd: "/workspace" });
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "active", status: "inProgress" },
+			},
+		});
+		transport.steerFailure = () => {
+			transport.emit("notification", {
+				method: "item/completed",
+				params: {
+					threadId: state.threadId,
+					turnId: "active",
+					item: {
+						id: "steer-echo",
+						type: "userMessage",
+						content: [{ type: "text", text: "Follow-up" }],
+					},
+				},
+			});
+		};
+		await manager.steer({
+			key: "steer",
+			text: "Follow-up",
+			images: ["data:image/png;base64,YWJj"],
+		});
+		expect(state.items.filter((item) => item.kind === "user")).toHaveLength(1);
+		expect(
+			state.items.find((item) => item.id === "steer-echo")?.images,
+		).toEqual(["data:image/png;base64,YWJj"]);
+		transport.steerFailure = () => {
+			throw new Error("Turn finished");
+		};
+		await expect(
+			manager.steer({ key: "steer", text: "Rejected" }),
+		).rejects.toThrow("Turn finished");
+		expect(state.items.some((item) => item.text === "Rejected")).toBe(false);
+	});
 	test("failed submission rolls back its local echo so retry cannot duplicate it", async () => {
 		const { manager, transport } = fixture();
 		await manager.start({ key: "failure", cwd: "/workspace" });
@@ -453,7 +660,9 @@ describe("native Codex session lifecycle", () => {
 			settings: {
 				model: "gpt-6-astra",
 				reasoning_effort: "xhigh",
-				developer_instructions: null,
+				developer_instructions: expect.stringContaining(
+					'session="codex:controls"',
+				),
 			},
 		});
 		expect(turn?.approvalPolicy).toBe("on-request");
@@ -893,4 +1102,54 @@ describe("native Codex session lifecycle", () => {
 		).toBe("one\n\ntwo");
 		expect(normalizeCodexItem({ type: "hookPrompt", id: "h" }, "t")).toBeNull();
 	});
+});
+
+test("Codex completion ignores tools, old turns, duplicate events and interruptions", async () => {
+	const { manager, transport } = fixture();
+	const state = await manager.start({ key: "notify", cwd: "/workspace" });
+	const completions: string[] = [];
+	const listener = (notice: { key: string; status: string }) => {
+		if (notice.key === "notify" && notice.status === "completed")
+			completions.push(notice.key);
+	};
+	sessionEvents.on("notice", listener);
+	try {
+		await manager.send({
+			key: "notify",
+			text: "Work",
+			model: "gpt-6-astra",
+			effort: "low",
+			permission: "default",
+		});
+		const notify = (method: string, params: Record<string, unknown>) =>
+			transport.emit("notification", {
+				method,
+				params: { threadId: state.threadId, ...params },
+			});
+		notify("item/completed", {
+			item: { id: "tool", type: "commandExecution", exitCode: 0 },
+		});
+		notify("turn/completed", { turn: { id: "older", status: "completed" } });
+		expect(state.status).toBe("working");
+		expect(completions).toHaveLength(0);
+		notify("turn/completed", { turn: { id: "turn-id", status: "completed" } });
+		notify("turn/completed", { turn: { id: "turn-id", status: "completed" } });
+		expect(completions).toHaveLength(1);
+		await manager.send({
+			key: "notify",
+			text: "More",
+			model: "gpt-6-astra",
+			effort: "low",
+			permission: "default",
+		});
+		await manager.interrupt("notify");
+		notify("item/started", {
+			item: { id: "late-tool", type: "commandExecution" },
+		});
+		notify("turn/completed", { turn: { id: "turn-id", status: "completed" } });
+		expect(completions).toHaveLength(1);
+		expect(sessionEvents.get("notify")?.status).toBe("idle");
+	} finally {
+		sessionEvents.off("notice", listener);
+	}
 });

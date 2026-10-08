@@ -483,6 +483,10 @@ export function createWorkspaceStore<TData>(
 									),
 									panes: { ...restPanes, [newPane.id]: newPane },
 									activePaneId: newPane.id,
+									maximizedPaneId:
+										tab.maximizedPaneId === args.paneId
+											? newPane.id
+											: tab.maximizedPaneId,
 								}
 							: t,
 					),

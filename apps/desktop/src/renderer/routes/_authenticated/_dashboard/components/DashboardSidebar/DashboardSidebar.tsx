@@ -1,3 +1,6 @@
+import { Pin, Search, X } from "lucide-react";
+import { useNativeSessionStates } from "renderer/hooks/useNativeSessionStates/useNativeSessionStates";
+import "./components/DashboardSidebarPanels/collections.css";
 import {
 	closestCenter,
 	DndContext,
@@ -53,7 +56,11 @@ import { useDashboardSidebarData } from "./hooks/useDashboardSidebarData";
 import { useDashboardSidebarShortcuts } from "./hooks/useDashboardSidebarShortcuts";
 import { DashboardSidebarHoverProvider } from "./providers/DashboardSidebarHoverProvider";
 import { DashboardSidebarPortsProvider } from "./providers/DashboardSidebarPortsProvider";
-import type { DashboardSidebarProject } from "./types";
+import type {
+	DashboardSidebarProject,
+	DashboardSidebarProjectChild,
+	DashboardSidebarWorkspace,
+} from "./types";
 
 interface DashboardSidebarProps {
 	isCollapsed?: boolean;
@@ -72,6 +79,8 @@ interface SortableProjectWrapperProps {
 	workspaceShortcutLabels: Map<string, string>;
 	onWorkspaceHover: (workspaceId: string) => void | Promise<void>;
 	onToggleCollapse: (projectId: string) => void;
+	pinned?: boolean;
+	onPin?: () => void;
 }
 
 const SortableProjectWrapper = memo(function SortableProjectWrapper({
@@ -81,6 +90,8 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 	workspaceShortcutLabels,
 	onWorkspaceHover,
 	onToggleCollapse,
+	pinned,
+	onPin,
 }: SortableProjectWrapperProps) {
 	const {
 		attributes,
@@ -105,7 +116,7 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 			 * groups were only findable by reading them. Padding does the
 			 * grouping and the rule just marks the seam.
 			 */
-			className="border-b border-border/45 py-1.5 last:border-b-0"
+			className="workspace-collection"
 			ref={setNodeRef}
 			style={{
 				transform: CSS.Translate.toString(transform),
@@ -113,6 +124,17 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 				opacity: isDragging ? 0.5 : undefined,
 			}}
 		>
+			{onPin && (
+				<button
+					type="button"
+					className="workspace-collection-pin"
+					aria-label={`${pinned ? "Unpin" : "Pin"} project ${project.name}`}
+					aria-pressed={Boolean(pinned)}
+					onClick={onPin}
+				>
+					<Pin size={12} />
+				</button>
+			)}
 			<DashboardSidebarProjectSection
 				project={project}
 				isSidebarCollapsed={isCollapsed}
@@ -282,6 +304,63 @@ export function DashboardSidebar({
 	}, [groups, projectOrder]);
 
 	const workspaceShortcutLabels = useDashboardSidebarShortcuts(orderedGroups);
+	const [workspaceQuery, setWorkspaceQuery] = useState("");
+	const [activeOnly, setActiveOnly] = useState(false);
+	const [favorites, setFavorites] = useState<string[]>(() => {
+		try {
+			const saved: unknown = JSON.parse(
+				localStorage.getItem("gatedspace-project-pins") || "[]",
+			);
+			return Array.isArray(saved)
+				? saved.filter((id): id is string => typeof id === "string")
+				: [];
+		} catch {
+			return [];
+		}
+	});
+	const nativeStates = useNativeSessionStates();
+	const activeIds = new Set(
+		nativeStates
+			.filter((s) => s.status === "working" || s.status === "attention")
+			.map((s) => s.workspaceId),
+	);
+	const visibleGroups = orderedGroups
+		.map((project) => {
+			const query = workspaceQuery.trim().toLowerCase();
+			const projectMatches = project.name.toLowerCase().includes(query);
+			const matches = (workspace: DashboardSidebarWorkspace) =>
+				(!activeOnly || activeIds.has(workspace.id)) &&
+				(projectMatches ||
+					`${workspace.name} ${workspace.branch}`
+						.toLowerCase()
+						.includes(query));
+			const children = project.children.flatMap<DashboardSidebarProjectChild>(
+				(child) => {
+					if (child.type === "workspace")
+						return matches(child.workspace) ? [child] : [];
+					const workspaces = child.section.workspaces.filter(matches);
+					return workspaces.length
+						? [{ ...child, section: { ...child.section, workspaces } }]
+						: [];
+				},
+			);
+			return { ...project, children };
+		})
+		.filter(
+			(project) => project.children.length || (!workspaceQuery && !activeOnly),
+		)
+		.sort(
+			(a, b) =>
+				Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)),
+		);
+	const toggleFavorite = (id: string) =>
+		setFavorites((previous) => {
+			const next = previous.includes(id)
+				? previous.filter((value) => value !== id)
+				: [...previous, id];
+			localStorage.setItem("gatedspace-project-pins", JSON.stringify(next));
+			return next;
+		});
 
 	/*
 	 * Workspaces, counted across every project — what the brand row and the
@@ -477,74 +556,117 @@ export function DashboardSidebar({
 										/>
 									) : (
 										<>
-											<div className="flex-1 overflow-y-auto hide-scrollbar">
-												{showSkeleton ? <DashboardSidebarSkeleton /> : null}
-												{!showSkeleton && orderedGroups.length === 0 ? (
-													<div className="px-5 py-8 text-sm text-muted-foreground">
-														<p>No workspaces to show yet.</p>
+											<div className="workspace-collections flex min-h-0 flex-1 flex-col">
+												<label className="collection-search">
+													<Search size={14} />
+													<input
+														aria-label="Search workspaces"
+														placeholder="Find a project or branch"
+														value={workspaceQuery}
+														onChange={(e) => setWorkspaceQuery(e.target.value)}
+													/>
+													{workspaceQuery && (
 														<button
 															type="button"
-															className="mt-3 text-foreground underline underline-offset-4"
-															onClick={() => navigate({ to: "/v2-workspaces" })}
+															aria-label="Clear workspace search"
+															onClick={() => setWorkspaceQuery("")}
 														>
-															Browse workspaces
+															<X size={14} />
 														</button>
-													</div>
-												) : null}
-												<DndContext
-													sensors={sensors}
-													collisionDetection={closestCenter}
-													measuring={{
-														droppable: { strategy: MeasuringStrategy.Always },
-													}}
-													onDragStart={({ active }) => {
-														const project = groups.find(
-															(p) => p.id === active.id,
-														);
-														setActiveProject(project ?? null);
-													}}
-													onDragEnd={handleDragEnd}
-													onDragCancel={() => setActiveProject(null)}
-												>
-													<SortableContext
-														items={projectOrder}
-														strategy={verticalListSortingStrategy}
-													>
-														{orderedGroups.map((project) => (
-															<SortableProjectWrapper
-																key={project.id}
-																project={project}
-																isCollapsed={isCollapsed}
-																isDraggingProject={activeProject != null}
-																workspaceShortcutLabels={
-																	workspaceShortcutLabels
-																}
-																onWorkspaceHover={refreshWorkspacePullRequest}
-																onToggleCollapse={toggleProjectCollapsed}
-															/>
-														))}
-													</SortableContext>
-
-													{createPortal(
-														<DragOverlay dropAnimation={null}>
-															{activeProject && (
-																<div className="bg-background shadow-lg border-b border-border">
-																	<DashboardSidebarProjectSection
-																		project={activeProject}
-																		isSidebarCollapsed={isCollapsed}
-																		isDraggingProject
-																		workspaceShortcutLabels={
-																			workspaceShortcutLabels
-																		}
-																		onWorkspaceHover={() => {}}
-																		onToggleCollapse={() => {}}
-																	/>
-																</div>
-															)}
-														</DragOverlay>,
-														document.body,
 													)}
-												</DndContext>
+												</label>
+												<div className="collection-filters">
+													<span>{visibleGroups.length} projects</span>
+													<button
+														type="button"
+														aria-pressed={activeOnly}
+														onClick={() => setActiveOnly(!activeOnly)}
+													>
+														Active only{" "}
+														<span aria-hidden="true">
+															{activeOnly ? "?" : "?"}
+														</span>
+													</button>
+												</div>
+												<div className="collection-list">
+													{visibleGroups.length === 0 &&
+														orderedGroups.length > 0 && (
+															<p className="collection-empty">
+																No matching workspaces.
+															</p>
+														)}
+													{showSkeleton ? <DashboardSidebarSkeleton /> : null}
+													{!showSkeleton && orderedGroups.length === 0 ? (
+														<div className="px-5 py-8 text-sm text-muted-foreground">
+															<p>No workspaces to show yet.</p>
+															<button
+																type="button"
+																className="mt-3 text-foreground underline underline-offset-4"
+																onClick={() =>
+																	navigate({ to: "/v2-workspaces" })
+																}
+															>
+																Browse workspaces
+															</button>
+														</div>
+													) : null}
+													<DndContext
+														sensors={sensors}
+														collisionDetection={closestCenter}
+														measuring={{
+															droppable: { strategy: MeasuringStrategy.Always },
+														}}
+														onDragStart={({ active }) => {
+															const project = groups.find(
+																(p) => p.id === active.id,
+															);
+															setActiveProject(project ?? null);
+														}}
+														onDragEnd={handleDragEnd}
+														onDragCancel={() => setActiveProject(null)}
+													>
+														<SortableContext
+															items={projectOrder}
+															strategy={verticalListSortingStrategy}
+														>
+															{visibleGroups.map((project) => (
+																<SortableProjectWrapper
+																	key={project.id}
+																	pinned={favorites.includes(project.id)}
+																	onPin={() => toggleFavorite(project.id)}
+																	project={project}
+																	isCollapsed={isCollapsed}
+																	isDraggingProject={activeProject != null}
+																	workspaceShortcutLabels={
+																		workspaceShortcutLabels
+																	}
+																	onWorkspaceHover={refreshWorkspacePullRequest}
+																	onToggleCollapse={toggleProjectCollapsed}
+																/>
+															))}
+														</SortableContext>
+
+														{createPortal(
+															<DragOverlay dropAnimation={null}>
+																{activeProject && (
+																	<div className="bg-background shadow-lg border-b border-border">
+																		<DashboardSidebarProjectSection
+																			project={activeProject}
+																			isSidebarCollapsed={isCollapsed}
+																			isDraggingProject
+																			workspaceShortcutLabels={
+																				workspaceShortcutLabels
+																			}
+																			onWorkspaceHover={() => {}}
+																			onToggleCollapse={() => {}}
+																		/>
+																	</div>
+																)}
+															</DragOverlay>,
+															document.body,
+														)}
+													</DndContext>
+												</div>
 											</div>
 											{!isCollapsed && !inlineWorkspacePortsEnabled && (
 												<DashboardSidebarPortsList />

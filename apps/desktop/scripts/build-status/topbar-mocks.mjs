@@ -5,6 +5,15 @@ import { resolve } from "node:path";
 export function topBarPreviewMocks(desktop) {
 	const mocks = new Map();
 	const hooks = {
+		"renderer/lib/session-names": "export const renameSessionTab=async()=>{};",
+		"renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider":
+			'export const useWorkspace=()=>({workspace:{id:"preview"}});',
+		"renderer/hooks/host-service/useV2NotificationStatus":
+			"export const useV2SourcesNotificationStatus=()=>null;",
+		"renderer/stores/v2-notifications":
+			"export const getV2NotificationSourcesForTab=()=>[];",
+		"renderer/components/StatusIndicator":
+			'export const getStatusTooltip=()=>"Working";',
 		"@tanstack/react-router":
 			'export const useMatchRoute=()=>()=>({workspaceId:"preview"}); export const useParams=()=>({workspaceId:"preview"});',
 		"renderer/hooks/useIsV2CloudEnabled":

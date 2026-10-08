@@ -1,6 +1,12 @@
+import { isLocalPreviewUrl } from "shared/local-preview";
+
 export function sanitizeUrl(url: string): string {
 	const value = url.trim();
-	if (/^https?:\/\//i.test(value) || value.startsWith("about:")) {
+	if (
+		/^https?:\/\//i.test(value) ||
+		value.startsWith("about:") ||
+		isLocalPreviewUrl(value)
+	) {
 		return value;
 	}
 	if (/^(localhost|127\.0\.0\.1)(:\d+)?(\/.*)?$/i.test(value)) {

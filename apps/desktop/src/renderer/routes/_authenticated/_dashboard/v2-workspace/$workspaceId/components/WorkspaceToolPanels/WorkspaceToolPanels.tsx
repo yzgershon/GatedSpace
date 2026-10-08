@@ -37,6 +37,7 @@ export function WorkspaceToolPanels({
 	contextMenuActions,
 	onResizing,
 	mainMinimum = { width: 400, height: 260 },
+	mainExpanded = false,
 	children,
 }: {
 	tools: ToolPanels;
@@ -46,22 +47,25 @@ export function WorkspaceToolPanels({
 	contextMenuActions: ContextMenuActionConfig<PaneViewerData>[];
 	onResizing: (resizing: boolean) => void;
 	mainMinimum?: { width: number; height: number };
+	mainExpanded?: boolean;
 }) {
 	const panels = useStore(tools.state);
 	const tabs = useStore(tools.store, (s) => s.tabs);
 	// The pane's own maximize action must also expand its enclosing tool panel.
 	// Keep the other surfaces mounted, and leave the saved dock sizes untouched.
-	const expanded = ([panels.focus, "right", "bottom"] as const).find(
-		(side) =>
-			side !== "main" &&
-			panels[side].open &&
-			tabs.some(
-				(tab) =>
-					tab.id === panels[side].activeTabId &&
-					tab.maximizedPaneId &&
-					tab.panes[tab.maximizedPaneId],
-			),
-	);
+	const expanded = mainExpanded
+		? "main"
+		: ([panels.focus, "right", "bottom"] as const).find(
+				(side) =>
+					side !== "main" &&
+					panels[side].open &&
+					tabs.some(
+						(tab) =>
+							tab.id === panels[side].activeTabId &&
+							tab.maximizedPaneId &&
+							tab.panes[tab.maximizedPaneId],
+					),
+			);
 	const [bounds, setBounds] = useState({ width: 1200, height: 800 });
 	const [resizing, setResizing] = useState(false);
 	const [present, setPresent] = useState({
@@ -83,6 +87,7 @@ export function WorkspaceToolPanels({
 	const root = useRef<HTMLDivElement>(null);
 	const resizeStart = useRef<{
 		side: ToolPlacement;
+		pointerId: number;
 		coordinate: number;
 		size: number;
 		scale: number;
@@ -111,11 +116,42 @@ export function WorkspaceToolPanels({
 		bottomMax,
 		bounds.height * 0.65,
 	);
-	function finishResize() {
-		resizeStart.current = null;
-		setResizing(false);
-		onResizing(false);
-	}
+	useEffect(() => {
+		if (!resizing) return;
+		const move = (event: PointerEvent) => {
+			const start = resizeStart.current;
+			if (!start || event.pointerId !== start.pointerId) return;
+			const delta =
+				(start.coordinate -
+					(start.side === "right" ? event.clientX : event.clientY)) /
+				start.scale;
+			tools.resize(
+				start.side,
+				Math.min(
+					start.side === "right" ? rightMax : bottomMax,
+					start.size + delta,
+				),
+			);
+		};
+		const finish = () => {
+			resizeStart.current = null;
+			setResizing(false);
+			onResizing(false);
+		};
+		// Keep dragging across pane/embedded-browser boundaries even if Chromium
+		// releases element capture. The shell disables guest input for this drag.
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", finish);
+		window.addEventListener("pointercancel", finish);
+		window.addEventListener("blur", finish);
+		return () => {
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", finish);
+			window.removeEventListener("pointercancel", finish);
+			window.removeEventListener("blur", finish);
+		};
+	}, [resizing, tools, rightMax, bottomMax, onResizing]);
+
 	const renderHandle = (side: ToolPlacement) => (
 		// biome-ignore lint/a11y/useSemanticElements: an interactive splitter needs separator range semantics, not a static horizontal rule
 		<div
@@ -128,6 +164,7 @@ export function WorkspaceToolPanels({
 			aria-valuemin={180}
 			aria-valuemax={Math.round(side === "right" ? rightMax : bottomMax)}
 			className={`gs-tool-resize gs-tool-resize-${side}`}
+			data-resizing={resizing && resizeStart.current?.side === side}
 			style={{
 				visibility: panels[side].open && !expanded ? "visible" : "hidden",
 			}}
@@ -157,6 +194,7 @@ export function WorkspaceToolPanels({
 				event.currentTarget.setPointerCapture(event.pointerId);
 				resizeStart.current = {
 					side,
+					pointerId: event.pointerId,
 					coordinate: side === "right" ? event.clientX : event.clientY,
 					size: side === "right" ? rightSize : bottomSize,
 					scale:
@@ -166,24 +204,6 @@ export function WorkspaceToolPanels({
 				setResizing(true);
 				onResizing(true);
 			}}
-			onPointerMove={(event) => {
-				const start = resizeStart.current;
-				if (!start) return;
-				const delta =
-					(start.coordinate -
-						(start.side === "right" ? event.clientX : event.clientY)) /
-					start.scale;
-				tools.resize(
-					start.side,
-					Math.min(
-						start.side === "right" ? rightMax : bottomMax,
-						start.size + delta,
-					),
-				);
-			}}
-			onPointerUp={finishResize}
-			onPointerCancel={finishResize}
-			onLostPointerCapture={finishResize}
 		/>
 	);
 	return (
@@ -230,8 +250,8 @@ export function WorkspaceToolPanels({
 					>
 						<div
 							className="gs-tool-main"
-							inert={!!expanded}
-							aria-hidden={!!expanded}
+							inert={!!expanded && expanded !== "main"}
+							aria-hidden={!!expanded && expanded !== "main"}
 							data-browser-clip
 							onPointerDownCapture={() => tools.focus("main")}
 							onFocusCapture={() => tools.focus("main")}
@@ -254,7 +274,6 @@ export function WorkspaceToolPanels({
 									aria-hidden={!!expanded && expanded !== side}
 									data-browser-clip
 								>
-									{renderHandle(side)}
 									<ToolPanel
 										side={side}
 										tools={tools}
@@ -281,6 +300,8 @@ export function WorkspaceToolPanels({
 								</div>
 							);
 						})}
+						{renderHandle("right")}
+						{renderHandle("bottom")}
 					</div>
 				)}
 			/>

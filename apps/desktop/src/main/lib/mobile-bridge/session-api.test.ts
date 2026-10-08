@@ -2,7 +2,19 @@ import { afterAll, beforeAll, expect, mock, test } from "bun:test";
 import type { Server } from "node:http";
 import express from "express";
 import type { CodexSessionState } from "../../../shared/codex-session/types";
+import { SessionNameStore } from "../session-names/store";
 
+const names = new SessionNameStore({
+	load: () => ({ names: {}, aliases: {} }),
+	save: () => {},
+	legacy: () => null,
+	mirror: () => {},
+	generate: async () => null,
+});
+mock.module("../session-names", () => ({
+	sessionNames: names,
+	sessionNamingInstructions: () => "",
+}));
 const codexState: CodexSessionState = {
 	key: "pane",
 	threadId: "thread",
@@ -204,4 +216,24 @@ test("Codex usage keeps the provider reported window instead of inventing a sess
 		usedPercent: 24,
 		resets: null,
 	});
+});
+
+test("renames appear in both mobile lists and open conversations immediately", async () => {
+	for (const [provider, id, key] of [
+		["codex", "thread", "pane"],
+		["claude", "claude-thread", "claude-pane"],
+	] as const) {
+		names.bind(provider, key, id);
+		names.rename({ provider, key }, `Named ${provider}`);
+		const list = await (await fetch(`${origin}/sessions`)).json();
+		expect(
+			list.sessions.find(
+				(row: { provider: string }) => row.provider === provider,
+			).title,
+		).toBe(`Named ${provider}`);
+		const conversation = await (
+			await fetch(`${origin}/${provider}/${key}`)
+		).json();
+		expect(conversation.title).toBe(`Named ${provider}`);
+	}
 });

@@ -24,6 +24,7 @@ export interface GitChangedMessage {
 }
 
 export interface AgentLifecycleMessage {
+	notifiedByDesktop?: boolean;
 	type: "agent:lifecycle";
 	workspaceId: string;
 	eventType: AgentLifecycleEventType;

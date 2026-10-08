@@ -1,5 +1,6 @@
 import {
 	ArrowUp,
+	Check,
 	ClipboardList,
 	Code,
 	Hand,
@@ -14,6 +15,9 @@ import {
 } from "renderer/components/ClaudeAccountSwap";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
+import { MessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
+import { useMessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
+import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
@@ -358,7 +362,30 @@ export function SessionComposer({
 		});
 	};
 
-	const submit = () => {
+	const queue = useMessageQueue(draftKey);
+	const [queueSending, setQueueSending] = useState(false);
+	const draftRef = useRef({ text, images });
+	draftRef.current = { text, images };
+	const editor = useQueuedMessageEdit({
+		key: draftKey ?? "claude-composer",
+		queue,
+		read: () => ({ provider: "claude", ...draftRef.current }),
+		write: (prompt) => {
+			if (prompt.provider !== "claude") return;
+			const next = { text: prompt.text, images: prompt.images ?? [] };
+			if (draftKey) setSessionDraft(draftKey, next);
+			setText(next.text);
+			setImages(next.images);
+			setCaret(next.text.length);
+		},
+		focus: () => textareaRef.current?.focus(),
+	});
+	const submit = async () => {
+		if (queueSending || editor.busy) return;
+		if (editor.id) {
+			await editor.save({ provider: "claude", text, images });
+			return;
+		}
 		const value = text.trim();
 		/*
 		 * `/swap` never reaches the CLI, which has no such command and would
@@ -379,10 +406,20 @@ export function SessionComposer({
 		// An image on its own is a complete prompt ("look at this"), so having
 		// something attached is enough to send even with the box empty.
 		if (!value && images.length === 0) return;
-		onSend(value, images.length > 0 ? images : undefined);
-		setText("");
+		if (draftKey && (isRunning || queue.state.entries.length)) {
+			setQueueSending(true);
+			try {
+				await queue.enqueue({ provider: "claude", text: value, images });
+			} catch (error) {
+				setImageError(error instanceof Error ? error.message : String(error));
+				return;
+			} finally {
+				setQueueSending(false);
+			}
+		} else onSend(value, images.length > 0 ? images : undefined);
+		setText((current) => (current === text ? "" : current));
 		setMentions([]);
-		setImages([]);
+		setImages((current) => current.filter((image) => !images.includes(image)));
 		setImageError(null);
 	};
 
@@ -391,6 +428,7 @@ export function SessionComposer({
 	return (
 		<div className="session-composer-area">
 			<SessionChangesPill changes={changes} provider="claude" />
+			<MessageQueue queue={queue} provider="claude" editor={editor} />
 			{/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target is
 			    a region, not a control; the same files go in via the + button,
 			    which is the keyboard-reachable path. */}
@@ -659,10 +697,17 @@ export function SessionComposer({
 								<button
 									type="button"
 									onClick={submit}
-									aria-label="Queue message"
+									disabled={queueSending || editor.busy}
+									aria-label={
+										editor.id ? "Save queued message" : "Queue message"
+									}
 									className="session-send"
 								>
-									<ArrowUp className="size-4" />
+									{editor.id ? (
+										<Check className="size-4" />
+									) : (
+										<ArrowUp className="size-4" />
+									)}
 								</button>
 							) : null}
 							<button
@@ -678,11 +723,15 @@ export function SessionComposer({
 						<button
 							type="button"
 							onClick={submit}
-							disabled={!canSend}
-							aria-label="Send"
+							disabled={!canSend || queueSending || editor.busy}
+							aria-label={editor.id ? "Save queued message" : "Send"}
 							className="session-send"
 						>
-							<ArrowUp className="size-4" />
+							{editor.id ? (
+								<Check className="size-4" />
+							) : (
+								<ArrowUp className="size-4" />
+							)}
 						</button>
 					)}
 				</div>

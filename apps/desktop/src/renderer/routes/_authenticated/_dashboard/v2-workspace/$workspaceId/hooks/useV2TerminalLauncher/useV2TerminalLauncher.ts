@@ -1,5 +1,6 @@
 import { useWorkspaceClient } from "@superset/workspace-client";
 import { useCallback, useMemo } from "react";
+import { registerTerminalName } from "renderer/lib/terminal/session-naming";
 import { getInitialDimensions } from "renderer/lib/terminal/terminal-runtime";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import { useTheme } from "renderer/stores/theme";
@@ -68,6 +69,8 @@ export function useV2TerminalLauncher(): TerminalLauncher {
 				cols: initial.cols,
 				rows: initial.rows,
 			});
+			if (!options?.terminalId)
+				await registerTerminalName(terminalId, options?.command);
 			return terminalId;
 		},
 		[trpcClient, workspaceId, themeType],

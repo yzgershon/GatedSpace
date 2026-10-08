@@ -365,10 +365,10 @@ function DashboardLayout() {
 				 * zooming the column would multiply the sidebar's own scale by this
 				 * one. See renderer/stores/ui-scale.
 				 */}
-				<div style={mainZoom}>
+				<div className="workspace-topbar-layer" style={mainZoom}>
 					<TopBar />
 				</div>
-				<div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
+				<div className="workspace-content-layer flex flex-1 min-h-0 min-w-0 overflow-hidden">
 					{!sidebarOutsideColumn && animatedSidebar}
 					<div style={mainZoom} className="flex flex-1 min-h-0 min-w-0">
 						{versionMismatch ? <CrossVersionMismatchState /> : <Outlet />}

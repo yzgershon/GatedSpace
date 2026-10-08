@@ -170,3 +170,16 @@ describe("notificationsRouter.hook", () => {
 		expect(broadcast?.agent).toBeUndefined();
 	});
 });
+
+it("preserves desktop ownership while forwarding status so the renderer cannot re-notify", async () => {
+	const { ctx, broadcastAgentLifecycle } = createContext("workspace-1");
+	await notificationsRouter.createCaller(ctx).hook({
+		terminalId: "terminal-1",
+		eventType: "Stop",
+		notifiedByDesktop: true,
+	});
+	expect(broadcastAgentLifecycle.mock.calls[0]?.[0]).toMatchObject({
+		eventType: "Stop",
+		notifiedByDesktop: true,
+	});
+});

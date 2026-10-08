@@ -9,6 +9,7 @@ import {
 	type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { sessionNames } from "../session-names";
 import {
 	agentBrowserService,
 	browserInput,
@@ -83,6 +84,7 @@ class AgentBrowserMcp {
 										},
 										annotations: {
 											readOnlyHint: [
+												"browser_tabs",
 												"browser_snapshot",
 												"browser_screenshot",
 												"browser_console",
@@ -141,7 +143,43 @@ class AgentBrowserMcp {
 	async connect(scope: string, tools: AdditionalTool[] = []) {
 		const url = await this.url();
 		const token = randomBytes(32).toString("hex");
-		this.tokens.set(token, { scope, tools });
+		const nameInput = z.object({
+			session: z.string().optional(),
+			title: z.string().min(3).max(64),
+		});
+		const naming: AdditionalTool = {
+			definition: {
+				name: "name_session",
+				description:
+					"Give a NEW session a concise, thoughtful title from its first prompt. Existing or manually chosen names are protected. Call once; do not copy the prompt verbatim.",
+				inputSchema: z.toJSONSchema(nameInput) as { type: "object" },
+			},
+			run: (raw) => {
+				const input = nameInput.parse(raw);
+				const session = scope === "codex" ? input.session : scope;
+				if (!session || (scope === "codex" && !session.startsWith("codex:")))
+					return {
+						isError: true,
+						content: [{ type: "text", text: "Use this pane's session key." }],
+					};
+				const provider = session.startsWith("codex:") ? "codex" : "claude";
+				const changed = sessionNames.suggest(
+					{ provider, key: session.slice(provider.length + 1) },
+					input.title,
+				);
+				return {
+					content: [
+						{
+							type: "text",
+							text: changed
+								? "Session named."
+								: "Name unchanged: existing, already named, or manually renamed session.",
+						},
+					],
+				};
+			},
+		};
+		this.tokens.set(token, { scope, tools: [...tools, naming] });
 		return {
 			url,
 			token,

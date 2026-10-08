@@ -1,0 +1,113 @@
+html,
+body {
+	height: auto;
+	overflow: auto;
+}
+body {
+	margin: 0;
+	font:
+		14px "Segoe UI",
+		sans-serif;
+	background: var(--background);
+	color: var(--foreground);
+}
+.collections-check {
+	max-width: 1200px;
+	margin: auto;
+	padding: 24px;
+}
+.collections-check header {
+	margin-bottom: 24px;
+}
+.collections-check h1 {
+	font-size: 24px;
+	font-weight: 600;
+}
+.collections-check p {
+	color: var(--muted-foreground);
+	line-height: 1.65;
+}
+.check-grid {
+	display: grid;
+	grid-template-columns: 300px minmax(0, 1fr);
+	gap: 24px;
+}
+.check-grid aside {
+	height: 690px;
+	min-width: 0;
+	background: var(--card);
+	border-radius: 14px;
+	overflow: hidden;
+}
+.check-conversation {
+	min-width: 0;
+	background: var(--card);
+	border-radius: 14px;
+	padding: 20px 10px 0;
+	display: flex;
+	flex-direction: column;
+}
+.check-conversation h2,
+.check-conversation > p {
+	margin: 0 16px 16px;
+}
+.check-conversation h2 {
+	font-size: 16px;
+	font-weight: 600;
+}
+.check-provider {
+	display: flex;
+	gap: 12px;
+	margin: 16px;
+	margin-top: auto;
+}
+.check-provider button {
+	border: 1px solid var(--border);
+	padding: 5px 9px;
+	border-radius: 7px;
+	cursor: pointer;
+}
+.check-project {
+	max-width: 310px;
+	width: 100%;
+	margin: 15px;
+}
+.check-branches {
+	font-size: 12px;
+	padding: 12px 38px;
+	color: var(--muted-foreground);
+	line-height: 2;
+}
+.check-conversation .session-composer textarea {
+	display: block;
+	width: 100%;
+	background: transparent;
+	resize: none;
+	padding: 18px;
+	outline: none;
+	min-height: 90px;
+}
+.check-conversation .session-composer-toolbar {
+	justify-content: space-between;
+	padding: 10px 18px;
+}
+.check-conversation .session-composer-toolbar > button {
+	background: var(--primary);
+	color: var(--primary-foreground);
+	padding: 5px 8px;
+	border-radius: 7px;
+}
+@media (max-width: 750px) {
+	.collections-check {
+		padding: 12px;
+	}
+	.check-grid {
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.check-grid aside {
+		height: 500px;
+	}
+	.check-conversation {
+		min-height: 500px;
+	}
+}

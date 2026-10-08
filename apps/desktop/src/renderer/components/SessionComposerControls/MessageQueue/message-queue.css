@@ -1,0 +1,138 @@
+.session-message-queue {
+	position: relative;
+	margin: 0 16px -17px;
+	padding: 5px 12px 21px;
+	border: 1px solid var(--border);
+	border-bottom: 0;
+	border-radius: 20px 20px 0 0;
+	background: var(--muted);
+	color: var(--muted-foreground);
+	max-height: 250px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	font-size: 13px;
+}
+.session-message-queue + .session-composer {
+	position: relative;
+}
+.message-queue-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-height: 32px;
+	min-width: 0;
+}
+.message-queue-row > svg {
+	flex-shrink: 0;
+	opacity: 0.65;
+}
+.message-queue-row button {
+	display: flex;
+	gap: 5px;
+	align-items: center;
+	padding: 5px 3px;
+	border-radius: 5px;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.message-queue-row button:hover {
+	color: var(--foreground);
+	background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.message-queue-row button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.message-queue-row button:focus-visible,
+.message-queue-expand:focus-visible,
+.message-queue-resume:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+.message-queue-row .message-queue-text {
+	flex: 1;
+	min-width: 0;
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	text-align: left;
+	color: var(--foreground);
+}
+.message-queue-text small {
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+.message-queue-caption {
+	font-size: 10px;
+	padding: 2px 0;
+}
+.message-queue-expand,
+.message-queue-resume {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: 11px;
+	padding: 5px 0;
+	cursor: pointer;
+}
+.message-queue-resume {
+	color: var(--foreground);
+}
+.message-queue-edit {
+	width: 100%;
+	padding: 5px 0;
+}
+.message-queue-edit textarea {
+	width: 100%;
+	max-height: 120px;
+	resize: vertical;
+	border: 1px solid var(--border);
+	border-radius: 7px;
+	padding: 8px;
+	background: var(--background);
+	color: var(--foreground);
+	user-select: text;
+}
+.message-queue-edit > div {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+}
+.message-queue-error {
+	color: var(--destructive);
+	font-size: 12px;
+	padding: 5px 0;
+}
+.queue-claude {
+	border-radius: 12px 12px 0 0;
+	background: var(--card);
+}
+@container (max-width: 400px) {
+	.message-queue-row > button > span {
+		display: none;
+	}
+	.session-message-queue {
+		margin-inline: 8px;
+		padding-inline: 8px;
+	}
+}
+
+.message-queue-editing {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 4px 10px;
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+.message-queue-editing span {
+	flex: 1;
+}
+.message-queue-editing button {
+	padding: 5px 9px;
+	border-radius: 6px;
+}
+.message-queue-editing button:hover {
+	color: var(--foreground);
+	background: var(--muted);
+}

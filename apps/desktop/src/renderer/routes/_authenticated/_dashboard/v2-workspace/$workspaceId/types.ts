@@ -9,6 +9,8 @@ export interface FilePaneData {
 
 export interface TerminalPaneData {
 	terminalId: string;
+	/** Preset label before the first task has a name; never a manual override. */
+	initialTitle?: string;
 	/**
 	 * Which agent this terminal was launched to run, when it was launched from a
 	 * preset that names one. Absent for a plain shell, and absent for every pane
@@ -78,6 +80,8 @@ export interface ChatPaneData {
 
 export interface BrowserPaneData {
 	url: string;
+	/** Persist agent ownership so previews can be reused after restarting. */
+	agentSessionKey?: string;
 	pageTitle?: string;
 	faviconUrl?: string | null;
 	previewMode?: "responsive" | "desktop" | "galaxy-s24";

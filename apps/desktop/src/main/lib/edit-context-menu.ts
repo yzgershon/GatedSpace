@@ -23,6 +23,9 @@ export function attachEditContextMenu(wc: Electron.WebContents): void {
 			});
 		}
 		if (params.misspelledWord) {
+			if (!params.dictionarySuggestions.length) {
+				menuItems.push({ label: "No spelling suggestions", enabled: false });
+			}
 			menuItems.push(
 				{
 					label: "Add to Dictionary",

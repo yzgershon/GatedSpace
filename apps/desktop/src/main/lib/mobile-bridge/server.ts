@@ -31,6 +31,7 @@ import { claudeSessionManager } from "../claude-session/session-manager";
 import { loadSessionTranscript } from "../claude-session/transcript";
 import { readProfileLimits } from "../claude-session/usage-refresh";
 import { listClaudeSessions } from "../claude-sessions/claude-sessions";
+import { sessionNames } from "../session-names";
 import {
 	type BridgeBindingMode,
 	DEFAULT_BRIDGE_BINDING_MODE,
@@ -124,6 +125,12 @@ const MAX_HISTORY_TO_PHONE = 40;
  * written by an earlier run and was never in this process's memory.
  */
 function titleOf(key: string, sessionId: string | null): string {
+	const canonical = sessionNames.get({
+		provider: "claude",
+		key,
+		id: sessionId ?? undefined,
+	});
+	if (canonical) return canonical;
 	if (sessionId) {
 		const stored = sessionTitles().get(sessionId);
 		if (stored) return stored;

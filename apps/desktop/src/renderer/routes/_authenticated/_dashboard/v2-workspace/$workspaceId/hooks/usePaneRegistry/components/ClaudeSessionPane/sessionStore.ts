@@ -156,7 +156,9 @@ function update(
 	// fatal notices and restarts alike; `publishSessionActivity` drops the ones
 	// that changed nothing, so a token-by-token stream doesn't repaint the tabs.
 	publishSessionActivity(key, {
-		status: snapshot.timeline.status,
+		status: snapshot.timeline.permissions?.length
+			? "attention"
+			: snapshot.timeline.status,
 		turnKey: lastFinishedTurnId(snapshot.timeline),
 	});
 	for (const listener of entry.listeners) listener();

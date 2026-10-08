@@ -1,3 +1,4 @@
+import { renameSessionTab } from "renderer/lib/session-names";
 /**
  * The tab strip, as a rail of collapsing pills in the top bar.
  *
@@ -40,10 +41,16 @@ import type { PaneRegistry, WorkspaceStore } from "@superset/panes";
 import { PANE_DRAG_TYPE, resolveTabTitle } from "@superset/panes";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { useDrop } from "react-dnd";
 import { createPortal } from "react-dom";
-import { LuPlus, LuX } from "react-icons/lu";
+import { LuChevronLeft, LuChevronRight, LuPlus, LuX } from "react-icons/lu";
 import { getStatusTooltip } from "renderer/components/StatusIndicator";
 import { useV2SourcesNotificationStatus } from "renderer/hooks/host-service/useV2NotificationStatus";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
@@ -51,6 +58,7 @@ import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
 import type { PaneViewerData } from "../../types";
+import { AgentStatusRing } from "./components/AgentStatusRing";
 import { computeSlideOffset, overlayRect } from "./tabRailDrag";
 import {
 	NO_DRAG_ATTRIBUTE,
@@ -58,6 +66,10 @@ import {
 	type TabRailDrag,
 	useTabRailDrag,
 } from "./useTabRailDrag";
+import { useTabRailHover } from "./useTabRailHover";
+import { useTabRailOverflow } from "./useTabRailOverflow";
+
+import "./tab-rail.css";
 
 interface PaneDragItem {
 	paneId?: string;
@@ -79,25 +91,13 @@ interface TabRailProps {
 	onCloseGroup: (tabId: string) => void;
 }
 
-/**
- * The ring colour for a status.
- *
- * Deliberately the same four the sidebar and the old tab dots use, so one
- * status never has two colours depending on where you read it.
- */
-const RING_CLASS = {
-	working: "ring-warning",
-	permission: "ring-destructive",
-	review: "ring-success",
-	error: "ring-destructive",
-} as const;
-
 function TabRailItem({
 	tab,
 	tabs,
 	index,
 	registry,
 	isActive,
+	isExpanded,
 	drag,
 	onSelect,
 	onCloseGroup,
@@ -109,6 +109,7 @@ function TabRailItem({
 	index: number;
 	registry: PaneRegistry<PaneViewerData>;
 	isActive: boolean;
+	isExpanded: boolean;
 	drag: TabRailDrag;
 	onSelect: (tabId: string) => void;
 	onCloseGroup: (tabId: string) => void;
@@ -118,6 +119,7 @@ function TabRailItem({
 	const status = useV2SourcesNotificationStatus(
 		workspace.id,
 		getV2NotificationSourcesForTab(tab),
+		true,
 	);
 
 	const paneIds = Object.keys(tab.panes);
@@ -173,6 +175,34 @@ function TabRailItem({
 			: undefined;
 
 	const nodeRef = useRef<HTMLDivElement | null>(null);
+	const labelRef = useRef<HTMLSpanElement>(null);
+	const [labelWidth, setLabelWidth] = useState(0);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: Text changes can keep collapsed child boxes at zero width, so they must remeasure explicitly.
+	useLayoutEffect(() => {
+		const label = labelRef.current;
+		if (!label) return;
+		const measure = () => {
+			const children = [...label.children] as HTMLElement[];
+			const gap = Number.parseFloat(getComputedStyle(label).columnGap) || 0;
+			setLabelWidth(
+				Math.min(
+					190,
+					Math.ceil(
+						children.reduce((sum, child) => {
+							const range = document.createRange();
+							range.selectNodeContents(child);
+							return sum + range.getBoundingClientRect().width;
+						}, 0) +
+							gap * Math.max(0, children.length - 1),
+					),
+				),
+			);
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		for (const child of label.children) observer.observe(child);
+		return () => observer.disconnect();
+	}, [title, paneCount]);
 
 	return (
 		<Tooltip>
@@ -180,6 +210,7 @@ function TabRailItem({
 				<div
 					ref={nodeRef}
 					data-active={isActive}
+					data-expanded={isExpanded}
 					data-rail-tab={tab.id}
 					onPointerDown={(event) => drag.start(event, tab.id)}
 					onClickCapture={(event) => {
@@ -203,9 +234,7 @@ function TabRailItem({
 							? "box-shadow, opacity"
 							: "transform, background-color, color, box-shadow",
 						transitionDuration: isDragged ? "120ms" : "180ms",
-						// Overshoots slightly on the way in, so the row settles rather
-						// than stopping dead.
-						transitionTimingFunction: "cubic-bezier(0.2, 0.9, 0.25, 1.15)",
+						transitionTimingFunction: "cubic-bezier(0.2, 0.8, 0.2, 1)",
 						zIndex: isDragged ? 2 : undefined,
 						cursor: isDragged ? "grabbing" : undefined,
 					}}
@@ -213,8 +242,7 @@ function TabRailItem({
 						// `duration-100` rather than the 150ms default: hovering a tab
 						// should feel like the pointer landed on it, not like the app
 						// noticed a moment later.
-						"gs-tabrail-tab no-drag relative flex h-10 shrink-0 items-center rounded-[10px] pr-2.5 pl-2 duration-100",
-						"focus-within:ring-1 focus-within:ring-ring",
+						"gs-tabrail-tab no-drag relative flex h-10 shrink-0 items-center rounded-[10px] duration-100",
 						// Lifted: a shadow under it and a brighter edge, so it reads as
 						// picked UP rather than merely displaced.
 						isDragged &&
@@ -223,7 +251,7 @@ function TabRailItem({
 						// the overlay is — so it steps back rather than competing.
 						isDragged && overPane && "opacity-45",
 						isActive
-							? "bg-card text-foreground shadow-[inset_0_0_0_1px_rgba(224,120,80,0.34)]"
+							? "bg-card text-foreground"
 							: "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
 					)}
 				>
@@ -256,17 +284,12 @@ function TabRailItem({
 							onStartRename();
 						}}
 					>
+						<AgentStatusRing status={status}>{icon}</AgentStatusRing>
 						<span
-							className={cn(
-								"flex size-5 shrink-0 items-center justify-center rounded-[5px] text-foreground",
-								status && "ring-2",
-								status && RING_CLASS[status],
-								status === "working" && "animate-pulse",
-							)}
+							ref={labelRef}
+							style={{ maxWidth: isExpanded ? labelWidth : 0 }}
+							className="gs-tabrail-label flex items-center gap-1.5"
 						>
-							{icon}
-						</span>
-						<span className="gs-tabrail-label flex items-center gap-1.5">
 							<span className="truncate">{title}</span>
 							{paneCount > 1 ? (
 								<span className="shrink-0 text-[11.5px] text-muted-foreground/60 tabular-nums">
@@ -292,25 +315,26 @@ function TabRailItem({
 					 * and the button cannot arrive under a stationary cursor. Every
 					 * other tab keeps middle-click, which is what the strip always had.
 					 */}
-					{isActive ? (
-						<button
-							type="button"
-							/*
-							 * Not a drag handle. The chip as a whole is, so without this
-							 * the ✕ would begin a drag on press and its click would then
-							 * be swallowed as drag fallout.
-							 */
-							{...{ [NO_DRAG_ATTRIBUTE]: "" }}
-							aria-label={`Close ${title}`}
-							className="ml-1 flex size-[17px] shrink-0 items-center justify-center rounded text-muted-foreground/55 transition-colors duration-100 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none"
-							onClick={(event) => {
-								event.stopPropagation();
-								onCloseGroup(tab.id);
-							}}
-						>
-							<LuX className="size-3.5" />
-						</button>
-					) : null}
+					<button
+						type="button"
+						/*
+						 * Not a drag handle. The chip as a whole is, so without this
+						 * the ✕ would begin a drag on press and its click would then
+						 * be swallowed as drag fallout.
+						 */
+						{...{ [NO_DRAG_ATTRIBUTE]: "" }}
+						aria-label={`Close ${title}`}
+						disabled={!isExpanded || !isActive}
+						tabIndex={isExpanded && isActive ? 0 : -1}
+						aria-hidden={!isExpanded || !isActive}
+						className="gs-tabrail-close flex size-[17px] shrink-0 items-center justify-center rounded text-muted-foreground/55 hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none"
+						onClick={(event) => {
+							event.stopPropagation();
+							onCloseGroup(tab.id);
+						}}
+					>
+						<LuX className="size-3.5" />
+					</button>
 				</div>
 			</TooltipTrigger>
 			{/*
@@ -372,6 +396,9 @@ export function TabRail({
 	 * chips against the rail's box to keep the lifted one inside it.
 	 */
 	const railRef = useRef<HTMLDivElement | null>(null);
+	const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
+	const holdPositionRef = useRef<() => void>(() => {});
+	const hover = useTabRailHover(() => holdPositionRef.current());
 	const setRef = useCallback(
 		(node: HTMLDivElement | null) => {
 			railRef.current = node;
@@ -392,6 +419,18 @@ export function TabRail({
 	 * needs a dependency that only changes at that moment.
 	 */
 	const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
+	const expandedId = drag.state
+		? activeTabId
+		: ([hover.hoveredId, focusedTabId, activeTabId].find((id) =>
+				tabs.some((tab) => tab.id === id),
+			) ?? null);
+	const { scrollRef, edges, step, reveal, holdPosition } = useTabRailOverflow(
+		expandedId,
+		tabs.length,
+		Boolean(renamingTabId),
+		activeTabId,
+	);
+	holdPositionRef.current = holdPosition;
 	const [draftTitle, setDraftTitle] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
@@ -415,6 +454,8 @@ export function TabRail({
 		const next = draftTitle.trim();
 		setRenamingTabId(null);
 		if (!tabId) return;
+		const tab = store.getState().tabs.find((item) => item.id === tabId);
+		if (tab && renameSessionTab(tab, registry, next || undefined)) return;
 		store.getState().setTabTitleOverride({
 			tabId,
 			// An empty name is a request to go back to the derived one, not a
@@ -465,7 +506,7 @@ export function TabRail({
 				 * put it two pixels off the launcher across the bar — near enough to
 				 * look like a rendering difference rather than a decision.
 				 */
-				"no-drag flex h-[46px] min-w-0 items-center gap-[3px] rounded-[13px] border border-[color-mix(in_oklab,var(--border)_100%,white_14%)] bg-[rgba(13,10,9,0.72)] p-[3px]",
+				"gs-tabrail no-drag flex h-[46px] min-w-0 items-center gap-[3px] rounded-[13px] border border-[color-mix(in_oklab,var(--border)_100%,white_14%)] bg-[rgba(13,10,9,0.72)] p-[3px]",
 				"shadow-[0_6px_20px_-10px_rgba(0,0,0,0.9)] transition-colors",
 				// Mid-drag the rail stops being a list and starts being a target,
 				// and says which of the two it currently is.
@@ -473,43 +514,132 @@ export function TabRail({
 				isOver && "bg-highlight/15 ring-1 ring-highlight",
 			)}
 		>
-			{canDrop && isOver ? (
-				<span className="px-2 text-[12px] text-foreground">
-					Release for a new group
-				</span>
-			) : (
-				tabs.map((tab, index) => (
-					<TabRailItem
-						key={tab.id}
-						tab={tab}
-						tabs={tabs}
-						index={index}
-						registry={registry}
-						isActive={tab.id === activeTabId}
-						drag={drag}
-						onSelect={selectTab}
-						onCloseGroup={onCloseGroup}
-						onStartRename={startRename}
-					/>
-				))
-			)}
-
-			<span className="mx-1 h-5 w-px shrink-0 bg-border" />
-			<Tooltip>
-				<TooltipTrigger asChild>
+			<div
+				className="gs-tabrail-window"
+				data-fade-left={edges.left}
+				data-fade-right={edges.right}
+				onPointerEnter={hover.cancel}
+				onPointerLeave={hover.leave}
+			>
+				<div
+					ref={scrollRef}
+					className="gs-tabrail-scroll"
+					role="toolbar"
+					aria-label="Session tabs"
+					onPointerDownCapture={hover.cancel}
+					onPointerMove={(event) => {
+						if (event.pointerType !== "mouse" || event.buttons || drag.state)
+							return;
+						const id =
+							(event.target as HTMLElement).closest<HTMLElement>(
+								"[data-rail-tab]",
+							)?.dataset.railTab ?? null;
+						hover.move(id, event.clientX, event.clientY);
+					}}
+					onFocusCapture={(event) => {
+						hover.clear();
+						reveal();
+						setFocusedTabId(
+							(event.target as HTMLElement).closest<HTMLElement>(
+								"[data-rail-tab]",
+							)?.dataset.railTab ?? null,
+						);
+					}}
+					onBlurCapture={(event) => {
+						if (
+							!event.currentTarget.contains(event.relatedTarget as Node | null)
+						)
+							setFocusedTabId(null);
+					}}
+					onKeyDown={(event) => {
+						if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
+							return;
+						const buttons = [
+							...event.currentTarget.querySelectorAll<HTMLButtonElement>(
+								"[data-rail-tab] > button:first-of-type",
+							),
+						];
+						const current = (event.target as HTMLElement)
+							.closest("[data-rail-tab]")
+							?.querySelector<HTMLButtonElement>("button");
+						const index = buttons.indexOf(current as HTMLButtonElement);
+						if (index < 0) return;
+						event.preventDefault();
+						const next =
+							event.key === "Home"
+								? 0
+								: event.key === "End"
+									? buttons.length - 1
+									: event.key === "ArrowRight"
+										? (index + 1) % buttons.length
+										: (index + buttons.length - 1) % buttons.length;
+						hover.clear();
+						buttons[next]?.focus();
+					}}
+				>
+					{canDrop && isOver ? (
+						<span className="px-2 text-[12px] text-foreground">
+							Release for a new group
+						</span>
+					) : (
+						tabs.map((tab, index) => (
+							<TabRailItem
+								key={tab.id}
+								tab={tab}
+								tabs={tabs}
+								index={index}
+								registry={registry}
+								isActive={tab.id === activeTabId}
+								isExpanded={tab.id === expandedId}
+								drag={drag}
+								onSelect={selectTab}
+								onCloseGroup={onCloseGroup}
+								onStartRename={startRename}
+							/>
+						))
+					)}
+				</div>
+			</div>
+			<div className="gs-tabrail-fixed">
+				<div className="gs-tabrail-arrows">
 					<button
 						type="button"
-						aria-label="New group"
-						className="no-drag flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground/60 transition-colors duration-100 hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-						onClick={onNewGroup}
+						className="gs-tabrail-control"
+						aria-label="Previous tabs"
+						title="Previous tabs"
+						disabled={!edges.left}
+						onClick={() => step(-1)}
 					>
-						<LuPlus className="size-5" />
+						<LuChevronLeft size={15} />
 					</button>
-				</TooltipTrigger>
-				<TooltipContent side="bottom" showArrow={false}>
-					{newGroupHint ? `New group · ${newGroupHint}` : "New group"}
-				</TooltipContent>
-			</Tooltip>
+					<button
+						type="button"
+						className="gs-tabrail-control"
+						aria-label="Next tabs"
+						title="Next tabs"
+						disabled={!edges.right}
+						onClick={() => step(1)}
+					>
+						<LuChevronRight size={15} />
+					</button>
+				</div>
+				<span className="mx-1 h-5 w-px shrink-0 bg-border" />
+				<Tooltip>
+					<TooltipTrigger asChild>
+						<button
+							type="button"
+							aria-label="New group"
+							className="no-drag flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground/60 transition-colors duration-100 hover:bg-accent/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							onClick={onNewGroup}
+						>
+							<LuPlus className="size-5" />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent side="bottom" showArrow={false}>
+						{newGroupHint ? `New group · ${newGroupHint}` : "New group"}
+					</TooltipContent>
+				</Tooltip>
+			</div>
 			<PaneDropPreview target={drag.state?.paneTarget ?? null} />
 		</div>
 	);

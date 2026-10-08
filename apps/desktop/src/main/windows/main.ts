@@ -14,6 +14,7 @@ import {
 	getWorkspaceName as getEnvWorkspaceName,
 } from "shared/env.shared";
 import type { AgentLifecycleEvent } from "shared/notification-types";
+import type { SessionNotificationState } from "shared/session-notifications";
 import { createIPCHandler } from "trpc-electron/main";
 import { productName } from "~/package.json";
 import { appState } from "../lib/app-state";
@@ -33,11 +34,13 @@ import {
 	notificationsApp,
 	notificationsEmitter,
 } from "../lib/notifications/server";
+import { sessionEvents } from "../lib/notifications/session-events";
 import {
 	extractWorkspaceIdFromUrl,
 	getNotificationTitle,
 	getWorkspaceName,
 } from "../lib/notifications/utils";
+import { enableComposerSpellcheck } from "../lib/spellcheck";
 import {
 	getInitialWindowBounds,
 	loadWindowState,
@@ -169,6 +172,7 @@ export async function MainWindow() {
 		trafficLightPosition: { x: 16, y: 16 },
 		webPreferences: {
 			preload: join(__dirname, "../preload/index.js"),
+			spellcheck: true,
 			webviewTag: true,
 			// Isolate Electron session from system browser cookies
 			// This ensures desktop uses bearer token auth, not web cookies
@@ -192,6 +196,7 @@ export async function MainWindow() {
 
 	createApplicationMenu();
 
+	enableComposerSpellcheck(window.webContents.session);
 	attachEditContextMenu(window.webContents);
 
 	currentWindow = window;
@@ -271,18 +276,29 @@ export async function MainWindow() {
 		playSound: playNotificationSound,
 		getNotificationMatrix,
 		shouldShowBanner,
+		isEventVisible: (event) =>
+			Boolean(
+				event.managed &&
+					window.isFocused() &&
+					sessionEvents.get(event.paneId ?? "")?.visible,
+			),
 		pushToPhone: (notice) => {
 			void pushService.notify(notice);
 		},
 		onNotificationClick: (ids) => {
 			window.show();
 			window.focus();
-			if (ids.workspaceId && ids.terminalId) {
+			if (
+				ids.workspaceId &&
+				(ids.terminalId || (ids.paneId && sessionEvents.owns(ids.paneId)))
+			) {
 				notificationsEmitter.emit(
 					NOTIFICATION_EVENTS.FOCUS_V2_NOTIFICATION_SOURCE,
 					{
 						workspaceId: ids.workspaceId,
-						source: { type: "terminal", id: ids.terminalId },
+						source: ids.terminalId
+							? { type: "terminal", id: ids.terminalId }
+							: { type: "session", id: ids.paneId },
 					},
 				);
 				return;
@@ -298,6 +314,7 @@ export async function MainWindow() {
 		}),
 		getWorkspaceName: getWorkspaceNameFromDb,
 		getNotificationTitle: (event) =>
+			sessionEvents.getContext(event.paneId ?? "")?.title ||
 			getNotificationTitle({
 				tabId: event.tabId,
 				paneId: event.paneId,
@@ -306,6 +323,28 @@ export async function MainWindow() {
 			}),
 	});
 	notificationManager.start();
+	const sessionNotice = (state: SessionNotificationState) => {
+		notificationManager.handleAgentLifecycle({
+			paneId: state.key,
+			workspaceId: state.workspaceId,
+			sessionId: state.sessionId,
+			managed: true,
+			turnId: state.turnId,
+			sessionTitle:
+				state.title ||
+				(state.provider === "codex" ? "Codex session" : "Claude session"),
+			eventType: state.status === "completed" ? "Stop" : "PendingQuestion",
+		});
+	};
+	const sessionChanged = (state: SessionNotificationState) => {
+		if (state.status !== "completed") pushService.invalidate(state.key);
+	};
+	sessionEvents.on("notice", sessionNotice);
+	sessionEvents.on("change", sessionChanged);
+	window.once("closed", () => {
+		sessionEvents.off("notice", sessionNotice);
+		sessionEvents.off("change", sessionChanged);
+	});
 
 	notificationsEmitter.on(
 		NOTIFICATION_EVENTS.AGENT_LIFECYCLE,

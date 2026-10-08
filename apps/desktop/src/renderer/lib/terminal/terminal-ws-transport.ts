@@ -5,6 +5,7 @@ import {
 import type { Terminal as XTerm } from "@xterm/xterm";
 import { posthog } from "renderer/lib/posthog";
 import { requestAccountSwap } from "renderer/stores/claude-account-swap";
+import { observeFirstTerminalCommand } from "./session-naming";
 import {
 	createSwapInterceptState,
 	interceptSwapCommand,
@@ -35,6 +36,7 @@ type TerminalServerMessage =
 	| { type: "title"; title: string | null };
 
 export interface TerminalTransport {
+	terminalId?: string;
 	socket: WebSocket | null;
 	connectionState: ConnectionState;
 	/** The URL the socket is currently connected (or connecting) to. */
@@ -485,6 +487,7 @@ function attachSocketListeners(
 		}
 
 		if (message.type === "attached") {
+			transport.terminalId = message.terminalId;
 			setConnectionState(transport, "open");
 			sendResize(transport, terminal.cols, terminal.rows);
 			return;
@@ -576,7 +579,10 @@ function attachSocketListeners(
 		if (socket.readyState !== WebSocket.OPEN) return;
 		if (transport.connectionState !== "open") return;
 		const { forward, swapQuery } = interceptSwapCommand(swapState, data);
-		if (forward) socket.send(JSON.stringify({ type: "input", data: forward }));
+		if (forward) {
+			observeFirstTerminalCommand(transport.terminalId, forward);
+			socket.send(JSON.stringify({ type: "input", data: forward }));
+		}
 		if (swapQuery !== undefined) {
 			// A pty's environment is fixed when it opens, so this terminal keeps the
 			// account it started on. The picker says so rather than implying a
@@ -624,6 +630,7 @@ export function sendInput(transport: TerminalTransport, data: string) {
 	if (!transport.socket || transport.socket.readyState !== WebSocket.OPEN)
 		return;
 	if (transport.connectionState !== "open") return;
+	observeFirstTerminalCommand(transport.terminalId, data);
 	transport.socket.send(JSON.stringify({ type: "input", data }));
 }
 

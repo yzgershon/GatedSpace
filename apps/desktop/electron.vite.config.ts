@@ -16,9 +16,11 @@ import {
 	devPath,
 	htmlEnvTransformPlugin,
 } from "./vite/helpers";
+import { applyPersonalBackend } from "./vite/personal-backend";
 
 // override: true ensures .env values take precedence over inherited env vars
 config({ path: resolve(__dirname, "../../.env"), override: true, quiet: true });
+applyPersonalBackend(process.env);
 
 const DEV_SERVER_PORT = Number(process.env.DESKTOP_VITE_PORT);
 

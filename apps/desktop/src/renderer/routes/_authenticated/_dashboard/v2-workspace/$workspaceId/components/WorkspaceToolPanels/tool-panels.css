@@ -1,4 +1,5 @@
 .gs-tool-workspace {
+	position: relative;
 	/* Match the main pane well across the tool gutters and rounded corners. */
 	background: var(--gs-pane-well, transparent);
 	display: grid;
@@ -16,6 +17,13 @@
 .gs-tool-workspace-resizing {
 	transition: none;
 	user-select: none;
+}
+.gs-tool-workspace[data-expanded="main"] {
+	grid-template-columns: minmax(0, 1fr) 0;
+	grid-template-rows: minmax(0, 1fr) 0;
+}
+.gs-tool-workspace[data-expanded] {
+	transition: none;
 }
 .gs-tool-workspace[data-expanded="right"] {
 	grid-template-columns: 0 minmax(0, 1fr);
@@ -165,21 +173,55 @@
 	position: absolute;
 	z-index: 40;
 	touch-action: none;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	outline: none;
+	transition:
+		right 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		bottom 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gs-tool-workspace-resizing > .gs-tool-resize {
+	transition: none;
 }
 .gs-tool-resize-right {
-	inset: 18px auto 18px 0;
-	width: 6px;
+	top: 18px;
+	bottom: calc(var(--tool-bottom) + 18px);
+	right: calc(var(--tool-right) + var(--gs-pane-inset, 9px));
+	transform: translateX(50%);
+	width: 20px;
 	cursor: col-resize;
 }
 .gs-tool-resize-bottom {
-	inset: 0 18px auto;
-	height: 6px;
+	left: 18px;
+	right: 18px;
+	bottom: calc(var(--tool-bottom) + var(--gs-pane-inset, 9px));
+	transform: translateY(50%);
+	height: 20px;
 	cursor: row-resize;
 }
-.gs-tool-resize:hover,
-.gs-tool-resize:focus-visible {
-	background: color-mix(in srgb, var(--highlight) 40%, transparent);
-	border-radius: 8px;
+.gs-tool-resize::after {
+	content: "";
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--muted-foreground) 35%, transparent);
+	transition: background-color 150ms;
+}
+.gs-tool-resize-right::after {
+	width: 4px;
+	height: 56px;
+}
+.gs-tool-resize-bottom::after {
+	width: 56px;
+	height: 4px;
+}
+.gs-tool-resize:hover::after,
+.gs-tool-resize:focus-visible::after,
+.gs-tool-resize[data-resizing="true"]::after {
+	background: var(--muted-foreground);
+}
+.gs-tool-resize:focus-visible::after {
+	outline: 2px solid var(--foreground);
+	outline-offset: 2px;
 }
 @keyframes gs-tool-content-in {
 	from {
@@ -210,6 +252,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
 	.gs-tool-workspace,
+	.gs-tool-resize,
+	.gs-tool-resize::after,
 	.gs-tool-tab {
 		transition: none;
 	}

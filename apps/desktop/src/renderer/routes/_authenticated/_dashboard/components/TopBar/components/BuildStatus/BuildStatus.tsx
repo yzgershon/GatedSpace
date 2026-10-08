@@ -17,6 +17,7 @@ import {
 	buildRevision,
 	isBuildActive,
 	isBuildUrl,
+	primaryBuild,
 } from "shared/build-status";
 import "./build-status.css";
 
@@ -39,8 +40,7 @@ export function BuildStatusView({
 	onOpen: (url: string) => void;
 }) {
 	const active = jobs.find(isBuildActive);
-	const primary =
-		jobs.find((job) => job.stage === "failed") ?? active ?? jobs[0];
+	const primary = primaryBuild(jobs);
 	if (!primary && !error) return null;
 	const stage = error ? "failed" : (primary?.stage ?? "failed");
 	const Icon = icons[stage];

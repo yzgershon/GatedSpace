@@ -11,6 +11,7 @@ import { build } from "vite";
 const directory = resolve(import.meta.dir, "workspace-tools");
 const preview = process.argv.includes("--preview");
 const previewCheck = process.argv.includes("--preview-check");
+const layoutCheck = process.argv.includes("--layout-check");
 const productionCss = process.argv.includes("--production-css");
 if (preview && productionCss)
 	throw new Error("Use --preview-check to verify production CSS offline");
@@ -116,6 +117,10 @@ await writeFile(
 	resolve(output, "preview-checks.cjs"),
 	await readFile(resolve(directory, "preview-checks.cjs")),
 );
+await writeFile(
+	resolve(output, "layout-checks.cjs"),
+	await readFile(resolve(directory, "layout-checks.cjs")),
+);
 // The app loads its Tailwind base before lazy route CSS. This single-bundle
 // fixture must declare the same layer order before dependency styles.
 const stylesheet = await readFile(resolve(output, "style.css"), "utf8");
@@ -167,8 +172,13 @@ if (preview) {
 	console.log(`Header preview: http://127.0.0.1:${server.port}/?preview`);
 	await new Promise(() => {});
 }
-const env = { ...process.env, GS_TOOLS_TEST_OUTPUT: output };
+const env = {
+	...process.env,
+	GS_TOOLS_TEST_OUTPUT: output,
+	GS_TOOLS_LAYOUT_ONLY: layoutCheck ? "1" : "",
+};
 delete env.ELECTRON_RUN_AS_NODE;
+delete env.NoDefaultCurrentDirectoryInExePath;
 const child = spawn(String(electron), [resolve(output, "main.cjs")], {
 	env,
 	windowsHide: true,

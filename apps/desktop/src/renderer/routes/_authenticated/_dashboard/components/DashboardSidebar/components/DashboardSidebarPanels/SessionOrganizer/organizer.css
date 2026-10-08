@@ -1,0 +1,214 @@
+.session-organizer {
+	--organizer-fill: color-mix(in srgb, var(--foreground) 4%, transparent);
+	padding-bottom: 8px;
+}
+.organizer-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 3px 6px 12px;
+}
+.organizer-toolbar > span {
+	font-size: 9px;
+	letter-spacing: 0.09em;
+	color: var(--muted-foreground);
+	font-weight: 600;
+}
+.organizer-toolbar > button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 6px 8px;
+	border-radius: 7px;
+	background: var(--organizer-fill);
+	color: var(--foreground);
+	font-size: 11px;
+	cursor: pointer;
+}
+.session-project-section {
+	margin-bottom: 14px;
+	border: 1px solid transparent;
+	border-radius: 9px;
+	padding: 2px;
+}
+.session-project-section[data-over="true"] {
+	border-color: var(--ring);
+	background: var(--organizer-fill);
+}
+.session-project-section:has([data-session-key]:hover) .project-menu-button {
+	opacity: 1;
+}
+.session-project-heading {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+.session-project-heading .collection-heading {
+	min-width: 0;
+	flex: 1;
+	font-size: 12px;
+	color: var(--foreground);
+}
+.session-project-heading .collection-heading > svg:first-child {
+	color: var(--muted-foreground);
+}
+.session-project-heading .collection-heading small {
+	font-variant-numeric: tabular-nums;
+}
+.session-project-heading:hover .project-menu-button,
+.project-menu-button:focus-visible,
+.project-menu-button[data-state="open"] {
+	opacity: 1;
+}
+.project-menu-button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 25px;
+	height: 28px;
+	flex-shrink: 0;
+	color: var(--muted-foreground);
+	border-radius: 5px;
+	cursor: pointer;
+	opacity: 0.6;
+}
+.project-menu-button:hover,
+.organizer-toolbar > button:hover {
+	background: color-mix(in srgb, var(--foreground) 9%, transparent);
+}
+.session-drag-handle {
+	width: 18px;
+	min-width: 18px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--muted-foreground);
+	cursor: grab;
+	touch-action: none;
+	opacity: 0.25;
+	border-radius: 4px;
+}
+.session-drag-handle:active {
+	cursor: grabbing;
+}
+.collection-session-row:hover .session-drag-handle,
+.session-drag-handle:focus-visible {
+	opacity: 1;
+}
+.session-organizer .collection-session-open {
+	padding-left: 3px;
+}
+.session-organizer .collection-row-menu {
+	flex-shrink: 0;
+	opacity: 0.6;
+}
+.session-organizer .collection-session-meta {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.session-organizer [data-group="@pinned"] .collection-pin {
+	display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.session-organizer [data-session-key] {
+		transition: none;
+	}
+}
+.session-project-empty {
+	margin: 3px 8px 8px 29px;
+	font-size: 11px;
+	line-height: 1.65;
+	color: var(--muted-foreground);
+}
+.project-inline-form {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 5px 4px 10px;
+	padding: 10px;
+	border-radius: 8px;
+	border: 1px solid var(--border);
+	background: var(--organizer-fill);
+	font-size: 12px;
+}
+.project-inline-form label {
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+.project-inline-form input {
+	width: 100%;
+	min-width: 0;
+	background: var(--background);
+	color: var(--foreground);
+	border: 1px solid var(--border);
+	border-radius: 5px;
+	padding: 7px 8px;
+	user-select: text;
+}
+.project-inline-form input:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+.project-inline-form > div {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.project-inline-form button {
+	padding: 5px 8px;
+	cursor: pointer;
+	border-radius: 5px;
+	color: var(--muted-foreground);
+}
+.project-inline-form button:first-child {
+	background: var(--foreground);
+	color: var(--background);
+}
+.session-organizer button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+.project-inline-form p {
+	color: var(--muted-foreground);
+	font-size: 11px;
+	line-height: 1.5;
+}
+.organizer-error {
+	margin: 8px;
+	font-size: 12px;
+	color: var(--destructive);
+	line-height: 1.5;
+}
+.session-project-destinations {
+	max-height: min(400px, var(--radix-dropdown-menu-content-available-height));
+	overflow-y: auto;
+	max-width: 260px;
+}
+.session-project-destination {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.session-drag-preview {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 12px;
+	background: var(--popover);
+	color: var(--foreground);
+	border: 1px solid var(--ring);
+	border-radius: 8px;
+	box-shadow: 0 8px 24px #0004;
+	font-size: 12px;
+}
+.session-drag-preview span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

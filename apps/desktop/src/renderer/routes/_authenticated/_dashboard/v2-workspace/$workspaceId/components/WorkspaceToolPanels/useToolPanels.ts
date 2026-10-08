@@ -32,10 +32,11 @@ export function useToolPanels(
 			{
 				onData: (request) => {
 					try {
-						openAgentBrowserTab(tools, request);
+						const result = openAgentBrowserTab(tools, request);
 						void electronTrpcClient.browser.agentOpened.mutate({
 							workspaceId,
 							requestId: request.requestId,
+							result,
 						});
 					} catch (error) {
 						void electronTrpcClient.browser.agentOpened.mutate({

@@ -103,12 +103,14 @@ export function Pane<TData>({
 				},
 				focus: () =>
 					store.getState().setActivePane({ tabId: tab.id, paneId: pane.id }),
-				setTitle: (title?: string) =>
+				setTitle: (title?: string) => {
+					if (definition?.onRename) return definition.onRename(pane, title);
 					store.getState().setPaneTitleOverride({
 						tabId: tab.id,
 						paneId: pane.id,
 						titleOverride: title,
-					}),
+					});
+				},
 				pin: () =>
 					store.getState().setPanePinned({
 						paneId: pane.id,

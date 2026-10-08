@@ -4,6 +4,9 @@
 # host-service endpoint, with a v1 Electron hook fallback while both
 # terminal stacks are supported.
 
+# Native panes report authoritative results over their own transport.
+[ "$GATEDSPACE_NATIVE_SESSION" = "1" ] && exit 0
+
 # Codex passes JSON as argv; Claude/Mastra/Droid pipe via stdin.
 if [ -n "$1" ]; then
   INPUT="$1"

@@ -7,6 +7,8 @@ import {
 } from "main/lib/browser/agent-browser-service";
 import { browserManager } from "main/lib/browser/browser-manager";
 import { applyBrowserPreview } from "main/lib/browser/browser-preview";
+import { localPreviews } from "main/lib/browser/local-previews";
+import { browserPanelResultSchema } from "shared/agent-browser";
 import { BROWSER_PREVIEW_MODES } from "shared/browser-preview";
 import { BROWSER_SCRIPT_NAMES, getBrowserScript } from "shared/browser-scripts";
 import { z } from "zod";
@@ -15,6 +17,14 @@ import { publicProcedure, router } from "../..";
 export const createBrowserRouter = () => {
 	installAgentBrowserAdapter();
 	return router({
+		resolveLocalPreview: publicProcedure
+			.input(z.object({ url: z.string().max(8000) }))
+			.mutation(async ({ input }) => ({
+				url: await localPreviews().resolveUrl(
+					input.url,
+					agentBrowserService.workspaceDirectories(),
+				),
+			})),
 		agentOpenRequests: publicProcedure
 			.input(z.object({ workspaceId: z.string() }))
 			.subscription(({ input }) =>
@@ -35,6 +45,7 @@ export const createBrowserRouter = () => {
 				z.object({
 					requestId: z.string(),
 					workspaceId: z.string(),
+					result: browserPanelResultSchema.optional(),
 					error: z.string().optional(),
 				}),
 			)
@@ -42,6 +53,7 @@ export const createBrowserRouter = () => {
 				agentBrowserService.acknowledge(
 					input.requestId,
 					input.workspaceId,
+					input.result,
 					input.error,
 				);
 				return { success: true };

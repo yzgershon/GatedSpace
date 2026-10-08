@@ -66,6 +66,8 @@ export interface PaneTitleSource {
 }
 
 export interface PaneDefinition<TData> {
+	/** Persist a session-scoped name instead of an independent pane override. */
+	onRename?(pane: Pane<TData>, title: string | undefined): void;
 	renderPane(context: RendererContext<TData>): ReactNode;
 	getTitle?(pane: Pane<TData>): string | undefined;
 	/**

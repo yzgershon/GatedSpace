@@ -18,6 +18,7 @@ const agentIdentityInput = z
 const hookInput = z.object({
 	terminalId: z.string().optional(),
 	eventType: z.string().optional(),
+	notifiedByDesktop: z.boolean().optional(),
 	agent: agentIdentityInput,
 });
 
@@ -80,6 +81,7 @@ export const notificationsRouter = router({
 			terminalId: input.terminalId,
 			...(agent ? { agent } : {}),
 			occurredAt,
+			notifiedByDesktop: input.notifiedByDesktop,
 		});
 
 		ctx.terminalAgentStore.recordEvent({

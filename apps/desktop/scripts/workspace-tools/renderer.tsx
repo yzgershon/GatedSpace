@@ -44,6 +44,7 @@ import { TerminalSessionTitle } from "../../src/renderer/routes/_authenticated/_
 import type { PaneViewerData } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import "@xterm/xterm/css/xterm.css";
 import "./test.css";
+import { LauncherFixture, launcherControl } from "./LauncherFixture";
 
 const tools = createToolPanels({
 	key: "isolated-tools",
@@ -194,11 +195,7 @@ const registry: PaneRegistry<PaneViewerData> = {
 	},
 	"new-tab": {
 		getTitle: () => "New pane",
-		renderPane: () => (
-			<div className="p-6 text-muted-foreground">
-				Choose a session, terminal or browser.
-			</div>
-		),
+		renderPane: (ctx) => <LauncherFixture ctx={ctx} />,
 	},
 };
 const closeActions = [
@@ -225,6 +222,10 @@ const chrome = {
 function Fixture() {
 	const state = useStore(tools.state);
 	const layout = useStore(main, (state) => state.tabs[0]?.layout);
+	const mainExpanded = useStore(
+		main,
+		(s) => !!s.tabs.find((t) => t.id === s.activeTabId)?.maximizedPaneId,
+	);
 	const actions = useDefaultPaneActions({ tools });
 	const menus = useDefaultContextMenuActions({
 		paneRegistry: registry,
@@ -272,6 +273,7 @@ function Fixture() {
 					<WorkspaceToolPanels
 						tools={tools}
 						mainMinimum={mainPaneMinimum(layout, 9)}
+						mainExpanded={mainExpanded}
 						registry={registry}
 						paneActions={closeActions}
 						contextMenuActions={menus}
@@ -309,6 +311,7 @@ if (!appRoot) throw new Error("Missing fixture root");
 createRoot(appRoot).render(<Fixture />);
 Object.assign(window, {
 	toolsTest: {
+		launcherControl,
 		hotkeyCalls,
 		tools,
 		browserRuntimeRegistry,

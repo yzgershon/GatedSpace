@@ -125,11 +125,17 @@ export function Workspace<TData>({
 							await closeTab(tab.id);
 						}
 					}}
-					onRenameTab={(tabId, title) =>
-						store
-							.getState()
-							.setTabTitleOverride({ tabId, titleOverride: title })
-					}
+					onRenameTab={(tabId, title) => {
+						const tab = store.getState().tabs.find((item) => item.id === tabId);
+						const panes = Object.values(tab?.panes ?? {});
+						const pane = panes.length === 1 ? panes[0] : undefined;
+						const rename = pane ? registry[pane.kind]?.onRename : undefined;
+						if (rename && pane) rename(pane, title);
+						else
+							store
+								.getState()
+								.setTabTitleOverride({ tabId, titleOverride: title });
+					}}
 					onReorderTab={(tabId, toIndex) =>
 						store.getState().reorderTab({ tabId, toIndex })
 					}

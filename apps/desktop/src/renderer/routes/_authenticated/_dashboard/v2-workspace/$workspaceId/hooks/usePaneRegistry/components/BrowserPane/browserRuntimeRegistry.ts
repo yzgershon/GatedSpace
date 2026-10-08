@@ -4,6 +4,7 @@ import type {
 	BrowserPreviewMode,
 	BrowserPreviewOrientation,
 } from "shared/browser-preview";
+import { loopbackPreviewUrl } from "shared/local-preview";
 import type { BrowserLoadError } from "shared/tabs-types";
 import { previewLayout } from "./preview-layout";
 import { sanitizeUrl } from "./sanitizeUrl";
@@ -46,6 +47,7 @@ interface RegistryEntry {
 	suspendedUrl: string | null;
 	/** Pending grace-period timer that discards this pane once idle. */
 	suspendTimer: ReturnType<typeof setTimeout> | null;
+	previewRecoveryUrl: string | null;
 }
 
 const EMPTY_STATE: BrowserRuntimeState = Object.freeze({
@@ -362,6 +364,7 @@ class BrowserRuntimeRegistryImpl {
 			suspended: false,
 			suspendedUrl: null,
 			suspendTimer: null,
+			previewRecoveryUrl: null,
 		};
 
 		const firePersist = () => {
@@ -412,6 +415,10 @@ class BrowserRuntimeRegistryImpl {
 
 		const handleDidStopLoading = () => {
 			if (entry.suspended) return;
+			if (entry.state.error) {
+				this.setState(paneId, { isLoading: false });
+				return;
+			}
 			const url = webview.getURL() ?? "";
 			const title = webview.getTitle() ?? "";
 			this.setState(paneId, {
@@ -473,15 +480,40 @@ class BrowserRuntimeRegistryImpl {
 
 		const handleDidFailLoad = (e: Electron.DidFailLoadEvent) => {
 			if (entry.suspended) return;
+			if (e.isMainFrame === false) return;
 			if (e.errorCode === -3) return; // ERR_ABORTED
+			const failedUrl = e.validatedURL || entry.state.currentUrl;
 			this.setState(paneId, {
 				isLoading: false,
 				error: {
 					code: e.errorCode ?? 0,
 					description: e.errorDescription ?? "",
-					url: e.validatedURL ?? "",
+					url: failedUrl,
 				},
 			});
+			if (
+				loopbackPreviewUrl(failedUrl) &&
+				entry.previewRecoveryUrl !== failedUrl
+			) {
+				entry.previewRecoveryUrl = failedUrl;
+				void electronTrpcClient.browser.resolveLocalPreview
+					.mutate({ url: failedUrl })
+					.then(({ url }) => {
+						if (
+							url !== failedUrl &&
+							this.entries.get(paneId) === entry &&
+							!entry.suspended &&
+							entry.state.error?.url === failedUrl
+						)
+							this.navigate(paneId, url);
+					})
+					.catch((error) =>
+						console.warn(
+							"[browserRuntimeRegistry] preview recovery failed:",
+							error,
+						),
+					);
+			}
 		};
 
 		webview.addEventListener("dom-ready", handleDomReady);
@@ -648,7 +680,10 @@ class BrowserRuntimeRegistryImpl {
 
 	reload(paneId: string): void {
 		const entry = this.entries.get(paneId);
-		entry?.webview.reload();
+		if (!entry) return;
+		entry.previewRecoveryUrl = null;
+		if (entry.state.error?.url) this.navigate(paneId, entry.state.error.url);
+		else entry.webview.reload();
 	}
 
 	getState(paneId: string): BrowserRuntimeState {

@@ -29,10 +29,13 @@ import {
 } from "renderer/lib/codex-session/store";
 import { FileIcon } from "renderer/lib/fileIcons";
 import { getBaseName } from "renderer/lib/pathBasename";
+import { renameSessionPane } from "renderer/lib/session-names";
+import { registerTerminalName } from "renderer/lib/terminal/session-naming";
 import { consumeTerminalBackgroundIntent } from "renderer/lib/terminal/terminal-background-intents";
 import { terminalRuntimeRegistry } from "renderer/lib/terminal/terminal-runtime-registry";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
+import type { PaneLaunchTarget } from "renderer/stores/tabs/preset-launch";
 import { getV2NotificationSourcesForPane } from "renderer/stores/v2-notifications";
 import type { CodexTurnReview } from "shared/codex-session/review";
 import type { StoreApi } from "zustand/vanilla";
@@ -140,7 +143,9 @@ interface UsePaneRegistryOptions {
 	 */
 	workspaceCwd?: string;
 	onReviewChanges?: (review: CodexTurnReview) => void;
-	newTabActionsRef?: React.RefObject<NewTabPaneActions | null>;
+	newTabActionsRef?: React.RefObject<
+		((target: PaneLaunchTarget) => NewTabPaneActions) | null
+	>;
 }
 
 export function usePaneRegistry({
@@ -206,16 +211,21 @@ export function usePaneRegistry({
 					return null;
 				}
 				const terminalId = result.sessionId;
+				await registerTerminalName(terminalId, undefined, input.prompt, false);
 				const state = store.getState();
 				const pane = {
 					kind: "terminal" as const,
-					titleOverride: result.label,
+
 					// `agents.run` reports a session and a label but not which agent
 					// produced them, so the config id is the best identifier available
 					// here. For a built-in it IS the agent id; for a user-defined agent
 					// it won't match and `agentAccent` returns undefined, which is the
 					// same neutral header this pane had before.
-					data: { terminalId, agentId: input.configId } as TerminalPaneData,
+					data: {
+						terminalId,
+						agentId: input.configId,
+						initialTitle: result.label,
+					} as TerminalPaneData,
 				};
 				if (input.placement === "split-pane" && state.activeTabId) {
 					state.addPane({ tabId: state.activeTabId, pane });
@@ -317,7 +327,10 @@ export function usePaneRegistry({
 				getTabIcon: () => <LuPlus className="size-3.5" />,
 				getTitle: () => "New tab",
 				renderPane: (ctx: RendererContext<PaneViewerData>) => {
-					const actions = newTabActionsRef?.current;
+					const actions = newTabActionsRef?.current?.({
+						tabId: ctx.tab.id,
+						paneId: ctx.pane.id,
+					});
 					if (!actions) return null;
 					return (
 						<LauncherPane
@@ -346,6 +359,7 @@ export function usePaneRegistry({
 			 */
 			// Live VS Code-style Claude Code session (pane kind "session").
 			session: {
+				onRename: renameSessionPane,
 				/*
 				 * Status dot, THEN the agent mark — the reference's order, and the
 				 * order that survives a four-up grid: the dot is what you scan, so
@@ -361,9 +375,7 @@ export function usePaneRegistry({
 					// `shrink-0` span with no gap of its own — two children in a
 					// fragment would render touching.
 					<span className="flex items-center gap-1.5">
-						{(ctx.pane.data as SessionPaneData).provider !== "codex" && (
-							<SessionStatusDot paneId={ctx.pane.id} />
-						)}
+						<SessionStatusDot paneId={ctx.pane.id} />
 						<SessionPaneIcon
 							agentId={(ctx.pane.data as SessionPaneData).provider}
 						/>
@@ -571,6 +583,7 @@ export function usePaneRegistry({
 					),
 			},
 			terminal: {
+				onRename: renameSessionPane,
 				getIcon: (ctx) => {
 					const { terminalId, agentId } = ctx.pane.data as TerminalPaneData;
 					return (
@@ -588,7 +601,8 @@ export function usePaneRegistry({
 						workspaceId={workspaceId}
 					/>
 				),
-				getTitle: () => "Terminal",
+				getTitle: (pane) =>
+					(pane.data as TerminalPaneData).initialTitle ?? "Terminal",
 				getAccent: (ctx) =>
 					agentAccent((ctx.pane.data as TerminalPaneData).agentId),
 				titleSource: (pane) => {

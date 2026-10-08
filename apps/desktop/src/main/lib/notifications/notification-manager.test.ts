@@ -429,8 +429,8 @@ describe("NotificationManager", () => {
 
 			expect(createNotification).toHaveBeenCalledWith(
 				expect.objectContaining({
-					title: "Awaiting Response — Test Workspace",
-					body: '"Test Title" is waiting for your reply',
+					title: "Test Title — Needs your reply",
+					body: "Waiting for your reply · Test Workspace",
 				}),
 			);
 		});
@@ -447,8 +447,8 @@ describe("NotificationManager", () => {
 
 			expect(createNotification).toHaveBeenCalledWith(
 				expect.objectContaining({
-					title: "Agent Complete — Test Workspace",
-					body: '"Test Title" has finished its task',
+					title: "Test Title — Complete",
+					body: "Finished its response · Test Workspace",
 				}),
 			);
 		});
@@ -461,8 +461,8 @@ describe("NotificationManager", () => {
 				makeEvent({ eventType: "Stop" }),
 			);
 			expect(pushToPhone).toHaveBeenCalledWith({
-				title: "Agent Complete — Test Workspace",
-				body: '"Test Title" has finished its task',
+				title: "Test Title — Complete",
+				body: "Finished its response · Test Workspace",
 				sessionKey: "pane-1",
 			});
 		});

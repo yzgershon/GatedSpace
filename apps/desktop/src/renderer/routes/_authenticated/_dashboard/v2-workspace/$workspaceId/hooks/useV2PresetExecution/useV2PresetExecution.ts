@@ -15,7 +15,7 @@ import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/provide
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
 import {
 	getPresetLaunchPlan,
-	type PresetOpenTarget,
+	type PresetLaunchOptions,
 } from "renderer/stores/tabs/preset-launch";
 import { toAbsoluteWorkspacePath } from "shared/absolute-paths";
 import {
@@ -26,6 +26,7 @@ import { quote } from "shell-quote";
 import type { StoreApi } from "zustand/vanilla";
 import type { PaneViewerData, TerminalPaneData } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
+import { placeLaunchedPanes } from "../useWorkspacePaneOpeners/place-launched-panes";
 
 function makeTerminalPane(
 	terminalId: string,
@@ -34,8 +35,11 @@ function makeTerminalPane(
 ): CreatePaneInput<PaneViewerData> {
 	return {
 		kind: "terminal",
-		titleOverride,
-		data: { terminalId, agentId } as TerminalPaneData,
+		data: {
+			terminalId,
+			agentId,
+			initialTitle: titleOverride,
+		} as TerminalPaneData,
 	};
 }
 
@@ -160,17 +164,16 @@ export function useV2PresetExecution({
 	);
 
 	const executePreset = useCallback(
-		async (
-			preset: V2TerminalPresetRow,
-			options?: { target?: PresetOpenTarget },
-		) => {
+		async (preset: V2TerminalPresetRow, options?: PresetLaunchOptions) => {
 			const state = store.getState();
-			const activeTabId = state.activeTabId;
+			const activeTabId = options?.paneTarget?.tabId ?? state.activeTabId;
 			const target = options?.target ?? resolveTarget(preset.executionMode);
 			const title = preset.name || undefined;
 			const commands = resolvePresetCommands(preset);
 			const activeTerminal =
-				target !== "new-tab" && preset.executionMode === "sequential"
+				!options?.paneTarget &&
+				target !== "new-tab" &&
+				preset.executionMode === "sequential"
 					? getActiveTerminalPane(state)
 					: null;
 			// Sequential mode is one shell command sent to one terminal; every
@@ -269,6 +272,10 @@ export function useV2PresetExecution({
 					case "active-tab-single": {
 						const terminalId = await createTerminal(launchCommands[0]);
 						const pane = makeTerminalPane(terminalId, title, preset.agentId);
+						if (options?.paneTarget) {
+							placeLaunchedPanes(store, [pane], options.paneTarget);
+							break;
+						}
 						/*
 						 * Re-read the store, because the target tab can be GONE by now.
 						 *
@@ -303,6 +310,14 @@ export function useV2PresetExecution({
 						const panes = ids.map((id) =>
 							makeTerminalPane(id, title, preset.agentId),
 						);
+						if (options?.paneTarget && panes[0]) {
+							placeLaunchedPanes(
+								store,
+								[panes[0], ...panes.slice(1)],
+								options.paneTarget,
+							);
+							break;
+						}
 						// Same race as active-tab-single: the launcher may have taken
 						// its tab with it while these terminals were being created.
 						const liveMulti = store.getState();
@@ -332,6 +347,7 @@ export function useV2PresetExecution({
 							? err.message
 							: "Terminal session creation failed.",
 				});
+				if (options?.paneTarget) throw err;
 			}
 		},
 		[

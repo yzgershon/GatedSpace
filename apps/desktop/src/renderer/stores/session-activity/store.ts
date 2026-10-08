@@ -19,7 +19,7 @@ import type { SessionStatus } from "shared/claude-session/timeline";
 
 export interface SessionActivity {
 	/** Mirrors `SessionTimeline.status` for the pane. */
-	status: SessionStatus;
+	status: SessionStatus | "attention";
 	/**
 	 * Identifies the turn that most recently finished, so a "seen" mark can be
 	 * pinned to one completion instead of to the pane as a whole. Undefined
@@ -29,6 +29,7 @@ export interface SessionActivity {
 }
 
 const activity = new Map<string, SessionActivity>();
+const authoritative = new Set<string>();
 /**
  * pane id → workspace id, registered by the pane itself.
  *
@@ -61,7 +62,10 @@ function notify(): void {
 export function publishSessionActivity(
 	paneId: string,
 	next: SessionActivity,
+	fromSessionTransport = false,
 ): void {
+	if (fromSessionTransport) authoritative.add(paneId);
+	else if (authoritative.has(paneId)) return;
 	const prev = activity.get(paneId);
 	if (prev && prev.status === next.status && prev.turnKey === next.turnKey) {
 		return;
@@ -96,6 +100,7 @@ export function getSessionWorkspaceEntries(): Array<[string, string]> {
 
 /** Drop a pane's activity when its session is disposed. */
 export function clearSessionActivity(paneId: string): void {
+	authoritative.delete(paneId);
 	const hadActivity = activity.delete(paneId);
 	const hadWorkspace = paneWorkspaces.delete(paneId);
 	if (!hadActivity && !hadWorkspace) return;
@@ -122,6 +127,7 @@ export function getSessionActivityVersion(): number {
 /** Test seam — the module-level maps otherwise leak between test cases. */
 export function resetSessionActivity(): void {
 	activity.clear();
+	authoritative.clear();
 	paneWorkspaces.clear();
 	notify();
 }

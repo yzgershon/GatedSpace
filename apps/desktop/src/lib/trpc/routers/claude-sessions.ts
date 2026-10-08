@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { observable } from "@trpc/server/observable";
 import { shell } from "electron";
 import { readAgentLastUserMessage } from "main/lib/agent-last-message";
 import { SUPERSET_HOME_DIR } from "main/lib/app-environment";
@@ -16,17 +17,114 @@ import {
 	PinnedCodexSessions,
 } from "main/lib/codex-session/pinned-sessions";
 import { codexSessionManager } from "main/lib/codex-session/session-manager";
+import { sessionNames } from "main/lib/session-names";
+import { SessionOrganizationStore } from "main/lib/session-organization/store";
+import {
+	organizationCommand,
+	type SessionOrganization,
+} from "shared/session-organization";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
 
 export type AgentSessionProvider = "claude" | "codex";
+const organization = new SessionOrganizationStore(
+	join(SUPERSET_HOME_DIR, "session-projects.json"),
+);
+function withOrganizedSessions(
+	rows: ClaudeSessionSummary[],
+	provider: AgentSessionProvider,
+	search = "",
+) {
+	const ids = new Set(rows.map((row) => row.sessionId));
+	const query = search.trim().toLowerCase();
+	return [
+		...rows,
+		...Object.values(organization.read().bookmarks)
+			.filter((row) => row.provider === provider && !ids.has(row.sessionId))
+			.filter(
+				(row) =>
+					!query ||
+					`${sessionNames.get({ provider, id: row.sessionId }) ?? row.title} ${row.cwd ?? ""}`
+						.toLowerCase()
+						.includes(query),
+			)
+			.map((row) => ({
+				...row,
+				sizeBytes: 0,
+				contextTokens: null,
+				filePath: "",
+				firstMessage: "",
+				projectDirName: "",
+			})),
+	];
+}
 const pinnedCodex = new PinnedCodexSessions(
 	join(SUPERSET_HOME_DIR, "pinned-codex-sessions.json"),
 );
 
+const pinnedClaude = new PinnedCodexSessions(
+	join(SUPERSET_HOME_DIR, "pinned-claude-sessions.json"),
+);
+const allPins = () => [
+	...pinnedCodex.read().map((s) => ({ ...s, provider: "codex" as const })),
+	...pinnedClaude.read().map((s) => ({ ...s, provider: "claude" as const })),
+];
+const archived = {
+	claude: new PinnedCodexSessions(
+		join(SUPERSET_HOME_DIR, "archived-claude-sessions.json"),
+	),
+	codex: new PinnedCodexSessions(
+		join(SUPERSET_HOME_DIR, "archived-codex-sessions.json"),
+	),
+};
+const bookmarkInput = z.object({
+	provider: z.enum(["claude", "codex"]),
+	sessionId: z.string().uuid(),
+	title: z.string().trim().min(1).max(120),
+	cwd: z.string().nullable(),
+	lastModified: z.number().finite(),
+});
 export const createClaudeSessionsRouter = () => {
 	return router({
-		pinnedCodex: publicProcedure.query(() => pinnedCodex.read()),
+		organization: publicProcedure.query(() => organization.syncPins(allPins())),
+		watchOrganization: publicProcedure.subscription(() =>
+			observable<SessionOrganization>((emit) => {
+				const send = (state: SessionOrganization) => emit.next(state);
+				organization.on("change", send);
+				return () => {
+					organization.off("change", send);
+				};
+			}),
+		),
+		organize: publicProcedure
+			.input(organizationCommand)
+			.mutation(({ input }) =>
+				organization.apply(input, input.type === "movePin" ? allPins() : []),
+			),
+		pin: publicProcedure
+			.input(bookmarkInput.extend({ pinned: z.boolean() }))
+			.mutation(({ input }) => {
+				(input.provider === "codex" ? pinnedCodex : pinnedClaude).set(
+					input,
+					input.pinned,
+				);
+				organization.syncPins(allPins());
+				return { ok: true };
+			}),
+		setArchived: publicProcedure
+			.input(bookmarkInput.extend({ archived: z.boolean() }))
+			.mutation(({ input }) => {
+				archived[input.provider].set(input, input.archived);
+				return { ok: true };
+			}),
+		pinnedCodex: publicProcedure.query(() =>
+			pinnedCodex.read().map((row) => ({
+				...row,
+				title:
+					sessionNames.get({ provider: "codex", id: row.sessionId }) ??
+					row.title,
+			})),
+		),
 		pinCodex: publicProcedure
 			.input(
 				z.object({
@@ -41,6 +139,7 @@ export const createClaudeSessionsRouter = () => {
 					: pinnedCodex.read().find((row) => row.sessionId === input.sessionId);
 				if (session)
 					pinnedCodex.set({ ...session, title: input.title }, input.pinned);
+				organization.syncPins(allPins());
 				return { ok: true };
 			}),
 		list: publicProcedure
@@ -50,6 +149,7 @@ export const createClaudeSessionsRouter = () => {
 						limit: z.number().min(1).max(100).optional(),
 						provider: z.enum(["claude", "codex"]).optional(),
 						search: z.string().max(200).optional(),
+						archived: z.boolean().optional(),
 					})
 					.optional(),
 			)
@@ -58,25 +158,77 @@ export const createClaudeSessionsRouter = () => {
 					input,
 				}): Promise<(ClaudeSessionSummary & { pinned?: boolean })[]> => {
 					const limit = input?.limit ?? 30;
+					const hidden = archived[input?.provider ?? "claude"].read();
+					const hiddenIds = new Set(hidden.map((row) => row.sessionId));
+					if (input?.archived)
+						return hidden.map((row) => ({
+							...row,
+							title:
+								sessionNames.get({
+									provider: input?.provider ?? "claude",
+									id: row.sessionId,
+								}) ?? row.title,
+							sizeBytes: 0,
+							contextTokens: null,
+							filePath: "",
+							firstMessage: "",
+							projectDirName: "",
+							pinned: false,
+						}));
 					if (input?.provider === "codex") {
 						// CodexSessionSummary is structurally identical. Overrides are keyed
 						// by session id and provider-agnostic, so Codex gets them too.
 						return mergePinnedCodexSessions(
-							applyTitleOverrides(
-								await codexSessionManager.listThreads(limit, input.search),
+							withOrganizedSessions(
+								applyTitleOverrides(
+									await codexSessionManager.listThreads(limit, input.search),
+								),
+								"codex",
+								input.search,
 							),
-							pinnedCodex.read(),
+							pinnedCodex.read().map((row) => ({
+								...row,
+								title:
+									sessionNames.get({
+										provider: "codex",
+										id: row.sessionId,
+									}) ?? row.title,
+							})),
 							input.search,
-						).map((row) => ({
+						)
+							.map((row) => ({
+								sizeBytes: 0,
+								contextTokens: null,
+								filePath: "",
+								firstMessage: "",
+								projectDirName: "",
+								...row,
+								title:
+									sessionNames.get({
+										provider: input?.provider ?? "claude",
+										id: row.sessionId,
+									}) ?? row.title,
+							}))
+							.filter((row) => !hiddenIds.has(row.sessionId));
+					}
+					return mergePinnedCodexSessions(
+						withOrganizedSessions(listClaudeSessions(limit), "claude"),
+						pinnedClaude.read(),
+					)
+						.map((row) => ({
 							sizeBytes: 0,
 							contextTokens: null,
 							filePath: "",
 							firstMessage: "",
 							projectDirName: "",
 							...row,
-						}));
-					}
-					return listClaudeSessions(limit);
+							title:
+								sessionNames.get({
+									provider: input?.provider ?? "claude",
+									id: row.sessionId,
+								}) ?? row.title,
+						}))
+						.filter((row) => !hiddenIds.has(row.sessionId));
 				},
 			),
 
@@ -131,12 +283,16 @@ export const createClaudeSessionsRouter = () => {
 			.mutation(async ({ input }) => {
 				if (input.provider === "codex" && input.title)
 					await codexSessionManager.rename(input.sessionId, input.title);
-				setSessionTitleOverride(input.sessionId, input.title);
-				const pinned = pinnedCodex
+				sessionNames.rename(
+					{ provider: input.provider ?? "claude", id: input.sessionId },
+					input.title,
+				);
+				const pins = input.provider === "codex" ? pinnedCodex : pinnedClaude;
+				const pinned = pins
 					.read()
 					.find((row) => row.sessionId === input.sessionId);
-				if (input.provider === "codex" && pinned && input.title?.trim())
-					pinnedCodex.set({ ...pinned, title: input.title.trim() }, true);
+				if (pinned && input.title?.trim())
+					pins.set({ ...pinned, title: input.title.trim() }, true);
 				return { ok: true } as const;
 			}),
 
@@ -166,6 +322,7 @@ export const createClaudeSessionsRouter = () => {
 						.read()
 						.find((row) => row.sessionId === input.sessionId);
 					if (pinned) pinnedCodex.set(pinned, false);
+					organization.forget(input);
 					return { ok: true } as const;
 				}
 				const sessions = listClaudeSessions(200);
@@ -200,6 +357,7 @@ export const createClaudeSessionsRouter = () => {
 				// The name outlives the transcript otherwise, and would reattach to
 				// nothing — or to a future session that reused the id.
 				setSessionTitleOverride(input.sessionId, null);
+				organization.forget(input);
 				return { ok: true } as const;
 			}),
 

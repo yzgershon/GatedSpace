@@ -48,6 +48,7 @@ export const DashboardSidebarProjectRow = forwardRef<
 			// biome-ignore lint/a11y/noStaticElementInteractions: The header acts as a single toggle target in view mode while preserving nested inline controls.
 			<div
 				ref={ref}
+				data-project-row
 				role={isRenaming ? undefined : "button"}
 				tabIndex={isRenaming ? undefined : 0}
 				onClick={isRenaming ? undefined : onToggleCollapse}

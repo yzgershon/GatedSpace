@@ -185,3 +185,55 @@ export function readAgentLastUserMessage(
 	resultCache.set(cacheKey, { mtime, result });
 	return result;
 }
+
+/** Bounded first-prompt read for a just-created terminal agent; never a resumed transcript. */
+export function readNewAgentFirstMessage(
+	provider: AgentSessionProvider,
+	sessionId: string,
+	startedAt: number,
+): string | null {
+	const file =
+		provider === "codex"
+			? findCodexRolloutPath(sessionId)
+			: findClaudeTranscriptPath(sessionId);
+	if (!file) return null;
+	let fd: number | undefined;
+	try {
+		if (statSync(file).birthtimeMs < startedAt - 2_000) return "";
+		fd = openSync(file, "r");
+		const buffer = Buffer.alloc(512_000);
+		const length = readSync(fd, buffer, 0, buffer.length, 0);
+		for (const line of buffer
+			.subarray(0, length)
+			.toString("utf8")
+			.split("\n")) {
+			try {
+				const obj = JSON.parse(line);
+				// Copying/restoring an old transcript can give it a new filesystem birth time.
+				if (
+					typeof obj.timestamp === "string" &&
+					Date.parse(obj.timestamp) < startedAt - 2_000
+				)
+					return "";
+				const text =
+					provider === "codex"
+						? extractCodexUserText(obj)
+						: extractClaudeUserText(obj);
+				if (
+					text &&
+					!(provider === "codex"
+						? isCodexPlumbingText(text)
+						: isClaudePlumbingText(text))
+				)
+					return text;
+			} catch {
+				/* Partial last record. */
+			}
+		}
+	} catch {
+		return null;
+	} finally {
+		if (fd !== undefined) closeSync(fd);
+	}
+	return null;
+}

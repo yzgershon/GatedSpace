@@ -183,7 +183,7 @@ export function TopBar() {
 				{isV2WorkspaceRoute && (
 					<div
 						id="workspace-topbar-tabs-slot"
-						className="no-drag flex min-w-0 items-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] empty:hidden [&::-webkit-scrollbar]:hidden"
+						className="no-drag flex min-w-0 items-center empty:hidden"
 					/>
 				)}
 				{/*

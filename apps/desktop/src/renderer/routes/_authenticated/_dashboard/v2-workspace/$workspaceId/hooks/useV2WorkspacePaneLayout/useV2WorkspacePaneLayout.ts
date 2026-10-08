@@ -2,6 +2,7 @@ import { createWorkspaceStore, type WorkspaceState } from "@superset/panes";
 import { eq } from "@tanstack/db";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useEffect, useMemo, useRef } from "react";
+import { useSessionNames } from "renderer/hooks/useSessionNames";
 import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import type { PaneViewerData } from "../../types";
@@ -34,6 +35,7 @@ export function useV2WorkspacePaneLayout() {
 		[workspaceId],
 	);
 	const { store } = workspaceRuntime;
+	useSessionNames(store);
 	const syncStateRef = useRef({
 		workspaceId,
 		lastSyncedSnapshot: getSnapshot(EMPTY_STATE),

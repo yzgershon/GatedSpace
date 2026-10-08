@@ -6,6 +6,7 @@ import { claudeSessionManager as claude } from "../claude-session/session-manage
 import { loadSessionTranscript } from "../claude-session/transcript";
 import { listClaudeSessions } from "../claude-sessions/claude-sessions";
 import { codexSessionManager as codex } from "../codex-session/session-manager";
+import { sessionNames } from "../session-names";
 import {
 	type MobileMessage,
 	type MobileProvider,
@@ -133,13 +134,27 @@ export function mobileSessionRouter() {
 					.map((s) => ({
 						...s,
 						provider: "claude",
-						title: titles.get(s.sessionId ?? "")?.title ?? "Claude session",
+						title:
+							sessionNames.get({
+								provider: "claude",
+								key: s.key,
+								id: s.sessionId ?? undefined,
+							}) ??
+							titles.get(s.sessionId ?? "")?.title ??
+							"Claude session",
 					})),
 				...codex.listSessions().map((s) => ({
 					key: s.key,
 					sessionId: s.threadId,
 					provider: "codex",
-					title: s.title || "Codex session",
+					title:
+						sessionNames.get({
+							provider: "codex",
+							key: s.key,
+							id: s.threadId ?? undefined,
+						}) ??
+						s.title ??
+						"Codex session",
 					running: s.status === "working",
 				})),
 			];
@@ -155,6 +170,9 @@ export function mobileSessionRouter() {
 				history.push(
 					...recent.items.map((s) => ({
 						...s,
+						title:
+							sessionNames.get({ provider: "codex", id: s.sessionId }) ??
+							s.title,
 						provider: "codex" as MobileProvider,
 					})),
 				);
@@ -294,7 +312,14 @@ export function mobileSessionRouter() {
 					...page,
 					hasEarlier: page.hasEarlier || !!current.historyCursor,
 					provider,
-					title: current.title || "Codex",
+					title:
+						sessionNames.get({
+							provider: "codex",
+							key,
+							id: current.threadId ?? undefined,
+						}) ??
+						current.title ??
+						"Codex",
 					working: current.status === "working" || current.status === "loading",
 					error: current.error,
 					questions: current.approvals,
@@ -342,7 +367,14 @@ export function mobileSessionRouter() {
 			res.json({
 				...messagePage(messages, before),
 				provider,
-				title: timeline.header?.model || "Claude",
+				title:
+					sessionNames.get({
+						provider: "claude",
+						key,
+						id:
+							claude.listSessions().find((s) => s.key === key)?.sessionId ??
+							undefined,
+					}) ?? "Claude",
 				context: timeline.usage,
 				working: claude.isRunning(key) && timeline.status === "streaming",
 				questions: (timeline.permissions ?? []).map((p) => ({

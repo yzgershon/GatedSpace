@@ -53,6 +53,7 @@ export function GrowingTextarea({
 			data-below={edges.below}
 		>
 			<textarea
+				spellCheck={true}
 				{...props}
 				ref={input}
 				value={value}
@@ -68,6 +69,7 @@ export function GrowingTextarea({
 				aria-hidden="true"
 				tabIndex={-1}
 				readOnly
+				spellCheck={false}
 				rows={1}
 			/>
 		</div>

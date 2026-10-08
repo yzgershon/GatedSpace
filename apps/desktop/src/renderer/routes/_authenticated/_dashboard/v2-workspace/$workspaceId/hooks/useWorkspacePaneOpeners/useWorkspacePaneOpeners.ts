@@ -1,7 +1,7 @@
 import type { WorkspaceStore } from "@superset/panes";
 import { useCallback } from "react";
 import type { V2TerminalPresetRow } from "renderer/routes/_authenticated/providers/CollectionsProvider/dashboardSidebarLocal";
-import type { PresetOpenTarget } from "renderer/stores/tabs/preset-launch";
+import type { PresetLaunchOptions } from "renderer/stores/tabs/preset-launch";
 import type { StoreApi } from "zustand/vanilla";
 import type {
 	BrowserPaneData,
@@ -14,6 +14,7 @@ import type {
 	TerminalPaneData,
 } from "../../types";
 import type { TerminalLauncher } from "../useV2TerminalLauncher";
+import { placeLaunchedPanes } from "./place-launched-panes";
 
 export function useWorkspacePaneOpeners({
 	store,
@@ -26,7 +27,7 @@ export function useWorkspacePaneOpeners({
 	newTabPresets: V2TerminalPresetRow[];
 	executePreset: (
 		preset: V2TerminalPresetRow,
-		options?: { target?: PresetOpenTarget },
+		options?: PresetLaunchOptions,
 	) => void | Promise<void>;
 }): {
 	openDiffPane: (
@@ -36,10 +37,11 @@ export function useWorkspacePaneOpeners({
 		side?: DiffFocusSide,
 		changeKey?: string,
 	) => void;
-	addTerminalTab: () => Promise<void>;
-	addBrowserTab: () => void;
+	addTerminalTab: (options?: PresetLaunchOptions) => Promise<void>;
+	addBrowserTab: (options?: PresetLaunchOptions) => void;
 	addSessionTab: (options?: {
-		target?: PresetOpenTarget;
+		target?: PresetLaunchOptions["target"];
+		paneTarget?: PresetLaunchOptions["paneTarget"];
 		provider?: "claude" | "codex";
 	}) => void;
 	openBrowserUrl: (url: string) => void;
@@ -120,70 +122,64 @@ export function useWorkspacePaneOpeners({
 		[store],
 	);
 
-	const addBlankTerminalTab = useCallback(async () => {
-		const terminalId = await launcher.create();
-		store.getState().addTab({
-			panes: [
-				{
-					kind: "terminal",
-					data: { terminalId } as TerminalPaneData,
-				},
-			],
-		});
-	}, [store, launcher]);
+	const addBlankTerminalTab = useCallback(
+		async (options?: PresetLaunchOptions) => {
+			const terminalId = await launcher.create();
+			placeLaunchedPanes(
+				store,
+				[{ kind: "terminal", data: { terminalId } as TerminalPaneData }],
+				options?.paneTarget,
+			);
+		},
+		[store, launcher],
+	);
 
-	const addTerminalTab = useCallback(async () => {
-		if (newTabPresets.length === 0) {
-			await addBlankTerminalTab();
-			return;
-		}
+	const addTerminalTab = useCallback(
+		async (options?: PresetLaunchOptions) => {
+			if (newTabPresets.length === 0) {
+				await addBlankTerminalTab(options);
+				return;
+			}
+			for (const preset of newTabPresets) {
+				await executePreset(preset, options ?? { target: "new-tab" });
+			}
+		},
+		[addBlankTerminalTab, executePreset, newTabPresets],
+	);
 
-		// New terminal tabs are the trigger point for applyOnNewTab presets.
-		// Each matching preset owns the tab/pane shape it creates.
-		for (const preset of newTabPresets) {
-			await executePreset(preset, { target: "new-tab" });
-		}
-	}, [addBlankTerminalTab, executePreset, newTabPresets]);
+	const addBrowserTab = useCallback(
+		(options?: PresetLaunchOptions) => {
+			placeLaunchedPanes(
+				store,
+				[{ kind: "browser", data: { url: "about:blank" } as BrowserPaneData }],
+				options?.paneTarget,
+			);
+		},
+		[store],
+	);
 
-	const addBrowserTab = useCallback(() => {
-		store.getState().addTab({
-			panes: [
-				{
-					kind: "browser",
-					data: {
-						url: "about:blank",
-					} as BrowserPaneData,
-				},
-			],
-		});
-	}, [store]);
-
-	/**
-	 * Open a Claude Code session pane (kind "session").
-	 *
-	 * `target: "active-tab"` appends to the tab you are already in, the same as
-	 * every preset opener. It exists for the new-tab launcher, which is itself a
-	 * pane in a tab that was just created: without it, clicking Claude there
-	 * made a SECOND tab and left the first one empty enough to be removed, so
-	 * the tab you had just made vanished under you.
-	 */
 	const addSessionTab = useCallback(
-		(options?: {
-			target?: PresetOpenTarget;
-			provider?: "claude" | "codex";
-		}) => {
+		(options?: PresetLaunchOptions & { provider?: "claude" | "codex" }) => {
 			const state = store.getState();
 			const pane = {
 				kind: "session",
 				data: { provider: options?.provider } as SessionPaneData,
 			} as const;
-
-			if (options?.target === "active-tab" && state.activeTabId) {
+			if (options?.target === "active-pane") {
+				const active = state.getActivePane();
+				placeLaunchedPanes(
+					store,
+					[pane],
+					options.paneTarget ??
+						(active
+							? { tabId: active.tabId, paneId: active.pane.id }
+							: undefined),
+				);
+			} else if (options?.target === "active-tab" && state.activeTabId) {
 				state.addPane({ tabId: state.activeTabId, pane });
-				return;
+			} else {
+				state.addTab({ panes: [pane] });
 			}
-
-			state.addTab({ panes: [pane] });
 		},
 		[store],
 	);

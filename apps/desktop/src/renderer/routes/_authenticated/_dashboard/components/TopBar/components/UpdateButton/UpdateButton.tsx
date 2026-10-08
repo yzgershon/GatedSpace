@@ -1,8 +1,8 @@
 /**
  * One click from "a newer build exists" to running it.
  *
- * Always offers a manual check; a completed personal installer adds a badge
- * and changes the action to install and restart.
+ * Appears only when a completed personal installer is available. Manual
+ * checks remain available through the Check for Updates command.
  *
  * The dot is the same green the tab status dots use for "done, go look". A
  * finished build is exactly that, and reusing the colour means the window has
@@ -65,20 +65,16 @@ export function UpdateButton() {
 		onError: (error) => toast.error(`Update failed: ${error.message}`),
 	});
 
-	const check = electronTrpc.autoUpdate.checkInteractive.useMutation({
-		onError: (error) => toast.error(`Update check failed: ${error.message}`),
-	});
-	const pending = installPersonal.isPending || check.isPending;
+	const pending = installPersonal.isPending;
+
+	// Keep polling while hidden, without reserving a button or flex gap.
+	if (!update) return null;
 
 	const install = () => {
 		if (update) installPersonal.mutate({ installerPath: update.installerPath });
 	};
 
 	const onClick = () => {
-		if (!update) {
-			check.mutate();
-			return;
-		}
 		const busy = streamingSessionCount();
 		// Installing quits the app, and any Claude Code session running INSIDE
 		// GatedSpace dies with it, mid-turn, losing whatever it was part-way
@@ -96,9 +92,7 @@ export function UpdateButton() {
 			<Tooltip>
 				<TooltipTrigger asChild>
 					<Button
-						aria-label={
-							update ? `Update to ${update.version}` : "Check for updates"
-						}
+						aria-label={`Update to ${update.version}`}
 						className="no-drag relative size-8 shrink-0 text-muted-foreground hover:text-foreground"
 						disabled={pending}
 						onClick={onClick}
@@ -115,7 +109,7 @@ export function UpdateButton() {
 						<ArrowDownToLine
 							className={pending ? "size-4 animate-pulse" : "size-4"}
 						/>
-						{update && !pending && (
+						{!pending && (
 							<span className="absolute top-1 right-1 flex size-[7px]">
 								<span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-500 opacity-75" />
 								<span className="relative inline-flex size-[7px] rounded-full border border-background bg-green-500" />
@@ -126,9 +120,7 @@ export function UpdateButton() {
 				<TooltipContent side="bottom" showArrow={false}>
 					{installPersonal.isPending
 						? "Installing…"
-						: update
-							? `Update to ${update.version} — quits, installs, reopens`
-							: "Check for updates"}
+						: `Update to ${update.version} — quits, installs, reopens`}
 				</TooltipContent>
 			</Tooltip>
 

@@ -1,7 +1,7 @@
 .session-changes-dock {
 	display: flex;
 	justify-content: center;
-	padding: 0 8px 9px;
+	padding: 0 10px 12px;
 	pointer-events: none;
 }
 .session-changes-pill {
@@ -9,29 +9,43 @@
 	align-items: center;
 	justify-content: center;
 	flex-wrap: wrap;
-	gap: 7px;
+	gap: 10px;
 	max-width: 100%;
-	padding: 6px 12px;
-	border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+	min-height: 40px;
+	padding: 8px 16px;
+	border: 1px solid color-mix(in srgb, var(--foreground) 20%, var(--border));
 	border-radius: 999px;
-	background: color-mix(in srgb, var(--foreground) 4%, var(--background));
-	color: var(--muted-foreground);
-	font-size: 12px;
-	line-height: 18px;
+	background: color-mix(in srgb, var(--foreground) 5%, var(--card));
+	color: var(--foreground);
+	font-size: 14px;
+	line-height: 22px;
+	font-weight: 500;
 	font-variant-numeric: tabular-nums;
-	box-shadow: 0 2px 6px color-mix(in srgb, var(--background) 25%, transparent);
+	box-shadow:
+		inset 0 1px 0 color-mix(in srgb, var(--foreground) 7%, transparent),
+		0 3px 10px -5px rgb(0 0 0 / 35%);
 	pointer-events: auto;
 }
+.session-changes-icon {
+	flex-shrink: 0;
+	color: var(--muted-foreground);
+}
+.session-changes-label {
+	white-space: nowrap;
+}
+.session-changes-label strong {
+	font-weight: 650;
+}
 .session-changes-dock[data-provider="claude"] .session-changes-pill {
-	border-radius: 9px;
-	font-size: 11px;
-	padding: 4px 10px;
-	box-shadow: none;
-	background: color-mix(in srgb, var(--foreground) 2%, var(--background));
+	border-radius: 12px;
+	background: var(--card);
 }
 .session-changes-counts {
 	display: inline-flex;
-	gap: 5px;
+	gap: 9px;
+	padding-left: 11px;
+	border-left: 1px solid color-mix(in srgb, var(--foreground) 17%, transparent);
+	font-weight: 600;
 }
 .session-changes-added {
 	color: var(--terminal-green, #91c68c);

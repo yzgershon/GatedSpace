@@ -23,11 +23,15 @@ export interface AgentLifecycleEvent extends NotificationIds {
 	 * them apart without the status layer having to care.
 	 */
 	sourceEventType?: string;
+	sessionTitle?: string;
+	managed?: boolean;
+	turnId?: string;
 }
 
 export type V2NotificationSource =
 	| { type: "terminal"; id: string }
-	| { type: "chat"; id: string };
+	| { type: "chat"; id: string }
+	| { type: "session"; id: string };
 
 export interface V2NotificationSourceFocusTarget {
 	workspaceId: string;

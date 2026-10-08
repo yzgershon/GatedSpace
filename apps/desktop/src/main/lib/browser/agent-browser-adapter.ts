@@ -5,6 +5,7 @@ import {
 } from "./agent-browser-service";
 import { browserManager } from "./browser-manager";
 import { browserInputPoint } from "./browser-preview";
+import { localPreviews } from "./local-previews";
 
 // An isolated world keeps our element map separate from scripts on the website.
 const WORLD = 1005;
@@ -56,7 +57,8 @@ const adapter: BrowserAdapter = {
 	async run(tool, paneId, input) {
 		const wc = wcFor(paneId);
 		if (tool === "browser_open") {
-			if (wc.getURL() !== input.url) await wc.loadURL(input.url as string);
+			if (wc.getURL() !== input.url || input.previewUpdated)
+				await wc.loadURL(input.url as string);
 		} else if (tool === "browser_screenshot") {
 			const image = await wc.capturePage();
 			if (image.isEmpty())
@@ -134,4 +136,12 @@ const adapter: BrowserAdapter = {
 };
 export function installAgentBrowserAdapter() {
 	agentBrowserService.adapter = adapter;
+	agentBrowserService.previews = {
+		async prepare(url, directory, cwd) {
+			if (directory && cwd) return localPreviews().capture(directory, cwd, url);
+			return {
+				url: url ? await localPreviews().resolveUrl(url, cwd ? [cwd] : []) : "",
+			};
+		},
+	};
 }

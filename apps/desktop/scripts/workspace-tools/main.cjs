@@ -95,6 +95,19 @@ app
 			features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
 		});
 		await wait(700);
+		if (process.env.GS_TOOLS_LAYOUT_ONLY === "1") {
+			await require(path.join(output, "layout-checks.cjs"))({
+				win,
+				run,
+				click,
+				wait,
+				capture,
+				pass,
+			});
+			clearTimeout(timeout);
+			await finish();
+			return;
+		}
 		await run(
 			`for(const key of ['AudioVolumeUp','AudioVolumeDown','AudioVolumeMute','MediaPlayPause','Unidentified']) { document.dispatchEvent(new KeyboardEvent('keydown',{key,code:'',bubbles:true})); document.dispatchEvent(new KeyboardEvent('keyup',{key,code:'',bubbles:true})); }`,
 		);

@@ -1,11 +1,13 @@
-import { Bot, Plus, Settings, X } from "lucide-react";
+import { Bot, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { TopBar } from "../../src/renderer/routes/_authenticated/_dashboard/components/TopBar/TopBar";
 import type { BuildJob } from "../../src/shared/build-status";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
+import { HeaderPreviewTabs } from "./HeaderPreviewTabs";
 import "../../src/renderer/globals.css";
+import "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/tool-panels.css";
 
 for (const [key, value] of Object.entries(draculaTheme.ui)) {
 	if (typeof value === "string")
@@ -16,6 +18,10 @@ for (const [key, value] of Object.entries(draculaTheme.ui)) {
 }
 document.documentElement.classList.add("dark");
 document.documentElement.style.setProperty("--gs-pane-inset", "9px");
+document.documentElement.style.setProperty(
+	"--gs-pane-well",
+	"var(--background)",
+);
 document.body.style.cssText =
 	"margin:0;background:var(--background);color:var(--foreground);font-family:Inter,Segoe UI,sans-serif";
 const root = document.createElement("main");
@@ -72,7 +78,9 @@ function Preview() {
 		: null;
 	return (
 		<>
-			<TopBar />
+			<div className="workspace-topbar-layer">
+				<TopBar />
+			</div>
 			{presetsSlot &&
 				createPortal(
 					<div
@@ -108,114 +116,91 @@ function Preview() {
 					</div>,
 					presetsSlot,
 				)}
-			{tabsSlot &&
-				createPortal(
+			{tabsSlot && createPortal(<HeaderPreviewTabs />, tabsSlot)}
+			{/* Include the positioned, painted workspace that sits below the real
+			    header. A detached toolbar fixture cannot detect sibling occlusion. */}
+			<div
+				className="workspace-content-layer flex min-w-0 overflow-hidden"
+				data-preview-workspace
+			>
+				<div
+					className="gs-tool-workspace"
+					style={
+						{
+							"--tool-right": "0px",
+							"--tool-bottom": "0px",
+						} as React.CSSProperties
+					}
+				>
 					<div
+						data-preview-pane
 						style={{
-							display: "flex",
-							flexShrink: 0,
-							alignItems: "center",
-							gap: 12,
-							border: "1px solid var(--border)",
-							borderRadius: 13,
-							padding: 4,
-							height: 46,
+							marginTop: "calc(var(--gs-pane-inset, 0px) * 2)",
+							borderTop: "1px solid var(--border)",
+							padding: 32,
+							maxWidth: 660,
 						}}
 					>
-						<button
-							type="button"
+						<small style={{ color: "var(--primary)" }}>
+							INTERACTIVE PREVIEW
+						</small>
+						<h1 style={{ fontSize: 25, marginTop: 12 }}>
+							Your builds stay in sight.
+						</h1>
+						<p
 							style={{
-								display: "flex",
-								alignItems: "center",
-								gap: 8,
-								padding: "8px 14px",
-								borderRadius: 10,
-								background: "var(--accent)",
-								whiteSpace: "nowrap",
+								color: "var(--muted-foreground)",
+								lineHeight: 1.8,
+								marginTop: 12,
 							}}
 						>
-							<Bot size={20} /> Emails/texts <X size={14} />
-						</button>
-						{[1, 2, 3, 4].map((i) => (
-							<button
-								type="button"
-								key={i}
-								aria-label={`Session ${i}`}
-								style={{ width: 28 }}
-							>
-								<Bot size={20} />
-							</button>
-						))}
-						<button
-							type="button"
-							aria-label="New session"
-							style={{ width: 32 }}
+							Click the build chip centered to the left of the agent launcher.
+							Completed downloads and errors stay visible until dismissed. These
+							controls simulate build states.
+						</p>
+						<div
+							style={{
+								display: "flex",
+								gap: 12,
+								flexWrap: "wrap",
+								marginTop: 20,
+							}}
 						>
-							<Plus size={20} />
-						</button>
-					</div>,
-					tabsSlot,
-				)}
-			<div
-				data-preview-pane
-				style={{
-					marginTop: "calc(var(--gs-pane-inset, 0px) * 2)",
-					borderTop: "1px solid var(--border)",
-					padding: 32,
-					maxWidth: 660,
-				}}
-			>
-				<small style={{ color: "var(--primary)" }}>INTERACTIVE PREVIEW</small>
-				<h1 style={{ fontSize: 25, marginTop: 12 }}>
-					Your builds stay in sight.
-				</h1>
-				<p
-					style={{
-						color: "var(--muted-foreground)",
-						lineHeight: 1.8,
-						marginTop: 12,
-					}}
-				>
-					Click the build chip centered to the left of the agent launcher.
-					Completed downloads and errors stay visible until dismissed. These
-					controls simulate build states.
-				</p>
-				<div
-					style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 20 }}
-				>
-					{(["building", "verifying", "ready", "failed"] as const).map(
-						(stage) => (
-							<button
-								key={stage}
-								type="button"
-								style={{
-									border: "1px solid var(--border)",
-									borderRadius: 8,
-									padding: "8px 12px",
-								}}
-								onClick={() =>
-									setJobs([
-										{
-											...initial,
-											stage,
-											message:
-												stage === "failed"
-													? "The build worker stopped before verification. Check the build log before retrying."
-													: stage === "building"
-														? "Packaging the Windows installers."
-														: stage === "verifying"
-															? "Checking installer contents, architecture and checksums."
-															: initial.message,
-										},
-									])
-								}
-							>
-								{stage}
-							</button>
-						),
-					)}
+							{(["building", "verifying", "ready", "failed"] as const).map(
+								(stage) => (
+									<button
+										key={stage}
+										type="button"
+										style={{
+											border: "1px solid var(--border)",
+											borderRadius: 8,
+											padding: "8px 12px",
+										}}
+										onClick={() =>
+											setJobs([
+												{
+													...initial,
+													stage,
+													message:
+														stage === "failed"
+															? "The build worker stopped before verification. Check the build log before retrying."
+															: stage === "building"
+																? "Packaging the Windows installers."
+																: stage === "verifying"
+																	? "Checking installer contents, architecture and checksums."
+																	: initial.message,
+												},
+											])
+										}
+									>
+										{stage}
+									</button>
+								),
+							)}
+						</div>
+						{opened && <output aria-label="Opened URL">{opened}</output>}
+					</div>
 				</div>
-				{opened && <output aria-label="Opened URL">{opened}</output>}
 			</div>
 		</>
 	);

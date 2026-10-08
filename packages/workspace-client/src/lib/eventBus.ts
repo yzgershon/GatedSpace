@@ -30,6 +30,7 @@ export interface GitChangedPayload {
 }
 
 export interface AgentLifecyclePayload {
+	notifiedByDesktop?: boolean;
 	eventType: AgentLifecycleEventType;
 	terminalId: string;
 	// Absent when the hook ran without `SUPERSET_AGENT_ID` set.
@@ -169,6 +170,7 @@ function handleMessage(state: ConnectionState, data: unknown): void {
 					eventType: message.eventType,
 					terminalId: message.terminalId,
 					...(message.agent ? { agent: message.agent } : {}),
+					notifiedByDesktop: message.notifiedByDesktop,
 					occurredAt: message.occurredAt,
 				},
 			);

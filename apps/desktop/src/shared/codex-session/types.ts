@@ -45,6 +45,8 @@ export interface CodexApproval {
 	questions: CodexQuestion[];
 	isBlocking?: boolean;
 	turnId?: string;
+	/** Plain-text choice recovery. Can be dismissed without deciding anything. */
+	sourceItemId?: string;
 }
 export interface CodexModel {
 	id: string;

@@ -1,22 +1,4 @@
-/**
- * A tab that has not decided what it is yet.
- *
- * `+` used to open a dropdown, so making a tab meant choosing what it would be
- * BEFORE you had one — and changing your mind meant closing it and starting
- * again. Now `+` makes the tab immediately and the tab asks the question, which
- * is the same shape as a fresh workspace: an empty thing that offers you the
- * ways to fill it.
- *
- * FILLS ITSELF IN PLACE, and does it by reusing the existing openers rather
- * than by mutating its own pane. Each action runs the ordinary opener with
- * `target: "active-tab"` — which appends a pane to this tab — and then closes
- * the launcher. So the tab briefly holds two panes and settles on one, and none
- * of the launch logic (creating a pty and awaiting it, seeding session data,
- * resolving a preset's agent) is duplicated here.
- *
- * Order matters: launch first, close second. Closing first would leave the tab
- * with no panes, which removes the tab.
- */
+/** The chooser stays mounted until a launch succeeds, then fills its own slot. */
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -24,6 +6,7 @@ import {
 	DropdownMenuTrigger,
 } from "@superset/ui/dropdown-menu";
 import { cn } from "@superset/ui/utils";
+import { useRef, useState } from "react";
 import { BsTerminalPlus } from "react-icons/bs";
 import {
 	LuChevronDown,
@@ -48,29 +31,28 @@ import { useOpenNewWorkspaceModal } from "renderer/stores/new-workspace-modal";
 export interface NewTabPaneActions {
 	agents: V2TerminalPresetRow[];
 	/**
-	 * Open an agent the way it opens by default: a session pane for Claude, a
-	 * terminal for everything else.
+	 * Open Codex/Claude as a session pane and other agents as terminals.
 	 */
-	onLaunchAgent: (preset: V2TerminalPresetRow) => void;
+	onLaunchAgent: (preset: V2TerminalPresetRow) => void | Promise<void>;
 	/**
 	 * Open an agent in a specific shape. Only called for presets that
-	 * `canOpenAsPane` says have both, which today means Claude.
+	 * `canOpenAsPane` says have both.
 	 */
 	onLaunchAgentAs: (
 		preset: V2TerminalPresetRow,
 		mode: "pane" | "terminal",
-	) => void;
+	) => void | Promise<void>;
 	/**
 	 * Whether this preset has a session pane as well as a terminal. Clicking it
 	 * used to go straight to the pane with no way to ask for the terminal, and
 	 * the terminal is what you want whenever you care about the raw output.
 	 */
 	canOpenAsPane: (preset: V2TerminalPresetRow) => boolean;
-	onLaunchAll: () => void;
-	onOpenTerminal: () => void;
-	onOpenBrowser: () => void;
-	onOpenQuickOpen: () => void;
-	onOpenSessions: () => void;
+	onLaunchAll: () => void | Promise<void>;
+	onOpenTerminal: () => void | Promise<void>;
+	onOpenBrowser: () => void | Promise<void>;
+	onOpenQuickOpen: () => void | Promise<void>;
+	onOpenSessions: () => void | Promise<void>;
 }
 
 const AGENT_BUTTON_CLASS =
@@ -199,14 +181,34 @@ export function LauncherPane({
 }: NewTabPaneActions & { onDone: () => void }) {
 	const openNewWorkspace = useOpenNewWorkspaceModal();
 
-	// Every action is "do the thing, then stop being a launcher".
-	const run = (action: () => void) => () => {
-		action();
-		onDone();
+	const launching = useRef(false);
+	const [pending, setPending] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const run = (action: () => void | Promise<void>) => async () => {
+		if (launching.current) return;
+		launching.current = true;
+		setPending(true);
+		setError(null);
+		try {
+			await action();
+			onDone();
+		} catch (error) {
+			setError(
+				error instanceof Error
+					? error.message
+					: "Could not start this pane. Try again.",
+			);
+		} finally {
+			launching.current = false;
+			setPending(false);
+		}
 	};
 
 	return (
-		<div className="flex h-full w-full items-center justify-center overflow-auto p-6">
+		<div
+			aria-busy={pending}
+			className="flex h-full w-full items-center justify-center overflow-auto p-6"
+		>
 			<div className="flex w-full max-w-[480px] flex-col">
 				{agents.length > 0 ? (
 					<>
@@ -250,6 +252,19 @@ export function LauncherPane({
 					</button>
 				) : null}
 
+				{pending && (
+					<output className="mt-3 text-sm text-muted-foreground">
+						Starting agent...
+					</output>
+				)}
+				{error && (
+					<p
+						role="alert"
+						className="mt-3 select-text cursor-text text-sm text-destructive"
+					>
+						{error}
+					</p>
+				)}
 				<span className="mt-5 mb-2.5 px-1 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground/40">
 					Or open
 				</span>

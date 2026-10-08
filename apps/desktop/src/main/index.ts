@@ -25,10 +25,12 @@ import {
 	PLATFORM,
 	PROTOCOL_SCHEME,
 } from "shared/constants";
+import { LOCAL_PREVIEW_SCHEME } from "shared/local-preview";
 import { setupAgentHooks } from "./lib/agent-setup";
 import { initAppState } from "./lib/app-state";
 import { requestAppleEventsAccess } from "./lib/apple-events-permission";
 import { isUpdateReadyToInstall, setupAutoUpdater } from "./lib/auto-updater";
+import { localPreviews } from "./lib/browser/local-previews";
 import { installBundledCliShim } from "./lib/bundled-cli";
 import { flushCostStore } from "./lib/claude-session/cost-store";
 import { startUsageRefreshTicker } from "./lib/claude-session/usage-refresh";
@@ -347,6 +349,15 @@ if (process.env.NODE_ENV === "development") {
 
 protocol.registerSchemesAsPrivileged([
 	{
+		scheme: LOCAL_PREVIEW_SCHEME,
+		privileges: {
+			standard: true,
+			secure: true,
+			supportFetchAPI: true,
+			corsEnabled: true,
+		},
+	},
+	{
 		scheme: "superset-icon",
 		privileges: {
 			standard: true,
@@ -465,6 +476,12 @@ if (!gotTheLock) {
 		requestLocalNetworkAccess();
 
 		// Must register on both default session and the app's custom partition
+		const previewHandler = (request: Request) =>
+			localPreviews().respond(request);
+		protocol.handle(LOCAL_PREVIEW_SCHEME, previewHandler);
+		session
+			.fromPartition("persist:superset")
+			.protocol.handle(LOCAL_PREVIEW_SCHEME, previewHandler);
 		const iconProtocolHandler = (request: Request) => {
 			const url = new URL(request.url);
 			const projectId = url.pathname.replace(/^\//, "");

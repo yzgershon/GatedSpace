@@ -91,10 +91,15 @@ function AuthenticatedLayout() {
 									terminalId: source.id,
 									focusRequestId: crypto.randomUUID(),
 								}
-							: {
-									chatSessionId: source.id,
-									focusRequestId: crypto.randomUUID(),
-								},
+							: source.type === "session"
+								? {
+										sessionPaneId: source.id,
+										focusRequestId: crypto.randomUUID(),
+									}
+								: {
+										chatSessionId: source.id,
+										focusRequestId: crypto.randomUUID(),
+									},
 				});
 				return;
 			}

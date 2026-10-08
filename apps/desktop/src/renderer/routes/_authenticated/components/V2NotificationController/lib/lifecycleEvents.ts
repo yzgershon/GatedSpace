@@ -71,7 +71,8 @@ export function handleV2AgentLifecycleEvent({
 	// Start fires per-prompt (the working spinner is feedback enough);
 	// Attached/Detached fire on agent boot and clean exit. None of the three is
 	// a "your agent needs you" moment, so none is configurable either.
-	if (!isNotifiableEventType(payload.eventType)) return;
+	if (!isNotifiableEventType(payload.eventType) || payload.notifiedByDesktop)
+		return;
 	if (shouldSuppress(target, paneLayout)) return;
 
 	if (
@@ -88,6 +89,7 @@ export function handleV2AgentLifecycleEvent({
 			workspaceId,
 			workspaceName,
 			target,
+			paneLayout,
 		});
 	}
 }
@@ -171,13 +173,20 @@ function showNativeNotification({
 	workspaceId,
 	workspaceName,
 	target,
+	paneLayout,
 }: {
 	payload: AgentLifecyclePayload;
 	workspaceId: string;
 	workspaceName: string;
 	target: V2NotificationTarget;
+	paneLayout: WorkspaceState<PaneViewerData> | null | undefined;
 }): void {
+	const tab = paneLayout?.tabs.find((tab) => tab.id === target.tabId);
+	const sessionTitle =
+		(target.paneId ? tab?.panes[target.paneId]?.titleOverride : undefined) ||
+		tab?.titleOverride;
 	const { title, body } = getV2NativeNotificationContent({
+		sessionTitle,
 		workspaceName,
 		payload,
 	});

@@ -37,7 +37,7 @@ await build({
 });
 await writeFile(
 	resolve(output, "index.html"),
-	'<!doctype html><html><head><meta charset="utf-8"><title>GatedSpace build status preview</title><link rel="stylesheet" href="/style.css"></head><body><script src="/renderer.js"></script></body></html>',
+	'<!doctype html><html><head><meta charset="utf-8"><style>@layer theme, base, components, utilities;</style><title>GatedSpace build status preview</title><link rel="stylesheet" href="./style.css"></head><body><script src="./renderer.js"></script></body></html>',
 );
 const server = createServer(async (request, response) => {
 	const file =
@@ -97,12 +97,23 @@ if (!process.argv.includes("--serve")) {
 	try {
 		await page.goto(url);
 		await page.locator(".build-status-chip").waitFor();
+		await page.evaluate(() => {
+			// Even high-z pane overlays must stay inside the content layer.
+			const overlay = document.createElement("div");
+			overlay.dataset.headerOccluder = "true";
+			overlay.style.cssText =
+				"position:absolute;inset:0;z-index:1000;background:var(--background)";
+			document.querySelector(".gs-tool-workspace").append(overlay);
+		});
 		const verticalChecks = [];
 		for (const zoom of [1, 1.25, 1.5]) {
 			for (const inset of [9, 0]) {
 				await page.evaluate(
 					({ zoom, inset }) => {
 						document.body.style.zoom = String(zoom);
+						// Electron zoom reduces the CSS viewport; body zoom alone would
+						// expand the global 100vw body beyond the browser window.
+						document.body.style.width = `${100 / zoom}vw`;
 						document.documentElement.style.setProperty(
 							"--gs-pane-inset",
 							`${inset}px`,
@@ -134,6 +145,33 @@ if (!process.argv.includes("--serve")) {
 					await page.screenshot({
 						path: resolve(output, "topbar-vertical.png"),
 					});
+				// Bounding rectangles remain correct when another pane paints over
+				// the toolbar. Sample its visible lower surface, including controls.
+				const occluded = await page.evaluate(() => {
+					const selectors = [
+						"#workspace-topbar-presets-slot > div",
+						"#workspace-topbar-tabs-slot > div",
+						'[aria-label="Codex"]',
+						'[aria-label="New group"]',
+						'[aria-label="Search files"]',
+						'[aria-label="Close window"]',
+						".build-status-chip",
+					];
+					return selectors.filter((selector) => {
+						const el = document.querySelector(selector);
+						const r = el.getBoundingClientRect();
+						const hit = document.elementFromPoint(
+							(r.left + r.right) / 2,
+							r.bottom - 3,
+						);
+						return !hit || !el.contains(hit);
+					});
+				});
+				assert.deepEqual(
+					occluded,
+					[],
+					`Header covered by workspace at ${zoom}x/inset${inset}`,
+				);
 				const middle = (geometry.bar.top + geometry.pane.top) / 2;
 				for (const key of ["launcher", "tabs", "build", "search", "close"]) {
 					assert.ok(
@@ -156,7 +194,9 @@ if (!process.argv.includes("--serve")) {
 			}
 		}
 		await page.evaluate(() => {
+			document.querySelector("[data-header-occluder]").remove();
 			document.body.style.zoom = "1";
+			document.body.style.width = "100vw";
 			document.documentElement.style.setProperty("--gs-pane-inset", "9px");
 		});
 		await page.evaluate(() => {
@@ -312,6 +352,7 @@ if (!process.argv.includes("--serve")) {
 			layoutChecks,
 			verticalChecks,
 			checks: [
+				"header lower edges remain visible and hit-testable above positioned panes and high-z overlays",
 				"vertical center, unchanged heights and pane clearance at three zoom levels and two shell insets",
 				"real TopBar gap centering and non-overlap at seven widths",
 				"download action",

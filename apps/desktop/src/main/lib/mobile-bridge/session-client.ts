@@ -168,6 +168,7 @@ function thinkingRow() {
   var row = document.createElement("div"); row.className = "thinking-word"; row.setAttribute("role", "status"); row.textContent = "Working"; return row;
 }
 function drawConversation(data, prepend) {
+	if (data.title) title.textContent = data.title;
   var oldHeight = document.documentElement.scrollHeight, oldY = window.scrollY;
   var atBottom = initialScroll || window.innerHeight + oldY >= oldHeight - 100;
   var existingQuestions = main.querySelector(".questions");

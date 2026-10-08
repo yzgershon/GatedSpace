@@ -55,3 +55,22 @@ test("pins survive the recent-list limit, retain chosen titles and filter correc
 		{ ...b, pinned: true },
 	]);
 });
+test("renaming a pinned conversation does not move it to the end", () => {
+	const dir = mkdtempSync(join(tmpdir(), "codex-pin-order-"));
+	try {
+		const pins = new PinnedCodexSessions(join(dir, "pins.json"));
+		const a = {
+			sessionId: crypto.randomUUID(),
+			title: "First",
+			cwd: null,
+			lastModified: 1,
+		};
+		const b = { ...a, sessionId: crypto.randomUUID(), title: "Second" };
+		pins.set(a, true);
+		pins.set(b, true);
+		pins.set({ ...a, title: "Renamed" }, true);
+		expect(pins.read().map((s) => s.title)).toEqual(["Renamed", "Second"]);
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});

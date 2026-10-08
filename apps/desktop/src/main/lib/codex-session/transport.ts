@@ -153,6 +153,7 @@ export class CodexTransport extends EventEmitter {
 					...process.env,
 					...executable.env,
 					GATEDSPACE_BROWSER_TOKEN: bridge.token,
+					GATEDSPACE_NATIVE_SESSION: "1",
 				},
 			},
 		);

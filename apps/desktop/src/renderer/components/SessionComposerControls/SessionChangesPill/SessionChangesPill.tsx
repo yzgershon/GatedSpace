@@ -1,3 +1,4 @@
+import { FileDiff } from "lucide-react";
 import type { SessionChangeSummary } from "shared/session-changes";
 import "./session-changes-pill.css";
 
@@ -23,8 +24,15 @@ export function SessionChangesPill({
 						: "Successful file edits in this task. Line totals are unavailable for some edits."
 				}
 			>
-				<span>
-					{changes.files} {changes.files === 1 ? "file" : "files"} changed
+				<FileDiff
+					className="session-changes-icon"
+					size={17}
+					strokeWidth={1.8}
+					aria-hidden="true"
+				/>
+				<span className="session-changes-label">
+					<strong>{changes.files}</strong>{" "}
+					{changes.files === 1 ? "file" : "files"} changed
 				</span>
 				{known && (
 					<span className="session-changes-counts">

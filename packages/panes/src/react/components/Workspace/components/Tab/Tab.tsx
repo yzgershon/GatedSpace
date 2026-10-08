@@ -253,7 +253,7 @@ export function Tab<TData>({
 		: null;
 	if (maximizedPane) {
 		return (
-			<div className="flex h-full w-full min-h-0 min-w-0 flex-1 overflow-auto bg-[var(--gs-pane-well,transparent)] p-[var(--gs-pane-inset,0px)]">
+			<div className="flex h-full w-full min-h-0 min-w-0 flex-1 overflow-auto bg-[var(--gs-pane-well,transparent)] p-[calc(var(--gs-pane-inset,0px)*2)]">
 				{/* Keyed for the same reason as the leaf above: maximizing swaps
 				    which pane occupies this slot. */}
 				<Pane

@@ -77,6 +77,7 @@ export interface NotificationManagerDeps {
 	};
 	getWorkspaceName: (workspaceId: string | undefined) => string;
 	getNotificationTitle: (event: AgentLifecycleEvent) => string;
+	isEventVisible?: (event: AgentLifecycleEvent) => boolean;
 	/**
 	 * Read per-call rather than injected once: the user can change it in
 	 * settings while the app runs, and a value captured at construction would
@@ -131,7 +132,11 @@ export class NotificationManager {
 		if (!isNotifiableEventType(event.eventType)) return;
 		if (isSessionTeardown(event)) return;
 		if (this.isRepeat(event)) return;
-		if (this.shouldSuppressForVisiblePane(event)) return;
+		if (
+			this.deps.isEventVisible?.(event) ||
+			this.shouldSuppressForVisiblePane(event)
+		)
+			return;
 
 		const matrix =
 			this.deps.getNotificationMatrix?.() ?? DEFAULT_NOTIFICATION_MATRIX;
@@ -155,17 +160,17 @@ export class NotificationManager {
 		if (!wantsBanner) return;
 
 		const workspaceName = this.deps.getWorkspaceName(event.workspaceId);
-		const title = this.deps.getNotificationTitle(event);
+		const title = event.sessionTitle || this.deps.getNotificationTitle(event);
 
 		const isPermissionRequest = event.eventType === "PermissionRequest";
 		const isPendingQuestion = event.eventType === "PendingQuestion";
 		const isAwaiting = isPermissionRequest || isPendingQuestion;
 		const bannerTitle = isAwaiting
-			? `Awaiting Response — ${workspaceName}`
-			: `Agent Complete — ${workspaceName}`;
+			? `${title} — Needs your reply`
+			: `${title} — Complete`;
 		const bannerBody = isAwaiting
-			? `"${title}" is waiting for your reply`
-			: `"${title}" has finished its task`;
+			? `Waiting for your reply · ${workspaceName}`
+			: `Finished its response · ${workspaceName}`;
 
 		// The phone is told BEFORE the `isSupported()` gate, and independently of
 		// it. That check is about whether this OS will draw a banner on this
@@ -192,7 +197,10 @@ export class NotificationManager {
 		// Checked AFTER the phone push on purpose. The phone is a separate
 		// device with its own delivery path; suppressing a desktop banner
 		// because the renderer already drew one must not also silence the phone.
-		if (this.deps.shouldShowBanner?.(bannerTitle, bannerBody) === false) {
+		if (
+			!event.managed &&
+			this.deps.shouldShowBanner?.(bannerTitle, bannerBody) === false
+		) {
 			return;
 		}
 
@@ -244,7 +252,7 @@ export class NotificationManager {
 	 * real occurrence.
 	 */
 	private isRepeat(event: AgentLifecycleEvent): boolean {
-		const key = `${event.sessionId ?? event.paneId ?? "anon"}:${event.eventType}`;
+		const key = `${event.sessionId ?? event.paneId ?? "anon"}:${event.eventType}:${event.turnId ?? ""}`;
 		const now = (this.deps.now ?? Date.now)();
 		const last = this.recent.get(key);
 		this.recent.set(key, now);

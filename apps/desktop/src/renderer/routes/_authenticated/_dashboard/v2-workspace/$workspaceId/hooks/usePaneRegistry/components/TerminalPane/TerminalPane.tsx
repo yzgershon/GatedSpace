@@ -1,6 +1,7 @@
 import type { RendererContext } from "@superset/panes";
 import { cn } from "@superset/ui/utils";
 import { workspaceTrpc } from "@superset/workspace-client";
+import { useTerminalSessionName } from "renderer/hooks/useTerminalSessionName";
 import "@xterm/xterm/css/xterm.css";
 import {
 	useCallback,
@@ -70,6 +71,7 @@ export function TerminalPane({
 	const openInExternalEditor = useOpenInExternalEditor(workspaceId);
 	const paneData = ctx.pane.data as TerminalPaneData;
 	const { terminalId } = paneData;
+	useTerminalSessionName(workspaceId, terminalId);
 	const terminalInstanceId = ctx.pane.id;
 	const containerRef = useRef<HTMLDivElement | null>(null);
 	const [isSearchOpen, setIsSearchOpen] = useState(false);

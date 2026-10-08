@@ -1,3 +1,4 @@
+import { renameSessionTab } from "renderer/lib/session-names";
 /**
  * The tab strip, as one pill in the top bar.
  *
@@ -212,6 +213,8 @@ export function GroupSwitcher({
 		const next = draftTitle.trim();
 		setRenamingTabId(null);
 		if (!tabId) return;
+		const tab = store.getState().tabs.find((item) => item.id === tabId);
+		if (tab && renameSessionTab(tab, registry, next || undefined)) return;
 		store.getState().setTabTitleOverride({
 			tabId,
 			// An empty name is a request to go back to the derived one, not a

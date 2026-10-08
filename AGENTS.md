@@ -104,7 +104,7 @@ The user wants coding to continue while installers build. For future installer w
 
 ## Design skill preference
 
-For UI and UX work, use **UI UX Pro Max** and **Awesome DESIGN.md** as the primary design skills. Read their installed SKILL.md files when applying them: use UI UX Pro Max for usability, layout, accessibility, and component guidance; use relevant Awesome DESIGN.md references for visual direction. Adapt them to GatedSpace's existing theme and the user's references. Other design skills are supplementary when relevant, rather than the default starting point. Tell the user which skills are being applied.
+For each design request, the user delegates the choice of skill to the agent: choose **UI UX Pro Max**, **Awesome DESIGN.md**, or the **Claude taste skill** (`design-taste-frontend` / `taste-skill`) according to the task. There is no mandatory primary pair; the earlier preference to prioritize only UI UX Pro Max and Awesome DESIGN.md is superseded. Read the chosen installed SKILL.md, apply only guidance that fits the task, preserve GatedSpace's identity and the user's references, and briefly say which skill(s) are being used and why.
 
 ## Code Quality
 

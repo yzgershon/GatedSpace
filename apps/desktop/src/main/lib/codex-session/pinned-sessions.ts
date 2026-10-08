@@ -22,16 +22,18 @@ export class PinnedCodexSessions {
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
 			throw new Error(
-				"Could not read pinned Codex sessions. The saved file has been preserved.",
+				"Could not read saved sessions. The saved file has been preserved.",
 			);
 		}
 	}
 	set(session: PinnedCodexSession, pinned: boolean) {
 		const valid = entry.parse(session);
-		const rows = this.read().filter((row) => row.sessionId !== valid.sessionId);
-		if (pinned) rows.push(valid);
+		const rows = this.read();
+		const index = rows.findIndex((row) => row.sessionId === valid.sessionId);
+		if (index >= 0) rows.splice(index, 1, ...(pinned ? [valid] : []));
+		else if (pinned) rows.push(valid);
 		if (rows.length > 100)
-			throw new Error("You can pin up to 100 Codex sessions.");
+			throw new Error("You can save up to 100 sessions in this collection.");
 		mkdirSync(dirname(this.file), { recursive: true });
 		const temp = `${this.file}.${process.pid}.tmp`;
 		writeFileSync(temp, JSON.stringify(rows, null, 2), "utf8");

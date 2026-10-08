@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -35,10 +36,10 @@ const TOKEN_LIFETIME_SECONDS = 12 * 60 * 60;
 
 /**
  * Push services drop a notification that could not be delivered within the TTL.
- * An hour is the window in which "your agent is waiting" is still true; a stale
- * one arriving the next morning is noise.
+ * Match the bridge notice lifetime: a delayed wake must not replay a completion
+ * after the user has already resumed work.
  */
-const PUSH_TTL_SECONDS = 60 * 60;
+const PUSH_TTL_SECONDS = 30;
 
 /**
  * There is no mailbox behind this, but the spec requires a contact so a push
@@ -60,6 +61,7 @@ export interface PushSubscription {
  * next launch there is nothing to point at.
  */
 export interface PendingPushNotice {
+	id: string;
 	title: string;
 	body: string;
 	sessionKey: string | null;
@@ -86,7 +88,12 @@ function writeJsonFile(path: string, value: unknown): void {
 	writeSecureFile(path, JSON.stringify(value, null, 2));
 }
 
-class PushService {
+export class PushService {
+	constructor(
+		private readSubscriptions: () => PushSubscription[] = () =>
+			readJsonFile<PushSubscription[]>(SUBSCRIPTIONS_FILE) ?? [],
+		private now: () => number = Date.now,
+	) {}
 	private keys: VapidKeys | null = null;
 	private subscriptions: PushSubscription[] | null = null;
 	private pending: PendingPushNotice | null = null;
@@ -140,7 +147,7 @@ class PushService {
 	takePending(): PendingPushNotice | null {
 		const notice = this.pending;
 		if (!notice) return null;
-		if (Date.now() - notice.at > PENDING_NOTICE_TTL_MS) {
+		if (this.now() - notice.at > PENDING_NOTICE_TTL_MS) {
 			this.pending = null;
 			return null;
 		}
@@ -154,8 +161,8 @@ class PushService {
 	 * woken and come asking within milliseconds, and finding nothing there would
 	 * show a generic notification for an event we could have named.
 	 */
-	async notify(notice: Omit<PendingPushNotice, "at">): Promise<void> {
-		this.pending = { ...notice, at: Date.now() };
+	async notify(notice: Omit<PendingPushNotice, "at" | "id">): Promise<void> {
+		this.pending = { ...notice, id: randomUUID(), at: this.now() };
 
 		const subscriptions = this.loadSubscriptions();
 		if (!subscriptions.length) return;
@@ -163,6 +170,10 @@ class PushService {
 		await Promise.all(
 			subscriptions.map((subscription) => this.send(subscription)),
 		);
+	}
+
+	invalidate(sessionKey: string): void {
+		if (this.pending?.sessionKey === sessionKey) this.pending = null;
 	}
 
 	private async send(subscription: PushSubscription): Promise<void> {
@@ -174,6 +185,7 @@ class PushService {
 				method: "POST",
 				headers: {
 					TTL: String(PUSH_TTL_SECONDS),
+					Topic: "gatedspace-latest",
 					Authorization: buildVapidAuthorization({
 						audience,
 						subject: VAPID_SUBJECT,
@@ -214,7 +226,7 @@ class PushService {
 
 	private loadSubscriptions(): PushSubscription[] {
 		if (this.subscriptions) return this.subscriptions;
-		const stored = readJsonFile<PushSubscription[]>(SUBSCRIPTIONS_FILE);
+		const stored = this.readSubscriptions();
 		this.subscriptions = Array.isArray(stored) ? stored : [];
 		return this.subscriptions;
 	}

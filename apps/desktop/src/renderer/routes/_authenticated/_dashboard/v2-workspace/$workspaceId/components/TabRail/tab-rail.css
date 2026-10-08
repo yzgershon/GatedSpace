@@ -1,0 +1,218 @@
+.gs-tabrail {
+	width: max-content;
+	max-width: 100%;
+}
+.gs-tabrail-window {
+	position: relative;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+}
+.gs-tabrail-window {
+	--rail-fade-left: 0px;
+	--rail-fade-right: 0px;
+	/* Fade the contents themselves; never paint a mismatched surface over them. */
+	mask-image: linear-gradient(
+		to right,
+		transparent,
+		#000 var(--rail-fade-left),
+		#000 calc(100% - var(--rail-fade-right)),
+		transparent
+	);
+}
+.gs-tabrail-window[data-fade-left="true"] {
+	--rail-fade-left: 14px;
+}
+.gs-tabrail-window[data-fade-right="true"] {
+	--rail-fade-right: 14px;
+}
+.gs-tabrail-scroll {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+	scrollbar-width: none;
+}
+.gs-tabrail-scroll::-webkit-scrollbar {
+	display: none;
+}
+.gs-tabrail .gs-tabrail-tab {
+	width: max-content;
+	min-width: 40px;
+	max-width: 100%;
+	padding-inline: 10px;
+}
+.gs-tabrail .gs-tabrail-tab > button:first-of-type {
+	flex: 1;
+	min-width: 0;
+}
+.gs-tabrail .gs-tabrail-tab[data-expanded="false"] > button:first-of-type {
+	justify-content: center;
+}
+/* Keep image-backed marks on the rail's pointer-drag path, like SVG marks. */
+.gs-tabrail .gs-agent-status-ring img {
+	-webkit-user-drag: none;
+	user-select: none;
+}
+.gs-tabrail .gs-tabrail-tab:has(> button:focus-visible) {
+	outline: 1px solid var(--ring);
+	outline-offset: -2px;
+}
+/* Exactly one expanded label: hover, keyboard focus, then active. */
+.gs-tabrail .gs-tabrail-scroll .gs-tabrail-tab .gs-tabrail-label {
+	max-width: 0;
+	opacity: 0;
+	margin-left: 0;
+	transition:
+		max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		opacity 140ms ease,
+		margin-left 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.gs-tabrail
+	.gs-tabrail-scroll
+	.gs-tabrail-tab[data-expanded="true"]
+	.gs-tabrail-label {
+	opacity: 1;
+	margin-left: 8px;
+}
+.gs-tabrail-close {
+	max-width: 0;
+	margin-left: 0;
+	opacity: 0;
+	overflow: hidden;
+	pointer-events: none;
+	transition:
+		max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		margin-left 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+		opacity 140ms ease;
+}
+[data-expanded="true"][data-active="true"] > .gs-tabrail-close {
+	max-width: 17px;
+	margin-left: 4px;
+	opacity: 1;
+	pointer-events: auto;
+}
+.gs-tabrail-fixed,
+.gs-tabrail-arrows {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+}
+.gs-tabrail-control {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 3px;
+	height: 32px;
+	min-width: 22px;
+	border-radius: 7px;
+	color: var(--muted-foreground);
+	cursor: pointer;
+}
+.gs-tabrail-control:hover:not(:disabled) {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.gs-tabrail-control:disabled {
+	opacity: 0.3;
+	cursor: default;
+}
+.gs-tabrail-control:focus-visible {
+	outline: 1px solid var(--ring);
+	outline-offset: -1px;
+}
+.gs-tabrail-switcher {
+	padding: 0 5px;
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
+}
+.gs-tab-switcher {
+	width: min(340px, calc(100vw - 24px));
+	padding: 8px;
+	border-radius: 13px;
+	border-color: color-mix(in srgb, var(--foreground) 15%, var(--border));
+	box-shadow: 0 14px 35px rgb(0 0 0 / 25%);
+}
+.gs-tab-switcher-search {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 7px;
+	color: var(--muted-foreground);
+}
+.gs-tab-switcher-search input {
+	min-width: 0;
+	flex: 1;
+	padding: 5px;
+	background: transparent;
+	color: var(--foreground);
+	font-size: 13px;
+	outline: none;
+}
+.gs-tab-switcher-search:focus-within {
+	border-radius: 8px;
+	box-shadow: inset 0 0 0 1px var(--ring);
+}
+.gs-tab-switcher-search input:focus-visible {
+	outline: none;
+}
+.gs-tab-switcher-results {
+	max-height: min(320px, 55vh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.gs-tab-switcher-results > button {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-height: 40px;
+	width: 100%;
+	padding: 9px 8px;
+	border-radius: 7px;
+	text-align: left;
+	font-size: 13px;
+	cursor: pointer;
+}
+.gs-tab-switcher-results > button > span:nth-child(2) {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.gs-tab-switcher-results > button:hover,
+.gs-tab-switcher-results > button:focus-visible {
+	background: var(--accent);
+	outline: none;
+}
+.gs-tab-switcher-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	flex-shrink: 0;
+}
+.gs-tab-switcher-icon > * {
+	max-width: 20px;
+	max-height: 20px;
+}
+.gs-tab-switcher-results p {
+	padding: 18px 8px;
+	color: var(--muted-foreground);
+	font-size: 12px;
+}
+.gs-tab-switcher footer {
+	padding: 9px 7px 3px;
+	font-size: 10px;
+	color: var(--muted-foreground);
+	border-top: 1px solid var(--border);
+}
+@media (prefers-reduced-motion: reduce) {
+	.gs-tabrail .gs-tabrail-tab,
+	.gs-tabrail .gs-tabrail-label,
+	.gs-tabrail .gs-tabrail-close {
+		/* biome-ignore lint/complexity/noImportantStyles: Reduced motion must override inline drag transitions and scoped label styles. */
+		transition: none !important;
+	}
+}

@@ -11,8 +11,10 @@ import {
 	type NotificationIds,
 	notificationsEmitter,
 } from "main/lib/notifications/server";
+import { sessionEvents } from "main/lib/notifications/session-events";
 import { NOTIFICATION_EVENTS } from "shared/constants";
 import type { V2NotificationSourceFocusTarget } from "shared/notification-types";
+import type { SessionNotificationState } from "shared/session-notifications";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
 
@@ -95,6 +97,34 @@ export const createNotificationsRouter = (
 	getWindow: () => BrowserWindow | null,
 ) => {
 	return router({
+		sessionStates: publicProcedure.subscription(() =>
+			observable<SessionNotificationState[]>((emit) => {
+				const update = () => emit.next(sessionEvents.list());
+				sessionEvents.on("change", update);
+				update();
+				return () => {
+					sessionEvents.off("change", update);
+				};
+			}),
+		),
+		setSessionContexts: publicProcedure
+			.input(
+				z
+					.array(
+						z.object({
+							key: z.string(),
+							workspaceId: z.string(),
+							title: z.string().optional(),
+							visible: z.boolean(),
+						}),
+					)
+					.max(2000),
+			)
+			.mutation(({ input }) => {
+				for (const { key, ...context } of input)
+					sessionEvents.context(key, context);
+				return { success: true };
+			}),
 		showNative: publicProcedure
 			.input(showNativeInputSchema)
 			.mutation(({ input }) => {

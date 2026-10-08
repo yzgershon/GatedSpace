@@ -9,11 +9,13 @@ import type {
 
 interface V2NativeNotificationContentOptions {
 	workspaceName: string;
+	sessionTitle?: string;
 	payload: AgentLifecyclePayload;
 }
 
 export function getV2NativeNotificationContent({
 	workspaceName,
+	sessionTitle,
 	payload,
 }: V2NativeNotificationContentOptions): { title: string; body: string } {
 	const agentLabel = getAgentLabel(payload.agent);
@@ -22,7 +24,7 @@ export function getV2NativeNotificationContent({
 	const workspaceLabel = cleanLabel(workspaceName) ?? "Workspace";
 
 	return {
-		title: `${agentLabel} - ${action}`,
+		title: `${cleanLabel(sessionTitle) ?? agentLabel} - ${action}`,
 		body: workspaceLabel,
 	};
 }

@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import { clipboard, Menu, webContents } from "electron";
 import { safeOpenExternal } from "main/lib/safe-url";
+import { isLocalPreviewUrl } from "shared/local-preview";
 
 interface ConsoleEntry {
 	level: "log" | "warn" | "error" | "info" | "debug";
@@ -11,7 +12,11 @@ interface ConsoleEntry {
 const MAX_CONSOLE_ENTRIES = 500;
 
 function sanitizeUrl(url: string): string {
-	if (/^https?:\/\//i.test(url) || url.startsWith("about:")) {
+	if (
+		/^https?:\/\//i.test(url) ||
+		url.startsWith("about:") ||
+		isLocalPreviewUrl(url)
+	) {
 		return url;
 	}
 	if (url.startsWith("localhost") || url.startsWith("127.0.0.1")) {

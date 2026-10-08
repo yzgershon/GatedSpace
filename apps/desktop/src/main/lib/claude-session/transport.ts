@@ -32,6 +32,7 @@ import {
 } from "../browser/agent-browser-service";
 import { getClaudeProfile } from "../claude-profile";
 import { ensureSecureDir, writeSecureFile } from "../secure-file";
+import { sessionNamingInstructions } from "../session-names";
 import { withFastSettings } from "./fast-settings";
 import { NdjsonLineBuffer } from "./ndjson-line-buffer";
 import { PermissionRequests } from "./permission-requests";
@@ -154,6 +155,7 @@ export class ClaudeSessionTransport extends EventEmitter {
 		return {
 			...process.env,
 			...this.options.env,
+			GATEDSPACE_NATIVE_SESSION: "1",
 			// The account binding wins over preset env — the switcher is the
 			// source of truth for which account a session runs on.
 			...(configDir ? { CLAUDE_CONFIG_DIR: configDir } : {}),
@@ -173,7 +175,11 @@ export class ClaudeSessionTransport extends EventEmitter {
 		const args = this.buildArgs();
 		if (this.options.workspaceId && this.options.sessionKey) {
 			const key = `claude:${this.options.sessionKey}`;
-			agentBrowserService.register(key, this.options.workspaceId);
+			agentBrowserService.register(
+				key,
+				this.options.workspaceId,
+				this.options.cwd,
+			);
 			this.browserDispose = () => agentBrowserService.unregister(key);
 			const bridge = await agentBrowserMcp.connect(key);
 			if (this.disposed) {
@@ -203,7 +209,7 @@ export class ClaudeSessionTransport extends EventEmitter {
 				"--mcp-config",
 				this.browserConfig,
 				"--append-system-prompt",
-				browserInstructions(key),
+				`${browserInstructions(key)}\n\n${sessionNamingInstructions(key)}`,
 			);
 		}
 
@@ -273,6 +279,14 @@ export class ClaudeSessionTransport extends EventEmitter {
 	 * just accepted (probe sent a solid red PNG and got "Red" back).
 	 */
 	sendUserMessage(text: string, images: UserImagePayload[] = []): void {
+		if (
+			this.disposed ||
+			this.child?.stdin.destroyed ||
+			(this.child && this.child.exitCode !== null)
+		)
+			throw new Error(
+				"Claude disconnected before accepting the message. Reopen the session and retry.",
+			);
 		const content: unknown[] = images.map((image) => ({
 			type: "image",
 			source: {

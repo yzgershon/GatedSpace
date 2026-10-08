@@ -22,6 +22,7 @@ export function deriveSessionPaneStatus({
 	seenTurn: string | undefined;
 }): PaneStatus {
 	if (!activity) return "idle";
+	if (activity.status === "attention") return "permission";
 	if (activity.status === "streaming") return "working";
 	if (activity.status !== "done" && activity.status !== "error") return "idle";
 	// A settled status with no finished turn behind it is a session restored

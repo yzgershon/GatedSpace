@@ -1,15 +1,21 @@
 import type { WorkspaceState } from "@superset/panes";
 import { buildHostRoutingKey } from "@superset/shared/host-routing";
 import { useLiveQuery } from "@tanstack/react-db";
-import { useEffectEvent, useMemo } from "react";
+import { useLocation } from "@tanstack/react-router";
+import { useEffect, useEffectEvent, useMemo } from "react";
 import { useRelayUrl } from "renderer/hooks/useRelayUrl";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
+import { electronTrpcClient } from "renderer/lib/trpc-client";
 import type { PaneViewerData } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { useVisibleSidebarWorkspaceIds } from "renderer/routes/_authenticated/hooks/useVisibleSidebarWorkspaceIds";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import { useHostWorkspaces } from "renderer/routes/_authenticated/providers/HostWorkspacesProvider";
 import { useLocalHostService } from "renderer/routes/_authenticated/providers/LocalHostServiceProvider";
+import {
+	publishSessionActivity,
+	registerSessionWorkspace,
+} from "renderer/stores/session-activity";
 import { NOTIFICATION_EVENTS } from "shared/constants";
 import type { AgentLifecycleEvent } from "shared/notification-types";
 import {
@@ -58,6 +64,28 @@ type ElectronNotificationEvent =
  */
 export function V2NotificationController() {
 	const collections = useCollections();
+	const pathname = useLocation({ select: (location) => location.pathname });
+	electronTrpc.notifications.sessionStates.useSubscription(undefined, {
+		onData: (states) => {
+			for (const state of states) {
+				if (state.workspaceId)
+					registerSessionWorkspace(state.key, state.workspaceId);
+				publishSessionActivity(
+					state.key,
+					{
+						status:
+							state.status === "working"
+								? "streaming"
+								: state.status === "completed"
+									? "done"
+									: state.status,
+						turnKey: state.turnId,
+					},
+					true,
+				);
+			}
+		},
+	});
 	const { machineId, activeHostUrl } = useLocalHostService();
 	const relayUrl = useRelayUrl();
 	const visibleWorkspaceIds = useVisibleSidebarWorkspaceIds();
@@ -117,6 +145,31 @@ export function V2NotificationController() {
 		[workspaceHosts, workspaceStatesById, machineId, activeHostUrl, relayUrl],
 	);
 
+	useEffect(() => {
+		const contexts = [...workspaceStatesById.values()].flatMap((workspace) =>
+			(workspace.paneLayout?.tabs ?? []).flatMap((tab) =>
+				Object.values(tab.panes).map((pane) => ({
+					key: pane.id,
+					workspaceId: workspace.workspaceId,
+					title:
+						pane.titleOverride?.trim() ||
+						(Object.keys(tab.panes).length === 1
+							? tab.titleOverride?.trim()
+							: undefined),
+					visible:
+						pathname.endsWith(`/${workspace.workspaceId}`) &&
+						workspace.paneLayout?.activeTabId === tab.id &&
+						(!tab.maximizedPaneId || tab.maximizedPaneId === pane.id),
+				})),
+			),
+		);
+		void electronTrpcClient.notifications.setSessionContexts
+			.mutate(contexts)
+			.catch((error) => {
+				console.warn("[notifications] Failed to sync session titles", error);
+			});
+	}, [workspaceStatesById, pathname]);
+
 	const handleElectronAgentLifecycle = useEffectEvent(
 		(event: ElectronNotificationEvent) => {
 			if (event.type !== NOTIFICATION_EVENTS.AGENT_LIFECYCLE) return;
@@ -147,7 +200,8 @@ export function V2NotificationController() {
 				getHostServiceClientByUrl(activeHostUrl)
 					.notifications.hook.mutate({
 						terminalId: data.terminalId,
-						eventType,
+						eventType: data.sourceEventType ?? eventType,
+						notifiedByDesktop: true,
 					})
 					.catch((error) => {
 						console.warn(

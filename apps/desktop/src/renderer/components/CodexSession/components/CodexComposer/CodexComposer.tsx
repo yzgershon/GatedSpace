@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUp, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Check, ListPlus, Paperclip, Square, X } from "lucide-react";
 import {
 	type SetStateAction,
 	useEffect,
@@ -10,6 +10,9 @@ import {
 } from "react";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
+import { MessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
+import { useMessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
+import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
 import {
@@ -87,6 +90,37 @@ export function CodexComposer({
 	const selected = models.find((m) => m.id === model);
 	const effort = chosenEffort || state?.effort || defaultCodexEffort(selected);
 	const working = state?.status === "working";
+	const queue = useMessageQueue(paneId);
+	const editor = useQueuedMessageEdit({
+		key: paneId,
+		queue,
+		read: () => {
+			const current = getCodexDraft(paneId);
+			return {
+				provider: "codex",
+				text: current.text,
+				images: current.images.map((i) => i.url),
+				model: current.model || model,
+				effort: current.effort || effort,
+				permission: current.permission ?? permission,
+				plan: current.plan ?? plan,
+				fast: current.fast ?? fast,
+			};
+		},
+		write: (prompt) => {
+			if (prompt.provider !== "codex") return;
+			updateCodexDraft(paneId, {
+				...prompt,
+				images: (prompt.images ?? []).map((url, i) => ({
+					name: `Image ${i + 1}`,
+					url,
+				})),
+			});
+			setCaret(prompt.text.length);
+			setMenuDismissed(true);
+		},
+		focus: () => textarea.current?.focus(),
+	});
 	const changes = useMemo(() => codexTaskChanges(state), [state]);
 	const before = draft.slice(0, caret);
 	const skillToken = before.match(/(?:^|\s)\$([\w.:-]*)$/);
@@ -250,23 +284,40 @@ export function CodexComposer({
 	const send = async () => {
 		if (
 			sending ||
-			working ||
-			state?.status !== "idle" ||
+			editor.busy ||
+			(!editor.id && !working && state?.status !== "idle") ||
 			(!draft.trim() && !images.length)
 		)
 			return;
 		setSending(true);
 		onError(null);
 		try {
+			if (editor.id) {
+				await editor.save({
+					provider: "codex",
+					text: draft,
+					images: images.map((i) => i.url),
+					model,
+					effort,
+					permission,
+					plan,
+					fast,
+				});
+				return;
+			}
 			const command = parseCodexCommand(draft);
 			if (command) {
+				if (working || queue.state.entries.length)
+					throw new Error(
+						"Wait for the queue and current turn to finish before running a slash command.",
+					);
 				const clear = await runCommand(command.name, command.args);
 				if (clear && getCodexDraft(paneId).text === draft) setDraft("");
 				return;
 			}
 			setNotice("");
-			await electronTrpcClient.codexSession.send.mutate({
-				key: paneId,
+			const prompt = {
+				provider: "codex" as const,
 				text: draft.trim(),
 				model,
 				effort,
@@ -274,7 +325,13 @@ export function CodexComposer({
 				plan,
 				fast,
 				images: images.map((i) => i.url),
-			});
+			};
+			if (working || queue.state.entries.length) await queue.enqueue(prompt);
+			else
+				await electronTrpcClient.codexSession.send.mutate({
+					key: paneId,
+					...prompt,
+				});
 			// Do not erase a follow-up the user typed while Codex accepted the turn.
 			const current = getCodexDraft(paneId);
 			updateCodexDraft(paneId, {
@@ -335,6 +392,7 @@ export function CodexComposer({
 					)}
 				</div>
 			)}
+			<MessageQueue queue={queue} provider="codex" editor={editor} />
 			<div className="session-composer">
 				{images.length > 0 && (
 					<fieldset className="session-images" aria-label="Attached images">
@@ -499,14 +557,37 @@ export function CodexComposer({
 						onFastChange={setFast}
 						disabled={working || !selected}
 					/>
+					{working && (draft.trim() || images.length > 0) && (
+						<button
+							type="button"
+							className="session-send"
+							aria-label={editor.id ? "Save queued message" : "Queue message"}
+							title={
+								editor.id
+									? "Save queued message"
+									: "Send after the current turn"
+							}
+							disabled={sending || editor.busy}
+							onClick={() => void send()}
+						>
+							{editor.id ? <Check size={17} /> : <ListPlus size={17} />}
+						</button>
+					)}
 					<button
 						type="button"
 						className="session-send"
-						aria-label={working ? "Stop Codex" : "Send message"}
+						aria-label={
+							working
+								? "Stop Codex"
+								: editor.id
+									? "Save queued message"
+									: "Send message"
+						}
 						disabled={
 							!working &&
 							(sending ||
-								state?.status !== "idle" ||
+								editor.busy ||
+								(!editor.id && state?.status !== "idle") ||
 								(!draft.trim() && !images.length))
 						}
 						onClick={() => {
@@ -519,6 +600,8 @@ export function CodexComposer({
 					>
 						{working ? (
 							<Square size={15} fill="currentColor" />
+						) : editor.id ? (
+							<Check size={17} />
 						) : (
 							<ArrowUp size={17} />
 						)}

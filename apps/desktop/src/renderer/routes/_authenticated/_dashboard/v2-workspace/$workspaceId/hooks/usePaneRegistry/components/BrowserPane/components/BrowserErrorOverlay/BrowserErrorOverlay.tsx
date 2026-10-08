@@ -3,6 +3,7 @@ import { GlobeIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import { TbCopy } from "react-icons/tb";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
+import { loopbackPreviewUrl } from "shared/local-preview";
 import type { BrowserLoadError } from "shared/tabs-types";
 
 const ERROR_LABELS: Record<number, string> = {
@@ -49,9 +50,15 @@ export function BrowserErrorOverlay({
 	onRetry,
 }: BrowserErrorOverlayProps) {
 	const [showDetails, setShowDetails] = useState(false);
-	const label = ERROR_LABELS[error.code] ?? "Page Load Failed";
-	const friendlyMessage =
-		FRIENDLY_MESSAGES[error.code] ?? "The page could not be loaded";
+	const localUnavailable =
+		!!loopbackPreviewUrl(error.url) &&
+		[-6, -7, -102, -118].includes(error.code);
+	const label = localUnavailable
+		? "Local preview is offline"
+		: (ERROR_LABELS[error.code] ?? "Page Load Failed");
+	const friendlyMessage = localUnavailable
+		? "Its local server has stopped. Saved previews restore automatically; a live development app needs its server running."
+		: (FRIENDLY_MESSAGES[error.code] ?? "The page could not be loaded");
 	const detailsText = `Error Code: ${error.code} URL: ${error.url}`;
 
 	const toggleDetails = useCallback(() => {
@@ -71,7 +78,7 @@ export function BrowserErrorOverlay({
 					<h2 className="text-xl font-medium text-muted-foreground/70">
 						{label}
 					</h2>
-					<p className="mt-1.5 text-sm text-muted-foreground/50">
+					<p className="mt-1.5 text-sm text-muted-foreground/50 select-text cursor-text">
 						{friendlyMessage}
 					</p>
 					<p className="mt-0.5 text-sm text-muted-foreground/50">
@@ -101,7 +108,7 @@ export function BrowserErrorOverlay({
 					</div>
 				)}
 				<Button variant="outline" size="sm" onClick={onRetry}>
-					Restart Browser
+					Retry
 				</Button>
 			</div>
 		</div>

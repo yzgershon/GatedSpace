@@ -1,0 +1,297 @@
+.collection-panel-title {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 14px 15px 10px;
+	gap: 8px;
+}
+.collection-panel-title h2 {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--foreground);
+}
+.collection-panel-title > span {
+	font-size: 11px;
+	color: var(--muted-foreground);
+	font-variant-numeric: tabular-nums;
+}
+.collection-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 12px;
+	padding: 7px 9px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	background: color-mix(in srgb, var(--background) 30%, transparent);
+}
+.collection-search input {
+	min-width: 0;
+	width: 100%;
+	font-size: 12px;
+	background: transparent;
+	color: var(--foreground);
+	outline: none;
+	user-select: text;
+}
+.collection-search:focus-within {
+	border-color: var(--ring);
+}
+.collection-search button {
+	display: flex;
+	cursor: pointer;
+}
+.collection-filters {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin: 9px 12px 12px;
+	color: var(--muted-foreground);
+	font-size: 11px;
+}
+.collection-filters select {
+	max-width: 100%;
+	background: transparent;
+	padding: 4px 3px;
+	color: inherit;
+	cursor: pointer;
+	border-radius: 5px;
+}
+.collection-filters select option {
+	background: var(--background);
+	color: var(--foreground);
+}
+.collection-filters label,
+.collection-filters button {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	cursor: pointer;
+}
+.collection-filters button[aria-pressed="true"] {
+	color: var(--foreground);
+}
+.collection-list {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 0 10px 12px;
+	scrollbar-width: thin;
+}
+.session-collection,
+.workspace-collection {
+	border: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+	border-radius: 11px;
+	margin-bottom: 10px;
+	padding: 4px;
+	background: color-mix(in srgb, var(--background) 12%, transparent);
+}
+.collection-pinned {
+	border-color: transparent;
+	background: transparent;
+	padding: 0 0 5px;
+}
+.collection-heading {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	width: 100%;
+	min-height: 32px;
+	padding: 5px 8px;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	cursor: pointer;
+	border-radius: 6px;
+}
+.collection-heading:hover {
+	color: var(--foreground);
+	background: color-mix(in srgb, var(--foreground) 3%, transparent);
+}
+.collection-heading > span {
+	flex: 1;
+	text-align: left;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-weight: 600;
+}
+.collection-heading small {
+	font-size: 10px;
+	opacity: 0.7;
+}
+.collection-session-row {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	border-radius: 7px;
+	padding-right: 4px;
+	position: relative;
+}
+.collection-session-row:hover,
+.collection-session-row:focus-within {
+	background: color-mix(in srgb, var(--foreground) 5%, transparent);
+}
+.collection-session-open {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 9px 7px;
+	flex: 1;
+	min-width: 0;
+	text-align: left;
+	cursor: pointer;
+	border-radius: 7px;
+}
+.collection-agent-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	flex-shrink: 0;
+	border-radius: 7px;
+}
+.collection-agent-icon img {
+	width: 15px;
+	height: 15px;
+}
+.collection-session-copy {
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	flex: 1;
+	min-width: 0;
+}
+.collection-session-title {
+	font-size: 12px;
+	color: var(--foreground);
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+.collection-session-meta {
+	color: var(--muted-foreground);
+	font-size: 10px;
+	opacity: 0.8;
+}
+.collection-session-time {
+	font-size: 10px;
+	color: var(--muted-foreground);
+	opacity: 0.7;
+	font-variant-numeric: tabular-nums;
+}
+.collection-pin {
+	color: var(--muted-foreground);
+	opacity: 0.65;
+	margin-right: 3px;
+}
+.collection-row-menu {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 28px;
+	color: var(--muted-foreground);
+	cursor: pointer;
+	opacity: 0;
+	border-radius: 5px;
+}
+.collection-session-row:hover .collection-row-menu,
+.collection-row-menu:focus-visible,
+.collection-row-menu[data-state="open"] {
+	opacity: 1;
+}
+.collection-session-row[data-status="working"] .collection-agent-icon {
+	box-shadow: 0 0 0 1px #e8c16b;
+	animation: collection-breathe 2s ease-in-out infinite;
+}
+.collection-session-row[data-status="attention"] .collection-agent-icon {
+	box-shadow: 0 0 0 1px #f07885;
+}
+.collection-session-row[data-status="completed"] .collection-agent-icon {
+	box-shadow: 0 0 0 1px #78c997;
+}
+.collection-empty {
+	padding: 14px 8px;
+	font-size: 12px;
+	color: var(--muted-foreground);
+}
+.collection-empty button {
+	display: block;
+	text-decoration: underline;
+	margin-top: 8px;
+}
+.collection-rename {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	padding: 8px;
+	width: 100%;
+	font-size: 11px;
+}
+.collection-rename input {
+	width: 100%;
+	border: 1px solid var(--ring);
+	border-radius: 5px;
+	padding: 6px;
+	background: var(--background);
+	user-select: text;
+}
+.collection-rename p {
+	color: var(--destructive);
+}
+.collection-rename button {
+	padding: 3px 6px;
+	cursor: pointer;
+}
+.session-collections button:focus-visible,
+.session-collections select:focus-visible,
+.workspace-collections button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+.workspace-collection {
+	position: relative;
+}
+.workspace-collection [data-project-row] {
+	padding-left: 7px;
+	padding-right: 29px;
+	border-radius: 7px;
+	font-size: 13px;
+}
+.workspace-collection-pin {
+	position: absolute;
+	right: 6px;
+	top: 10px;
+	width: 22px;
+	height: 23px;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	color: var(--muted-foreground);
+	opacity: 0;
+	cursor: pointer;
+	border-radius: 5px;
+}
+.workspace-collection:hover .workspace-collection-pin,
+.workspace-collection-pin:focus-visible,
+.workspace-collection-pin[aria-pressed="true"] {
+	opacity: 1;
+}
+.workspace-collection-pin[aria-pressed="true"] {
+	color: var(--foreground);
+}
+@keyframes collection-breathe {
+	50% {
+		box-shadow: 0 0 0 2px #e8c16b80;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.collection-session-row[data-status="working"] .collection-agent-icon {
+		animation: none;
+	}
+}
