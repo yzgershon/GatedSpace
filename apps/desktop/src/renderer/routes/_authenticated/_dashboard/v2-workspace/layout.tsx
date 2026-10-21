@@ -93,10 +93,14 @@ function V2WorkspaceLayout() {
 
 	const hostStatus = useRemoteHostStatus(workspace);
 
+	// The index chooses the last workspace or the first-run setup screen. It
+	// must mount before a workspace ID exists, otherwise launch loads forever.
+	if (!workspaceId) return <Outlet />;
+
 	// Not yet known to be missing — `isReady` now waits for the local host
 	// service to actually report, so this covers the whole cold-start window
 	// instead of ending a second early and falling through to "not found".
-	if (!workspaceId || (!workspace && !isReady)) {
+	if (!workspace && !isReady) {
 		return <WorkspaceLoadingState />;
 	}
 

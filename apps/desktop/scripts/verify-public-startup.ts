@@ -149,14 +149,24 @@ try {
 			);
 		});
 	const ready = async () => {
+		let lastText = "";
 		for (let i = 0; i < 120; i++) {
 			if (child.exitCode !== null)
 				throw new Error("App closed during clean-profile check");
 			const text = String(await evaluate("document.body?.innerText ?? ''"));
+			lastText = text;
 			if (text.includes("Your space to build") && text.includes("Open folder"))
 				return;
 			await Bun.sleep(1000);
 		}
+		writeFileSync(
+			resolve(`release/public-smoke-${arch}-screen.json`),
+			JSON.stringify(
+				{ url: await evaluate("location.href"), text: lastText },
+				null,
+				2,
+			),
+		);
 		throw new Error("Clean profile did not reach public setup");
 	};
 	await ready();
@@ -167,6 +177,8 @@ try {
 		home,
 		"host/00000000-0000-4000-8000-000000000002/manifest.json",
 	);
+	for (let i = 0; i < 80 && !existsSync(manifestFile); i++)
+		await Bun.sleep(250);
 	if (!existsSync(manifestFile)) throw new Error("Local backend did not start");
 	const manifest = JSON.parse(readFileSync(manifestFile, "utf8"));
 	const plain = join(root, "Plain folder");
