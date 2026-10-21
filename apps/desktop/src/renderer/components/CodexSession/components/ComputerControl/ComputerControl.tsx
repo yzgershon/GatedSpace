@@ -1,5 +1,5 @@
 import { Popover, PopoverContent, PopoverTrigger } from "@superset/ui/popover";
-import { Monitor, Square } from "lucide-react";
+import { Monitor, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import {
@@ -14,12 +14,29 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 	useEffect(() => {
 		const subscription =
 			electronTrpcClient.codexSession.computerStream.subscribe(undefined, {
-				onData: setState,
+				onData: (next) => {
+					setState(next);
+					setError("");
+				},
 				onError: (e) => setError(e.message),
 			});
 		return () => subscription.unsubscribe();
 	}, []);
-	const active = ["ready", "connecting", "stopping"].includes(state.phase);
+	const enable = async () => {
+		setError("");
+		try {
+			setState(
+				await electronTrpcClient.codexSession.computerEnable.mutate({
+					key: paneId,
+				}),
+			);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : String(e));
+		}
+	};
+	const active = ["ready", "connecting", "paused", "stopping"].includes(
+		state.phase,
+	);
 	const mine = state.owner === `codex:${paneId}`;
 	const stop = async () => {
 		setError("");
@@ -31,6 +48,37 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 	};
 	return (
 		<div className="computer-control" data-active={active}>
+			{state.request?.owner === `codex:${paneId}` && !active && (
+				<div className="computer-control-request" aria-live="polite">
+					<span title={state.request.reason}>{state.request.reason}</span>
+					<button
+						type="button"
+						className="computer-control-action"
+						onClick={() => void enable()}
+					>
+						Enable computer control
+					</button>
+					<button
+						type="button"
+						aria-label="Dismiss computer control request"
+						onClick={() => {
+							void electronTrpcClient.codexSession.computerDismissRequest
+								.mutate({ key: paneId })
+								.catch((e) => setError(e.message));
+						}}
+					>
+						<X size={14} />
+					</button>
+					{error && (
+						<span
+							role="alert"
+							className="select-text cursor-text computer-control-error"
+						>
+							{error}
+						</span>
+					)}
+				</div>
+			)}
 			<Popover>
 				<PopoverTrigger asChild>
 					<button
@@ -54,8 +102,9 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 						through Windows-MCP.
 					</p>
 					<p className="computer-control-hint">
-						Windows must stay unlocked. Control turns off on restart, sleep, or
-						lock.
+						The controller pauses after 60 idle seconds or a completed task and
+						resumes on this pane's next desktop request. Stop, closing the
+						session, restart, sleep, or locking Windows removes approval.
 					</p>
 					{(error || state.error) && (
 						<p
@@ -73,7 +122,9 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 									: state.phase === "stopping"
 										? "Stopping computer control…"
 										: mine
-											? "Enabled for this pane"
+											? state.phase === "paused"
+												? "Paused; approved for this pane"
+												: "Enabled for this pane"
 											: "Enabled in another pane"}
 							</output>
 							<button
@@ -89,18 +140,7 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 						<button
 							type="button"
 							className="computer-control-action"
-							onClick={async () => {
-								setError("");
-								try {
-									setState(
-										await electronTrpcClient.codexSession.computerEnable.mutate(
-											{ key: paneId },
-										),
-									);
-								} catch (e) {
-									setError(e instanceof Error ? e.message : String(e));
-								}
-							}}
+							onClick={() => void enable()}
 						>
 							Enable for this pane
 						</button>
@@ -120,7 +160,9 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 								: mine
 									? state.activity
 										? `Computer · ${state.activity}`
-										: "Computer ready"
+										: state.phase === "paused"
+											? "Computer paused"
+											: "Computer ready"
 									: "Computer in use"}
 					</span>
 					<button

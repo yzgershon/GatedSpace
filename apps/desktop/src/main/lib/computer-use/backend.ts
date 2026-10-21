@@ -86,6 +86,8 @@ export class WindowsComputerBackend implements ComputerBackend {
 				POSTHOG_API_KEY: "",
 				WINDOWS_MCP_WATCHDOG: "false",
 				WINDOWS_MCP_SCREENSHOT_BACKEND: "pillow",
+				// GatedSpace owns the visible indicator; avoid the controller's red flash.
+				WINDOWS_MCP_DISABLE_FLASH: "true",
 				PYTHONIOENCODING: "utf-8",
 				UV_NO_PROGRESS: "1",
 			},

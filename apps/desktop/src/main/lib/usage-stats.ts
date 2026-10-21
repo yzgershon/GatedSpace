@@ -15,6 +15,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolveUsageWindow } from "shared/usage-window";
 import { getClaudeProjectRoots, listClaudeProfiles } from "./claude-profile";
+import { readUsageTranscriptLines } from "./usage-transcript-lines";
 
 export interface UsageModel {
 	name: string;
@@ -173,11 +174,26 @@ function claudeModelName(m: string | undefined): string {
 }
 
 let cache: { at: number; stats: UsageStats } | null = null;
+let pendingScan: Promise<UsageStats> | null = null;
 const CACHE_MS = 60_000;
 
-export function computeUsageStats(now = Date.now(), force = false): UsageStats {
+export async function computeUsageStats(
+	now = Date.now(),
+	force = false,
+): Promise<UsageStats> {
 	if (!force && cache && now - cache.at < CACHE_MS) return cache.stats;
+	// The sidebar and Usage page can request this together. Share one scan,
+	// including forced refreshes, instead of multiplying disk reads and memory.
+	if (pendingScan) return pendingScan;
+	pendingScan = scanUsageStats(now);
+	try {
+		return await pendingScan;
+	} finally {
+		pendingScan = null;
+	}
+}
 
+async function scanUsageStats(now: number): Promise<UsageStats> {
 	const home = homedir();
 	type Tok = { in: number; out: number; cacheRead: number; cacheWrite: number };
 	const perDayModel = new Map<string, Map<string, Tok>>();
@@ -223,13 +239,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 
 	// ---- Claude Code ----
 	for (const f of getClaudeProjectRoots().flatMap((root) => walkJsonl(root))) {
-		let text: string;
-		try {
-			text = readFileSync(f, "utf8");
-		} catch {
-			continue;
-		}
-		for (const line of text.split("\n")) {
+		for await (const line of readUsageTranscriptLines(f)) {
 			if (!line.trim()) continue;
 			// biome-ignore lint/suspicious/noExplicitAny: untyped JSONL transcript line
 			let o: any;
@@ -270,13 +280,7 @@ export function computeUsageStats(now = Date.now(), force = false): UsageStats {
 		join(home, ".codex", "archived_sessions"),
 	]) {
 		for (const f of walkJsonl(base)) {
-			let text: string;
-			try {
-				text = readFileSync(f, "utf8");
-			} catch {
-				continue;
-			}
-			for (const line of text.split("\n")) {
+			for await (const line of readUsageTranscriptLines(f)) {
 				if (!line.trim()) continue;
 				// biome-ignore lint/suspicious/noExplicitAny: untyped JSONL transcript line
 				let o: any;

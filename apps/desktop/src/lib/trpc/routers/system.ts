@@ -1,3 +1,4 @@
+import { agentSetupStatus } from "main/lib/agent-setup-status";
 import { openElevatedTerminal } from "main/lib/elevated-terminal";
 import { FOCUS_SURFACES, writeFocusSurface } from "main/lib/focus-surface-file";
 import { z } from "zod";
@@ -49,6 +50,7 @@ async function detectGhCli(): Promise<GhDetectResult> {
 export const createSystemRouter = () => {
 	return router({
 		detectGhCli: publicProcedure.query(detectGhCli),
+		agentSetupStatus: publicProcedure.query(agentSetupStatus),
 		/**
 		 * Opens an admin shell in its OWN window — see `elevated-terminal.ts` for
 		 * why it cannot be a pane. Reports failure in the result rather than

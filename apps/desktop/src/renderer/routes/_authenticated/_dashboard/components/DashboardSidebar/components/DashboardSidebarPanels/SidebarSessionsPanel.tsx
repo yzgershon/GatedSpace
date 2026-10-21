@@ -1,7 +1,8 @@
 import { toast } from "@superset/ui/sonner";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Search, SlidersHorizontal, X } from "lucide-react";
+import { Archive, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
 import { useCopyToClipboard } from "renderer/hooks/useCopyToClipboard";
 import { getHostTrpcClient } from "renderer/lib/host-trpc-client";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
@@ -58,7 +59,9 @@ export function SidebarSessionsPanel({
 		const saved = localStorage.getItem("gatedspace-session-provider");
 		return saved === "codex" || saved === "claude" ? saved : "all";
 	});
-	const [filter, setFilter] = useState("all");
+	const [archived, setArchived] = useState(false);
+	const claudeIcon = usePresetIcon("claude");
+	const codexIcon = usePresetIcon("codex");
 	const organization = useQuery({
 		queryKey: ["session-organization"],
 		queryFn: () => electronTrpcClient.claudeSessions.organization.query(),
@@ -84,7 +87,6 @@ export function SidebarSessionsPanel({
 	const [debouncedQuery, setDebouncedQuery] = useState("");
 	const { activeHostUrl } = useLocalHostService();
 	const { copyToClipboard } = useCopyToClipboard();
-	const archived = filter === "archived";
 	useEffect(() => {
 		const timer = setTimeout(
 			() => setDebouncedQuery(query.trim().slice(0, 200)),
@@ -210,12 +212,7 @@ export function SidebarSessionsPanel({
 				.toLowerCase()
 				.includes(query.trim().toLowerCase()) ||
 			matches.has(key);
-		return (
-			textMatch &&
-			(filter === "all" ||
-				archived ||
-				(filter === "pinned" ? s.pinned : activity.get(key) === filter))
-		);
+		return textMatch;
 	});
 
 	const perform = async (action: () => Promise<unknown>) => {
@@ -250,10 +247,6 @@ export function SidebarSessionsPanel({
 		});
 	return (
 		<div className="session-collections flex h-full min-h-0 flex-col">
-			<div className="collection-panel-title">
-				<h2>Recent sessions</h2>
-				<span>{sessions.data?.rows.length ?? ""}</span>
-			</div>
 			<label className="collection-search">
 				<Search size={14} />
 				<input
@@ -272,36 +265,6 @@ export function SidebarSessionsPanel({
 					</button>
 				)}
 			</label>
-			<div className="collection-filters">
-				<select
-					aria-label="Agent filter"
-					value={provider}
-					onChange={(e) => {
-						const next = e.target.value as typeof provider;
-						setProvider(next);
-						localStorage.setItem("gatedspace-session-provider", next);
-					}}
-				>
-					<option value="all">All agents</option>
-					<option value="claude">Claude</option>
-					<option value="codex">Codex</option>
-				</select>
-				<label>
-					<SlidersHorizontal size={12} />
-					<select
-						aria-label="Session filter"
-						value={filter}
-						onChange={(e) => setFilter(e.target.value)}
-					>
-						<option value="all">All sessions</option>
-						<option value="working">Working</option>
-						<option value="attention">Needs reply</option>
-						<option value="completed">Complete</option>
-						<option value="pinned">Pinned</option>
-						<option value="archived">Archived</option>
-					</select>
-				</label>
-			</div>
 			<div className="collection-list">
 				{sessions.isError || sessions.data?.errors.length ? (
 					<div className="collection-empty select-text cursor-text">
@@ -316,7 +279,7 @@ export function SidebarSessionsPanel({
 				) : (
 					!filtered.length && (
 						<p className="collection-empty">
-							{query || filter !== "all"
+							{query || provider !== "all" || archived
 								? "No matching sessions."
 								: "Your conversations will appear here."}
 						</p>
@@ -331,12 +294,58 @@ export function SidebarSessionsPanel({
 					</p>
 				)}
 				<SessionOrganizer
+					toolbar={
+						<>
+							<fieldset
+								className="collection-agent-filters"
+								aria-label="Filter by agent"
+							>
+								{(["claude", "codex"] as const).map((agent) => (
+									<button
+										key={agent}
+										type="button"
+										aria-label={
+											agent === "claude" ? "Claude sessions" : "Codex sessions"
+										}
+										title={
+											provider === agent
+												? "Show all agents"
+												: `Show ${agent === "claude" ? "Claude" : "Codex"} sessions`
+										}
+										aria-pressed={provider === agent}
+										onClick={() => {
+											const next = provider === agent ? "all" : agent;
+											setProvider(next);
+											localStorage.setItem("gatedspace-session-provider", next);
+										}}
+									>
+										<img
+											src={agent === "claude" ? claudeIcon : codexIcon}
+											alt=""
+										/>
+									</button>
+								))}
+							</fieldset>
+							<button
+								type="button"
+								className="collection-archive-toggle"
+								aria-label="Archived sessions"
+								title={
+									archived ? "Return to recent sessions" : "Archived sessions"
+								}
+								aria-pressed={archived}
+								onClick={() => setArchived(!archived)}
+							>
+								<Archive size={15} />
+							</button>
+						</>
+					}
 					sessions={filtered}
 					organization={organization.data ?? emptyOrganization()}
 					disabled={!organization.data || organization.isError}
 					archived={archived}
-					filtered={!!query.trim() || filter !== "all" || provider !== "all"}
-					filterKey={`${query}/${filter}/${provider}`}
+					filtered={!!query.trim() || archived || provider !== "all"}
+					filterKey={`${query}/${archived}/${provider}`}
 					onChange={async (command) => {
 						const state =
 							await electronTrpcClient.claudeSessions.organize.mutate(command);

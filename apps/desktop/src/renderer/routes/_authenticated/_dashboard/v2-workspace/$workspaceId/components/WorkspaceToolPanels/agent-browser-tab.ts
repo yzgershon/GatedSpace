@@ -9,6 +9,7 @@ import type { createToolPanels } from "./tool-panel-store";
 export function openAgentBrowserTab(
 	tools: ReturnType<typeof createToolPanels>,
 	request: BrowserPanelRequest,
+	prepare?: (paneId: string, data: BrowserPaneData) => void,
 ): BrowserPanelResult {
 	const known = new Set(request.knownPaneIds);
 	const owned = () =>
@@ -50,25 +51,29 @@ export function openAgentBrowserTab(
 		: owned().find(({ data }) => browserUrlKey(data.url) === url);
 	if (existing) {
 		const { tab, pane, data } = existing;
+		if (request.action === "prepare") {
+			prepare?.(pane.id, data);
+			return { paneId: pane.id, reused: true, tabs: list() };
+		}
 		if (!data.agentSessionKey)
 			tools.store.getState().setPaneData({
 				paneId: pane.id,
 				data: { ...data, agentSessionKey: request.sessionKey },
 			});
+		tools.select(tab.id, { focus: false });
 		if (tab.maximizedPaneId && tab.maximizedPaneId !== pane.id)
 			tools.store.getState().toggleMaximizePane({
 				tabId: tab.id,
 				paneId: tab.maximizedPaneId,
 			});
 		tools.store.getState().setActivePane({ tabId: tab.id, paneId: pane.id });
-		tools.select(tab.id);
 		return {
 			paneId: pane.id,
 			reused: request.action === "select" || browserUrlKey(data.url) === url,
 			tabs: list(),
 		};
 	}
-	if (request.action === "select")
+	if (request.action === "select" || request.action === "prepare")
 		throw new Error(
 			"Browser tab is closed. Use browser_tabs to find an open tab.",
 		);
@@ -76,14 +81,19 @@ export function openAgentBrowserTab(
 		throw new Error("This browser tab belongs to another session.");
 	const paneId = request.paneId ?? `agent-browser-${crypto.randomUUID()}`;
 	// Let the page reflow at the user's panel width. Device emulation is opt-in.
-	tools.add("right", {
-		id: paneId,
-		kind: "browser",
-		data: {
-			url: url as string,
-			previewMode: "responsive",
-			agentSessionKey: request.sessionKey,
+	const tabId = tools.add(
+		"right",
+		{
+			id: paneId,
+			kind: "browser",
+			data: {
+				url: url as string,
+				previewMode: "responsive",
+				agentSessionKey: request.sessionKey,
+			},
 		},
-	});
+		false,
+	);
+	tools.select(tabId, { focus: false });
 	return { paneId, reused: false, tabs: list() };
 }

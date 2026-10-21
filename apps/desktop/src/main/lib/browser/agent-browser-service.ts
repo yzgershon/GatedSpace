@@ -93,6 +93,7 @@ interface BrowserSession {
 	workspaceId: string;
 	cwd?: string;
 	tabs: Set<string>;
+	lease: symbol;
 }
 export interface BrowserAdapter {
 	ready(paneId: string): Promise<void>;
@@ -127,13 +128,23 @@ export class AgentBrowserService extends EventEmitter {
 		];
 	}
 	register(key: string, workspaceId: string, cwd?: string) {
+		const lease = Symbol(key);
 		const previous = this.sessions.get(key);
 		if (previous?.workspaceId === workspaceId) {
 			previous.cwd = cwd ?? previous.cwd;
-			return;
+			previous.lease = lease;
+		} else {
+			this.unregister(key);
+			this.sessions.set(key, { workspaceId, cwd, tabs: new Set(), lease });
 		}
-		this.unregister(key);
-		this.sessions.set(key, { workspaceId, cwd, tabs: new Set() });
+		// An old Claude process can exit after its replacement has registered.
+		// Its cleanup must not revoke the new process's browser access.
+		return () => {
+			if (this.sessions.get(key)?.lease === lease) this.unregister(key);
+		};
+	}
+	has(key: string) {
+		return this.sessions.has(key);
 	}
 	unregister(key: string) {
 		this.sessions.delete(key);
@@ -225,6 +236,7 @@ export class AgentBrowserService extends EventEmitter {
 				);
 			if (!this.adapter)
 				throw new Error("The GatedSpace browser bridge is not ready.");
+			input.session = key;
 			if (name === "browser_tabs") {
 				const result = await this.requestPanel(key, session, "list");
 				return {
@@ -282,6 +294,11 @@ export class AgentBrowserService extends EventEmitter {
 				operation = "browser_snapshot";
 			} else if (!paneId)
 				throw new Error("Open a page first, then supply its tabId.");
+			else if (name !== "browser_console") {
+				// Wake parked guests without changing the user's selected tab or
+				// keyboard focus. Only open/select intentionally reveal a page.
+				await this.requestPanel(key, session, "prepare", paneId);
+			}
 			if (!paneId || !session.tabs.has(paneId))
 				throw new Error("Browser panel did not select an accessible tab.");
 			await this.adapter.ready(paneId);

@@ -25,10 +25,11 @@ export function questionChoices(message: string) {
 		.at(-1)
 		?.replace(/\*\*|__/g, "")
 		.trim();
-	if (!question || question.length > 700 || !question.endsWith("?"))
-		return null;
+	if (!question || question.length > 700) return null;
+	// A request can include context after its question: "Have you measured it?
+	// If so, paste the dimensions here." Preserve that context in the card.
 	if (
-		!/\b(which|what|would you|should (?:I|we)|do you|does this|can you|are you|shall (?:I|we))\b/i.test(
+		!/\b(which|what|would you|should (?:I|we)|do you|did you|does this|can (?:you|I|we)|are (?:you|there)|is (?:this|that|there)|have (?:you|we)|has (?:this|that)|shall (?:I|we))\b[^?]*\?/i.test(
 			question,
 		)
 	)

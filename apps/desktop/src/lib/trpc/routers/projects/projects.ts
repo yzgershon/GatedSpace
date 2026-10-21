@@ -11,6 +11,7 @@ import {
 	workspaces,
 	worktrees,
 } from "@superset/local-db";
+import { ensureInitialGitCommit } from "@superset/shared/initial-git-commit";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNotNull, isNull, not } from "drizzle-orm";
 import type { BrowserWindow } from "electron";
@@ -118,23 +119,7 @@ async function initGitRepo(path: string): Promise<{ defaultBranch: string }> {
 		await git.init();
 	}
 
-	try {
-		await git.raw(["commit", "--allow-empty", "-m", "Initial commit"]);
-	} catch (err) {
-		const errorMessage = err instanceof Error ? err.message : String(err);
-		if (
-			errorMessage.includes("empty ident") ||
-			errorMessage.includes("user.email") ||
-			errorMessage.includes("user.name")
-		) {
-			throw new Error(
-				"Git user not configured. Please run:\n" +
-					'  git config --global user.name "Your Name"\n' +
-					'  git config --global user.email "you@example.com"',
-			);
-		}
-		throw new Error(`Failed to create initial commit: ${errorMessage}`);
-	}
+	await ensureInitialGitCommit(git);
 
 	const defaultBranch = (await getCurrentBranch(path)) || "main";
 	return { defaultBranch };

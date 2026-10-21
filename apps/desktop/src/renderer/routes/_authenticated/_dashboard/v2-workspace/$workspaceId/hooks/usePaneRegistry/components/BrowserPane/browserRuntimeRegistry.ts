@@ -385,6 +385,7 @@ class BrowserRuntimeRegistryImpl {
 
 		const handleDomReady = async () => {
 			const webContentsId = webview.getWebContentsId();
+			webview.setAttribute("data-browser-contents-id", String(webContentsId));
 			try {
 				if (entry.webContentsId !== webContentsId || !entry.registered) {
 					entry.registered = false;
@@ -397,6 +398,7 @@ class BrowserRuntimeRegistryImpl {
 				}
 				entry.previewApplied = null;
 				this.updateLayout(entry);
+				void this.syncPreview(entry);
 			} catch (error) {
 				console.error("[browserRuntimeRegistry] register failed:", error);
 			}
@@ -568,6 +570,33 @@ class BrowserRuntimeRegistryImpl {
 		};
 
 		return entry;
+	}
+
+	/** Wake an owned page without selecting its tab or changing keyboard focus. */
+	prepareForAgent(
+		paneId: string,
+		data: {
+			url: string;
+			previewMode?: BrowserPreviewMode;
+			previewOrientation?: BrowserPreviewOrientation;
+		},
+		onPersist: (state: PersistableBrowserState) => void,
+	): void {
+		let entry = this.entries.get(paneId);
+		if (!entry) {
+			entry = this.createEntry(paneId, data.url);
+			entry.webview.style.width = "420px";
+			entry.webview.style.height = "600px";
+			entry.webview.style.pointerEvents = "none";
+			entry.preview.mode = data.previewMode ?? "responsive";
+			entry.preview.orientation = data.previewOrientation ?? "portrait";
+			this.entries.set(paneId, entry);
+			this.ensureRootContainer().appendChild(entry.webview);
+		}
+		entry.onPersist = onPersist;
+		this.clearSuspendTimer(entry);
+		this.resumeIfSuspended(entry);
+		if (!entry.visible) this.scheduleSuspend(entry);
 	}
 
 	attach(

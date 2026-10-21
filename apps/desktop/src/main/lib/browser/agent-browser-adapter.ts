@@ -1,21 +1,20 @@
 import { setTimeout as delay } from "node:timers/promises";
+import { browserCursorScript } from "./agent-browser-cursor";
+import {
+	browserInput,
+	clickBrowserPoint,
+	pressBrowserKey,
+} from "./agent-browser-input";
 import {
 	agentBrowserService,
 	type BrowserAdapter,
 } from "./agent-browser-service";
+import { browserSnapshotScript } from "./agent-browser-snapshot";
 import { browserManager } from "./browser-manager";
-import { browserInputPoint } from "./browser-preview";
 import { localPreviews } from "./local-previews";
 
 // An isolated world keeps our element map separate from scripts on the website.
 const WORLD = 1005;
-const SNAPSHOT = `(() => {
- const visible = e => { const r = e.getBoundingClientRect(); const s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; };
- const elements = [...document.querySelectorAll('a,button,input,textarea,select,[role="button"],[contenteditable="true"]')].filter(visible).slice(0,400);
- const prefix='e'+crypto.randomUUID().slice(0,8)+'-';
- globalThis.__gsBrowserElements = new Map(elements.map((e,i) => [prefix+i,e]));
- return { url: location.href, title: document.title, text: (document.body?.innerText || '').slice(0,24000), elements: elements.map((e,i) => ({ ref: prefix+i, tag: e.tagName.toLowerCase(), role: e.getAttribute('role'), text: (e.getAttribute('aria-label') || e.innerText || e.getAttribute('placeholder') || e.getAttribute('name') || '').slice(0,200), href: e.getAttribute('href'), type: e.getAttribute('type'), disabled: !!e.disabled })), iframeCount: document.querySelectorAll('iframe').length };
-})()`;
 function wcFor(paneId: string) {
 	const wc = browserManager.getWebContents(paneId);
 	if (!wc)
@@ -37,7 +36,7 @@ async function snapshot(paneId: string) {
 		content: [
 			{
 				type: "text" as const,
-				text: JSON.stringify(await script(paneId, SNAPSHOT)),
+				text: JSON.stringify(await script(paneId, browserSnapshotScript())),
 			},
 		],
 	};
@@ -90,36 +89,21 @@ const adapter: BrowserAdapter = {
 				paneId,
 				`(() => { ${element(input.ref)} e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect(); const x=r.x+r.width/2, y=r.y+r.height/2; const hit=document.elementFromPoint(x,y); if (!hit || (!e.contains(hit) && !hit.contains(e))) throw new Error('Element is covered; take a new snapshot.'); return { x:Math.round(x), y:Math.round(y) }; })()`,
 			)) as { x: number; y: number };
-			const point = browserInputPoint(wc, pagePoint);
-			wc.sendInputEvent({
-				type: "mouseDown",
-				...point,
-				button: "left",
-				clickCount: 1,
-			});
-			wc.sendInputEvent({
-				type: "mouseUp",
-				...point,
-				button: "left",
-				clickCount: 1,
-			});
+			await script(paneId, browserCursorScript(pagePoint, input.session));
+			await clickBrowserPoint(wc, pagePoint);
 		} else if (tool === "browser_fill") {
 			if (input.text === undefined) throw new Error("Supply text to fill.");
-			await script(
-				paneId,
-				`(() => { ${element(input.ref)} if (e.disabled || e.readOnly) throw new Error('Field is not editable.'); e.focus(); const value=${JSON.stringify(input.text)}; if (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement) { if (e.type==='file' || e.type==='password') throw new Error('Use the browser directly for files or passwords.'); const proto=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(e,value); } else if (e.isContentEditable) e.textContent=value; else throw new Error('Element is not an editable text field.'); e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value})); e.dispatchEvent(new Event('change',{bubbles:true})); })()`,
-			);
+			await browserInput(wc, async () => {
+				await script(
+					paneId,
+					`(() => { ${element(input.ref)} if (e.disabled || e.readOnly) throw new Error('Field is not editable.'); e.focus(); const value=${JSON.stringify(input.text)}; if (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement) { if (e.type==='file' || e.type==='password') throw new Error('Use the browser directly for files or passwords.'); const proto=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(e,value); } else if (e.isContentEditable) e.textContent=value; else throw new Error('Element is not an editable text field.'); e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value})); e.dispatchEvent(new Event('change',{bubbles:true})); })()`,
+				);
+			});
+			await script(paneId, browserCursorScript(null, input.session));
 		} else if (tool === "browser_press") {
 			const key = input.key ?? "";
-			if (
-				!/^(Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown|.)$/.test(
-					key,
-				)
-			)
-				throw new Error("Unsupported key.");
-			wc.sendInputEvent({ type: "keyDown", keyCode: key });
-			if (key.length === 1) wc.sendInputEvent({ type: "char", keyCode: key });
-			wc.sendInputEvent({ type: "keyUp", keyCode: key });
+			await pressBrowserKey(wc, key);
+			await script(paneId, browserCursorScript(null, input.session));
 		} else if (tool === "browser_scroll") {
 			const direction = input.direction ?? "down";
 			await script(

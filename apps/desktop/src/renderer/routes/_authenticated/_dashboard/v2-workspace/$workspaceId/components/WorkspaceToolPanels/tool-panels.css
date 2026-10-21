@@ -130,8 +130,8 @@
 	animation: gs-tool-content-in 180ms ease-out;
 }
 .gs-tool-tab-list {
-	scrollbar-width: thin;
-	scrollbar-color: var(--border) transparent;
+	scrollbar-width: none;
+	overscroll-behavior-x: contain;
 }
 .gs-tool-view [data-pane-id] {
 	min-height: 0;
@@ -260,5 +260,37 @@
 	.gs-tool-panel .gs-tool-view,
 	.gs-tool-tab {
 		animation: none;
+	}
+}
+
+/* Keep every preview identifiable; all tabs retain a compact, stable title. */
+.gs-tool-tab {
+	width: clamp(96px, calc((100cqw - 148px) / 3.25), 152px);
+}
+.gs-tool-tab-select {
+	padding-left: 7px;
+}
+.gs-tool-tab[data-selected="true"] .gs-tool-tab-close {
+	opacity: 0.6;
+}
+.gs-tool-tab-select > span:first-child {
+	overflow: hidden;
+}
+.gs-tool-tab-list::-webkit-scrollbar {
+	display: none;
+}
+.gs-tool-scroll-controls {
+	display: flex;
+	flex-shrink: 0;
+}
+.gs-tool-scroll-controls .gs-tool-icon {
+	width: 22px;
+}
+.gs-tool-panel-bar {
+	container-type: inline-size;
+}
+@container (max-width: 340px) {
+	.gs-tool-panel-bar > .gs-tool-icon {
+		width: 26px;
 	}
 }

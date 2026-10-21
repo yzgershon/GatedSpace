@@ -23,6 +23,26 @@ function setup(saved?: string) {
 }
 
 describe("workspace tool panels", () => {
+	test("moving the final tab repairs its source panel even when global order stays the same", () => {
+		const { tools, disconnect } = setup();
+		const previous = tools.add("right", {
+			kind: "browser",
+			data: { url: "about:blank" },
+		});
+		const moved = tools.add("right", {
+			kind: "browser",
+			data: { url: "https://example.test" },
+		});
+		const tab = tools.store.getState().getTab(moved);
+		if (!tab) throw new Error("Missing test tab");
+		const paneId = Object.keys(tab.panes)[0];
+		tools.store.getState().toggleMaximizePane({ tabId: moved, paneId });
+		tools.move(moved, "bottom");
+		expect(tools.state.getState().right.activeTabId).toBe(previous);
+		expect(tools.state.getState().bottom.activeTabId).toBe(moved);
+		expect(tools.store.getState().getTab(moved)?.maximizedPaneId).toBe(paneId);
+		disconnect();
+	});
 	test("empty right panel toggles and restores without creating any tool", async () => {
 		const { tools, disconnect, storage } = setup();
 		await tools.toggle("right");

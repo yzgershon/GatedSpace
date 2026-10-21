@@ -7,13 +7,13 @@ import {
 const originalUserAgents = new WeakMap<WebContents, string>();
 const previewScales = new WeakMap<WebContents, number>();
 
-/** DOM rectangles use page CSS pixels; native input uses the displayed guest surface. */
-export function browserInputPoint(
+/** CDP handles page zoom itself, but Electron's device-preview paint scale is external. */
+export function browserDevtoolsPoint(
 	wc: WebContents,
 	point: { x: number; y: number },
 ) {
-	const scale = previewScales.get(wc) ?? wc.getZoomFactor();
-	return { x: Math.round(point.x * scale), y: Math.round(point.y * scale) };
+	const scale = previewScales.get(wc) ?? 1;
+	return { x: point.x * scale, y: point.y * scale };
 }
 
 /** Native Chromium emulation keeps the guest's paint and hit targets in the same coordinate space. */

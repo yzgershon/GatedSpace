@@ -5,6 +5,12 @@ import { PERSONAL_BACKEND } from "../../apps/desktop/vite/personal-backend";
 
 /** One contract for both compiled preflight and the extracted installer. */
 export const REQUIRED_MARKERS: readonly string[] = [
+	"session-preview-pill",
+	"Show session activity",
+	"Start Flow dictation",
+	"Finish Flow dictation",
+	"GatedSpace.Flow.",
+	"session-composer-buttons",
 	"browser_tabs",
 	"browser_select",
 	"agentSessionKey",
@@ -52,7 +58,14 @@ export const REQUIRED_MARKERS: readonly string[] = [
 	"windows-mcp==",
 	"0.8.5",
 	"Computer control was stopped.",
-	"browserInputPoint",
+	"browserDevtoolsPoint",
+	"Input.dispatchMouseEvent",
+	"Emulation.setFocusEmulationEnabled",
+	"__gsBrowserFocusGuard",
+	"__gsBrowserTabBoundary",
+	"data-gatedspace-agent-cursor",
+	"WINDOWS_MCP_DISABLE_FLASH",
+	"Computer paused",
 	"previewScales",
 	"Galaxy S24",
 	"Rotate Galaxy S24",

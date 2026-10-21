@@ -120,13 +120,21 @@ void (async () => {
 		computerOverlayBounds({
 			workArea: { x: -1920, y: 0, width: 1920, height: 1040 },
 		}),
-		{ x: -1196, y: 12, width: 472, height: 64 },
+		{ x: -1160, y: 12, width: 400, height: 52 },
 	);
 	const layout = await bar.webContents.executeJavaScript(
 		"({width:innerWidth, overflow:document.documentElement.scrollWidth > innerWidth, transparent:getComputedStyle(document.body).backgroundColor})",
 	);
 	assert.equal(layout.overflow, false);
 	assert.equal(layout.transparent, "rgba(0, 0, 0, 0)");
+	for (const border of borders) {
+		const glow = await border.webContents.executeJavaScript(
+			"(() => {const s=getComputedStyle(document.getElementById('control-border'));return {border:s.borderTopWidth,shadow:s.boxShadow,inset:s.top}})()",
+		);
+		assert.equal(glow.border, "0px");
+		assert.notEqual(glow.shadow, "none");
+		assert.equal(glow.inset, "0px");
+	}
 	await writeFile(
 		resolve(output, "ready.png"),
 		(await bar.webContents.capturePage()).toPNG(),
@@ -146,7 +154,7 @@ void (async () => {
 		async () => (await status()) === "Computer control ready",
 		"Idle state not restored",
 	);
-	bar.setBounds({ x: -10000, y: -10000, width: 472, height: 64 });
+	bar.setBounds({ x: -10000, y: -10000, width: 400, height: 52 });
 	screen.emit("display-metrics-changed");
 	assert.ok(bar.getBounds().x > -10000);
 	await bar.webContents.executeJavaScript(
@@ -154,6 +162,14 @@ void (async () => {
 	);
 	await until(() => service.get().phase === "off", "Stop did not revoke grant");
 	assert.equal(BrowserWindow.getAllWindows().length, 0);
+	// Destroy an overlay while its document is loading. Its late load rejection
+	// must not revoke the approval retained by idle pause or a later connection.
+	await service.enable("codex:overlay-test");
+	await service.pause("codex:overlay-test");
+	await delay(250);
+	assert.equal(service.get().phase, "paused");
+	assert.equal(BrowserWindow.getAllWindows().length, 0);
+	assert.equal((await service.discover("codex:overlay-test"))[0].name, "Type");
 	await service.enable("codex:overlay-test");
 	await until(
 		async () =>
@@ -180,6 +196,9 @@ void (async () => {
 			"always on top without focus",
 			"DPI and negative-origin geometry",
 			"transparent and fits",
+			"soft full-screen glow with no hard border",
+			"pause closes indicators without losing approval",
+			"stale overlay load failures do not revoke a later grant",
 			"live action and idle labels",
 			"display-change recovery",
 			"Stop over tRPC",

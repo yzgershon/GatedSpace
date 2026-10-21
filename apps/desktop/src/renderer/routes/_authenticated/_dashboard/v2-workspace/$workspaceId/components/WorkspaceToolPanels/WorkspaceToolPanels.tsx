@@ -6,7 +6,6 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import {
 	type ContextMenuActionConfig,
 	type PaneActionConfig,
@@ -22,32 +21,38 @@ import {
 } from "react";
 import { useStore } from "zustand";
 import type { PaneViewerData } from "../../types";
+import { PreviewSessionActivity } from "./components/PreviewSessionActivity/PreviewSessionActivity";
 import { ToolPanel } from "./components/ToolPanel/ToolPanel";
 import {
 	panelDefaults,
 	type ToolPanels,
 	type ToolPlacement,
 } from "./tool-panel-store";
+import { toolTabKeyboardCoordinates } from "./tool-tab-keyboard";
 import "./tool-panels.css";
+
+const NO_TOOL_ACTIONS: PaneActionConfig<PaneViewerData>[] = [];
 
 export function WorkspaceToolPanels({
 	tools,
 	registry,
-	paneActions,
+	paneActions = NO_TOOL_ACTIONS,
 	contextMenuActions,
 	onResizing,
 	mainMinimum = { width: 400, height: 260 },
 	mainExpanded = false,
+	mainStore,
 	children,
 }: {
 	tools: ToolPanels;
 	registry: PaneRegistry<PaneViewerData>;
 	children: ReactNode;
-	paneActions: PaneActionConfig<PaneViewerData>[];
+	paneActions?: PaneActionConfig<PaneViewerData>[];
 	contextMenuActions: ContextMenuActionConfig<PaneViewerData>[];
 	onResizing: (resizing: boolean) => void;
 	mainMinimum?: { width: number; height: number };
 	mainExpanded?: boolean;
+	mainStore?: ToolPanels["store"];
 }) {
 	const panels = useStore(tools.state);
 	const tabs = useStore(tools.store, (s) => s.tabs);
@@ -95,7 +100,7 @@ export function WorkspaceToolPanels({
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
 		useSensor(KeyboardSensor, {
-			coordinateGetter: sortableKeyboardCoordinates,
+			coordinateGetter: toolTabKeyboardCoordinates,
 		}),
 	);
 	useEffect(() => {
@@ -296,6 +301,24 @@ export function WorkspaceToolPanels({
 												)}
 											</div>
 										) : null}
+										{expanded === side &&
+											mainStore &&
+											active?.maximizedPaneId &&
+											active.panes[active.maximizedPaneId]?.kind ===
+												"browser" && (
+												<PreviewSessionActivity
+													mainStore={mainStore}
+													tools={tools}
+													owner={
+														(
+															active.panes[active.maximizedPaneId]
+																.data as import("../../types").BrowserPaneData
+														).agentSessionKey
+													}
+													previewTabId={active.id}
+													previewPaneId={active.maximizedPaneId}
+												/>
+											)}
 									</ToolPanel>
 								</div>
 							);

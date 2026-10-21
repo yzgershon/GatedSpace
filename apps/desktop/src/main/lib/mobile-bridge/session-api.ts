@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import { z } from "zod";
 import { buildTimeline } from "../../../shared/claude-session/timeline";
+import { defaultCodexPermission } from "../../../shared/codex-session/permissions";
 import { claudeSessionManager as claude } from "../claude-session/session-manager";
 import { loadSessionTranscript } from "../claude-session/transcript";
 import { listClaudeSessions } from "../claude-sessions/claude-sessions";
@@ -412,7 +413,7 @@ export function mobileSessionRouter() {
 							text: body.text,
 							model: state.model,
 							effort: state.effort,
-							permission: "default",
+							permission: defaultCodexPermission(),
 							images: body.images.map(
 								(i) => `data:${i.mediaType};base64,${i.data}`,
 							),

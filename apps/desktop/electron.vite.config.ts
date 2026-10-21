@@ -179,6 +179,10 @@ export default defineConfig({
 
 	renderer: {
 		define: {
+			"process.env.GATEDSPACE_PERSONAL": defineEnv(
+				process.env.GATEDSPACE_PERSONAL,
+				"",
+			),
 			"process.env.NODE_ENV": defineEnv(process.env.NODE_ENV),
 			"process.env.SKIP_ENV_VALIDATION": defineEnv(
 				process.env.SKIP_ENV_VALIDATION,

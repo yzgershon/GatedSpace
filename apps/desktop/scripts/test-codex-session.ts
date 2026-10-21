@@ -30,10 +30,7 @@ await build({
 				if (/[/\\]useSkinTokens[/\\]useSkinTokens\.ts$/.test(id))
 					return 'import { VSCODE_TOKENS, LIQUID_GLASS_TOKENS } from "./skin-tokens"; export function useSkinTokens() { return location.search.includes("loading") ? {...VSCODE_TOKENS,paneGap:18,paneRadius:8,paneSurface:"raised"} : location.search.includes("inline") ? LIQUID_GLASS_TOKENS : VSCODE_TOKENS; }';
 				if (/[/\\]renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
-					return readFile(
-						resolve(import.meta.dirname, "codex-session/fixture-client.ts"),
-						"utf8",
-					);
+					return `export { electronTrpcClient } from ${JSON.stringify(resolve(import.meta.dirname, "codex-session/fixture-client.ts").replaceAll("\\", "/"))};`;
 			},
 		},
 	],
@@ -143,6 +140,59 @@ async function checkComputerControl(
 		.getByRole("button", { name: "Stop computer control", exact: true })
 		.click();
 	checks.push("computer enable menu and Stop remain accessible at 380px");
+	await page.evaluate(() =>
+		(
+			window as unknown as { setComputerFixture: (s: unknown) => void }
+		).setComputerFixture({
+			phase: "off",
+			request: {
+				owner: "codex:fixture",
+				reason: "Open File Explorer to the release folder",
+			},
+		}),
+	);
+	const requested = page.getByRole("button", {
+		name: "Enable computer control",
+		exact: true,
+	});
+	await requested.waitFor();
+	const requestBounds = await page
+		.locator(".computer-control-request")
+		.boundingBox();
+	if (
+		!requestBounds ||
+		requestBounds.x < 0 ||
+		requestBounds.x + requestBounds.width > 380
+	)
+		throw Error("Enable request is clipped");
+	if (await page.getByText("Computer ready", { exact: true }).count())
+		throw Error("A request must not enable control");
+	await page.screenshot({
+		path: resolve(output, "computer-request-narrow.png"),
+	});
+	await page.getByLabel("Dismiss computer control request").click();
+	await requested.waitFor({ state: "detached" });
+	await page.evaluate(() =>
+		(
+			window as unknown as { setComputerFixture: (s: unknown) => void }
+		).setComputerFixture({
+			phase: "off",
+			request: {
+				owner: "codex:fixture",
+				reason: "Open File Explorer to the release folder",
+			},
+		}),
+	);
+	await requested.click();
+	await page.getByText("Computer ready", { exact: true }).waitFor();
+	await requested.waitFor({ state: "detached" });
+	await page
+		.getByRole("button", { name: "Stop computer control", exact: true })
+		.click();
+	checks.push(
+		"agent request stays off until click; Enable and Dismiss work at 380px",
+	);
+
 	await page.setViewportSize({ width: 1440, height: 1000 });
 }
 try {
@@ -204,364 +254,545 @@ try {
 		server.close();
 		process.exit(0);
 	}
-	await checkPaneLayout("production pane fills its content wrapper");
-	const theme = await page.evaluate(() =>
-		getComputedStyle(document.documentElement)
-			.getPropertyValue("--background")
-			.trim(),
-	);
-	if (theme !== "#282a36") throw Error(`Expected Dracula, received ${theme}`);
-	checks.push("Dracula theme tokens");
-	await page.screenshot({ path: resolve(output, "dracula-conversation.png") });
-	await page.getByRole("button", { name: "Load earlier messages" }).click();
-	await page.getByText("Earlier conversation restored.").waitFor();
-	checks.push("history paging");
-	const input = page.getByRole("textbox", { name: "Message Codex" });
-	await input.fill("Check the panel animations");
-	await page.getByRole("button", { name: "Send message", exact: true }).click();
-	await page.getByText("Done. Your workspace layout is preserved.").waitFor();
-	checks.push("send and stream completion");
-	await input.fill("Stop this turn");
-	await input.press("Enter");
-	await page.getByRole("button", { name: "Stop Codex" }).click();
-	await page
-		.getByRole("button", { name: "Send message", exact: true })
-		.waitFor();
-	checks.push("interrupt");
-	await input.fill("simulate failure");
-	await input.press("Enter");
-	await page.getByRole("alert").waitFor();
-	if ((await input.inputValue()) !== "simulate failure")
-		throw Error("Failed send lost draft");
-	checks.push("failed send preserves draft");
-	await page.evaluate(() => {
-		(
-			window as unknown as { codexFixture: { approval: () => void } }
-		).codexFixture.approval();
-	});
-	await page.getByRole("button", { name: "Allow once" }).waitFor();
-	await page.screenshot({ path: resolve(output, "dracula-approval.png") });
-	await page.getByRole("button", { name: "Decline", exact: true }).click();
-	checks.push("inline approval");
-	await input.fill("draft survives reload");
-	await page.reload();
-	await input.waitFor();
-	if ((await input.inputValue()) !== "draft survives reload")
-		throw Error("Draft not persisted");
-	checks.push("draft persistence");
-	await page
-		.getByRole("textbox", { name: "Message Codex" })
-		.fill("/effort xhigh");
-	await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
-	await page.getByText("Effort set to Extra High.", { exact: true }).waitFor();
-	await page
-		.getByRole("button", { name: "GPT-6 Astra settings", exact: true })
-		.click();
-	const slider = page.getByRole("slider", { name: "Reasoning effort" });
-	await slider.press("Home");
-	if ((await slider.getAttribute("aria-valuetext")) !== "Low")
-		throw Error("Effort slider did not change");
-	await page.getByRole("button", { name: "Reset effort to default" }).click();
-	await slider.press("Escape");
-	checks.push("shared effort slider supports keyboard and reset");
-	await page.getByRole("textbox", { name: "Message Codex" }).fill("$des");
-	await page.getByRole("option", { name: "$design Design this app" }).waitFor();
-	await page.getByRole("textbox", { name: "Message Codex" }).press("Tab");
-	if (
-		(await page
-			.getByRole("textbox", { name: "Message Codex" })
-			.inputValue()) !== "$design "
-	)
-		throw Error("Skill completion lost the input");
-	await page.evaluate(
-		() =>
-			new Promise<void>((resolve) =>
-				requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-			),
-	);
-	await page.getByRole("textbox", { name: "Message Codex" }).fill("/review");
-	await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
-	await page.getByText("Running review", { exact: true }).waitFor();
-	checks.push("slash review runs a command and dollar skills complete");
-	await page
-		.getByRole("textbox", { name: "Message Codex" })
-		.fill("/not-a-command");
-	await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
-	await page
-		.getByText(
-			"Unknown command /not-a-command. Type / to see available commands.",
-		)
-		.waitFor();
-	if (
-		(await page
-			.getByRole("textbox", { name: "Message Codex" })
-			.inputValue()) !== "/not-a-command"
-	)
-		throw Error("Invalid command lost the draft");
-	await page.getByRole("textbox", { name: "Message Codex" }).fill("");
-	checks.push("unknown commands are not sent as prompts");
-
-	for (const width of [1440, 820, 440]) {
-		await page.setViewportSize({ width, height: 950 });
-		await checkPaneLayout(`single pane ${width}`);
-		await page.screenshot({ path: resolve(output, `dracula-${width}.png`) });
-		const overflow = await page.evaluate(
-			() => document.documentElement.scrollWidth > innerWidth,
+	if (process.env.COMPOSER_REFRESH_ONLY !== "1") {
+		await checkPaneLayout("production pane fills its content wrapper");
+		const theme = await page.evaluate(() =>
+			getComputedStyle(document.documentElement)
+				.getPropertyValue("--background")
+				.trim(),
 		);
-		if (overflow) throw Error(`Horizontal overflow at ${width}`);
-		checks.push(`responsive ${width}`);
-	}
-	await page.setViewportSize({ width: 1600, height: 950 });
-	await page.evaluate(() =>
-		(
-			window as unknown as { codexLayout: { split(): void } }
-		).codexLayout.split(),
-	);
-	for (const scale of [0.85, 1, 1.2]) {
-		await page.evaluate(
-			(scale: number) =>
-				(
-					window as unknown as { codexLayout: { zoom(scale: number): void } }
-				).codexLayout.zoom(scale),
-			scale,
-		);
-		await checkPaneLayout(`split panes at ${scale}`);
-		await input.fill(`Typing in the split pane at ${scale}`);
+		if (theme !== "#282a36") throw Error(`Expected Dracula, received ${theme}`);
+		checks.push("Dracula theme tokens");
 		await page.screenshot({
-			path: resolve(output, `dracula-split-${scale}.png`),
+			path: resolve(output, "dracula-conversation.png"),
 		});
-	}
-	await page.getByRole("button", { name: "Expand pane" }).first().click();
-	await checkPaneLayout("expanded pane");
-	await page.getByRole("button", { name: "Restore pane" }).click();
-	await checkPaneLayout("restored split pane");
-	await page.goto(`http://127.0.0.1:${port}/?paired`);
-	await page.evaluate(() =>
-		(
-			window as unknown as { codexLayout: { split(): void } }
-		).codexLayout.split(),
-	);
-	const claudeInput = page.getByRole("textbox", { name: "Message Claude" });
-	await claudeInput.waitFor().catch(async (error: Error) => {
-		await page.screenshot({ path: resolve(output, "paired-failure.png") });
-		console.error(await page.locator("body").innerText());
-		throw error;
-	});
-	await input.fill("");
-	await page
-		.getByText("Start a Claude Code session", { exact: true })
-		.waitFor();
-	const claudeBox = page
-		.locator(".session-composer")
-		.filter({ has: claudeInput });
-	const geometry = await claudeBox.boundingBox();
-	if (
-		!geometry ||
-		geometry.width < 300 ||
-		geometry.height > 125 ||
-		geometry.height < 50
-	)
-		throw Error(`Claude Focus composer geometry: ${JSON.stringify(geometry)}`);
-	await claudeBox
-		.getByRole("button", { name: "Claude Opus settings", exact: true })
-		.click();
-	await page
-		.getByRole("slider", { name: "Reasoning effort", exact: true })
-		.press("ArrowLeft");
-	await page.getByRole("button", { name: "Fast mode", exact: true }).click();
-	if (
-		(await page
-			.getByRole("button", { name: "Fast mode", exact: true })
-			.getAttribute("aria-pressed")) !== "true"
-	)
-		throw Error("Claude Fast toggle did not apply");
-	await page.screenshot({
-		path: resolve(output, "claude-focus-settings.png"),
-	});
-	await page
-		.getByRole("slider", { name: "Reasoning effort", exact: true })
-		.press("Escape");
-	await claudeInput.fill("/model");
-	await page.getByRole("button", { name: /Opus/ }).first().waitFor();
-	await claudeInput.fill("");
-	await page
-		.getByRole("slider", { name: "Reasoning effort", exact: true })
-		.waitFor({ state: "detached" });
-	await page.screenshot({
-		path: resolve(output, "claude-focus-paired.png"),
-	});
-	for (const textbox of [input, claudeInput]) {
-		const prompt = Array.from(
-			{ length: 20 },
-			(_, i) => `Line ${i + 1}: Keep my composer aligned.`,
-		).join("\n");
-		await textbox.fill(prompt);
-		await textbox.press("Control+Home");
-		await page.waitForTimeout(200);
-		const dimensions = await textbox.evaluate((node: HTMLTextAreaElement) => ({
-			height: node.clientHeight,
-			line: parseFloat(getComputedStyle(node).lineHeight),
-			scrollHeight: node.scrollHeight,
-			fade: getComputedStyle(node).maskImage,
-		}));
-		if (
-			Math.abs(dimensions.height / dimensions.line - 6.55) > 0.1 ||
-			dimensions.scrollHeight <= dimensions.height ||
-			dimensions.fade === "none"
-		)
-			throw Error(`Long prompt cap/fade: ${JSON.stringify(dimensions)}`);
-		await textbox.press("Control+End");
-		await textbox.pressSequentially(" Kept.");
-		if (!(await textbox.inputValue()).endsWith(" Kept."))
-			throw Error("Long prompt caret lost its position");
-		await textbox.fill("");
-	}
-	await page
-		.getByRole("button", { name: "GPT-6 Astra settings", exact: true })
-		.click();
-	await page.getByRole("radio", { name: /^Plan/ }).check();
-	await page.getByRole("button", { name: "Fast mode", exact: true }).click();
-	if (
-		(await page
-			.getByRole("button", { name: "Fast mode", exact: true })
-			.getAttribute("aria-pressed")) !== "true"
-	)
-		throw Error("Fast toggle did not change");
-	await page.screenshot({ path: resolve(output, "focus-paired-settings.png") });
-	await page.getByRole("slider", { name: "Reasoning effort" }).press("Escape");
-	checks.push(
-		"Claude Focus composer, command palette and shared model/mode controls work",
-		"both composers cap at six lines and fade overflow",
-		"long prompt typing preserves caret",
-		"Codex Focus menu and both Fast toggles work",
-	);
-
-	await page.goto(`http://127.0.0.1:${port}/?paired`);
-	await input.fill("Delayed first response");
-	await input.press("Enter");
-	await page.getByText("Considering the next step", { exact: true }).waitFor();
-	if (
-		!(await page
-			.getByText("Delayed first response", { exact: true })
-			.isVisible())
-	)
-		throw Error("Sent prompt disappeared while Codex was working");
-	const workingLayout = await page
-		.locator(".codex-work-heading")
-		.evaluate((el: HTMLElement) => ({
-			top: el.getBoundingClientRect().top,
-			font: parseFloat(getComputedStyle(el).fontSize),
-			promptBottom:
-				document.querySelector(".codex-user-message")?.getBoundingClientRect()
-					.bottom ?? 0,
-		}));
-	if (
-		workingLayout.top - workingLayout.promptBottom > 70 ||
-		workingLayout.font < 14
-	)
-		throw Error(
-			`Working indicator misplaced: ${JSON.stringify(workingLayout)}`,
+		await page.getByRole("button", { name: "Load earlier messages" }).click();
+		await page.getByText("Earlier conversation restored.").waitFor();
+		checks.push("history paging");
+		const input = page.getByRole("textbox", { name: "Message Codex" });
+		await input.fill("Check the panel animations");
+		await page
+			.getByRole("button", { name: "Send message", exact: true })
+			.click();
+		await page.getByText("Done. Your workspace layout is preserved.").waitFor();
+		checks.push("send and stream completion");
+		await input.fill("Stop this turn");
+		await input.press("Enter");
+		await page.getByRole("button", { name: "Stop Codex" }).click();
+		await page
+			.getByRole("button", { name: "Send message", exact: true })
+			.waitFor();
+		checks.push("interrupt");
+		await input.fill("simulate failure");
+		await input.press("Enter");
+		await page.getByRole("alert").waitFor();
+		if ((await input.inputValue()) !== "simulate failure")
+			throw Error("Failed send lost draft");
+		checks.push("failed send preserves draft");
+		await page.evaluate(() => {
+			(
+				window as unknown as { codexFixture: { approval: () => void } }
+			).codexFixture.approval();
+		});
+		await page.getByRole("button", { name: "Allow once" }).waitFor();
+		await page.screenshot({ path: resolve(output, "dracula-approval.png") });
+		await page.getByRole("button", { name: "Decline", exact: true }).click();
+		checks.push("inline approval");
+		await input.fill("draft survives reload");
+		await page.reload();
+		await input.waitFor();
+		if ((await input.inputValue()) !== "draft survives reload")
+			throw Error("Draft not persisted");
+		checks.push("draft persistence");
+		await page.waitForFunction(
+			() =>
+				document.querySelector<HTMLButtonElement>(
+					'button[aria-label="Send message"]',
+				)?.disabled === false,
 		);
-	await page.screenshot({ path: resolve(output, "codex-working.png") });
-	await page.getByText("Done. Your workspace layout is preserved.").waitFor();
-	checks.push(
-		"first prompt stays visible during delayed response",
-		"working indicator follows the prompt at readable size",
-	);
-	await page.goto(`http://127.0.0.1:${port}/?paired&inline`);
-	await page.evaluate(() =>
-		(
-			window as unknown as { codexLayout: { split(): void } }
-		).codexLayout.split(),
-	);
-	await page.getByRole("textbox", { name: "Message Claude" }).waitFor();
-	await claudeInput.fill("");
-	await input.fill("");
-	await page.waitForTimeout(200);
-	const cards = await page
-		.locator(".session-composer")
-		.evaluateAll((nodes: Element[]) =>
-			nodes.map((node) => {
-				const box = node.getBoundingClientRect();
-				const css = getComputedStyle(node);
-				return {
-					height: box.height,
-					bottom: box.bottom,
-					radius: css.borderRadius,
-					background: css.backgroundColor,
-				};
-			}),
-		);
-	if (
-		cards.length !== 2 ||
-		Math.abs(cards[0].height - cards[1].height) > 1 ||
-		Math.abs(cards[0].bottom - cards[1].bottom) > 1 ||
-		cards[0].radius !== cards[1].radius ||
-		cards[0].background !== cards[1].background
-	)
-		throw Error(`Composers must match across skins: ${JSON.stringify(cards)}`);
-	for (const [title, provider] of [
-		["Codex", "Codex"],
-		["Claude", "Claude Code"],
-	]) {
-		const pane = page
-			.locator("[data-pane-id]")
-			.filter({ has: page.getByRole("textbox", { name: `Message ${title}` }) });
-		await pane.locator(".gs-pane-title").dblclick();
-		await pane
-			.getByRole("textbox", { name: "Rename pane" })
-			.fill(`Renamed ${title} session with a long descriptive title`);
-		await pane.getByRole("textbox", { name: "Rename pane" }).press("Enter");
-		const icon = pane.locator(`img[alt="${provider}"][title]`);
-		if (!(await icon.isVisible()))
-			throw Error(`Missing ${provider} header icon after rename`);
-		const appearance = await pane
-			.locator(".gs-pane-title")
-			.evaluate((node: Element) => ({
-				font: getComputedStyle(node).fontFamily,
-				weight: getComputedStyle(node).fontWeight,
-			}));
+		await page
+			.getByRole("textbox", { name: "Message Codex" })
+			.fill("/effort xhigh");
+		await page.keyboard.press("Escape");
+		await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
+		await page
+			.getByText("Effort set to Extra High.", { exact: true })
+			.waitFor();
+		await page
+			.getByRole("button", { name: "Model and effort", exact: true })
+			.first()
+			.click();
+		const slider = page.getByRole("slider", { name: "Reasoning effort" });
+		await slider.press("Home");
+		if ((await slider.getAttribute("aria-valuetext")) !== "Low")
+			throw Error("Effort slider did not change");
+		await page.getByRole("button", { name: "Reset effort to default" }).click();
+		await slider.press("Escape");
+		checks.push("shared effort slider supports keyboard and reset");
+		await page.getByRole("textbox", { name: "Message Codex" }).fill("$des");
+		await page
+			.getByRole("option", { name: "$design Design this app" })
+			.waitFor();
+		await page.getByRole("textbox", { name: "Message Codex" }).press("Tab");
 		if (
-			!appearance.font.includes("Segoe UI Variable") ||
-			appearance.weight !== "600"
+			(await page
+				.getByRole("textbox", { name: "Message Codex" })
+				.inputValue()) !== "$design "
 		)
-			throw Error(`Header typography missing: ${JSON.stringify(appearance)}`);
-	}
-	await page.screenshot({
-		path: resolve(output, "focus-matching-renamed.png"),
-	});
-	checks.push(
-		"both providers use matching Focus surfaces and geometry across skins",
-		"renamed headers retain provider icons, folder icons and refined typography",
-	);
+			throw Error("Skill completion lost the input");
+		await page.evaluate(
+			() =>
+				new Promise<void>((resolve) =>
+					requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+				),
+		);
+		await page.getByRole("textbox", { name: "Message Codex" }).fill("/review");
+		await page.keyboard.press("Escape");
+		await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
+		await page.getByText("Running review", { exact: true }).waitFor();
+		checks.push("slash review runs a command and dollar skills complete");
+		await page
+			.getByRole("textbox", { name: "Message Codex" })
+			.fill("/not-a-command");
+		await page.getByRole("textbox", { name: "Message Codex" }).press("Enter");
+		await page
+			.getByText(
+				"Unknown command /not-a-command. Type / to see available commands.",
+			)
+			.waitFor();
+		if (
+			(await page
+				.getByRole("textbox", { name: "Message Codex" })
+				.inputValue()) !== "/not-a-command"
+		)
+			throw Error("Invalid command lost the draft");
+		await page.getByRole("textbox", { name: "Message Codex" }).fill("");
+		checks.push("unknown commands are not sent as prompts");
 
-	await page.goto(`http://127.0.0.1:${port}/?paired&permission`);
-	await page.evaluate(() =>
-		(
-			window as unknown as { codexLayout: { split: () => void } }
-		).codexLayout.split(),
-	);
-	await page.getByRole("region", { name: "Permission request" }).waitFor();
-	await page.getByText("Request details").click();
-	await page
-		.getByText('"url": "http://localhost:3000"', { exact: false })
-		.waitFor();
-	await page.screenshot({
-		path: resolve(output, "claude-browser-approval.png"),
-	});
-	await page.getByRole("button", { name: "Allow once", exact: true }).click();
-	await page
-		.getByRole("region", { name: "Permission request" })
-		.waitFor({ state: "detached", timeout: 5000 })
-		.catch(async (error) => {
-			await page.screenshot({ path: resolve(output, "approval-failure.png") });
-			console.error("Approval state", await page.locator("body").innerText());
+		for (const width of [1440, 820, 440]) {
+			await page.setViewportSize({ width, height: 950 });
+			await checkPaneLayout(`single pane ${width}`);
+			await page.screenshot({ path: resolve(output, `dracula-${width}.png`) });
+			const overflow = await page.evaluate(
+				() => document.documentElement.scrollWidth > innerWidth,
+			);
+			if (overflow) throw Error(`Horizontal overflow at ${width}`);
+			checks.push(`responsive ${width}`);
+		}
+		await page.setViewportSize({ width: 1600, height: 950 });
+		await page.evaluate(() =>
+			(
+				window as unknown as { codexLayout: { split(): void } }
+			).codexLayout.split(),
+		);
+		for (const scale of [0.85, 1, 1.2]) {
+			await page.evaluate(
+				(scale: number) =>
+					(
+						window as unknown as { codexLayout: { zoom(scale: number): void } }
+					).codexLayout.zoom(scale),
+				scale,
+			);
+			await checkPaneLayout(`split panes at ${scale}`);
+			await input.fill(`Typing in the split pane at ${scale}`);
+			await page.screenshot({
+				path: resolve(output, `dracula-split-${scale}.png`),
+			});
+		}
+		await page.getByRole("button", { name: "Expand pane" }).first().click();
+		await checkPaneLayout("expanded pane");
+		await page.getByRole("button", { name: "Restore pane" }).click();
+		await checkPaneLayout("restored split pane");
+		await page.goto(`http://127.0.0.1:${port}/?paired`);
+		await page.evaluate(() =>
+			(
+				window as unknown as { codexLayout: { split(): void } }
+			).codexLayout.split(),
+		);
+		const claudeInput = page.getByRole("textbox", { name: "Message Claude" });
+		await claudeInput.waitFor().catch(async (error: Error) => {
+			await page.screenshot({ path: resolve(output, "paired-failure.png") });
+			console.error(await page.locator("body").innerText());
 			throw error;
 		});
-	checks.push(
-		"Claude tool permission displays details and submits an explicit approval",
+		await input.fill("");
+		await page
+			.getByText("Start a Claude Code session", { exact: true })
+			.waitFor();
+		const claudeBox = page
+			.locator(".session-composer")
+			.filter({ has: claudeInput });
+		const geometry = await claudeBox.boundingBox();
+		if (
+			!geometry ||
+			geometry.width < 300 ||
+			geometry.height > 125 ||
+			geometry.height < 50
+		)
+			throw Error(
+				`Claude Focus composer geometry: ${JSON.stringify(geometry)}`,
+			);
+		await claudeBox
+			.getByRole("button", { name: "Model and effort", exact: true })
+			.last()
+			.click();
+		await page
+			.getByRole("slider", { name: "Reasoning effort", exact: true })
+			.press("ArrowLeft");
+		await page.getByRole("button", { name: "Fast mode", exact: true }).click();
+		if (
+			(await page
+				.getByRole("button", { name: "Fast mode", exact: true })
+				.getAttribute("aria-pressed")) !== "true"
+		)
+			throw Error("Claude Fast toggle did not apply");
+		await page.screenshot({
+			path: resolve(output, "claude-focus-settings.png"),
+		});
+		await page
+			.getByRole("slider", { name: "Reasoning effort", exact: true })
+			.press("Escape");
+		await claudeInput.fill("/model");
+		await page.getByRole("button", { name: /Opus/ }).first().waitFor();
+		await claudeInput.fill("");
+		await page
+			.getByRole("slider", { name: "Reasoning effort", exact: true })
+			.waitFor({ state: "detached" });
+		await page.screenshot({
+			path: resolve(output, "claude-focus-paired.png"),
+		});
+		for (const textbox of [input, claudeInput]) {
+			const prompt = Array.from(
+				{ length: 20 },
+				(_, i) => `Line ${i + 1}: Keep my composer aligned.`,
+			).join("\n");
+			await textbox.fill(prompt);
+			await textbox.press("Control+Home");
+			await page.waitForTimeout(200);
+			const dimensions = await textbox.evaluate(
+				(node: HTMLTextAreaElement) => ({
+					height: node.clientHeight,
+					line: parseFloat(getComputedStyle(node).lineHeight),
+					scrollHeight: node.scrollHeight,
+					fade: getComputedStyle(node).maskImage,
+				}),
+			);
+			if (
+				Math.abs(dimensions.height / dimensions.line - 6.55) > 0.1 ||
+				dimensions.scrollHeight <= dimensions.height ||
+				dimensions.fade === "none"
+			)
+				throw Error(`Long prompt cap/fade: ${JSON.stringify(dimensions)}`);
+			await textbox.press("Control+End");
+			await textbox.pressSequentially(" Kept.");
+			if (!(await textbox.inputValue()).endsWith(" Kept."))
+				throw Error("Long prompt caret lost its position");
+			await textbox.fill("");
+		}
+		await page
+			.getByRole("button", { name: "Model and effort", exact: true })
+			.first()
+			.click();
+		await page.keyboard.press("Escape");
+		await page
+			.getByRole("button", { name: "Permissions", exact: true })
+			.first()
+			.click();
+		await page.getByRole("radio", { name: /^Plan/ }).check();
+		await page.keyboard.press("Escape");
+		await page
+			.getByRole("button", { name: "Model and effort", exact: true })
+			.first()
+			.click();
+		await page.getByRole("button", { name: "Fast mode", exact: true }).click();
+		if (
+			(await page
+				.getByRole("button", { name: "Fast mode", exact: true })
+				.getAttribute("aria-pressed")) !== "true"
+		)
+			throw Error("Fast toggle did not change");
+		await page.screenshot({
+			path: resolve(output, "focus-paired-settings.png"),
+		});
+		await page
+			.getByRole("slider", { name: "Reasoning effort" })
+			.press("Escape");
+		checks.push(
+			"Claude Focus composer, command palette and shared model/mode controls work",
+			"both composers cap at six lines and fade overflow",
+			"long prompt typing preserves caret",
+			"Codex Focus menu and both Fast toggles work",
+		);
+
+		await page.goto(`http://127.0.0.1:${port}/?paired`);
+		await input.fill("Delayed first response");
+		await input.press("Enter");
+		await page
+			.getByText("Considering the next step", { exact: true })
+			.waitFor();
+		if (
+			!(await page
+				.getByText("Delayed first response", { exact: true })
+				.isVisible())
+		)
+			throw Error("Sent prompt disappeared while Codex was working");
+		const workingLayout = await page
+			.locator(".codex-work-heading")
+			.evaluate((el: HTMLElement) => ({
+				top: el.getBoundingClientRect().top,
+				font: parseFloat(getComputedStyle(el).fontSize),
+				promptBottom:
+					document.querySelector(".codex-user-message")?.getBoundingClientRect()
+						.bottom ?? 0,
+			}));
+		if (
+			workingLayout.top - workingLayout.promptBottom > 70 ||
+			workingLayout.font < 14
+		)
+			throw Error(
+				`Working indicator misplaced: ${JSON.stringify(workingLayout)}`,
+			);
+		await page.screenshot({ path: resolve(output, "codex-working.png") });
+		await page.getByText("Done. Your workspace layout is preserved.").waitFor();
+		checks.push(
+			"first prompt stays visible during delayed response",
+			"working indicator follows the prompt at readable size",
+		);
+		await page.goto(`http://127.0.0.1:${port}/?paired&inline`);
+		await page.evaluate(() =>
+			(
+				window as unknown as { codexLayout: { split(): void } }
+			).codexLayout.split(),
+		);
+		await page.getByRole("textbox", { name: "Message Claude" }).waitFor();
+		await claudeInput.fill("");
+		await input.fill("");
+		await page.waitForTimeout(200);
+		const cards = await page
+			.locator(".session-composer")
+			.evaluateAll((nodes: Element[]) =>
+				nodes.map((node) => {
+					const box = node.getBoundingClientRect();
+					const css = getComputedStyle(node);
+					return {
+						height: box.height,
+						bottom: box.bottom,
+						radius: css.borderRadius,
+						background: css.backgroundColor,
+					};
+				}),
+			);
+		if (
+			cards.length !== 2 ||
+			Math.abs(cards[0].height - cards[1].height) > 1 ||
+			Math.abs(cards[0].bottom - cards[1].bottom) > 1 ||
+			cards[0].radius !== cards[1].radius ||
+			cards[0].background !== cards[1].background
+		)
+			throw Error(
+				`Composers must match across skins: ${JSON.stringify(cards)}`,
+			);
+		for (const [title, provider] of [
+			["Codex", "Codex"],
+			["Claude", "Claude Code"],
+		]) {
+			const pane = page.locator("[data-pane-id]").filter({
+				has: page.getByRole("textbox", { name: `Message ${title}` }),
+			});
+			await pane.locator(".gs-pane-title").dblclick();
+			await pane
+				.getByRole("textbox", { name: "Rename pane" })
+				.fill(`Renamed ${title} session with a long descriptive title`);
+			await pane.getByRole("textbox", { name: "Rename pane" }).press("Enter");
+			const icon = pane.locator(`img[alt="${provider}"][title]`);
+			if (!(await icon.isVisible()))
+				throw Error(`Missing ${provider} header icon after rename`);
+			const appearance = await pane
+				.locator(".gs-pane-title")
+				.evaluate((node: Element) => ({
+					font: getComputedStyle(node).fontFamily,
+					weight: getComputedStyle(node).fontWeight,
+				}));
+			if (
+				!appearance.font.includes("Segoe UI Variable") ||
+				appearance.weight !== "600"
+			)
+				throw Error(`Header typography missing: ${JSON.stringify(appearance)}`);
+		}
+		await page.screenshot({
+			path: resolve(output, "focus-matching-renamed.png"),
+		});
+		checks.push(
+			"both providers use matching Focus surfaces and geometry across skins",
+			"renamed headers retain provider icons, folder icons and refined typography",
+		);
+
+		await page.goto(`http://127.0.0.1:${port}/?paired&permission`);
+		await page.evaluate(() =>
+			(
+				window as unknown as { codexLayout: { split: () => void } }
+			).codexLayout.split(),
+		);
+		await page.getByRole("region", { name: "Permission request" }).waitFor();
+		await page.getByText("Request details").click();
+		await page
+			.getByText('"url": "http://localhost:3000"', { exact: false })
+			.waitFor();
+		await page.screenshot({
+			path: resolve(output, "claude-browser-approval.png"),
+		});
+		await page.getByRole("button", { name: "Allow once", exact: true }).click();
+		await page
+			.getByRole("region", { name: "Permission request" })
+			.waitFor({ state: "detached", timeout: 5000 })
+			.catch(async (error) => {
+				await page.screenshot({
+					path: resolve(output, "approval-failure.png"),
+				});
+				console.error("Approval state", await page.locator("body").innerText());
+				throw error;
+			});
+		checks.push(
+			"Claude tool permission displays details and submits an explicit approval",
+		);
+		await checkComputerControl(page);
+	}
+	await page.setViewportSize({ width: 800, height: 780 });
+	await page.goto(`http://127.0.0.1:${port}/?paired`);
+	await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
+	await page.evaluate(() =>
+		(
+			window as unknown as { codexLayout: { split(): void } }
+		).codexLayout.split(),
 	);
-	await checkComputerControl(page);
+	for (const provider of ["Codex", "Claude"]) {
+		const composer = page.locator(".session-composer").filter({
+			has: page.getByRole("textbox", { name: `Message ${provider}` }),
+		});
+		const input = composer.getByRole("textbox");
+		await composer.getByRole("button", { name: "Model and effort" }).click();
+		const slider = page.getByRole("slider", { name: "Reasoning effort" });
+		await slider.press("Home");
+		await page.getByRole("button", { name: "Reset effort to default" }).click();
+		await page.getByRole("button", { name: "Fast mode", exact: true }).click();
+		await page.keyboard.press("Escape");
+		await composer
+			.getByRole("button", { name: "Permissions", exact: true })
+			.click();
+		await page.getByRole("radio").first().check();
+		await page.keyboard.press("Escape");
+		const fits = await composer.evaluate((el) => {
+			const outer = el.getBoundingClientRect();
+			const buttons = [
+				...el.querySelectorAll<HTMLButtonElement>(
+					".session-composer-toolbar button",
+				),
+			]
+				.map((b) => b.getBoundingClientRect())
+				.filter((r) => r.width && r.height);
+			return (
+				buttons.every(
+					(r) =>
+						r.left >= outer.left &&
+						r.right <= outer.right &&
+						r.bottom <= outer.bottom,
+				) &&
+				buttons.every((r, i) => i === 0 || r.left >= buttons[i - 1].right - 1)
+			);
+		});
+		if (!fits) throw Error(`${provider} composer controls overflow`);
+		await input.fill("Keep this draft");
+		await composer
+			.getByRole("button", { name: "Start Flow dictation" })
+			.click();
+		await composer
+			.getByRole("button", { name: "Finish Flow dictation" })
+			.waitFor();
+		await input.fill("Typed while recording");
+		await composer
+			.getByRole("button", { name: "Finish Flow dictation" })
+			.click();
+		await page.waitForFunction(
+			({ provider }) =>
+				document.querySelector<HTMLTextAreaElement>(
+					`textarea[aria-label="Message ${provider}"]`,
+				)?.value === "Typed while recording Flow dictated text",
+			{ provider },
+		);
+		await input.fill("");
+	}
+	checks.push(
+		"both production composers insert Flow text without sending or overwriting concurrent typing",
+	);
+	await page.screenshot({
+		path: resolve(output, "compact-flow-composers.png"),
+	});
+	await page.goto(`http://127.0.0.1:${port}/?activity-pill`);
+	await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
+	await page.evaluate(() =>
+		(
+			window as unknown as { expandActivityPreview(): void }
+		).expandActivityPreview(),
+	);
+	for (const width of [390, 640, 1200]) {
+		await page.setViewportSize({ width, height: 780 });
+		await page.evaluate(() =>
+			(
+				window as unknown as { setCodexActivityFixture(patch: unknown): void }
+			).setCodexActivityFixture({ status: "working" }),
+		);
+		const pill = page.locator(".session-preview-activity");
+		await pill.locator("strong", { hasText: "Working" }).waitFor();
+		await page.getByRole("button", { name: "Show session activity" }).click();
+		await page.getByText("Latest activity", { exact: true }).waitFor();
+		const geometry = await page.evaluate(() => {
+			const pill = document
+				.querySelector(".session-preview-activity")
+				?.getBoundingClientRect();
+			const preview = document
+				.querySelector('[data-testid="preview-content"]')
+				?.getBoundingClientRect();
+			if (!pill || !preview) throw Error("Missing preview geometry");
+			return {
+				left: pill.left,
+				right: pill.right,
+				bottom: pill.bottom,
+				overlap: preview.bottom > pill.top + 1,
+				width: innerWidth,
+				height: innerHeight,
+			};
+		});
+		if (
+			geometry.left < 0 ||
+			geometry.right > geometry.width ||
+			geometry.bottom > geometry.height ||
+			geometry.overlap
+		)
+			throw Error(`Preview activity overflow: ${JSON.stringify(geometry)}`);
+		await page.screenshot({
+			path: resolve(output, `live-activity-${width}.png`),
+		});
+		await page.getByRole("button", { name: "Show session activity" }).click();
+	}
+	await page.evaluate(() =>
+		(
+			window as unknown as { setCodexActivityFixture(patch: unknown): void }
+		).setCodexActivityFixture({
+			status: "idle",
+			turns: [{ id: "one", status: "completed" }],
+		}),
+	);
+	await page
+		.locator(".session-preview-activity strong", { hasText: "Task complete" })
+		.waitFor();
+	await page.getByRole("button", { name: "Return to session" }).click();
+	await page
+		.locator(".session-preview-activity")
+		.waitFor({ state: "detached" });
+	await page.getByRole("textbox", { name: "Message Codex" }).waitFor();
+	checks.push(
+		"expanded production tool panel follows real progress, retains browser space and returns to session at three widths",
+	);
 	await page.goto(`http://127.0.0.1:${port}/?loading`);
 	const loader = page.getByLabel("Loading workspace");
 	await loader.waitFor();

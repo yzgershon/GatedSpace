@@ -247,7 +247,7 @@ export function CodexApprovalCard({
 					</button>
 					<button
 						type="button"
-						disabled={busy}
+						disabled={busy || approval.acceptDisabled}
 						onClick={() => void answer(true)}
 					>
 						Allow once

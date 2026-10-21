@@ -1,12 +1,4 @@
-/**
- * Local-only mode (main process side).
- *
- * Mirrors renderer/lib/local-mode.ts, minus the localStorage escape hatch
- * (that lives in the renderer). Main-process consumers treat the baked build
- * flag as "local mode is available": when the renderer runs in cloud mode it
- * supplies real auth tokens, which always take precedence over the local
- * fallbacks gated on this flag.
- */
+/** Public builds always use local identity, including when older cloud tokens exist. */
 import { env } from "main/env.main";
 
 /** Must match renderer/lib/local-mode.ts. */

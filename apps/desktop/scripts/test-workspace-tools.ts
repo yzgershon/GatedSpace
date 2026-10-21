@@ -130,7 +130,9 @@ await writeFile(
 );
 let styles = '<link rel="stylesheet" href="style.css">';
 if (productionCss) {
-	const renderer = resolve(import.meta.dir, "../dist/renderer");
+	const renderer = process.env.WORKSPACE_TOOLS_RENDERER_DIR
+		? resolve(process.env.WORKSPACE_TOOLS_RENDERER_DIR)
+		: resolve(import.meta.dir, "../dist/renderer");
 	const html = await readFile(resolve(renderer, "index.html"), "utf8");
 	const entry = html.match(/href="\.\/assets\/([^"<>]+\.css)"/)?.[1];
 	if (!entry)
@@ -140,7 +142,13 @@ if (productionCss) {
 	const files = await readdir(resolve(renderer, "assets"));
 	styles = [
 		entry,
-		...files.filter((file) => file.endsWith(".css") && file !== entry),
+		...files.filter(
+			(file) =>
+				file.endsWith(".css") &&
+				file !== entry &&
+				// The computer overlay is a separate window with its own global styles.
+				!file.startsWith("computer-overlay-"),
+		),
 	]
 		.map(
 			(file) =>

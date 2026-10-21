@@ -1,0 +1,79 @@
+/* Owned by Workspaces; recent-session toolbar changes must not affect it. */
+.workspace-collection-controls {
+	display: flex;
+	flex: 0 0 auto;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+	padding: 8px 12px;
+}
+.workspace-collection-search {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	padding: 7px 9px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	color: var(--muted-foreground);
+	background: color-mix(in srgb, var(--background) 30%, transparent);
+}
+.workspace-collection-search > svg,
+.workspace-collection-search > button {
+	flex-shrink: 0;
+}
+.workspace-collection-search input {
+	min-width: 0;
+	width: 100%;
+	font-size: 12px;
+	background: transparent;
+	color: var(--foreground);
+	outline: none;
+	user-select: text;
+}
+.workspace-collection-search:focus-within {
+	border-color: var(--ring);
+}
+.workspace-collection-controls button {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+}
+.workspace-collection-controls button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 2px;
+}
+.workspace-collection-filters {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 6px 12px;
+	min-width: 0;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	line-height: 16px;
+}
+.workspace-collection-filters > span {
+	white-space: nowrap;
+	font-variant-numeric: tabular-nums;
+}
+.workspace-collection-filters button {
+	gap: 6px;
+	min-height: 28px;
+	margin-left: auto;
+	padding: 4px 7px;
+	border: 1px solid transparent;
+	border-radius: 7px;
+	white-space: nowrap;
+}
+.workspace-collection-filters button:hover {
+	background: var(--muted);
+	color: var(--foreground);
+}
+.workspace-collection-filters button[aria-pressed="true"] {
+	border-color: color-mix(in srgb, var(--primary) 40%, transparent);
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	color: var(--primary);
+}

@@ -40,8 +40,7 @@ async function drag(handle, destination) {
 }
 try {
 	await page.goto(process.env.ORGANIZER_PREVIEW_URL ?? "http://127.0.0.1:8146");
-	await page.getByLabel("Agent filter").selectOption("all");
-	await page.getByLabel("Session filter").selectOption("all");
+
 	await group("Pinned")
 		.getByLabel("Move GatedSpace improvements", { exact: true })
 		.waitFor();
@@ -82,7 +81,9 @@ try {
 	);
 	checks.push("Keyboard drag reorders pins");
 	await page.getByRole("button", { name: "New project", exact: true }).click();
-	await page.getByLabel("New project", { exact: true }).fill(projectName);
+	await page
+		.getByRole("textbox", { name: "New project", exact: true })
+		.fill(projectName);
 	await page
 		.getByRole("button", { name: "Create project", exact: true })
 		.click();
@@ -172,14 +173,14 @@ try {
 	await page
 		.getByRole("menuitem", { name: "Archive session", exact: true })
 		.click();
-	await page.getByLabel("Session filter").selectOption("archived");
+	await page.getByLabel("Archived sessions", { exact: true }).click();
 	await group("GatedSpace")
 		.getByLabel("Actions for Mobile sign-in investigation")
 		.click();
 	await page
 		.getByRole("menuitem", { name: "Restore session", exact: true })
 		.click();
-	await page.getByLabel("Session filter").selectOption("all");
+	await page.getByLabel("Archived sessions", { exact: true }).click();
 	await group("GatedSpace")
 		.getByLabel("Actions for Mobile sign-in investigation")
 		.waitFor();

@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, rmSync, statSync } from "node:fs";
-import { join, resolve as resolvePath } from "node:path";
+import { homedir } from "node:os";
+import { join, parse, resolve as resolvePath } from "node:path";
 import { parseGitHubRemote } from "@superset/shared/github-remote";
+import { ensureInitialGitCommit } from "@superset/shared/initial-git-commit";
 import { TRPCError } from "@trpc/server";
 import type { GitCredentialProvider } from "../../../../runtime/git";
 import { createUserSimpleGit } from "../../../../runtime/git/simple-git";
@@ -206,6 +208,19 @@ export async function initLocalRepoInPlace(
 	const existingRoot = await tryRevParseGitRoot(repoPath);
 	const root = existingRoot ?? repoPath;
 	if (!existingRoot) {
+		const selected = resolvePath(repoPath);
+		const comparable = (value: string) =>
+			process.platform === "win32" ? value.toLowerCase() : value;
+		if (
+			comparable(selected) === comparable(parse(selected).root) ||
+			comparable(selected) === comparable(resolvePath(homedir()))
+		) {
+			throw new TRPCError({
+				code: "BAD_REQUEST",
+				message:
+					"Choose a project folder inside your home or drive, rather than the entire home or drive.",
+			});
+		}
 		await gitInitMainBranch(repoPath);
 	}
 
@@ -239,28 +254,10 @@ async function hasAnyCommit(repoPath: string): Promise<boolean> {
  * machine. The user's own commits still use their global config once they set it.
  */
 async function createInitialCommit(repoPath: string): Promise<void> {
-	const git = createUserSimpleGit(repoPath);
-	const args = ["commit", "--allow-empty", "-m", "Initial commit"];
 	try {
-		await git.raw(args);
-	} catch (err) {
-		const message = err instanceof Error ? err.message : String(err);
-		const identityMissing =
-			message.includes("empty ident") ||
-			message.includes("user.email") ||
-			message.includes("user.name");
-		if (!identityMissing) throw asInitialCommitTrpcError(err);
-		try {
-			await git.raw([
-				"-c",
-				"user.name=GatedSpace",
-				"-c",
-				"user.email=noreply@gatedspace.local",
-				...args,
-			]);
-		} catch (fallbackErr) {
-			throw asInitialCommitTrpcError(fallbackErr);
-		}
+		await ensureInitialGitCommit(createUserSimpleGit(repoPath));
+	} catch (error) {
+		throw asInitialCommitTrpcError(error);
 	}
 }
 
@@ -327,16 +324,7 @@ export async function initEmptyRepo(
 
 	try {
 		await gitInitMainBranch(targetPath);
-		try {
-			await createUserSimpleGit(targetPath).raw([
-				"commit",
-				"--allow-empty",
-				"-m",
-				"Initial commit",
-			]);
-		} catch (err) {
-			throw asInitialCommitTrpcError(err);
-		}
+		await createInitialCommit(targetPath);
 		return { repoPath: targetPath, remoteName: null, parsed: null };
 	} catch (err) {
 		rmSync(targetPath, { recursive: true, force: true });
@@ -381,7 +369,7 @@ export async function cloneTemplateInto(
 		const git = createUserSimpleGit(targetPath);
 		await git.add(".");
 		try {
-			await git.raw(["commit", "-m", "Initial commit"]);
+			await ensureInitialGitCommit(git, { includeTemplateFiles: true });
 		} catch (err) {
 			throw asInitialCommitTrpcError(err);
 		}

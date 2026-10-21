@@ -20,6 +20,9 @@ import { useCallback, useMemo } from "react";
 import { LuClipboard, LuClipboardCopy, LuEraser, LuPlus } from "react-icons/lu";
 import { CodexAccount } from "renderer/components/CodexSession/components/CodexAccount/CodexAccount";
 import { CodexContext } from "renderer/components/CodexSession/components/CodexContext/CodexContext";
+import { LiveCodeButton } from "renderer/components/LiveCode/LiveCodeButton";
+import { LiveCodeLayout } from "renderer/components/LiveCode/LiveCodeLayout";
+import { forgetLiveCode } from "renderer/components/LiveCode/live-code-state";
 import { useHotkeyDisplay } from "renderer/hotkeys";
 import { agentAccent } from "renderer/lib/agent-accent";
 import {
@@ -359,6 +362,7 @@ export function usePaneRegistry({
 			 */
 			// Live VS Code-style Claude Code session (pane kind "session").
 			session: {
+				renderHeaderExtras: (ctx) => <LiveCodeButton context={ctx} />,
 				onRename: renameSessionPane,
 				/*
 				 * Status dot, THEN the agent mark — the reference's order, and the
@@ -439,32 +443,39 @@ export function usePaneRegistry({
 					const SessionComponent =
 						data.provider === "codex" ? CodexSessionPane : ClaudeSessionPane;
 					return (
-						<SessionComponent
+						<LiveCodeLayout
 							paneId={ctx.pane.id}
 							workspaceId={workspaceId}
-							// Drives the header's compact mode. With panes side by side
-							// there is no room for reset times and cost, and crowding them
-							// is what made the strip overlap the folder name.
-							paneCount={Object.keys(ctx.tab.panes).length}
-							// Only the focused pane shows the keyboard hint strip.
-							isActive={ctx.isActive}
-							model={data.model}
-							resumeSessionId={data.resumeSessionId}
-							{...(data.provider === "codex" ? { onReviewChanges } : {})}
-							forkSession={data.forkSession}
-							cwdOverride={data.cwd}
-							// Persisted on the pane so a restored layout resumes the real
-							// conversation instead of opening a blank session.
-							onSessionId={(sessionId) =>
-								// A fork has its own id now, so drop the flag — reopening
-								// this pane later must resume it, not fork it again.
-								ctx.actions.updateData({
-									...data,
-									resumeSessionId: sessionId,
-									forkSession: undefined,
-								})
-							}
-						/>
+							provider={data.provider === "codex" ? "codex" : "claude"}
+							cwd={data.cwd ?? workspaceCwd}
+						>
+							<SessionComponent
+								paneId={ctx.pane.id}
+								workspaceId={workspaceId}
+								// Drives the header's compact mode. With panes side by side
+								// there is no room for reset times and cost, and crowding them
+								// is what made the strip overlap the folder name.
+								paneCount={Object.keys(ctx.tab.panes).length}
+								// Only the focused pane shows the keyboard hint strip.
+								isActive={ctx.isActive}
+								model={data.model}
+								resumeSessionId={data.resumeSessionId}
+								{...(data.provider === "codex" ? { onReviewChanges } : {})}
+								forkSession={data.forkSession}
+								cwdOverride={data.cwd}
+								// Persisted on the pane so a restored layout resumes the real
+								// conversation instead of opening a blank session.
+								onSessionId={(sessionId) =>
+									// A fork has its own id now, so drop the flag — reopening
+									// this pane later must resume it, not fork it again.
+									ctx.actions.updateData({
+										...data,
+										resumeSessionId: sessionId,
+										forkSession: undefined,
+									})
+								}
+							/>
+						</LiveCodeLayout>
 					);
 				},
 				contextMenuActions: (_ctx, defaults) =>
@@ -477,10 +488,12 @@ export function usePaneRegistry({
 					),
 				// A session deliberately outlives an unmount (tab switches keep the
 				// process alive); closing the pane is the one thing that kills it.
-				onAfterClose: (pane) =>
-					(pane.data as SessionPaneData).provider === "codex"
+				onAfterClose: (pane) => {
+					forgetLiveCode(pane.id);
+					return (pane.data as SessionPaneData).provider === "codex"
 						? disposeCodexSession(pane.id)
-						: disposeSession(pane.id),
+						: disposeSession(pane.id);
+				},
 			},
 			file: {
 				getIcon: (ctx: RendererContext<PaneViewerData>) => {

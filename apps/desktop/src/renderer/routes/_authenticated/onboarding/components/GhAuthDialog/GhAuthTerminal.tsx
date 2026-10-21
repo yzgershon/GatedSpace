@@ -14,9 +14,13 @@ const GH_AUTH_COMMAND =
 interface GhAuthTerminalProps {
 	/** Fired when the gh process exits (success or failure). */
 	onExit: () => void;
+	command?: string;
 }
 
-export function GhAuthTerminal({ onExit }: GhAuthTerminalProps) {
+export function GhAuthTerminal({
+	onExit,
+	command = GH_AUTH_COMMAND,
+}: GhAuthTerminalProps) {
 	const appearance = useTerminalAppearance();
 	const appearanceRef = useRef(appearance);
 	appearanceRef.current = appearance;
@@ -66,17 +70,25 @@ export function GhAuthTerminal({ onExit }: GhAuthTerminalProps) {
 					onExitRef.current();
 				}
 			},
+			onError: (error) => runtime.terminal.writeln(`\r\n${error.message}`),
 		});
 
-		void electronTrpcClient.terminal.createOrAttach.mutate({
-			paneId,
-			tabId: paneId,
-			workspaceId: paneId,
-			command: GH_AUTH_COMMAND,
-			cols: runtime.terminal.cols,
-			rows: runtime.terminal.rows,
-			skipColdRestore: true,
-		});
+		void electronTrpcClient.terminal.createOrAttach
+			.mutate({
+				paneId,
+				tabId: paneId,
+				workspaceId: paneId,
+				command,
+				cols: runtime.terminal.cols,
+				rows: runtime.terminal.rows,
+				skipColdRestore: true,
+			})
+			.catch((error: unknown) => {
+				runtime.terminal.writeln(
+					`\r\n${error instanceof Error ? error.message : String(error)}`,
+				);
+				onExitRef.current();
+			});
 
 		return () => {
 			for (const timer of refitTimers) window.clearTimeout(timer);
@@ -85,7 +97,7 @@ export function GhAuthTerminal({ onExit }: GhAuthTerminalProps) {
 			void electronTrpcClient.terminal.kill.mutate({ paneId });
 			disposeRuntime(runtime);
 		};
-	}, []);
+	}, [command]);
 
 	return (
 		<div className="relative h-full w-full overflow-hidden">

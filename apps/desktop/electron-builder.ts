@@ -74,6 +74,9 @@ const config: Configuration = {
 
 	// Extra resources placed outside asar archive (accessible via process.resourcesPath)
 	extraResources: [
+		...(existsSync("dist/resources/git/cmd/git.exe")
+			? [{ from: "dist/resources/git", to: "resources/git", filter: ["**/*"] }]
+			: []),
 		// Database migrations - must be outside asar for drizzle-orm to read
 		{
 			from: "dist/resources/migrations",

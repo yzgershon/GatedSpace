@@ -227,6 +227,35 @@
 	color: #f1c66c;
 	fill: currentColor;
 }
+.session-settings-icon {
+	display: inline-grid;
+	place-items: center;
+	flex-shrink: 0;
+	width: 32px;
+	height: 32px;
+	padding: 0;
+	border-radius: 11px;
+	color: var(--muted-foreground);
+	transition:
+		color 140ms,
+		background 140ms;
+}
+.session-settings-icon:hover,
+.session-settings-icon[data-state="open"] {
+	background: color-mix(in srgb, var(--foreground) 4%, transparent);
+	color: var(--foreground);
+}
+.session-permissions-symbol {
+	display: grid;
+	place-items: center;
+}
+.session-permissions-symbol > svg {
+	grid-area: 1 / 1;
+}
+.session-permissions-symbol > svg:last-child {
+	width: 11px;
+	height: 11px;
+}
 .session-settings {
 	width: min(280px, calc(100vw - 32px));
 	max-height: var(--radix-popover-content-available-height);
@@ -396,5 +425,82 @@
 	.session-composer *,
 	.session-settings * {
 		transition: none;
+	}
+}
+
+/* Approved compact composer; retains the existing settings sheets and editor behavior. */
+.session-composer {
+	border-radius: 26px;
+	border-width: 1px;
+	background: color-mix(in srgb, var(--card) 86%, var(--foreground) 4%);
+}
+.session-composer-toolbar {
+	gap: 4px;
+	padding: 8px 12px 12px;
+}
+.session-composer-buttons {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	margin-left: auto;
+	flex-shrink: 0;
+}
+.session-composer-buttons .session-settings-icon {
+	margin: 0;
+}
+.session-composer-toolbar .session-send {
+	border-radius: 50%;
+	width: 34px;
+	height: 34px;
+}
+.session-composer-toolbar .session-send > svg {
+	width: 17px;
+	height: 17px;
+}
+.session-attach {
+	width: 32px;
+	height: 32px;
+	display: grid;
+	place-items: center;
+}
+.session-attach > svg,
+.session-flow-mic > svg {
+	width: 18px;
+	height: 18px;
+}
+.session-flow-mic {
+	position: relative;
+}
+.session-flow-mic[data-recording="true"] {
+	color: var(--primary);
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+.session-flow-status {
+	position: absolute;
+	bottom: calc(100% + 10px);
+	right: 0;
+	white-space: nowrap;
+	padding: 6px 10px;
+	border-radius: 9px;
+	background: var(--popover);
+	color: var(--popover-foreground);
+	border: 1px solid var(--border);
+	font-size: 11px;
+	pointer-events: none;
+}
+@container (max-width: 420px) {
+	.session-composer-toolbar {
+		gap: 1px;
+		padding-inline: 9px;
+	}
+	.session-composer-buttons {
+		gap: 1px;
+	}
+	.session-settings-icon {
+		width: 30px;
+	}
+	.session-composer-toolbar .session-send {
+		width: 32px;
+		height: 32px;
 	}
 }

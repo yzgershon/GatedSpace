@@ -152,6 +152,24 @@ test("retrying a lost response calls the real route action once", async () => {
 		text: "From phone",
 	});
 });
+test("personal phone messages use the owner's full-access default", async () => {
+	const previous = process.env.GATEDSPACE_PERSONAL;
+	process.env.GATEDSPACE_PERSONAL = "1";
+	try {
+		const response = await post("/codex/pane/send", {
+			requestId: crypto.randomUUID(),
+			text: "Personal phone prompt",
+		});
+		expect(response.status).toBe(200);
+		expect(sent.at(-1)).toMatchObject({
+			key: "pane",
+			permission: "full-access",
+		});
+	} finally {
+		if (previous === undefined) delete process.env.GATEDSPACE_PERSONAL;
+		else process.env.GATEDSPACE_PERSONAL = previous;
+	}
+});
 test("answer buttons and Other use the pending question ID", async () => {
 	expect(
 		(

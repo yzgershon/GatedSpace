@@ -1,18 +1,4 @@
-/**
- * Local-only mode (renderer side).
- *
- * Public GatedSpace builds bake NEXT_PUBLIC_LOCAL_ONLY=1 so the app runs with
- * no cloud account: a static local session replaces Better Auth, the
- * host-service starts against a fixed local org, and cloud-backed collections
- * become local-only stores seeded on boot.
- *
- * Escape hatch: setting localStorage "gatedspace:auth-mode" to "cloud"
- * restores the cloud sign-in path on next launch (for users who run their own
- * Superset-compatible backend). Anything else — including unset — means local.
- *
- * isLocalMode() is intentionally safe to call at module load; several modules
- * (auth-client) branch on it when they're first imported.
- */
+/** Public builds always use local identity. Legacy cloud preferences are ignored. */
 import { env } from "renderer/env.renderer";
 
 export const AUTH_MODE_STORAGE_KEY = "gatedspace:auth-mode";
@@ -27,19 +13,14 @@ export function isLocalOnlyBuild(): boolean {
 }
 
 export function isLocalMode(): boolean {
-	if (!isLocalOnlyBuild()) return false;
-	try {
-		return window.localStorage.getItem(AUTH_MODE_STORAGE_KEY) !== "cloud";
-	} catch {
-		return true;
-	}
+	return isLocalOnlyBuild();
 }
 
-/** Switch between local and cloud auth. Takes effect on reload. */
+/** Retained for older recovery controls; public mode no longer reads this preference. */
 export function setAuthMode(mode: "local" | "cloud"): void {
 	try {
 		window.localStorage.setItem(AUTH_MODE_STORAGE_KEY, mode);
 	} catch {
-		// localStorage unavailable — stay in the baked default
+		// Storage may be unavailable; public builds remain local.
 	}
 }

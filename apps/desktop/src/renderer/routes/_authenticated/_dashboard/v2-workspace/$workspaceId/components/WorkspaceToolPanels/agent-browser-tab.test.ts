@@ -2,6 +2,61 @@ import { expect, test } from "bun:test";
 import { openAgentBrowserTab } from "./agent-browser-tab";
 import { createToolPanels } from "./tool-panel-store";
 
+test("preparing an owned background page preserves selection, layout and focus", () => {
+	const tools = createToolPanels({
+		key: "prepare-browser-test",
+		createTerminal: async () => "terminal",
+	});
+	const disconnect = tools.connect();
+	const first = tools.add("right", {
+		id: "owned",
+		kind: "browser",
+		data: {
+			url: "https://example.com",
+			agentSessionKey: "codex:a",
+			previewMode: "galaxy-s24",
+		},
+	});
+	tools.add("right", {
+		id: "manual",
+		kind: "browser",
+		data: { url: "https://example.org" },
+	});
+	tools.focus("main");
+	tools.setOpen("right", false);
+	const before = tools.state.getState();
+	const activeTab = tools.store.getState().activeTabId;
+	const prepared: string[] = [];
+	const request = {
+		requestId: "request",
+		workspaceId: "workspace",
+		sessionKey: "codex:a",
+		knownPaneIds: [],
+		action: "prepare" as const,
+		paneId: "owned",
+	};
+	openAgentBrowserTab(tools, request, (id, data) => {
+		prepared.push(id);
+		expect(data.previewMode).toBe("galaxy-s24");
+	});
+	expect(prepared).toEqual(["owned"]);
+	expect(tools.state.getState()).toEqual(before);
+	expect(tools.store.getState().activeTabId).toBe(activeTab);
+	expect(tools.store.getState().activeTabId).not.toBe(first);
+	expect(() =>
+		openAgentBrowserTab(tools, { ...request, paneId: "manual" }, (id) =>
+			prepared.push(id),
+		),
+	).toThrow();
+	expect(() =>
+		openAgentBrowserTab(tools, { ...request, paneId: "missing" }, (id) =>
+			prepared.push(id),
+		),
+	).toThrow();
+	expect(prepared).toEqual(["owned"]);
+	disconnect();
+});
+
 test("agent previews open in the shared right panel, reopen once, and preserve other tabs", async () => {
 	const tools = createToolPanels({
 		key: "agent-browser-test",
@@ -21,6 +76,7 @@ test("agent previews open in the shared right panel, reopen once, and preserve o
 		url: "http://localhost:3000/",
 	};
 	openAgentBrowserTab(tools, request);
+	expect(tools.state.getState().focus).toBe("bottom");
 	expect(tools.state.getState().right.open).toBe(true);
 	const id = tools.state.getState().right.activeTabId;
 	expect(
@@ -32,6 +88,7 @@ test("agent previews open in the shared right panel, reopen once, and preserve o
 	expect(tools.state.getState().right.size).toBe(width);
 	await tools.toggle("right");
 	openAgentBrowserTab(tools, request);
+	expect(tools.state.getState().focus).toBe("bottom");
 	expect(tools.state.getState().right).toMatchObject({
 		open: true,
 		activeTabId: id,

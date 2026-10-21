@@ -1,6 +1,7 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { delimiter, dirname, join } from "node:path";
 import { createInterface } from "node:readline";
 import { z } from "zod";
@@ -31,7 +32,7 @@ export function resolveCodexExecutable() {
 		.split(delimiter)
 		.filter((dir) => !/[\\/]\.superset[\\/]bin[\\/]?$/i.test(dir));
 	if (process.platform === "win32") {
-		const native = pathDirs
+		const native = [...pathDirs, join(homedir(), ".local", "bin")]
 			.map((dir) => join(dir, "codex.exe"))
 			.find(existsSync);
 		if (native) return { command: native, args: [] as string[], env: {} };

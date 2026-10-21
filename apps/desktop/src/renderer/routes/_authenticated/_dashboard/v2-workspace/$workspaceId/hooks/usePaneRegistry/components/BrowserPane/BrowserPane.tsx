@@ -52,20 +52,11 @@ export function BrowserPane({ ctx }: BrowserPaneProps) {
 	const { placeholderRef, reload } = usePersistentWebview({ paneId, ctx });
 	const data = ctx.pane.data as BrowserPaneData;
 	const mode = data.previewMode ?? "responsive";
-	const orientation = data.previewOrientation ?? "portrait";
 
 	const isBlankPage = !state.currentUrl || state.currentUrl === "about:blank";
 
 	return (
 		<div className="relative flex flex-1 h-full min-h-0 min-w-0 flex-col">
-			<BrowserPreviewControls
-				mode={mode}
-				orientation={orientation}
-				scale={state.previewScale}
-				onChange={(previewMode, previewOrientation) =>
-					ctx.actions.updateData({ ...data, previewMode, previewOrientation })
-				}
-			/>
 			<div
 				className="gs-browser-stage"
 				data-device={mode !== "responsive"}
@@ -100,6 +91,9 @@ interface BrowserPaneToolbarProps {
 }
 
 export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
+	const data = ctx.pane.data as BrowserPaneData;
+	const mode = data.previewMode ?? "responsive";
+	const orientation = data.previewOrientation ?? "portrait";
 	const paneId = ctx.pane.id;
 	const state = useBrowserState(paneId);
 
@@ -164,6 +158,15 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 					hasPage={!isBlankPage}
 				/>
 				<div className="mx-1 h-3.5 w-px bg-muted-foreground/30" />
+
+				<BrowserPreviewControls
+					mode={mode}
+					orientation={orientation}
+					scale={state.previewScale}
+					onChange={(previewMode, previewOrientation) =>
+						ctx.actions.updateData({ ...data, previewMode, previewOrientation })
+					}
+				/>
 				{ctx.components.PaneHeaderActions()}
 			</div>
 		</div>

@@ -18,6 +18,7 @@ import { createDeviceRouter } from "./device";
 import { createDiagnosticsRouter } from "./diagnostics";
 import { createExternalRouter } from "./external";
 import { createFilesystemRouter } from "./filesystem";
+import { createFlowDictationRouter } from "./flow-dictation";
 import { createHostServiceCoordinatorRouter } from "./host-service-coordinator";
 import { createKeyboardLayoutRouter } from "./keyboardLayout";
 import { createMenuRouter } from "./menu";
@@ -46,6 +47,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		claudeSession: createClaudeSessionRouter(),
 		codexSession: createCodexSessionRouter(),
 		sessionQueue: createSessionQueueRouter(),
+		flowDictation: createFlowDictationRouter(),
 		sessionNames: createSessionNamesRouter(),
 		analytics: createAnalyticsRouter(),
 		browser: createBrowserRouter(),

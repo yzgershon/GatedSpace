@@ -6,7 +6,7 @@ export interface BrowserPanelRequest {
 	workspaceId: string;
 	sessionKey: string;
 	knownPaneIds: string[];
-	action: "open" | "list" | "select";
+	action: "open" | "list" | "select" | "prepare";
 	paneId?: string;
 	url?: string;
 }

@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ArrowUp, Check, ListPlus, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Check, ListPlus, Plus, Square, X } from "lucide-react";
 import {
 	type SetStateAction,
 	useEffect,
@@ -9,12 +9,13 @@ import {
 	useSyncExternalStore,
 } from "react";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
+import { FlowMicrophone } from "renderer/components/SessionComposerControls/FlowMicrophone/FlowMicrophone";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
 import { MessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
 import { useMessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
 import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
-import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
+import { SessionComposerButtons as SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerButtons/SessionComposerButtons";
 import {
 	getCodexDraft,
 	subscribeCodexDraft,
@@ -23,6 +24,7 @@ import {
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { codexTaskChanges } from "shared/codex-session/changes";
 import { defaultCodexEffort } from "shared/codex-session/controls";
+import { defaultCodexPermission } from "shared/codex-session/permissions";
 import type {
 	CodexModel,
 	CodexPermission,
@@ -64,7 +66,7 @@ export function CodexComposer({
 	const chosenEffort = saved.effort ?? "";
 	const setChosenEffort = (value: string) =>
 		updateCodexDraft(paneId, { effort: value });
-	const permission = saved.permission ?? "default";
+	const permission = saved.permission ?? defaultCodexPermission();
 	const setPermission = (value: CodexPermission) =>
 		updateCodexDraft(paneId, { permission: value });
 	const plan = saved.plan ?? false;
@@ -409,7 +411,6 @@ export function CodexComposer({
 					</fieldset>
 				)}
 				<div className="session-input">
-					<span aria-hidden="true">›</span>
 					<GrowingTextarea
 						ref={textarea}
 						aria-label="Message Codex"
@@ -502,7 +503,7 @@ export function CodexComposer({
 						title="Attach images or text files"
 						onClick={() => fileInput.current?.click()}
 					>
-						<Paperclip size={18} />
+						<Plus size={23} />
 					</button>
 					<ComputerControl paneId={paneId} />
 					<SessionComposerSettings
@@ -556,6 +557,12 @@ export function CodexComposer({
 						fast={fast}
 						onFastChange={setFast}
 						disabled={working || !selected}
+					/>
+					<FlowMicrophone
+						paneId={paneId}
+						textarea={textarea}
+						onText={setDraft}
+						onError={onError}
 					/>
 					{working && (draft.trim() || images.length > 0) && (
 						<button

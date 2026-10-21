@@ -1,13 +1,3 @@
-import {
-	AlertDialog,
-	AlertDialogAction,
-	AlertDialogCancel,
-	AlertDialogContent,
-	AlertDialogDescription,
-	AlertDialogFooter,
-	AlertDialogHeader,
-	AlertDialogTitle,
-} from "@superset/ui/alert-dialog";
 import { Avatar } from "@superset/ui/atoms/Avatar";
 import { Badge } from "@superset/ui/badge";
 import {
@@ -25,7 +15,6 @@ import { cn } from "@superset/ui/utils";
 import { useLiveQuery } from "@tanstack/react-db";
 import { useNavigate } from "@tanstack/react-router";
 import { Check, Palette } from "lucide-react";
-import { useState } from "react";
 import {
 	HiChevronUpDown,
 	HiOutlineArrowRightOnRectangle,
@@ -39,7 +28,7 @@ import { GATED_FEATURES, usePaywall } from "renderer/components/Paywall";
 import { useCurrentPlan } from "renderer/hooks/useCurrentPlan";
 import { useSignOut } from "renderer/hooks/useSignOut";
 import { authClient } from "renderer/lib/auth-client";
-import { isLocalMode, setAuthMode } from "renderer/lib/local-mode";
+import { isLocalMode } from "renderer/lib/local-mode";
 import {
 	tasksSearchFromFilters,
 	useTasksFilterStore,
@@ -115,10 +104,6 @@ export function OrganizationDropdown({
 	const signOut = useSignOut();
 	const navigate = useNavigate();
 
-	// Confirm before leaving local mode, since switching to cloud
-	// reloads into a sign-in + setup flow a local user usually doesn't want.
-	const [confirmCloudOpen, setConfirmCloudOpen] = useState(false);
-
 	const activeOrganizationId = session?.session?.activeOrganizationId;
 
 	const { data: organizations } = useLiveQuery(
@@ -137,7 +122,7 @@ export function OrganizationDropdown({
 	const localMode = isLocalMode();
 	const userName = session?.user?.name;
 	const displayName = localMode
-		? "Local"
+		? "This PC"
 		: (activeOrganization?.name ?? userName ?? "Organization");
 
 	// Tasks reopens where you left it, and is paywalled — same behaviour the
@@ -179,14 +164,15 @@ export function OrganizationDropdown({
 	 * `bg-muted-foreground` until `group-hover`, which read as a disabled chip
 	 * that lit up on approach — the opposite of what a badge is for.
 	 */
-	const planBadge = isPaid ? (
-		<Badge
-			variant="default"
-			className="h-3.5 bg-fuchsia-500 px-1 py-0 text-[9px] text-white uppercase leading-none tracking-wide"
-		>
-			Ultra
-		</Badge>
-	) : null;
+	const planBadge =
+		isPaid && !localMode ? (
+			<Badge
+				variant="default"
+				className="h-3.5 bg-fuchsia-500 px-1 py-0 text-[9px] text-white uppercase leading-none tracking-wide"
+			>
+				Ultra
+			</Badge>
+		) : null;
 
 	const triggerButton =
 		variant === "collapsed" ? (
@@ -229,7 +215,7 @@ export function OrganizationDropdown({
 					<span className="truncate font-medium text-[13px] text-foreground">
 						{displayName}
 					</span>
-					{isPaid ? (
+					{isPaid && !localMode ? (
 						<span className="font-bold text-[9.5px] text-fuchsia-500 uppercase tracking-[0.06em]">
 							Ultra
 						</span>
@@ -383,11 +369,11 @@ export function OrganizationDropdown({
 				{/* Account */}
 				{localMode ? (
 					<DropdownMenuItem
-						onSelect={() => setConfirmCloudOpen(true)}
+						onSelect={() => navigate({ to: "/workspaces" })}
 						className="gap-2"
 					>
 						<HiOutlineArrowRightOnRectangle className="size-4" />
-						<span>Sign in with an account</span>
+						<span>Set up agents</span>
 					</DropdownMenuItem>
 				) : (
 					<DropdownMenuItem onSelect={handleSignOut} className="gap-2">
@@ -396,32 +382,6 @@ export function OrganizationDropdown({
 					</DropdownMenuItem>
 				)}
 			</DropdownMenuContent>
-
-			<AlertDialog open={confirmCloudOpen} onOpenChange={setConfirmCloudOpen}>
-				<AlertDialogContent>
-					<AlertDialogHeader>
-						<AlertDialogTitle>Sign in with an account?</AlertDialogTitle>
-						<AlertDialogDescription>
-							This reloads GatedSpace into account mode, where you sign in with
-							GitHub or Google to sync your work across devices and use teams.
-							Your current local setup stays on this machine, and you can switch
-							back anytime with "Use GatedSpace without an account" on the
-							sign-in screen.
-						</AlertDialogDescription>
-					</AlertDialogHeader>
-					<AlertDialogFooter>
-						<AlertDialogCancel>Stay local</AlertDialogCancel>
-						<AlertDialogAction
-							onClick={() => {
-								setAuthMode("cloud");
-								window.location.reload();
-							}}
-						>
-							Sign in with an account
-						</AlertDialogAction>
-					</AlertDialogFooter>
-				</AlertDialogContent>
-			</AlertDialog>
 		</DropdownMenu>
 	);
 }

@@ -4,7 +4,7 @@ import {
 	ClipboardList,
 	Code,
 	Hand,
-	Paperclip,
+	Plus,
 	Square,
 	Zap,
 } from "lucide-react";
@@ -14,12 +14,13 @@ import {
 	useClaudeAccounts,
 } from "renderer/components/ClaudeAccountSwap";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
+import { FlowMicrophone } from "renderer/components/SessionComposerControls/FlowMicrophone/FlowMicrophone";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
 import { MessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
 import { useMessageQueue } from "renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
 import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
-import { SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerSettings";
+import { SessionComposerButtons as SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerButtons/SessionComposerButtons";
 import {
 	matchSwapCandidate,
 	parseSwapCommand,
@@ -538,7 +539,6 @@ export function SessionComposer({
 				)}
 
 				<div className="session-input">
-					<span aria-hidden="true">›</span>
 					<GrowingTextarea
 						ref={textareaRef}
 						value={text}
@@ -618,7 +618,7 @@ export function SessionComposer({
 						aria-label="Attach a file"
 						onClick={() => fileInputRef.current?.click()}
 					>
-						<Paperclip size={18} />
+						<Plus size={23} />
 					</button>
 					<SessionComposerSettings
 						provider="Claude"
@@ -687,6 +687,12 @@ export function SessionComposer({
 								: undefined
 						}
 						disabled={isRunning || settingsBusy}
+					/>
+					<FlowMicrophone
+						paneId={draftKey ?? "claude-composer"}
+						textarea={textareaRef}
+						onText={setText}
+						onError={setImageError}
 					/>
 
 					{isRunning ? (

@@ -11,11 +11,31 @@ const keyInput = z.object({ key: z.string().min(1).max(200) });
 export const createCodexSessionRouter = () =>
 	router({
 		computerState: publicProcedure.query(() => computerUseService.get()),
-		computerEnable: publicProcedure.input(keyInput).mutation(({ input }) => {
-			if (!manager.get(input.key))
-				throw new Error("Open a Codex session first.");
-			return enableComputerUse(input.key);
-		}),
+		computerDismissRequest: publicProcedure
+			.input(keyInput)
+			.mutation(({ input }) =>
+				computerUseService.dismissRequest(`codex:${input.key}`),
+			),
+		computerEnable: publicProcedure
+			.input(keyInput)
+			.mutation(async ({ input }) => {
+				if (!manager.get(input.key))
+					throw new Error("Open a Codex session first.");
+				const requested =
+					computerUseService.get().request?.owner === `codex:${input.key}`;
+				const state = await enableComputerUse(input.key);
+				if (requested && state.phase === "ready") {
+					try {
+						await manager.notifyComputerEnabled(input.key);
+					} catch {
+						await computerUseService.stop();
+						throw new Error(
+							"Could not notify this session. Control is off; reconnect the session and try again.",
+						);
+					}
+				}
+				return state;
+			}),
 		computerStop: publicProcedure.mutation(async () => {
 			await computerUseService.stop();
 			return computerUseService.get();

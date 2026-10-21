@@ -30,6 +30,7 @@ import {
 	type TimelineItem,
 } from "../../src/shared/claude-session/timeline";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
+import { ActivityFixture } from "./ActivityFixture";
 import { navigatorCodexItems } from "./navigator-fixture";
 import { UsageFixture } from "./UsageFixture";
 
@@ -215,7 +216,9 @@ createRoot(container).render(
 	<QueryClientProvider client={new QueryClient()}>
 		<TooltipProvider>
 			<DndProvider backend={HTML5Backend}>
-				{location.search.includes("usage") ? (
+				{location.search.includes("activity-pill") ? (
+					<ActivityFixture />
+				) : location.search.includes("usage") ? (
 					<UsageFixture />
 				) : location.search.includes("loading") ? (
 					<WorkspaceLoadingState />

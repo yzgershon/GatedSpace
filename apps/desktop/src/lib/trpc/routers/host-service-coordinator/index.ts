@@ -18,14 +18,6 @@ const orgInput = z.object({ organizationId: z.string() });
  * child to skip cloud calls. Cloud builds with no token still throw.
  */
 export async function resolveSpawnConfig() {
-	const { token } = await loadToken();
-	if (token) {
-		return {
-			authToken: token,
-			cloudApiUrl: env.NEXT_PUBLIC_API_URL,
-			localOnly: false,
-		};
-	}
 	if (isLocalOnlyBuild()) {
 		return {
 			authToken: "local-only",
@@ -33,6 +25,14 @@ export async function resolveSpawnConfig() {
 			localOnly: true,
 		};
 	}
+	const { token } = await loadToken();
+	if (token)
+		return {
+			authToken: token,
+			cloudApiUrl: env.NEXT_PUBLIC_API_URL,
+			localOnly: false,
+		};
+
 	throw new TRPCError({
 		code: "UNAUTHORIZED",
 		message: "No auth token available — user must be logged in",

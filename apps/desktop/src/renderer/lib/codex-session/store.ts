@@ -1,6 +1,8 @@
 import { toast } from "@superset/ui/sonner";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { publishSessionProgress } from "renderer/stores/session-progress";
 import type { CodexSessionState } from "shared/codex-session/types";
+import { codexProgress } from "shared/session-progress";
 
 const states = new Map<string, CodexSessionState>();
 const listeners = new Map<string, Set<() => void>>();
@@ -9,6 +11,7 @@ export function getCodexSession(key: string) {
 }
 export function publishCodexSession(state: CodexSessionState) {
 	states.set(state.key, state);
+	publishSessionProgress(state.key, codexProgress(state));
 	for (const listener of listeners.get(state.key) ?? []) listener();
 }
 export function subscribeCodexSession(key: string, listener: () => void) {
@@ -32,5 +35,6 @@ export async function disposeCodexSession(key: string) {
 		});
 	}
 	states.delete(key);
+	publishSessionProgress(key);
 	for (const listener of listeners.get(key) ?? []) listener();
 }

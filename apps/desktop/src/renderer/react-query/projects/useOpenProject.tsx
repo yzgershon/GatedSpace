@@ -1,6 +1,8 @@
+import { toast } from "@superset/ui/sonner";
 import { useCallback, useRef } from "react";
 import type { ElectronRouterOutputs } from "renderer/lib/electron-trpc";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { isLocalMode } from "renderer/lib/local-mode";
 import { useGitInitDialogStore } from "renderer/stores/git-init-dialog";
 import { processOpenNewResults } from "./processOpenNewResults";
 import { useOpenFromPath } from "./useOpenFromPath";
@@ -24,6 +26,26 @@ export function useOpenProject() {
 
 	const showDialog = useCallback(
 		(pending: PendingGitInit) => {
+			if (isLocalMode()) {
+				void (async () => {
+					const projects = [...pending.immediateSuccesses];
+					for (const path of pending.paths) {
+						try {
+							projects.push(
+								(await initGitAndOpen.mutateAsync({ path })).project,
+							);
+						} catch (error) {
+							toast.error("Could not open folder", {
+								description:
+									error instanceof Error ? error.message : String(error),
+							});
+						}
+					}
+					await utils.projects.getRecents.invalidate();
+					pending.resolve(projects);
+				})();
+				return;
+			}
 			pendingRef.current = pending;
 
 			useGitInitDialogStore.getState().open({

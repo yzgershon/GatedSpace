@@ -20,6 +20,7 @@ import {
 	clearSessionActivity,
 	publishSessionActivity,
 } from "renderer/stores/session-activity";
+import { publishSessionProgress } from "renderer/stores/session-progress";
 import { useV2NotificationStore } from "renderer/stores/v2-notifications";
 import type {
 	ClaudeStreamEvent,
@@ -32,6 +33,7 @@ import {
 	type SessionTimeline,
 	settled,
 } from "shared/claude-session/timeline";
+import { claudeProgress } from "shared/session-progress";
 import {
 	EFFORT_LABELS,
 	type EffortLevel,
@@ -155,6 +157,7 @@ function update(
 	// change funnels through here, so this one call covers streaming, results,
 	// fatal notices and restarts alike; `publishSessionActivity` drops the ones
 	// that changed nothing, so a token-by-token stream doesn't repaint the tabs.
+	publishSessionProgress(key, claudeProgress(snapshot.timeline));
 	publishSessionActivity(key, {
 		status: snapshot.timeline.permissions?.length
 			? "attention"
@@ -712,6 +715,7 @@ export function disposeSession(key: string): void {
 	// leaving either behind means a closed pane's dot is counted forever by the
 	// workspace and dock badges.
 	clearSessionActivity(key);
+	publishSessionProgress(key);
 	// The account pin is stored per pane id and outlives the window on purpose,
 	// so a closed pane has to drop it or `localStorage` keeps a row for every
 	// pane ever swapped — the same reason the draft is deleted above.

@@ -2,12 +2,16 @@ import { TooltipProvider } from "@superset/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
 import { MessageQueue } from "../../src/renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
 import { useMessageQueue } from "../../src/renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
 import { useQueuedMessageEdit } from "../../src/renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
+import { DashboardSidebarNav } from "../../src/renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarNav/DashboardSidebarNav";
 import { SidebarSessionsPanel } from "../../src/renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarPanels/SidebarSessionsPanel";
 import { DashboardSidebarProjectRow } from "../../src/renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarProjectSection/components/DashboardSidebarProjectRow/DashboardSidebarProjectRow";
+import { DashboardSidebarWorkspaceFilters } from "../../src/renderer/routes/_authenticated/_dashboard/components/DashboardSidebar/components/DashboardSidebarWorkspaceFilters/DashboardSidebarWorkspaceFilters";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
+import { ToolTabsFixture } from "./ToolTabsFixture";
 import "../../src/renderer/globals.css";
 import "../../src/renderer/components/SessionComposerControls/session-composer.css";
 import "./style.css";
@@ -19,11 +23,14 @@ for (const [key, value] of Object.entries(draculaTheme.ui))
 			value,
 		);
 document.documentElement.classList.add("dark");
+useSidebarPanelStore.getState().selectPanel("sessions");
 function Preview() {
 	const [provider, setProvider] = useState<"claude" | "codex">("codex");
 	const [message, setMessage] = useState("");
 	const [workspaceOpen, setWorkspaceOpen] = useState(true);
 	const [workspacePinned, setWorkspacePinned] = useState(false);
+	const [workspaceQuery, setWorkspaceQuery] = useState("");
+	const [workspaceActiveOnly, setWorkspaceActiveOnly] = useState(false);
 	const [opened, setOpened] = useState("");
 	const queue = useMessageQueue(provider);
 	const editor = useQueuedMessageEdit({
@@ -55,20 +62,31 @@ function Preview() {
 			</header>
 			<div className="check-grid">
 				<aside>
-					<SidebarSessionsPanel
-						onOpenSession={(session) =>
-							setOpened(`${session.title} · ${session.mode}`)
-						}
-						onResumeInTerminal={(session) => setOpened(session.command)}
-					/>
+					<DashboardSidebarNav workspaceCount={2} />
+					<div style={{ flex: 1, minHeight: 0 }}>
+						<SidebarSessionsPanel
+							onOpenSession={(session) =>
+								setOpened(`${session.title} · ${session.mode}`)
+							}
+							onResumeInTerminal={(session) => setOpened(session.command)}
+						/>
+					</div>
 				</aside>
 				<section className="check-conversation">
+					<ToolTabsFixture />
 					<h2>{opened || "GatedSpace Edits"}</h2>
 					<p>
 						Queued messages stay close to the composer. Edit a message, remove
 						it, or send it into the current turn.
 					</p>
 					<div className="check-project">
+						<DashboardSidebarWorkspaceFilters
+							query={workspaceQuery}
+							onQueryChange={setWorkspaceQuery}
+							projectCount={workspaceQuery ? 0 : 1}
+							activeOnly={workspaceActiveOnly}
+							onActiveOnlyChange={setWorkspaceActiveOnly}
+						/>
 						<div className="workspace-collection">
 							<button
 								type="button"

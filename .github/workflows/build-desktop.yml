@@ -130,6 +130,12 @@ jobs:
           TARGET_ARCH: ${{ matrix.arch }}
         run: bun run compile:app
 
+      - name: Bundle verified private Git runtime
+        working-directory: apps/desktop
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bun scripts/bundle-public-git.ts
+
       - name: Build Electron app
         working-directory: apps/desktop
         env:
@@ -188,6 +194,20 @@ jobs:
             exit 1
           }
           echo "OK: bundled $BINDING ($(du -h "$BINDING" | cut -f1))"
+
+      - name: Verify clean public startup and folder workflow
+        working-directory: apps/desktop
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bun scripts/verify-public-startup.ts
+
+      - name: Upload public startup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: public-startup-${{ matrix.arch }}
+          path: apps/desktop/release/public-smoke-*
+          if-no-files-found: ignore
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

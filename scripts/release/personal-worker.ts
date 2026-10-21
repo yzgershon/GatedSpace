@@ -29,6 +29,7 @@ import {
 	buildJobSchema,
 } from "../../apps/desktop/src/shared/build-status";
 import { BuildCheckpoints, hashFiles } from "./build-checkpoints";
+import { resolvePlaywrightRuntime } from "./playwright-runtime";
 
 const { values } = parseArgs({
 	options: {
@@ -248,6 +249,9 @@ try {
 	]
 		.flatMap((name) => [join(repo, name), join(desktop, name)])
 		.filter(existsSync);
+	// UI checks run under Node; optional Bun packages may have no top-level link.
+	// Resolve before compilation instead of depending on the launching shell.
+	environment.PLAYWRIGHT_MODULE = resolvePlaywrightRuntime(repo);
 	const compileInput = createHash("sha256")
 		.update(
 			JSON.stringify({

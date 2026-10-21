@@ -70,7 +70,9 @@ export function SessionOrganizer({
 	onChange,
 	onPin,
 	renderSession,
+	toolbar,
 }: {
+	toolbar?: ReactNode;
 	sessions: CollectionSession[];
 	organization: SessionOrganization;
 	disabled?: boolean;
@@ -188,15 +190,20 @@ export function SessionOrganizer({
 	};
 	return (
 		<div className="session-organizer" aria-busy={pending}>
-			{!archived && (
-				<div className="organizer-toolbar">
-					<span>YOUR LIBRARY</span>
-					<button type="button" disabled={busy} onClick={() => startCreate()}>
-						<FolderPlus size={14} />
-						New project
+			<div className="organizer-toolbar">
+				{toolbar}
+				{!archived && (
+					<button
+						type="button"
+						aria-label="New project"
+						title="New project"
+						disabled={busy}
+						onClick={() => startCreate()}
+					>
+						<FolderPlus size={17} />
 					</button>
-				</div>
-			)}
+				)}
+			</div>
 			{creating && (
 				<form
 					className="project-inline-form project-create"

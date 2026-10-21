@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, mock } from "bun:test";
 
+let localMode = false;
+mock.module("renderer/lib/local-mode", () => ({
+	isLocalMode: () => localMode,
+}));
+
 const hostUrl = "http://host-service";
 const repoPath = "/repos/octocat";
 const setupResult = {
@@ -34,7 +39,9 @@ const createMock = mock(async () => ({
 const finalizeSetupMock = mock(() => undefined);
 const requestGitInitMock = mock(async () => false);
 
+const realReact = await import("react");
 mock.module("react", () => ({
+	...realReact,
 	useCallback: <T extends (...args: never[]) => unknown>(callback: T) =>
 		callback,
 }));
@@ -78,6 +85,7 @@ const { useFolderFirstImport } = await import("./useFolderFirstImport");
 
 describe("useFolderFirstImport", () => {
 	beforeEach(() => {
+		localMode = false;
 		for (const fn of [
 			selectDirectoryMock,
 			findByPathMock,
@@ -156,5 +164,22 @@ describe("useFolderFirstImport", () => {
 		expect(createMock).not.toHaveBeenCalled();
 		expect(finalizeSetupMock).not.toHaveBeenCalled();
 		expect(onError).not.toHaveBeenCalled();
+	});
+});
+
+it("public folder open prepares history without the technical confirmation", async () => {
+	localMode = true;
+	requestGitInitMock.mockClear();
+	createMock.mockClear();
+	findByPathMock.mockResolvedValue({
+		candidates: [],
+		cloudErrors: [],
+		needsGitInit: true,
+	});
+	await useFolderFirstImport().start();
+	expect(requestGitInitMock).not.toHaveBeenCalled();
+	expect(createMock).toHaveBeenCalledWith({
+		name: "octocat",
+		mode: { kind: "importLocal", repoPath, initIfNeeded: true },
 	});
 });

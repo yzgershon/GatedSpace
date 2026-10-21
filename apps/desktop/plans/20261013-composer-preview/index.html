@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GatedSpace · Composer & activity preview</title>
+    <link rel="stylesheet" href="./controls.css">
+    <link rel="stylesheet" href="./style.css">
+  </head>
+  <body>
+    <header class="preview-controls">
+      <div class="preview-heading"><strong>Composer & activity</strong><span>Interactive concept · simulated session</span></div>
+      <div class="test-controls">
+        <div class="segmented" aria-label="Preview view"><button id="composer-view" aria-pressed="true">Composer</button><button id="expanded-view" aria-pressed="false">Expanded preview</button></div>
+        <label class="select-control"><span class="sr-only">Agent</span><select id="provider"><option>Codex</option><option>Claude</option></select></label>
+        <label class="select-control"><span class="sr-only">Session state</span><select id="state"><option value="working">Working</option><option value="question">Needs your reply</option><option value="complete">Complete</option><option value="error">Needs attention</option><option value="idle">Idle</option></select></label>
+      </div>
+    </header>
+    <main id="shell" class="shell" data-provider="Codex" data-state="working">
+      <div class="session-header"><span class="agent-mark" data-icon="spark"></span><strong>GS Edits</strong><span class="header-context">Composer refinements</span><button class="icon-button" id="expand" aria-label="Expand preview" title="Expand preview" data-icon="expand"></button></div>
+      <section id="conversation" class="conversation" aria-label="Session conversation">
+        <div class="user-message">Keep the composer simple, and let me see what the agent is doing while the preview is expanded.</div>
+        <div class="assistant-message"><p>I’ll keep the controls together at the bottom right and use a compact activity pill when you expand the preview.</p><p class="muted">Your session stays within reach, even when the preview fills the pane.</p></div>
+        <div class="task-row"><span data-icon="file"></span><span id="inline-activity">Checking the composer layout</span><span class="task-spacer"></span><button class="text-button" id="run-demo">Play activity demo <span data-icon="play"></span></button></div>
+        <div id="chat-log" aria-live="polite"></div>
+      </section>
+      <section id="browser-preview" class="browser-preview" aria-label="Expanded browser preview" hidden>
+        <div class="browser-address"><span data-icon="globe"></span><span>Local preview</span><span class="address-divider"></span><span class="muted">Responsive · panel size</span><button id="preview-theme" class="icon-button" aria-label="Toggle sample preview theme" title="This page remains interactive" data-icon="sun"></button></div>
+        <div class="sample-page">
+          <nav class="sample-nav"><strong><span class="sample-logo"></span>Studio</strong><span>Overview <span class="sample-dot">•</span> Projects</span><button id="sample-action">New project <span data-icon="plus"></span></button></nav>
+          <div class="sample-content"><span class="sample-eyebrow">YOUR WORKSPACE</span><h1>A little more<br>room to focus.</h1><p>Everything you’re working on, together in one place.</p><div class="sample-grid"><button class="sample-card"><span class="sample-number">01</span><span class="sample-art art-one"></span><strong>Interface explorations</strong><small>Updated just now <span data-icon="arrow"></span></small></button><button class="sample-card"><span class="sample-number">02</span><span class="sample-art art-two"></span><strong>Product notes</strong><small>Ready to review <span data-icon="arrow"></span></small></button></div><p id="sample-feedback" aria-live="polite">Sample page for testing the activity overlay.</p></div>
+        </div>
+      </section>
+      <section id="question-card" class="question-card" aria-label="Question card" hidden>
+        <div class="question-caption"><span data-icon="message"></span><span>Your input</span><button id="dismiss-question" class="icon-button" aria-label="Dismiss demo question" data-icon="close"></button></div>
+        <h2>Have you taken any caliper measurements yet?</h2><p>If so, paste them here and I’ll use them in the Blender model.</p>
+        <button class="question-choice" data-answer="Not yet—use the existing geometry for now"><span class="choice-number">1</span><span>Not yet, use the existing geometry for now</span><span data-icon="arrow"></span></button>
+        <button class="question-choice" data-answer="Yes—I have measurements to provide"><span class="choice-number">2</span><span>Yes, I have measurements to provide</span><span data-icon="arrow"></span></button>
+        <button id="other-answer" class="question-choice"><span data-icon="edit"></span><span>Other</span><span class="muted">Write your own</span></button>
+        <form id="custom-answer" hidden><label for="answer-text" class="sr-only">Your answer</label><textarea id="answer-text" placeholder="Your answer…" rows="2"></textarea><button type="submit" class="small-send" aria-label="Send custom answer" data-icon="arrow"></button></form>
+        <div class="question-footer">Nothing is sent until you choose a reply.</div>
+      </section>
+      <div id="composer-dock" class="composer-dock">
+        <div class="change-pill"><span data-icon="file"></span><strong>2 files changed</strong><span class="change-divider"></span><span class="additions">+41</span><span class="deletions">−0</span></div>
+        <div id="queued-message" class="queued-message" hidden><span data-icon="queue"></span><span id="queued-text"></span><button id="edit-queue" class="icon-button" aria-label="Edit queued message" data-icon="edit"></button><button id="delete-queue" class="icon-button" aria-label="Delete queued message" data-icon="trash"></button></div>
+        <form id="composer" class="composer">
+          <label class="sr-only" for="draft">Message</label><textarea id="draft" placeholder="Ask anything, or describe a change…" rows="2" spellcheck="true"></textarea>
+          <div id="attachment-label" class="attachment-label" hidden></div>
+          <div class="composer-toolbar"><div class="left-tools"><button id="attach" type="button" class="icon-button" aria-label="Attach files" title="Attach files" data-icon="plus"></button><input type="file" id="files" multiple hidden><button type="button" id="computer" class="icon-button" aria-label="Computer control options" title="Computer control options" data-icon="monitor"></button><span id="voice-status" hidden>Flow demo · listening</span></div>
+            <div class="right-tools"><span id="settings-controls" class="settings-preview-controls"></span><button type="button" id="mic" class="icon-button" aria-label="Start Flow dictation demo" aria-pressed="false" title="Start Flow dictation" data-icon="mic"></button><button type="submit" id="send" class="send-button" aria-label="Stop demo task" title="Stop task" data-icon="stop"></button></div>
+          </div>
+        </form>
+        <p class="preview-hint">Try the brain, permissions and mic. Expand the preview to keep the session in view.</p>
+      </div>
+      <div id="activity-dock" class="activity-dock" hidden>
+        <div id="activity-details" class="activity-details" hidden><div class="activity-details-heading"><strong>Latest activity</strong><span>GS Edits</span></div><ol id="activity-events"><li><span data-icon="check"></span>Read the current composer</li><li><span data-icon="check"></span>Matched the control spacing</li><li><span class="live-dot"></span>Checking the composer layout</li></ol><p>Progress updates and tool activity from this session.</p></div>
+        <div class="activity-pill"><button id="activity-toggle" class="activity-main" aria-expanded="false" aria-label="Show session activity"><span class="activity-agent" data-icon="spark"></span><span class="activity-copy"><span class="activity-title"><strong id="activity-state">Working</strong><span>GS Edits</span></span><span id="activity-detail">Checking the composer layout</span></span><span class="activity-chevron" data-icon="chevron"></span></button><span class="pill-divider"></span><button id="return-session" class="icon-button" aria-label="Return to session" title="Return to session" data-icon="return"></button><button id="pill-stop" class="icon-button" aria-label="Stop demo task" title="Stop task" data-icon="stop"></button></div>
+      </div>
+      <div id="toast" class="toast" role="status" hidden></div>
+    </main>
+    <script src="./preview.js"></script>
+    <script src="./controls.js"></script>
+  </body>
+</html>

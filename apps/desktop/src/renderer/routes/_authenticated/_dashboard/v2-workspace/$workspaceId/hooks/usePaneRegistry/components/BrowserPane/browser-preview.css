@@ -1,45 +1,59 @@
 .gs-browser-preview-controls {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	min-height: 36px;
+	justify-content: center;
+	gap: 2px;
+	width: 30px;
+	height: 28px;
 	flex-shrink: 0;
-	padding: 4px 10px;
-	border-bottom: 1px solid var(--border);
+	border-radius: 7px;
+	color: var(--muted-foreground);
+	cursor: pointer;
+}
+.gs-browser-preview-controls:hover,
+.gs-browser-preview-controls[data-state="open"] {
+	background: var(--muted);
+	color: var(--foreground);
+}
+.gs-browser-preview-controls[data-mode="galaxy-s24"] {
+	color: var(--primary);
+}
+.gs-browser-preview-controls:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
+}
+.gs-browser-preview-menu {
+	width: 264px;
+	max-width: calc(100vw - 16px);
+	padding: 6px;
+	border-radius: 12px;
+}
+.gs-browser-preview-option {
+	gap: 10px;
+	min-height: 48px;
+	border-radius: 7px;
+}
+.gs-browser-preview-option > span:last-child {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+.gs-browser-preview-option small {
 	color: var(--muted-foreground);
 	font-size: 11px;
 	font-variant-numeric: tabular-nums;
 }
-.gs-browser-preview-controls select {
-	min-width: 0;
-	max-width: 130px;
-	background: var(--background);
-	color: var(--foreground);
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 3px 4px;
+.gs-browser-preview-option[data-state="checked"] {
+	background: color-mix(in srgb, var(--primary) 10%, transparent);
 }
-.gs-browser-preview-controls button {
-	display: grid;
-	place-items: center;
-	width: 26px;
-	height: 26px;
-	border-radius: 6px;
-}
-.gs-browser-preview-controls button:hover {
-	background: var(--muted);
-	color: var(--foreground);
-}
-.gs-browser-preview-controls :focus-visible {
-	outline: 2px solid var(--ring);
-	outline-offset: 2px;
-}
-.gs-browser-preview-dimensions {
-	white-space: nowrap;
-}
-.gs-browser-preview-fit {
-	margin-left: auto;
-	white-space: nowrap;
+.gs-browser-preview-summary {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 7px 8px 4px;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	font-variant-numeric: tabular-nums;
 }
 .gs-browser-stage {
 	position: relative;

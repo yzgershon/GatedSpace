@@ -1,5 +1,7 @@
 import type { CodexSessionState } from "../../src/shared/codex-session/types";
 import type { ComputerUseState } from "../../src/shared/computer-use";
+import type { QueuedPrompt } from "../../src/shared/session-queue";
+import { electronTrpcClient as collectionClient } from "../collections-preview/mock";
 
 let computer: ComputerUseState = { phase: "off" };
 const computerListeners = new Set<(s: ComputerUseState) => void>();
@@ -107,6 +109,29 @@ function state(key: string): CodexSessionState {
 	return s;
 }
 export const electronTrpcClient = {
+	sessionQueue: {
+		...collectionClient.sessionQueue,
+		enqueue: {
+			mutate: async (input: { key: string; prompt: QueuedPrompt }) => {
+				const key = input.key.replace(/^codex:/, "");
+				if (
+					input.prompt.provider === "codex" &&
+					state(key).status !== "working"
+				) {
+					return electronTrpcClient.codexSession.send.mutate({
+						key,
+						...input.prompt,
+					});
+				}
+				return collectionClient.sessionQueue.enqueue.mutate(input);
+			},
+		},
+	},
+	flowDictation: {
+		start: { mutate: async () => ({ recording: true }) },
+		stop: { mutate: async () => ({ text: "Flow dictated text" }) },
+		cancel: { mutate: async () => ({ cancelled: true }) },
+	},
 	claudeSession: {
 		answerPermission: {
 			mutate: async () =>
@@ -129,6 +154,9 @@ export const electronTrpcClient = {
 				publishComputer({ phase: "ready", owner: `codex:${key}` }),
 		},
 		computerStop: { mutate: async () => publishComputer({ phase: "off" }) },
+		computerDismissRequest: {
+			mutate: async () => publishComputer({ phase: "off" }),
+		},
 		skills: {
 			query: async () => [
 				{

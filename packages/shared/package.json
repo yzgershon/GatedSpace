@@ -171,6 +171,10 @@
 		"./continuity/device-sign-in": {
 			"types": "./src/continuity/device-sign-in.ts",
 			"default": "./src/continuity/device-sign-in.ts"
+		},
+		"./initial-git-commit": {
+			"types": "./src/initial-git-commit.ts",
+			"default": "./src/initial-git-commit.ts"
 		}
 	},
 	"scripts": {

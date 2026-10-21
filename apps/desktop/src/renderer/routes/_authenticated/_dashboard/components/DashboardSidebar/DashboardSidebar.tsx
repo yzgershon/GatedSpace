@@ -1,4 +1,4 @@
-import { Pin, Search, X } from "lucide-react";
+import { Pin } from "lucide-react";
 import { useNativeSessionStates } from "renderer/hooks/useNativeSessionStates/useNativeSessionStates";
 import "./components/DashboardSidebarPanels/collections.css";
 import {
@@ -51,6 +51,7 @@ import { DashboardSidebarRail } from "./components/DashboardSidebarRail";
 import { DashboardSidebarSectionRenameProvider } from "./components/DashboardSidebarSectionRenameContext";
 import { DashboardSidebarSkeleton } from "./components/DashboardSidebarSkeleton";
 import { DashboardSidebarUsageBar } from "./components/DashboardSidebarUsageBar";
+import { DashboardSidebarWorkspaceFilters } from "./components/DashboardSidebarWorkspaceFilters/DashboardSidebarWorkspaceFilters";
 import { V2SetupScriptCard } from "./components/V2SetupScriptCard";
 import { useDashboardSidebarData } from "./hooks/useDashboardSidebarData";
 import { useDashboardSidebarShortcuts } from "./hooks/useDashboardSidebarShortcuts";
@@ -557,37 +558,13 @@ export function DashboardSidebar({
 									) : (
 										<>
 											<div className="workspace-collections flex min-h-0 flex-1 flex-col">
-												<label className="collection-search">
-													<Search size={14} />
-													<input
-														aria-label="Search workspaces"
-														placeholder="Find a project or branch"
-														value={workspaceQuery}
-														onChange={(e) => setWorkspaceQuery(e.target.value)}
-													/>
-													{workspaceQuery && (
-														<button
-															type="button"
-															aria-label="Clear workspace search"
-															onClick={() => setWorkspaceQuery("")}
-														>
-															<X size={14} />
-														</button>
-													)}
-												</label>
-												<div className="collection-filters">
-													<span>{visibleGroups.length} projects</span>
-													<button
-														type="button"
-														aria-pressed={activeOnly}
-														onClick={() => setActiveOnly(!activeOnly)}
-													>
-														Active only{" "}
-														<span aria-hidden="true">
-															{activeOnly ? "?" : "?"}
-														</span>
-													</button>
-												</div>
+												<DashboardSidebarWorkspaceFilters
+													query={workspaceQuery}
+													onQueryChange={setWorkspaceQuery}
+													projectCount={visibleGroups.length}
+													activeOnly={activeOnly}
+													onActiveOnlyChange={setActiveOnly}
+												/>
 												<div className="collection-list">
 													{visibleGroups.length === 0 &&
 														orderedGroups.length > 0 && (

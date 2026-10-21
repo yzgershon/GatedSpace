@@ -12,7 +12,7 @@ import {
 	DropdownMenuItem,
 } from "@superset/ui/dropdown-menu";
 import { TooltipProvider } from "@superset/ui/tooltip";
-import { Folder, Globe, PanelBottom, X } from "lucide-react";
+import { Folder, Globe, PanelBottom } from "lucide-react";
 import { type CSSProperties, useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
@@ -35,7 +35,10 @@ import {
 } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/tool-panel-store";
 import { useDefaultContextMenuActions } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/useDefaultContextMenuActions";
 import { useDefaultPaneActions } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/useDefaultPaneActions";
-import { BrowserPane } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/BrowserPane";
+import {
+	BrowserPane,
+	BrowserPaneToolbar,
+} from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/BrowserPane";
 import { browserRuntimeRegistry } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/browserRuntimeRegistry";
 import { SessionAccountChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionAccountChip";
 import { SessionFolderChip } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/SessionFolderChip";
@@ -183,6 +186,7 @@ const registry: PaneRegistry<PaneViewerData> = {
 		getTitle: () => "New tab",
 		getTabIcon: () => <Globe />,
 		renderPane: (ctx) => <BrowserPane ctx={ctx} />,
+		renderToolbar: (ctx) => <BrowserPaneToolbar ctx={ctx} />,
 		onAfterClose: (pane) => {
 			disposed.push(pane.id);
 			browserRuntimeRegistry.destroy(pane.id);
@@ -198,15 +202,6 @@ const registry: PaneRegistry<PaneViewerData> = {
 		renderPane: (ctx) => <LauncherFixture ctx={ctx} />,
 	},
 };
-const closeActions = [
-	{
-		key: "close",
-		label: "Close pane",
-		tooltip: "Close pane",
-		icon: <X />,
-		onClick: (ctx: RendererContext<PaneViewerData>) => ctx.actions.close(),
-	},
-];
 const chrome = {
 	"--gs-pane-inset": "9px",
 	"--gs-pane-radius": "14px",
@@ -275,7 +270,6 @@ function Fixture() {
 						mainMinimum={mainPaneMinimum(layout, 9)}
 						mainExpanded={mainExpanded}
 						registry={registry}
-						paneActions={closeActions}
 						contextMenuActions={menus}
 						onResizing={(value) =>
 							browserRuntimeRegistry.setShellInteractionPassthrough(value)

@@ -208,3 +208,5 @@ export const electronTrpcClient = {
 		}),
 	},
 };
+
+export const UsageDialog = () => null;

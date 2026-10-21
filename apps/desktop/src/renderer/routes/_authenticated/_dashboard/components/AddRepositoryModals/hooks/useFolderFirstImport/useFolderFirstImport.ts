@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { getHostServiceClientByUrl } from "renderer/lib/host-service-client";
 import { getHostServiceUnavailableMessage } from "renderer/lib/host-service-unavailable";
+import { isLocalMode } from "renderer/lib/local-mode";
 import { getBaseName } from "renderer/lib/pathBasename";
 import {
 	type ProjectSetupResult,
@@ -43,7 +44,9 @@ export function useFolderFirstImport(options?: {
 		let repoPath: string;
 		try {
 			const picked = await selectDirectory.mutateAsync({
-				title: "Import existing folder",
+				title: isLocalMode()
+					? "Open project folder (sets up local history)"
+					: "Import existing folder",
 			});
 			if (picked.canceled || !picked.path) return null;
 			repoPath = picked.path;
@@ -60,7 +63,7 @@ export function useFolderFirstImport(options?: {
 			// Folder isn't a git repo yet: offer to `git init` it, then import
 			// via the create path with init enabled.
 			if ("needsGitInit" in response && response.needsGitInit) {
-				const confirmed = await requestGitInit(repoPath);
+				const confirmed = isLocalMode() || (await requestGitInit(repoPath));
 				if (!confirmed) return null;
 				const result = await client.project.create.mutate({
 					name: getBaseName(repoPath),
@@ -108,7 +111,7 @@ export function useFolderFirstImport(options?: {
 			} else {
 				result = await client.project.create.mutate({
 					name: getBaseName(repoPath),
-					mode: { kind: "importLocal", repoPath },
+					mode: { kind: "importLocal", repoPath, initIfNeeded: isLocalMode() },
 				});
 			}
 			finalizeSetup(activeHostUrl, result);

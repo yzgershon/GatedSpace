@@ -110,6 +110,7 @@ export function createToolPanels({
 	const state = createStore<ToolPanelState>(() => initial);
 	const pending = new Map<ToolPlacement, Promise<void>>();
 	let creating = false;
+	let preservingFocus = false;
 	function focus(side: "main" | ToolPlacement) {
 		if (state.getState().focus !== side) state.setState({ focus: side });
 		if (side !== "main") {
@@ -117,13 +118,18 @@ export function createToolPanels({
 			if (id) store.getState().setActiveTab(id);
 		}
 	}
-	function select(tabId: string) {
+	function select(tabId: string, options?: { focus?: boolean }) {
 		const side = state.getState().placement[tabId] ?? "right";
-		state.setState((s) => ({
-			[side]: { ...s[side], open: true, activeTabId: tabId },
-			focus: side,
-		}));
-		store.getState().setActiveTab(tabId);
+		preservingFocus = options?.focus === false;
+		try {
+			state.setState((s) => ({
+				[side]: { ...s[side], open: true, activeTabId: tabId },
+				focus: preservingFocus ? s.focus : side,
+			}));
+			store.getState().setActiveTab(tabId);
+		} finally {
+			preservingFocus = false;
+		}
 	}
 	function add(
 		side: ToolPlacement,
@@ -204,7 +210,28 @@ export function createToolPanels({
 	}
 	function move(tabId: string, side: ToolPlacement, beforeId?: string) {
 		if (!store.getState().getTab(tabId)) return;
-		state.setState((s) => ({ placement: { ...s.placement, [tabId]: side } }));
+		state.setState((s) => {
+			const source = s.placement[tabId];
+			return {
+				placement: { ...s.placement, [tabId]: side },
+				// Moving the last tab in global order need not reorder anything, so
+				// the store subscription may not reconcile the old panel for us.
+				...(source && source !== side && s[source].activeTabId === tabId
+					? {
+							[source]: {
+								...s[source],
+								activeTabId:
+									store
+										.getState()
+										.tabs.find(
+											(tab) =>
+												tab.id !== tabId && s.placement[tab.id] === source,
+										)?.id ?? null,
+							},
+						}
+					: {}),
+			};
+		});
 		const tabs = store.getState().tabs;
 		store.getState().reorderTab({
 			tabId,
@@ -277,6 +304,7 @@ export function createToolPanels({
 				!next.tabs.some((tab) => tab.panes[previousActivePane]);
 			if (
 				!creating &&
+				!preservingFocus &&
 				!closedActivePane &&
 				next.activeTabId &&
 				next.activeTabId !== prev.activeTabId

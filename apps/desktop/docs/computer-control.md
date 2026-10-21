@@ -15,6 +15,8 @@ Anonymous telemetry and the UIA background watchdog are disabled.
 The foreground Windows desktop must remain unlocked. Only one pane can hold the
 grant. Stop using the visible square button or **Ctrl+Alt+Shift+Esc**. Closing the
 owning pane, disconnecting Codex, locking, sleeping, or quitting revokes access.
+Control also stops when the turn ends or after 60 seconds without a desktop action.
+The idle timer pauses during an action; stopping still aborts it immediately.
 Enable is a desktop UI action; it is not an agent-callable tool. Existing task
 authorization still applies to sending messages, purchases, deletion and security
 changes. Enabling desktop control is not blanket authorization for those actions.
@@ -26,8 +28,18 @@ brighten the border and animate the status text. Reduced-motion preferences are
 respected. Stopping destroys the overlay windows, and an unexpected overlay close
 or renderer crash revokes desktop control.
 
+`computer_request` displays an Enable button and the agent's reason beside the
+composer. Requesting does not start Windows-MCP or grant access. Clicking Enable
+connects the controller and delivers a user reply to the originating session so
+it can continue; Dismiss leaves control off. Requests expire after five minutes.
+`computer_release` stops this pane's controller as soon as its desktop work is done.
+
 `computer_tools` returns the currently supported schemas. `computer_call` proxies
-one permitted UI tool at a time and preserves MCP screenshot image blocks. The
+one permitted UI tool at a time and preserves MCP screenshot image blocks.
+By default, an action returns a fresh `Screenshot` in the same round trip. This
+skips accessibility-tree extraction; use `Snapshot` only when element details
+are needed. Set `observeAfter: false` only when a separate observation is needed
+or the tool already supplies it. Actions are never batched or automatically retried. The
 allowlist excludes Windows-MCP's shell, filesystem, registry, clipboard and
 process-management tools. Prefer the embedded browser bridge for web work.
 

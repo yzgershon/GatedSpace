@@ -38,6 +38,7 @@ export interface CodexQuestion {
 	secret?: boolean;
 }
 export interface CodexApproval {
+	acceptDisabled?: boolean;
 	id: string;
 	method: string;
 	title: string;

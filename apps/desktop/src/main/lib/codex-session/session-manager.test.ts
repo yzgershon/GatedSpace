@@ -3,6 +3,7 @@ import {
 	normalizeCodexItem,
 	record,
 } from "../../../shared/codex-session/types";
+import { agentBrowserService } from "../browser/agent-browser-service";
 import { sessionEvents } from "../notifications/session-events";
 import { SessionNameStore } from "../session-names/store";
 import { CodexSessionManager } from "./session-manager";
@@ -155,6 +156,94 @@ test("a pane rename refreshes live Codex state and the CLI's saved title", async
 });
 afterEach(() => {
 	for (const manager of managers.splice(0)) manager.dispose();
+});
+
+const caliperQuestion = {
+	id: "caliper-question",
+	type: "agentMessage",
+	text: "Have you taken any caliper measurements yet? If so, paste them here and I’ll use them in the Blender model.\n\n- Not yet—use the existing geometry for now\n- Yes—I have measurements to provide",
+};
+
+test.each([
+	false,
+	true,
+])("imported desktop questions recover on reconnect without resurrecting dismissed replies (dismissed=%s)", async (dismissed) => {
+	const { manager, transport } = fixture();
+	transport.historyEntries = [
+		{ turnId: "imported-turn", item: caliperQuestion },
+	];
+	const input = {
+		key: "desktop-import",
+		cwd: "/workspace",
+		resumeSessionId: "original-id",
+	};
+	const first = await manager.start(input);
+	expect(first.approvals).toHaveLength(1);
+	if (dismissed) await manager.answer(input.key, first.approvals[0].id, false);
+	transport.emit("disconnected", new Error("Connection dropped"));
+	const restored = await manager.start(input);
+	expect(restored.approvals).toHaveLength(dismissed ? 0 : 1);
+	const resume = transport.calls.find((c) => c.method === "thread/resume");
+	expect(resume?.params.developerInstructions).toContain(
+		'gatedspace_browser.request_user_input_async MCP tool with session="codex:desktop-import"',
+	);
+	expect(resume?.params.config).toMatchObject({
+		"features.default_mode_request_user_input": true,
+	});
+	expect(
+		transport.calls.filter((c) => /turn\/(start|steer)/.test(c.method)),
+	).toHaveLength(0);
+	if (!dismissed) {
+		await manager.answer(input.key, restored.approvals[0].id, true, {
+			"0": "Not yet—use the existing geometry for now",
+		});
+		expect(transport.calls.at(-1)).toMatchObject({
+			method: "turn/start",
+			params: {
+				input: [
+					{
+						text: "Question: Have you taken any caliper measurements yet? If so, paste them here and I’ll use them in the Blender model.\nAnswer: Not yet—use the existing geometry for now",
+					},
+				],
+			},
+		});
+	}
+});
+
+test.each([
+	"completed",
+	"interrupted",
+	"failed",
+])("streamed question recovery waits for a successful turn completion (%s)", async (status) => {
+	const { manager, transport } = fixture();
+	const state = await manager.start({ key: "streamed", cwd: "/workspace" });
+	transport.emit("notification", {
+		method: "turn/started",
+		params: { threadId: state.threadId, turn: { id: "stream-turn" } },
+	});
+	transport.emit("notification", {
+		method: "item/agentMessage/delta",
+		params: {
+			threadId: state.threadId,
+			turnId: "stream-turn",
+			itemId: caliperQuestion.id,
+			delta: caliperQuestion.text,
+		},
+	});
+	expect(state.approvals).toHaveLength(0);
+	const event = {
+		method: "turn/completed",
+		params: {
+			threadId: state.threadId,
+			turn: { id: "stream-turn", status, items: [] },
+		},
+	};
+	transport.emit("notification", event);
+	transport.emit("notification", event);
+	expect(state.approvals).toHaveLength(status === "completed" ? 1 : 0);
+	expect(
+		transport.calls.filter((c) => /turn\/(start|steer)/.test(c.method)),
+	).toHaveLength(0);
 });
 
 describe("native Codex session lifecycle", () => {
@@ -636,6 +725,24 @@ describe("native Codex session lifecycle", () => {
 		).rejects.toThrow();
 		expect(manager.get("failure")?.items).toHaveLength(0);
 		expect(manager.get("failure")?.status).toBe("idle");
+	});
+	test.each([
+		["full-access", "never", "dangerFullAccess"],
+		["default", "on-request", "workspaceWrite"],
+		["read-only", "on-request", "readOnly"],
+	] as const)("%s permissions reach the app-server", async (permission, approvalPolicy, sandboxType) => {
+		const { manager, transport } = fixture();
+		await manager.start({ key: "permissions", cwd: "/workspace" });
+		await manager.send({
+			key: "permissions",
+			text: "Check permissions",
+			model: "gpt-6-astra",
+			effort: "xhigh",
+			permission,
+		});
+		const turn = transport.calls.find((c) => c.method === "turn/start")?.params;
+		expect(turn?.approvalPolicy).toBe(approvalPolicy);
+		expect(turn?.sandboxPolicy).toMatchObject({ type: sandboxType });
 	});
 	test("projects and real plan/fast settings reach the app-server", async () => {
 		const { manager, transport } = fixture();
@@ -1152,4 +1259,152 @@ test("Codex completion ignores tools, old turns, duplicate events and interrupti
 	} finally {
 		sessionEvents.off("notice", listener);
 	}
+});
+
+test("reattaching an existing pane binds its browser workspace without restarting", async () => {
+	const { manager, transport } = fixture();
+	await manager.start({ key: "late-workspace", cwd: "/workspace" });
+	expect(agentBrowserService.has("codex:late-workspace")).toBe(false);
+	await manager.start({
+		key: "late-workspace",
+		cwd: "/workspace",
+		workspaceId: "workspace-a",
+	});
+	expect(agentBrowserService.has("codex:late-workspace")).toBe(true);
+	expect(
+		transport.calls.filter((c) => c.method === "thread/start"),
+	).toHaveLength(1);
+});
+test.each([
+	true,
+	false,
+])("MCP tool approvals wait for the user and use the MCP response shape (allow=%s)", async (allow) => {
+	const { manager, transport } = fixture();
+	await manager.start({
+		key: "mcp",
+		cwd: "/workspace",
+		workspaceId: "workspace-a",
+	});
+	transport.emit("request", {
+		id: "mcp-tool-approval",
+		method: "mcpServer/elicitation/request",
+		params: {
+			threadId: "original-id",
+			turnId: "turn-id",
+			serverName: "gatedspace_browser",
+			mode: "form",
+			message: "Allow opening the sidebar preview?",
+			requestedSchema: { type: "object", properties: {} },
+			_meta: { codex_approval_kind: "mcp_tool_call" },
+		},
+	});
+	expect(transport.replies).toHaveLength(0);
+	const card = manager.get("mcp")?.approvals[0];
+	expect(card?.detail).toContain("sidebar preview");
+	expect(card?.acceptDisabled).toBe(false);
+	if (!card) throw new Error("Missing MCP approval");
+	await manager.answer("mcp", card.id, allow);
+	expect(transport.replies).toEqual([
+		{
+			id: "mcp-tool-approval",
+			result: {
+				action: allow ? "accept" : "decline",
+				content: allow ? {} : null,
+				_meta: null,
+			},
+		},
+	]);
+	expect(manager.get("mcp")?.approvals).toHaveLength(0);
+});
+test("closing a pane cancels an unanswered MCP request without persisting a denial", async () => {
+	const { manager, transport } = fixture();
+	await manager.start({ key: "mcp-close", cwd: "/workspace" });
+	transport.emit("request", {
+		id: 7,
+		method: "mcpServer/elicitation/request",
+		params: {
+			threadId: "original-id",
+			serverName: "example",
+			mode: "form",
+			message: "Allow?",
+			requestedSchema: { type: "object", properties: {} },
+		},
+	});
+	await manager.close("mcp-close");
+	expect(transport.replies).toEqual([
+		{ id: 7, result: { action: "cancel", content: null, _meta: null } },
+	]);
+});
+test("MCP forms preserve typed input and unsupported verification cannot be accepted", async () => {
+	const { manager, transport } = fixture();
+	await manager.start({ key: "mcp-form", cwd: "/workspace" });
+	transport.emit("request", {
+		id: 8,
+		method: "mcpServer/elicitation/request",
+		params: {
+			threadId: "original-id",
+			serverName: "example",
+			mode: "form",
+			message: "Confirm details",
+			requestedSchema: {
+				type: "object",
+				properties: {
+					confirmed: { type: "boolean" },
+					count: { type: "integer" },
+				},
+			},
+		},
+	});
+	const card = manager.get("mcp-form")?.approvals[0];
+	if (!card) throw new Error("Missing MCP form");
+	expect(() =>
+		manager.answer("mcp-form", card.id, true, {
+			confirmed: "Yes",
+			count: "abc",
+		}),
+	).toThrow();
+	expect(transport.replies).toHaveLength(0);
+	await manager.answer("mcp-form", card.id, true, {
+		confirmed: "No",
+		count: "2",
+	});
+	expect(transport.replies[0].result).toEqual({
+		action: "accept",
+		content: { confirmed: false, count: 2 },
+		_meta: null,
+	});
+	transport.emit("request", {
+		id: 9,
+		method: "mcpServer/elicitation/request",
+		params: {
+			threadId: "original-id",
+			serverName: "example",
+			mode: "unknown",
+			message: "Verify identity",
+		},
+	});
+	const other = manager.get("mcp-form")?.approvals[0];
+	if (!other) throw new Error("Missing verification card");
+	expect(other.acceptDisabled).toBe(true);
+	expect(() => manager.answer("mcp-form", other.id, true)).toThrow();
+	await manager.answer("mcp-form", other.id, false);
+	expect(transport.replies[1].result).toEqual({
+		action: "decline",
+		content: null,
+		_meta: null,
+	});
+});
+test("clicking a requested computer Enable notifies the agent without changing permissions", async () => {
+	const { manager, transport } = fixture();
+	await manager.start({ key: "computer-request", cwd: "/workspace" });
+	await manager.notifyComputerEnabled("computer-request");
+	const call = transport.calls.find((c) => c.method === "turn/start");
+	expect(call?.params.input).toMatchObject([
+		{
+			type: "text",
+			text: expect.stringContaining("I clicked Enable computer control"),
+		},
+	]);
+	expect(call?.params).not.toHaveProperty("approvalPolicy");
+	expect(call?.params).not.toHaveProperty("sandboxPolicy");
 });

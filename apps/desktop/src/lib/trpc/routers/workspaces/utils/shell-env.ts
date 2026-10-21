@@ -3,6 +3,7 @@ import {
 	execFile,
 } from "node:child_process";
 import { promisify } from "node:util";
+import { augmentWindowsRuntimePath } from "main/lib/windows-runtime-path";
 import { shellEnv } from "shell-env";
 import { resolveBinaryFromPath } from "./resolve-binary";
 
@@ -69,6 +70,7 @@ export async function getShellEnvironment(
 
 	try {
 		const env = await getShellEnvWithTimeout();
+		augmentWindowsRuntimePath(env);
 		cachedEnv = env as Record<string, string>;
 		cacheTime = now;
 		isFallbackCache = false;
@@ -86,6 +88,7 @@ export async function getShellEnvironment(
 			}
 		}
 		augmentPathForMacOS(fallback);
+		augmentWindowsRuntimePath(fallback);
 		cachedEnv = fallback;
 		cacheTime = now;
 		isFallbackCache = true;
@@ -195,6 +198,7 @@ export async function getProcessEnvWithShellPath(
 
 	// A truncated login-shell PATH still needs homebrew/common dirs so git resolves; matches terminal behavior.
 	augmentPathForMacOS(env);
+	augmentWindowsRuntimePath(env);
 
 	return env;
 }

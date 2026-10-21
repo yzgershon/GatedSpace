@@ -175,20 +175,21 @@ export class ClaudeSessionTransport extends EventEmitter {
 		const args = this.buildArgs();
 		if (this.options.workspaceId && this.options.sessionKey) {
 			const key = `claude:${this.options.sessionKey}`;
-			agentBrowserService.register(
+			const releaseBrowser = agentBrowserService.register(
 				key,
 				this.options.workspaceId,
 				this.options.cwd,
 			);
-			this.browserDispose = () => agentBrowserService.unregister(key);
+			this.browserDispose = releaseBrowser;
 			const bridge = await agentBrowserMcp.connect(key);
 			if (this.disposed) {
 				bridge.dispose();
+				releaseBrowser();
 				return;
 			}
 			this.browserDispose = () => {
 				bridge.dispose();
-				agentBrowserService.unregister(key);
+				releaseBrowser();
 			};
 			const directory = join(tmpdir(), `gatedspace-browser-${process.pid}`);
 			ensureSecureDir(directory);

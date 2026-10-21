@@ -42,37 +42,51 @@
 	display: flex;
 	cursor: pointer;
 }
-.collection-filters {
+/* Search and one compact action row leave room for the conversations. */
+.session-collections > .collection-search {
+	margin: 6px 12px 4px;
+	flex-shrink: 0;
+}
+.collection-agent-filters {
 	display: flex;
+	gap: 4px;
+	margin-right: auto;
+}
+.session-collections .organizer-toolbar {
+	justify-content: flex-end;
+	gap: 4px;
+	padding: 2px 0 6px;
+}
+.session-collections .organizer-toolbar button {
+	display: flex;
+	width: 30px;
+	height: 30px;
+	padding: 5px;
+	justify-content: center;
 	align-items: center;
-	justify-content: space-between;
-	gap: 8px;
-	margin: 9px 12px 12px;
+	border-radius: 8px;
 	color: var(--muted-foreground);
-	font-size: 11px;
-}
-.collection-filters select {
-	max-width: 100%;
 	background: transparent;
-	padding: 4px 3px;
-	color: inherit;
-	cursor: pointer;
-	border-radius: 5px;
-}
-.collection-filters select option {
-	background: var(--background);
-	color: var(--foreground);
-}
-.collection-filters label,
-.collection-filters button {
-	display: flex;
-	align-items: center;
-	gap: 5px;
-	min-width: 0;
 	cursor: pointer;
 }
-.collection-filters button[aria-pressed="true"] {
+.collection-agent-filters img {
+	width: 20px;
+	height: 20px;
+	object-fit: contain;
+}
+.session-collections .organizer-toolbar button:hover {
+	background: var(--muted);
 	color: var(--foreground);
+}
+.session-collections .organizer-toolbar button[aria-pressed="true"] {
+	background: color-mix(in srgb, var(--primary) 12%, transparent);
+	box-shadow: inset 0 0 0 1px
+		color-mix(in srgb, var(--primary) 40%, transparent);
+	color: var(--primary);
+}
+.session-collections .organizer-toolbar button:focus-visible {
+	outline: 2px solid var(--ring);
+	outline-offset: 1px;
 }
 .collection-list {
 	flex: 1;

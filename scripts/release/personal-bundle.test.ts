@@ -93,6 +93,40 @@ test("unused dropdown CSS is allowed, executable dropdown UI is rejected", () =>
 	);
 });
 
+test("sidebar input markers require the current isolation and cursor implementation", () => {
+	const directory = resolve(
+		import.meta.dir,
+		"../../apps/desktop/src/main/lib/browser",
+	);
+	const source = [
+		"agent-browser-input.ts",
+		"agent-browser-focus.ts",
+		"agent-browser-cursor.ts",
+	]
+		.map((name) => readFileSync(resolve(directory, name), "utf8"))
+		.join("\n");
+	expect(REQUIRED_MARKERS).not.toContain("Input.dispatchKeyEvent");
+	for (const marker of [
+		"Emulation.setFocusEmulationEnabled",
+		"__gsBrowserFocusGuard",
+		"__gsBrowserTabBoundary",
+		"data-gatedspace-agent-cursor",
+	]) {
+		expect(REQUIRED_MARKERS).toContain(marker);
+		expect(source).toContain(marker);
+		const bundle = fixture();
+		const main = bundle.get("dist/main/index.js");
+		if (!main) throw new Error("Missing main fixture");
+		bundle.set(
+			"dist/main/index.js",
+			Buffer.from(main.toString().replace(marker, "")),
+		);
+		expect(() => validatePersonalBundle(bundle)).toThrow(
+			`Bundle contract missing: ${marker}`,
+		);
+	}
+});
+
 test("preflight catches a bad marker before packaging, with the exact missing name", () => {
 	const bundle = fixture();
 	const name = "dist/main/index.js";

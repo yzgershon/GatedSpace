@@ -30,9 +30,9 @@ void (async () => {
 			"Emergency stop not registered",
 		);
 		check(
-			computerUseService
-				.discover("codex:native-test")
-				.some((t) => t.name === "Snapshot"),
+			(await computerUseService.discover("codex:native-test")).some(
+				(t) => t.name === "Snapshot",
+			),
 			"Missing Snapshot",
 		);
 		powerMonitor.emit("lock-screen");

@@ -20,7 +20,9 @@
  * The token is only applied when it is present and unexpired — an expired token
  * must still fall through to sign-in.
  */
+
 import { setAuthToken } from "renderer/lib/auth-client";
+import { isLocalMode } from "renderer/lib/local-mode";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 
 /**
@@ -55,6 +57,10 @@ export function getStoredTokenOutcome(): StoredTokenOutcome {
 const STORED_TOKEN_TIMEOUT_MS = 1_500;
 
 export async function applyStoredAuthTokenBeforeRender(): Promise<StoredTokenOutcome> {
+	if (isLocalMode()) {
+		outcome = "no-token";
+		return outcome;
+	}
 	try {
 		const timeout = new Promise<"timeout">((resolve) => {
 			setTimeout(() => resolve("timeout"), STORED_TOKEN_TIMEOUT_MS);

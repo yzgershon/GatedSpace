@@ -1,7 +1,7 @@
 import { type PaneRegistry, Workspace } from "@superset/panes";
 import { workspaceTrpc } from "@superset/workspace-client";
 import { createFileRoute } from "@tanstack/react-router";
-import { Folder, GitCompareArrows, X } from "lucide-react";
+import { Folder, GitCompareArrows } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuickOpenStore } from "renderer/commandPalette/ui/QuickOpen/quickOpenStore";
@@ -744,20 +744,6 @@ function V2WorkspaceContent() {
 			openCommentPane,
 		],
 	);
-	const toolPaneActions = useMemo(
-		() => [
-			{
-				key: "close",
-				label: "Close tool pane",
-				tooltip: "Close tool pane",
-				icon: <X className="size-4" />,
-				onClick: (
-					ctx: import("@superset/panes").RendererContext<PaneViewerData>,
-				) => ctx.actions.close(),
-			},
-		],
-		[],
-	);
 
 	return (
 		<FileDocumentStoreProvider>
@@ -772,8 +758,8 @@ function V2WorkspaceContent() {
 						tools={tools}
 						mainMinimum={mainPaneMinimum(mainLayout, paneGap / 2)}
 						mainExpanded={mainExpanded}
+						mainStore={store}
 						registry={toolRegistry}
-						paneActions={toolPaneActions}
 						contextMenuActions={defaultContextMenuActions}
 						onResizing={onSidebarResizeDragging}
 					>

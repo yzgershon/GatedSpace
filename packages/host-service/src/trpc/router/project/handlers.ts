@@ -216,7 +216,7 @@ async function resolveOrInitLocalRepo(
 ): Promise<ResolvedRepo> {
 	if (!initIfNeeded) return resolveLocalRepo(repoPath);
 	const root = await tryRevParseGitRoot(repoPath);
-	return root ? resolveLocalRepo(root) : initLocalRepoInPlace(repoPath);
+	return initLocalRepoInPlace(root ?? repoPath);
 }
 
 export async function createFromImportLocal(

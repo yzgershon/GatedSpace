@@ -1,0 +1,285 @@
+.gs-live-code-toggle {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 7px;
+	color: var(--muted-foreground);
+}
+.gs-live-code-toggle:hover,
+.gs-live-code-toggle[aria-pressed="true"] {
+	background: var(--accent);
+	color: var(--primary);
+}
+.gs-live-code-layout {
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	height: 100%;
+	width: 100%;
+	overflow: hidden;
+	container: live-code / inline-size;
+}
+.gs-live-code-layout[data-enabled="true"] {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 10px clamp(
+			280px,
+			var(--live-chat-width),
+			48%
+		);
+}
+.gs-live-code-main,
+.gs-live-code-conversation {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
+}
+.gs-live-code-divider {
+	display: grid;
+	place-items: center;
+	cursor: col-resize;
+	touch-action: none;
+	background: var(--background);
+}
+.gs-live-code-divider span {
+	width: 3px;
+	height: 40px;
+	border-radius: 3px;
+	background: var(--border);
+}
+.gs-live-code-divider:hover span {
+	background: var(--muted-foreground);
+}
+.gs-live-editor {
+	height: 100%;
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	background: var(--background);
+	border-right: 1px solid var(--border);
+}
+.gs-live-editor > header {
+	height: 43px;
+	flex-shrink: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 12px;
+	border-bottom: 1px solid var(--border);
+}
+.gs-live-editor > header strong {
+	font-size: 12px;
+	font-weight: 500;
+}
+.gs-live-editor > header button {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 4px 7px;
+	font-size: 10px;
+	color: var(--muted-foreground);
+	white-space: nowrap;
+}
+.gs-live-editor > header button[aria-pressed="true"] {
+	color: #99dec5;
+	background: #8be9bb08;
+	border-color: #4b6e64;
+}
+.gs-live-file-tabs {
+	display: flex;
+	min-height: 38px;
+	flex-shrink: 0;
+	overflow-x: auto;
+	scrollbar-width: thin;
+	border-bottom: 1px solid var(--border);
+	background: var(--card);
+}
+.gs-live-file-tabs button {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex-shrink: 0;
+	min-width: 100px;
+	max-width: 210px;
+	padding: 8px 12px;
+	font-size: 11px;
+	color: var(--muted-foreground);
+	border-right: 1px solid var(--border);
+	border-top: 2px solid transparent;
+}
+.gs-live-file-tabs button[aria-current="page"] {
+	color: var(--foreground);
+	background: var(--background);
+	border-top-color: var(--primary);
+}
+.gs-live-file-tabs button span,
+.gs-live-breadcrumb > span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.gs-live-file-tabs button svg {
+	color: #8be9fd;
+	flex-shrink: 0;
+}
+.gs-live-breadcrumb {
+	display: flex;
+	min-height: 36px;
+	flex-shrink: 0;
+	align-items: center;
+	gap: 8px;
+	padding: 3px 10px;
+	border-bottom: 1px solid var(--border);
+	font-size: 10px;
+	color: var(--muted-foreground);
+}
+.gs-live-breadcrumb > span {
+	flex: 1;
+	min-width: 0;
+}
+.gs-live-breadcrumb > div {
+	display: flex;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	padding: 2px;
+	flex-shrink: 0;
+}
+.gs-live-breadcrumb button {
+	padding: 2px 6px;
+	border-radius: 4px;
+}
+.gs-live-breadcrumb button[aria-pressed="true"] {
+	background: var(--accent);
+	color: var(--foreground);
+}
+.gs-live-code-views {
+	display: flex;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+.gs-live-code-views > section {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	overflow: hidden;
+}
+.gs-live-code-views > section + section {
+	border-left: 1px solid var(--border);
+}
+.gs-live-code-views > section > span {
+	font-size: 10px;
+	padding: 6px 12px;
+	color: var(--muted-foreground);
+	background: var(--card);
+}
+.gs-live-code-surface {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+.gs-live-code-surface .live-code-added {
+	background: #50fa7b06;
+	box-shadow: inset 2px 0 #75c794;
+}
+.gs-live-code-surface .live-code-writing-line {
+	background: #ffffff04;
+}
+.gs-live-code-surface .live-code-caret {
+	display: inline-block;
+	position: relative;
+	width: 0;
+	height: 1.2em;
+	vertical-align: -0.2em;
+	pointer-events: none;
+}
+.gs-live-code-surface .live-code-caret::after {
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0;
+	width: 2px;
+	height: 100%;
+	background: var(--primary);
+	border-radius: 1px;
+}
+.gs-live-empty {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 28px;
+	color: var(--muted-foreground);
+	font-size: 12px;
+	text-align: center;
+}
+.gs-live-empty strong {
+	font-weight: 500;
+	color: var(--foreground);
+}
+.gs-live-editor > footer {
+	height: 26px;
+	flex-shrink: 0;
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 5px 10px;
+	border-top: 1px solid var(--border);
+	font-size: 9px;
+	color: var(--muted-foreground);
+	white-space: nowrap;
+}
+.gs-live-code-layout button:focus-visible,
+.gs-live-code-divider:focus-visible,
+.gs-live-code-toggle:focus-visible {
+	outline: 2px solid var(--primary);
+	outline-offset: -2px;
+}
+@container live-code (max-width: 619px) {
+	.gs-live-code-main {
+		min-width: 0;
+	}
+	.gs-live-editor > header {
+		padding-inline: 7px;
+	}
+	.gs-live-editor > header button {
+		font-size: 9px;
+	}
+	.gs-live-editor > header button svg {
+		display: none;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.gs-live-code-layout * {
+		scroll-behavior: auto;
+	}
+}
+
+@container live-code (max-width: 619px) {
+	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-main {
+		grid-column: 1 / -1;
+		grid-row: 1;
+		min-height: 220px;
+		max-height: 42vh;
+	}
+	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-conversation {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		min-height: 260px;
+	}
+	.gs-live-code-divider {
+		display: none;
+	}
+}

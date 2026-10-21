@@ -7,12 +7,12 @@ export function computerOverlayBounds(
 	display: Pick<Display, "workArea">,
 ): Rectangle {
 	const area = display.workArea;
-	const width = Math.min(472, Math.max(240, area.width - 24));
+	const width = Math.min(400, Math.max(240, area.width - 24));
 	return {
 		x: Math.round(area.x + (area.width - width) / 2),
 		y: area.y + 12,
 		width,
-		height: 64,
+		height: 52,
 	};
 }
 
@@ -24,6 +24,7 @@ export class ComputerUseOverlay {
 	private closing = false;
 	private disposed = false;
 	private failed = false;
+	private retired = new WeakSet<BrowserWindow>();
 	constructor(
 		private readonly attach: (window: BrowserWindow) => void,
 		private readonly service: ComputerUseService = computerUseService,
@@ -87,8 +88,13 @@ export class ComputerUseOverlay {
 		this.attach(window);
 		window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 		window.webContents.on("will-navigate", (event) => event.preventDefault());
-		window.webContents.on("render-process-gone", this.fail);
-		window.on("closed", this.fail);
+		// Closing a loading overlay rejects loadFile asynchronously. That stale
+		// rejection must not revoke a later grant or an intentionally paused one.
+		const failed = () => {
+			if (!this.retired.has(window)) this.fail();
+		};
+		window.webContents.on("render-process-gone", failed);
+		window.on("closed", failed);
 		window.once("ready-to-show", () => {
 			if (!window.isDestroyed() && this.active()) {
 				window.showInactive();
@@ -101,7 +107,7 @@ export class ComputerUseOverlay {
 					`${this.paths.devUrl}/computer-overlay.html?kind=${kind}`,
 				)
 			: window.loadFile(this.paths.html, { query: { kind } });
-		void loaded.catch(this.fail);
+		void loaded.catch(failed);
 		return window;
 	}
 	private update = (_state: ComputerUseState) => {
@@ -126,6 +132,7 @@ export class ComputerUseOverlay {
 		this.closing = true;
 		for (const [id, window] of this.borders) {
 			if (!displays.some((display) => display.id === id)) {
+				this.retired.add(window);
 				if (!window.isDestroyed()) window.destroy();
 				this.borders.delete(id);
 			}
@@ -158,8 +165,11 @@ export class ComputerUseOverlay {
 	}
 	private closeWindows() {
 		this.closing = true;
-		for (const window of [...this.borders.values(), this.toolbar])
-			if (window && !window.isDestroyed()) window.destroy();
+		for (const window of [...this.borders.values(), this.toolbar]) {
+			if (!window) continue;
+			this.retired.add(window);
+			if (!window.isDestroyed()) window.destroy();
+		}
 		this.borders.clear();
 		this.toolbar = undefined;
 		this.toolbarDisplay = undefined;

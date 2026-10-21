@@ -171,6 +171,30 @@ test("an explicit existing tab ID navigates that tab to a different preview URL"
 	expect(tools.store.getState().tabs).toHaveLength(1);
 });
 
+test("background browser calls preserve the user's selected tab and focus", async () => {
+	const { tools, run, operations } = setup();
+	const first = tabId(
+		await run("browser_open", { url: "https://example.com/one" }),
+	);
+	const second = tabId(
+		await run("browser_open", { url: "https://example.com/two" }),
+	);
+	expect(tools.store.getState().getActivePane()?.pane.id).toBe(second);
+	tools.focus("main");
+	await run("browser_screenshot", { tabId: first });
+	expect(tools.store.getState().getActivePane()?.pane.id).toBe(second);
+	await run("browser_click", { tabId: first, ref: "e12345678-0" });
+	expect(tools.store.getState().getActivePane()?.pane.id).toBe(second);
+	expect(tools.state.getState().focus).toBe("main");
+	expect(operations).toEqual([
+		"browser_open",
+		"browser_open",
+		"browser_screenshot",
+		"browser_click",
+	]);
+	expect(tools.store.getState().tabs).toHaveLength(2);
+});
+
 test("session registration restores owned tabs and permits selecting them after restart", async () => {
 	const { tools, service, run } = setup();
 	const first = tabId(
@@ -261,4 +285,19 @@ test("closing a session cancels pending requests and ignores late acknowledgemen
 	expect((await result).isError).toBe(true);
 	service.acknowledge(request.requestId, "workspace-a", { tabs: [] });
 	expect(service.requests("workspace-a")).toHaveLength(0);
+});
+
+test("late cleanup from a replaced Claude connection preserves the new connection and tabs", async () => {
+	const { service, run } = setup();
+	const old = service.register("codex:a", "workspace-a");
+	const first = tabId(
+		await run("browser_open", { url: "https://example.com" }),
+	);
+	const replacement = service.register("codex:a", "workspace-a");
+	old();
+	expect(service.has("codex:a")).toBe(true);
+	expect(tabId(await run("browser_select", { tabId: first }))).toBe(first);
+	replacement();
+	expect(service.has("codex:a")).toBe(false);
+	expect((await run("browser_tabs")).isError).toBe(true);
 });

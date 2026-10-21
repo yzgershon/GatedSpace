@@ -192,6 +192,8 @@ app
 			["Files", "Side session", "Browser", "Terminal", "Changes"],
 		);
 		await capture("right-tool-chooser");
+		await click('[aria-label="right panel options"]');
+		await wait();
 		await click('[aria-label="Hide right panel"]');
 		await wait();
 		await click('[aria-label="Toggle right panel"]');
@@ -338,6 +340,7 @@ app
 		await key("ArrowRight", "ArrowRight", 39);
 		await key(" ", "Space", 32);
 		await wait();
+		console.log("Keyboard drag events", await run("toolsTest.dragEvents"));
 		assert.deepEqual(
 			await run(
 				'toolsTest.tools.store.getState().tabs.filter(t=>toolsTest.tools.state.getState().placement[t.id]==="right").map(t=>t.id)',
@@ -345,6 +348,8 @@ app
 			rightTabs,
 		);
 		pass("Keyboard dragging reorders the real tool tabs");
+		await click('[aria-label="right panel options"]');
+		await wait();
 		await click('[aria-label="Move tab to bottom panel"]');
 		await wait();
 		assert.equal(
@@ -356,6 +361,8 @@ app
 		assert.deepEqual(await run("toolsTest.disposed"), []);
 		pass("Moving a tab between panels preserves the browser/session lifecycle");
 		await run(`toolsTest.tools.select(${JSON.stringify(before[1])})`);
+		await wait();
+		await click('[aria-label="bottom panel options"]');
 		await wait();
 		await click('[aria-label="Hide bottom panel"]');
 		await wait(70);

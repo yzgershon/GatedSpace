@@ -49,7 +49,12 @@ export class CodexSessionManager extends EventEmitter {
 	private claims = new Map<string, string>();
 	private requests = new Map<
 		string,
-		{ id: string | number; key: string; method: string }
+		{
+			id: string | number;
+			key: string;
+			method: string;
+			elicitation?: Record<string, unknown>;
+		}
 	>();
 	private timers = new Map<string, ReturnType<typeof setTimeout>>();
 	private answering = new Set<string>();
@@ -97,6 +102,11 @@ export class CodexSessionManager extends EventEmitter {
 		transport.on("disconnected", (error: Error) => {
 			void computerUseService.stop();
 			for (const state of this.sessions.values()) {
+				// Pending inferred replies must be recoverable after reconnect. Keep
+				// answered/dismissed tokens suppressed; only release visible cards.
+				for (const approval of state.approvals)
+					if (approval.sourceItemId)
+						this.recoveredQuestions.delete(approval.id);
 				state.status = "error";
 				state.error = error.message;
 				state.approvals = [];
@@ -256,6 +266,14 @@ export class CodexSessionManager extends EventEmitter {
 		await this.transport.request("thread/archive", { threadId });
 	}
 	start(input: StartCodexSession): Promise<CodexSessionState> {
+		// A pane can mount before its workspace resolves. Rebind even when the
+		// underlying agent is already running; do not restart the conversation.
+		if (input.workspaceId)
+			agentBrowserService.register(
+				`codex:${input.key}`,
+				input.workspaceId,
+				input.cwd,
+			);
 		const pending = this.starts.get(input.key);
 		if (pending) return pending;
 		const existing = this.get(input.key);
@@ -781,6 +799,15 @@ export class CodexSessionManager extends EventEmitter {
 				text(turn.status) || "completed",
 			);
 			this.finishActivity(state, text(turn.status) || "completed");
+			// Some clients finish a streamed message without an item/completed
+			// payload. Recover only the newest conversation message for this turn.
+			if (!turn.error && (!turn.status || turn.status === "completed")) {
+				const lastMessage = state.items
+					.filter((item) => item.kind !== "activity")
+					.at(-1);
+				if (lastMessage?.turnId === (text(turn.id) || turnId))
+					this.recoverQuestion(state, lastMessage);
+			}
 			state.status = "idle";
 			state.turnId = null;
 			state.error =
@@ -920,6 +947,9 @@ export class CodexSessionManager extends EventEmitter {
 		else turns.push(next);
 	}
 	private finishActivity(state: CodexSessionState, status: string) {
+		if (status === "completed")
+			void computerUseService.pause(`codex:${state.key}`);
+		else computerUseService.release(`codex:${state.key}`);
 		if (state.turnId)
 			this.rememberTurn(state, { id: state.turnId, status }, status);
 		for (const item of state.items) {
@@ -1013,6 +1043,7 @@ export class CodexSessionManager extends EventEmitter {
 			"item/commandExecution/requestApproval",
 			"item/fileChange/requestApproval",
 			"item/tool/requestUserInput",
+			"mcpServer/elicitation/request",
 		];
 		if (!state || !supported.includes(method)) {
 			this.transport.reject(
@@ -1023,6 +1054,50 @@ export class CodexSessionManager extends EventEmitter {
 		}
 		const token = `${typeof id}:${id}`;
 		if (this.requests.has(token)) return;
+		if (method === "mcpServer/elicitation/request") {
+			// MCP approvals are not command approvals: the response uses action,
+			// content and _meta. Rejecting this unknown RPC silently denied every
+			// sidebar tool before it could reach GatedSpace's browser service.
+			this.requests.set(token, { id, key: state.key, method, elicitation: p });
+			const form = record(p.requestedSchema);
+			const fields = Object.entries(record(form.properties));
+			const supportedForm =
+				["form", "openai/form", "openaiForm"].includes(text(p.mode)) &&
+				fields.every(([, value]) =>
+					["string", "boolean", "number", "integer"].includes(
+						text(record(value).type),
+					),
+				);
+			state.approvals.push({
+				id: token,
+				method,
+				turnId: text(p.turnId),
+				isBlocking: true,
+				title: `${text(p.serverName) || "Tool"} needs approval`,
+				detail:
+					text(p.message) +
+					(!supportedForm
+						? "\nThis request needs a form or verification flow GatedSpace cannot display yet. Decline it and use the service directly."
+						: ""),
+				acceptDisabled: !supportedForm,
+				questions: supportedForm
+					? fields.map(([name, value]) => {
+							const field = record(value);
+							return {
+								id: name,
+								question: text(field.title) || name,
+								secret: field.format === "password",
+								options:
+									field.type === "boolean"
+										? ["Yes", "No"]
+										: list(field.enum).map(text),
+							};
+						})
+					: [],
+			});
+			this.publish(state);
+			return;
+		}
 		this.clearRecoveredQuestions(state);
 		this.requests.set(token, { id, key: state.key, method });
 		state.approvals.push({
@@ -1078,19 +1153,31 @@ export class CodexSessionManager extends EventEmitter {
 		this.publish(state);
 		return id;
 	}
+	async notifyComputerEnabled(key: string) {
+		const state = this.require(key);
+		await this.deliverQuestionAnswer(
+			state,
+			`computer:${randomUUID()}`,
+			{},
+			"I clicked Enable computer control for this pane. Continue the desktop task I requested. This does not approve unrelated or consequential actions.",
+		);
+	}
 	private async deliverQuestionAnswer(
 		state: CodexSessionState,
 		id: string,
 		answers: Record<string, string>,
+		messageOverride?: string,
 	) {
 		if (this.answering.has(id))
 			throw new Error("This answer is already being sent.");
 		this.answering.add(id);
 		const card = state.approvals.find((a) => a.id === id);
 		const message =
+			messageOverride ??
 			card?.questions
 				.map((q) => `Question: ${q.question}\nAnswer: ${answers[q.id]}`)
-				.join("\n\n") ?? "";
+				.join("\n\n") ??
+			"";
 		const input = [{ type: "text", text: message, text_elements: [] }];
 		try {
 			await this.turnStarts.get(state.key);
@@ -1159,6 +1246,45 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("This request is no longer pending.");
 		const state = this.require(key);
 		const approval = state.approvals.find((a) => a.id === id);
+		if (pending.elicitation) {
+			if (allow && approval?.acceptDisabled)
+				throw new Error("This verification flow is not supported here.");
+			const content: Record<string, unknown> = {};
+			if (allow) {
+				for (const [name, value] of Object.entries(
+					record(record(pending.elicitation.requestedSchema).properties),
+				)) {
+					const field = record(value);
+					const answer = answers?.[name];
+					if (!answer?.trim())
+						throw new Error("Answer each field before sending.");
+					if (list(field.enum).length && !list(field.enum).includes(answer))
+						throw new Error("Choose one of the provided values.");
+					if (field.type === "boolean") {
+						if (!["Yes", "No"].includes(answer))
+							throw new Error("Choose Yes or No.");
+						content[name] = answer === "Yes";
+					} else if (field.type === "number" || field.type === "integer") {
+						const number = Number(answer);
+						if (
+							!Number.isFinite(number) ||
+							(field.type === "integer" && !Number.isInteger(number))
+						)
+							throw new Error("Enter a valid number.");
+						content[name] = number;
+					} else content[name] = answer;
+				}
+			}
+			this.transport.respond(pending.id, {
+				action: allow ? "accept" : "decline",
+				content: allow ? content : null,
+				_meta: null,
+			});
+			this.requests.delete(id);
+			state.approvals = state.approvals.filter((a) => a.id !== id);
+			this.publish(state);
+			return;
+		}
 		if (approval?.sourceItemId && !allow) {
 			this.requests.delete(id);
 			state.approvals = state.approvals.filter((a) => a.id !== id);
@@ -1193,6 +1319,7 @@ export class CodexSessionManager extends EventEmitter {
 		this.publish(state);
 	}
 	async close(key: string) {
+		computerUseService.dismissRequest(`codex:${key}`);
 		computerUseService.release(`codex:${key}`);
 		await this.starts.get(key)?.catch(() => {});
 		sessionEvents.close(key);
@@ -1201,7 +1328,13 @@ export class CodexSessionManager extends EventEmitter {
 		if (state.status === "working") await this.interrupt(key).catch(() => {});
 		for (const [id, request] of this.requests)
 			if (request.key === key) {
-				if (request.method !== "gatedspace/requestUserInput")
+				if (request.elicitation)
+					this.transport.respond(request.id, {
+						action: "cancel",
+						content: null,
+						_meta: null,
+					});
+				else if (request.method !== "gatedspace/requestUserInput")
 					this.transport.reject(request.id, "Pane closed");
 				this.requests.delete(id);
 			}
