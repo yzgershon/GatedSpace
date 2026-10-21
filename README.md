@@ -90,50 +90,32 @@ GatedSpace is a Windows port of [Superset](https://github.com/superset-sh/supers
 
 ## Requirements
 
-GatedSpace drives real command-line tools, so a few things need to be installed
-first. On a brand-new PC, none of these are present yet.
-
-**Required**
-
 - **Windows 10/11**, x64 or ARM64.
-- **[Git](https://git-scm.com/download/win)**. Every workspace is a git worktree,
-  so Git must be installed and on your PATH. Install it with
-  `winget install --id Git.Git -e`, then set your identity once so commits work:
-  ```powershell
-  git config --global user.name "Your Name"
-  git config --global user.email "you@example.com"
-  ```
-- **At least one coding agent, installed and signed in.** For
-  [Claude Code](https://docs.anthropic.com/en/docs/claude-code):
-  ```powershell
-  winget install OpenJS.NodeJS.LTS
-  npm install -g @anthropic-ai/claude-code
-  ```
-  (If PowerShell says running scripts is disabled, run
-  `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`, or use `npm.cmd`.)
-  You sign in the first time you launch the agent: GatedSpace opens its browser
-  login for you. [Codex](https://github.com/openai/codex) works the same way.
+- **Your own ChatGPT or Claude account** and an internet connection for agent work.
 
-**Optional**
-
-- **[GitHub CLI](https://cli.github.com/)** (`gh`), only for GitHub features like
-  opening PRs or cloning private repos. Install with
-  `winget install --id GitHub.cli -e`, then run `gh auth login`. Without it,
-  GatedSpace may keep prompting to connect GitHub.
-
-After installing any of these, **restart GatedSpace** so it picks them up on your
-PATH.
+Public installers include Git for local project history. You do not need to
+install Git, configure a Git identity, or create a GatedSpace account to open a
+project. Existing Git installations and repositories are supported.
 
 ### First run
 
-GatedSpace runs **fully local with no account**. Just open it, add or clone a
-project, and start a workspace. Connect Claude Code or Codex from the model
-picker when you start a session.
+1. Open GatedSpace. The **This PC** profile opens the setup screen directly.
+2. Choose **Set up** beside Codex or Claude Code. GatedSpace runs the official
+   installer, then opens the provider's sign-in in your browser. If the tool is
+   already installed, choose **Sign in**. Use **Recheck** to refresh installation
+   status; an installed tool still needs your own provider sign-in.
+3. Choose **Open folder** or **New project**. GatedSpace prepares local history
+   when needed without uploading or committing your existing files.
 
-The **"Sign in with an account"** option is optional. It switches the app into
-cloud mode for syncing across devices and using teams, and it needs a Superset
-cloud account. You don't need it for solo use on one machine, and you can switch
-back anytime with **"Use GatedSpace without an account"** on the sign-in screen.
+Return to setup through **This PC** > **Set up agents**. Public releases do not
+require a GatedSpace cloud sign-in or an Electron account callback. Native agent
+installs are detected without restarting GatedSpace.
+
+**Optional:** [GitHub CLI](https://cli.github.com/) (`gh`) is used for GitHub
+features such as pull requests and private repositories. Install it with
+`winget install --id GitHub.cli -e`, then run `gh auth login`. It is not required
+to open a local folder or use an agent. Terminal-based workflows that specifically
+need Bash can use [Git for Windows](https://git-scm.com/download/win).
 
 ## Build from source
 
