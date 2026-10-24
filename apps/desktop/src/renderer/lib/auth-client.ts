@@ -117,6 +117,29 @@ function buildLocalSession(): SessionData {
 
 function buildLocalAuthClient(): typeof realAuthClient {
 	const localSession = buildLocalSession();
+	const localOrganization: NonNullable<
+		ReturnType<typeof realAuthClient.useActiveOrganization>["data"]
+	> = {
+		id: LOCAL_ORG_ID,
+		name: "Local",
+		slug: "local",
+		createdAt: localSession.user.createdAt,
+		members: [
+			{
+				id: "local-owner",
+				organizationId: LOCAL_ORG_ID,
+				userId: LOCAL_USER_ID,
+				role: "owner",
+				createdAt: localSession.user.createdAt,
+				user: {
+					id: localSession.user.id,
+					name: localSession.user.name,
+					email: localSession.user.email,
+				},
+			},
+		],
+		invitations: [],
+	};
 
 	const useLocalSession = () => ({
 		data: localSession,
@@ -127,21 +150,38 @@ function buildLocalAuthClient(): typeof realAuthClient {
 	});
 
 	const resolvedNull = async () => ({ data: null, error: null });
+	const useLocalOrganization = () => ({
+		data: localOrganization,
+		isPending: false,
+		isRefetching: false,
+		error: null,
+		refetch: async () => {},
+	});
 
-	// Only the members the app actually calls in local mode are overridden;
-	// everything else falls through to the real client (and would fail against
-	// the network, which is why cloud-only surfaces are hidden in local mode).
-	return {
-		...realAuthClient,
+	// Better Auth resolves hooks and endpoints through a Proxy. Spreading it
+	// drops that API (including useActiveOrganization), crashing local Settings.
+	// Override local identity without enumerating or replacing the client API.
+	const overrides = {
 		useSession: useLocalSession as unknown as typeof realAuthClient.useSession,
+		useActiveOrganization:
+			useLocalOrganization as typeof realAuthClient.useActiveOrganization,
 		token: resolvedNull as unknown as typeof realAuthClient.token,
 		signOut: resolvedNull as unknown as typeof realAuthClient.signOut,
-		organization: {
-			...realAuthClient.organization,
-			setActive:
-				resolvedNull as unknown as typeof realAuthClient.organization.setActive,
+		organization: new Proxy(realAuthClient.organization, {
+			get(target, property, receiver) {
+				return property === "setActive"
+					? resolvedNull
+					: Reflect.get(target, property, receiver);
+			},
+		}),
+	} satisfies Partial<typeof realAuthClient>;
+	return new Proxy(realAuthClient, {
+		get(target, property, receiver) {
+			return Object.hasOwn(overrides, property)
+				? Reflect.get(overrides, property)
+				: Reflect.get(target, property, receiver);
 		},
-	};
+	});
 }
 
 export const authClient = isLocalMode()

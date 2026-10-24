@@ -1,8 +1,9 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
+import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import "./sidebar-nav.css";
 import type { IconType } from "react-icons";
-import { LuGauge, LuHistory, LuLayers } from "react-icons/lu";
+import { LuGauge, LuHistory, LuLayers, LuNetwork } from "react-icons/lu";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
 import {
 	type SidebarPanel,
@@ -56,8 +57,16 @@ export function DashboardSidebarNav({
 	const panelOpen = useSidebarPanelStore((state) => state.panelOpen);
 	const selectPanel = useSidebarPanelStore((state) => state.selectPanel);
 	const [usageOpen, setUsageOpen] = useState(false);
+	const navigate = useNavigate();
+	const match = useMatchRoute();
+	const ensembleOpen = Boolean(match({ to: "/ensemble", fuzzy: true }));
 
-	const isPanel = (panel: SidebarPanel) => panelOpen && activePanel === panel;
+	const isPanel = (panel: SidebarPanel) =>
+		!ensembleOpen && panelOpen && activePanel === panel;
+	const openPanel = (panel: SidebarPanel) => {
+		selectPanel(panel);
+		if (ensembleOpen) void navigate({ to: "/v2-workspace" });
+	};
 
 	return (
 		<fieldset className="dashboard-sidebar-nav" aria-label="Sidebar navigation">
@@ -66,13 +75,19 @@ export function DashboardSidebarNav({
 				label={workspaceCount ? `Workspaces · ${workspaceCount}` : "Workspaces"}
 				Icon={LuLayers}
 				selected={!usageOpen && isPanel("workspaces")}
-				onClick={() => selectPanel("workspaces")}
+				onClick={() => openPanel("workspaces")}
 			/>
 			<NavGlyph
 				label="Recent sessions"
 				Icon={LuHistory}
 				selected={!usageOpen && isPanel("sessions")}
-				onClick={() => selectPanel("sessions")}
+				onClick={() => openPanel("sessions")}
+			/>
+			<NavGlyph
+				label="Flock · collaborative teams"
+				Icon={LuNetwork}
+				selected={!usageOpen && ensembleOpen}
+				onClick={() => void navigate({ to: "/ensemble" })}
 			/>
 			{/*
 			 * Usage stays a DIALOG rather than becoming a panel, for the reason the

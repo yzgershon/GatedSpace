@@ -377,7 +377,7 @@ export function mobileSessionRouter() {
 							undefined,
 					}) ?? "Claude",
 				context: timeline.usage,
-				working: claude.isRunning(key) && timeline.status === "streaming",
+				working: claude.isRunning(key) && claude.isBusy(key),
 				questions: (timeline.permissions ?? []).map((p) => ({
 					id: p.id,
 					title: `Allow ${p.tool}?`,
@@ -413,7 +413,7 @@ export function mobileSessionRouter() {
 							text: body.text,
 							model: state.model,
 							effort: state.effort,
-							permission: defaultCodexPermission(),
+							permission: state.permission ?? defaultCodexPermission(),
 							images: body.images.map(
 								(i) => `data:${i.mediaType};base64,${i.data}`,
 							),
@@ -422,6 +422,10 @@ export function mobileSessionRouter() {
 						if (!claude.isRunning(key))
 							throw new Error(
 								"Resume this session from History before sending.",
+							);
+						if (claude.isBusy(key) || claudeTimeline(key).permissions?.length)
+							throw new Error(
+								"Claude is busy or needs input. Queue this message in Flock or wait for the turn to finish.",
 							);
 						claude.send(key, body.text, false, body.images);
 					}

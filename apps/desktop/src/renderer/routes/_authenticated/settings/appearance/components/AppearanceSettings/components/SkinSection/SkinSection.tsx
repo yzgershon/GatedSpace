@@ -85,6 +85,8 @@ export function SkinSection() {
 					const active = preferences.appearanceSkin === option.id;
 					return (
 						<button
+							aria-label={option.label}
+							aria-pressed={active}
 							className={cn(
 								"flex items-start gap-3 rounded-lg border p-3 text-left transition-colors",
 								active

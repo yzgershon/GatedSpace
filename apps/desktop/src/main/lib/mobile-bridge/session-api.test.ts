@@ -71,12 +71,14 @@ const fakeCodex = {
 mock.module("../codex-session/session-manager", () => ({
 	codexSessionManager: fakeCodex,
 }));
+let claudeBusy = false;
 mock.module("../claude-session/session-manager", () => ({
 	claudeSessionManager: {
 		listSessions: () => [
 			{ key: "claude-pane", sessionId: "claude-thread", running: true },
 		],
 		isRunning: () => true,
+		isBusy: () => claudeBusy,
 		getBufferedEvents: () => [
 			{ type: "local_user_message", id: "user", text: "Claude prompt" },
 		],
@@ -253,5 +255,39 @@ test("renames appear in both mobile lists and open conversations immediately", a
 			await fetch(`${origin}/${provider}/${key}`)
 		).json();
 		expect(conversation.title).toBe(`Named ${provider}`);
+	}
+});
+
+test("peer delivery cannot interrupt a busy Claude turn and live activity wins over replay", async () => {
+	const before = sent.length;
+	claudeBusy = true;
+	try {
+		const view = await (await fetch(`${origin}/claude/claude-pane`)).json();
+		expect(view.working).toBe(true);
+		const response = await post("/claude/claude-pane/send", {
+			requestId: crypto.randomUUID(),
+			text: "Peer context",
+		});
+		expect(response.status).toBe(409);
+		expect(sent.length).toBe(before);
+	} finally {
+		claudeBusy = false;
+	}
+	const view = await (await fetch(`${origin}/claude/claude-pane`)).json();
+	expect(view.working).toBe(false);
+});
+
+test("mobile delivery preserves an explicitly restricted Codex session", async () => {
+	const previous = codexState.permission;
+	codexState.permission = "read-only";
+	try {
+		const response = await post("/codex/pane/send", {
+			requestId: crypto.randomUUID(),
+			text: "Keep the current permission",
+		});
+		expect(response.status).toBe(200);
+		expect(sent.at(-1)).toMatchObject({ permission: "read-only" });
+	} finally {
+		codexState.permission = previous;
 	}
 });

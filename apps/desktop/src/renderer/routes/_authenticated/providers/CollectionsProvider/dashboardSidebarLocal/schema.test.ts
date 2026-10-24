@@ -10,6 +10,20 @@ import {
 type PaneLayout = WorkspaceState<unknown>;
 
 describe("healV2UserPreferences", () => {
+	it("defaults missing or invalid layout to Liquid Glass and preserves explicit choices", () => {
+		for (const appearanceSkin of [undefined, null, "", "obsolete"]) {
+			expect(healV2UserPreferences({ appearanceSkin }).appearanceSkin).toBe(
+				"liquid-glass",
+			);
+		}
+		expect(
+			healV2UserPreferences({ appearanceSkin: "vscode" }).appearanceSkin,
+		).toBe("vscode");
+		expect(
+			healV2UserPreferences({ appearanceSkin: "liquid-glass" }).appearanceSkin,
+		).toBe("liquid-glass");
+	});
+
 	it("returns full defaults for empty/non-object input", () => {
 		expect(healV2UserPreferences({})).toEqual(DEFAULT_V2_USER_PREFERENCES);
 		expect(healV2UserPreferences(null)).toEqual(DEFAULT_V2_USER_PREFERENCES);

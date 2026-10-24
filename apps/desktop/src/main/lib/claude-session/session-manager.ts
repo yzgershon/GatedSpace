@@ -102,6 +102,10 @@ interface PendingCapture {
 }
 
 class ClaudeSessionManager extends EventEmitter {
+	private readonly contexts = new Map<
+		string,
+		{ cwd: string; workspaceId?: string }
+	>();
 	private readonly sessions = new Map<string, ClaudeSessionTransport>();
 	private readonly buffers = new Map<string, ClaudeStreamEvent[]>();
 	/** Live claude session id per key, learned from each session's init event. */
@@ -163,6 +167,7 @@ class ClaudeSessionManager extends EventEmitter {
 	/** Spawn a session for `key`. No-op if one already exists for that key. */
 	start(key: string, opts: ClaudeSessionOptions): void {
 		if (this.sessions.has(key)) return;
+		this.contexts.set(key, { cwd: opts.cwd, workspaceId: opts.workspaceId });
 		sessionEvents.open(key, "claude", opts.workspaceId);
 		this.turnNotifications.clear(key);
 
@@ -546,6 +551,9 @@ class ClaudeSessionManager extends EventEmitter {
 	/** Everything a fresh subscriber needs to rebuild the timeline. */
 	getBufferedEvents(key: string): ClaudeStreamEvent[] {
 		return this.buffers.get(key) ?? [];
+	}
+	getContext(key: string) {
+		return this.contexts.get(key);
 	}
 
 	/**

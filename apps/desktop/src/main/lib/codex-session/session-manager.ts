@@ -586,6 +586,7 @@ export class CodexSessionManager extends EventEmitter {
 			);
 		state.error = null;
 		state.status = "working";
+		state.permission = input.permission;
 		sessionEvents.work(input.key, "starting");
 		state.workingSince = Date.now();
 		state.diff = "";

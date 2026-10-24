@@ -198,7 +198,9 @@ try {
 		}),
 	});
 	const result = (await response.json()) as {
-		result?: { data?: { json?: { mainWorkspaceId?: string } } };
+		result?: {
+			data?: { json?: { mainWorkspaceId?: string; projectId?: string } };
+		};
 		error?: unknown;
 	};
 	if (!response.ok || !result.result?.data?.json?.mainWorkspaceId)
@@ -217,6 +219,67 @@ try {
 	console.log(
 		"PASS old cloud preference cannot strand public installs at sign-in",
 	);
+	const waitFor = async (expression: string, description: string) => {
+		for (let attempt = 0; attempt < 60; attempt++) {
+			if (child.exitCode !== null)
+				throw new Error("Packaged app closed during Settings check");
+			if (await evaluate(expression)) return;
+			const text = String(await evaluate("document.body?.innerText ?? ''"));
+			if (
+				text.includes("Something went wrong") ||
+				text.includes("TypeError:")
+			) {
+				throw new Error(`${description}: ${text.slice(-5000)}`);
+			}
+			await Bun.sleep(500);
+		}
+		throw new Error(
+			`${description}: ${String(await evaluate("document.body?.innerText ?? ''")).slice(-5000)}`,
+		);
+	};
+	const navigate = async (path: string) => {
+		await evaluate(
+			`location.hash = ${JSON.stringify(path)}; setTimeout(() => location.reload(), 50); true`,
+		);
+		await Bun.sleep(1500);
+	};
+	const selectedLayout = (label: string) =>
+		`document.querySelector('button[aria-label="${label}"][aria-pressed="true"]') !== null`;
+	await navigate("/settings/appearance");
+	await waitFor(
+		selectedLayout("Liquid Glass"),
+		"Fresh public install must use Liquid Glass",
+	);
+	console.log(
+		"PASS fresh public install selects Liquid Glass in Appearance Settings",
+	);
+	for (const label of ["VS Code Style", "Liquid Glass"]) {
+		await evaluate(
+			`document.querySelector('button[aria-label="${label}"]').click(); true`,
+		);
+		await waitFor(selectedLayout(label), `Switch to ${label}`);
+		await navigate("/settings/appearance");
+		await waitFor(selectedLayout(label), `Persist ${label} after reload`);
+	}
+	console.log("PASS both layout choices switch and survive reload");
+	const { projectId, mainWorkspaceId } = result.result.data.json;
+	if (!projectId) throw new Error("Imported project did not return its ID");
+	await navigate(`/settings/projects/${encodeURIComponent(projectId)}`);
+	await waitFor(
+		`[...document.querySelectorAll('button')].some(button => button.textContent.trim() === 'Delete project' && !button.disabled)`,
+		"Local project Settings must render with local owner controls",
+	);
+	console.log(
+		"PASS project Settings renders local owner controls without a cloud auth hook crash",
+	);
+	await navigate(`/v2-workspace/${encodeURIComponent(mainWorkspaceId)}`);
+	await waitFor(
+		`[...document.querySelectorAll('[style]')].some(element => parseFloat(element.style.getPropertyValue('--gs-pane-radius')) > 0)`,
+		"Workspace must render the Liquid Glass shell",
+	);
+	console.log(
+		"PASS Liquid Glass workspace shell renders after leaving Settings",
+	);
 	writeFileSync(
 		resolve(`release/public-smoke-${arch}.json`),
 		JSON.stringify(
@@ -229,6 +292,10 @@ try {
 					"local-backend",
 					"plain-folder",
 					"legacy-cloud-preference",
+					"liquid-glass-fresh-default",
+					"layout-switch-and-persist",
+					"local-project-settings",
+					"liquid-glass-workspace-shell",
 				],
 			},
 			null,

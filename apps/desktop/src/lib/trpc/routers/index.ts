@@ -16,6 +16,7 @@ import { createConfigRouter } from "./config";
 import { createContinuityRouter } from "./continuity";
 import { createDeviceRouter } from "./device";
 import { createDiagnosticsRouter } from "./diagnostics";
+import { createEnsembleRouter } from "./ensemble";
 import { createExternalRouter } from "./external";
 import { createFilesystemRouter } from "./filesystem";
 import { createFlowDictationRouter } from "./flow-dictation";
@@ -42,6 +43,7 @@ import { createWorkspacesRouter } from "./workspaces";
 
 export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
+		ensemble: createEnsembleRouter(),
 		chatService: createChatServiceRouter(),
 		claudeSessions: createClaudeSessionsRouter(),
 		claudeSession: createClaudeSessionRouter(),

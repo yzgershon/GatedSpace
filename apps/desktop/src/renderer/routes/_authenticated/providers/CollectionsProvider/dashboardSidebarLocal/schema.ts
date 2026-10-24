@@ -425,6 +425,8 @@ export function healV2UserPreferences(raw: unknown): V2UserPreferencesRow {
 	return {
 		...DEFAULT_V2_USER_PREFERENCES,
 		...r,
+		// Old or malformed preferences must agree with the fresh-install layout.
+		appearanceSkin: r.appearanceSkin === "vscode" ? "vscode" : "liquid-glass",
 		fileLinks: { ...DEFAULT_V2_USER_PREFERENCES.fileLinks, ...r.fileLinks },
 		urlLinks: { ...DEFAULT_V2_USER_PREFERENCES.urlLinks, ...r.urlLinks },
 		sidebarFileLinks: shouldMigrateLegacySidebarFileLinks
