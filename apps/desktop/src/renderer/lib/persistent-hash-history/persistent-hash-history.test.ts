@@ -7,6 +7,9 @@ import {
 	it,
 	mock,
 } from "bun:test";
+// biome-ignore lint/style/noRestrictedImports: test-only execution of the CI browser expression, never bundled into the renderer.
+import { runInNewContext } from "node:vm";
+import { packagedRouteReload } from "../../../../scripts/lib/packaged-navigation";
 
 // Mock localStorage
 const storage = new Map<string, string>();
@@ -215,6 +218,26 @@ describe("createPersistentHashHistory", () => {
 	});
 
 	describe("localStorage persistence", () => {
+		it("restores the packaged smoke check's Settings and workspace routes", () => {
+			for (const path of [
+				"/settings/appearance",
+				"/settings/projects/friend-project",
+				"/v2-workspace/friend-workspace",
+			]) {
+				let reloadScheduled = false;
+				runInNewContext(packagedRouteReload(path), {
+					localStorage: mockLocalStorage,
+					setTimeout: () => {
+						reloadScheduled = true;
+					},
+				});
+				expect(reloadScheduled).toBe(true);
+				const history = createPersistentHashHistory();
+				expect(history.location.pathname).toBe(path);
+				expect(history.length).toBe(1);
+			}
+		});
+
 		it("persists entries on push", () => {
 			const history = createPersistentHashHistory();
 			history.push("/tasks");

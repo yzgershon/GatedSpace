@@ -10,6 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { ensureInitialGitCommit } from "../../../packages/shared/src/initial-git-commit";
+import { packagedRouteReload } from "./lib/packaged-navigation";
 
 if (process.env.GITHUB_ACTIONS !== "true")
 	throw new Error(
@@ -238,9 +239,7 @@ try {
 		);
 	};
 	const navigate = async (path: string) => {
-		await evaluate(
-			`location.hash = ${JSON.stringify(path)}; setTimeout(() => location.reload(), 50); true`,
-		);
+		await evaluate(packagedRouteReload(path));
 		await Bun.sleep(1500);
 	};
 	const selectedLayout = (label: string) =>
