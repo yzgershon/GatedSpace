@@ -22,6 +22,7 @@ import {
 	updateCodexDraft,
 } from "renderer/lib/codex-session/draft";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { codexTaskChanges } from "shared/codex-session/changes";
 import { defaultCodexEffort } from "shared/codex-session/controls";
 import { defaultCodexPermission } from "shared/codex-session/permissions";
@@ -30,6 +31,12 @@ import type {
 	CodexPermission,
 	CodexSessionState,
 } from "shared/codex-session/types";
+import {
+	IMAGE_LIMIT_MESSAGE,
+	imageMimeType,
+	MAX_CHAT_IMAGE_BYTES,
+	MAX_CHAT_IMAGES,
+} from "shared/image-attachments";
 import { ComputerControl } from "../ComputerControl/ComputerControl";
 import { CODEX_COMMANDS, parseCodexCommand } from "./commands";
 
@@ -195,7 +202,13 @@ export function CodexComposer({
 			setMenuDismissed(false);
 			return false;
 		}
-		if (name === "model") {
+		if (name === "swap") {
+			requestAccountSwap({
+				kind: "codex",
+				paneKey: paneId,
+				paneTitle: state?.title,
+			});
+		} else if (name === "model") {
 			const next = models.find(
 				(m) => m.id === args || m.name.toLowerCase() === args.toLowerCase(),
 			);
@@ -257,30 +270,47 @@ export function CodexComposer({
 	}, [paneId]);
 	const attach = async (files: File[]) => {
 		for (const file of files) {
-			if (/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
-				if (file.size > 10_000_000) {
-					onError("Choose an image smaller than 10 MB.");
-					continue;
-				}
-				const url = await new Promise<string>((resolve, reject) => {
-					const reader = new FileReader();
-					reader.onload = () => resolve(String(reader.result));
-					reader.onerror = reject;
-					reader.readAsDataURL(file);
-				});
-				setImages((prev) => [...prev, { name: file.name, url }].slice(0, 8));
-			} else if (
-				file.size <= 200_000 &&
-				(file.type.startsWith("text/") ||
-					/\.(txt|md|json|csv|ts|tsx|js|jsx|css|html|py|rs|go|sh|ps1|yaml|yml|toml|xml|sql|log)$/i.test(
-						file.name,
-					))
-			) {
-				const content = await file.text();
-				setDraft(
-					(prev) => `${prev}\n\nFile: ${file.name}\n\`\`\`\n${content}\n\`\`\``,
-				);
-			} else onError("Attach an image or a text file smaller than 200 KB.");
+			try {
+				const mime = imageMimeType(file);
+				if (mime) {
+					if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
+						onError(IMAGE_LIMIT_MESSAGE);
+						break;
+					}
+					if (file.size > MAX_CHAT_IMAGE_BYTES) {
+						onError("Choose an image no larger than 5 MB.");
+						continue;
+					}
+					const url = await new Promise<string>((resolve, reject) => {
+						const reader = new FileReader();
+						reader.onload = () => resolve(String(reader.result));
+						reader.onerror = reject;
+						reader.readAsDataURL(
+							file.type === mime ? file : new Blob([file], { type: mime }),
+						);
+					});
+					if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
+						onError(IMAGE_LIMIT_MESSAGE);
+						break;
+					}
+					setImages((prev) => [...prev, { name: file.name, url }]);
+				} else if (
+					file.size <= 200_000 &&
+					(file.type.startsWith("text/") ||
+						/\.(txt|md|json|csv|ts|tsx|js|jsx|css|html|py|rs|go|sh|ps1|yaml|yml|toml|xml|sql|log)$/i.test(
+							file.name,
+						))
+				) {
+					const content = await file.text();
+					setDraft(
+						(prev) =>
+							`${prev}\n\nFile: ${file.name}\n\`\`\`\n${content}\n\`\`\``,
+					);
+				} else
+					onError("Images: up to 20, 5 MB each. Text files: up to 200 KB.");
+			} catch {
+				onError(`Could not read ${file.name}. Try attaching it again.`);
+			}
 		}
 	};
 	const send = async () => {

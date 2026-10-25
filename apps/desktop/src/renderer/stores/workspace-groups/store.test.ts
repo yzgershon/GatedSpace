@@ -14,6 +14,7 @@ function group(overrides: Partial<WorkspaceGroup> = {}): WorkspaceGroup {
 		id: "tab-1",
 		title: "GatedSpace Edits",
 		paneIds: ["pane-1"],
+		sessions: [{ paneId: "pane-1", provider: "claude" }],
 		isActive: true,
 		...overrides,
 	};
@@ -65,6 +66,36 @@ describe("workspace-groups", () => {
 		]);
 		expect(getWorkspaceGroupsVersion()).toBeGreaterThan(before);
 		expect(getWorkspaceGroups("ws-a")).toHaveLength(2);
+	});
+
+	it("updates a session's provider and name without needing a group title change", () => {
+		let notifications = 0;
+		const unsubscribe = subscribeWorkspaceGroups(() => notifications++);
+		publishWorkspaceGroups("ws-a", [group()]);
+		const codex = group({
+			sessions: [{ paneId: "pane-1", provider: "codex" }],
+		});
+		publishWorkspaceGroups("ws-a", [codex]);
+		expect(getWorkspaceGroups("ws-a")[0].sessions[0].provider).toBe("codex");
+		expect(notifications).toBe(2);
+
+		const renamed = group({
+			sessions: [
+				{ paneId: "pane-1", provider: "codex", title: "Review sign-in" },
+			],
+		});
+		publishWorkspaceGroups("ws-a", [renamed]);
+		expect(getWorkspaceGroups("ws-a")[0].sessions[0].title).toBe(
+			"Review sign-in",
+		);
+		expect(notifications).toBe(3);
+		publishWorkspaceGroups("ws-a", [structuredClone(renamed)]);
+		expect(notifications).toBe(3);
+
+		publishWorkspaceGroups("ws-a", [group({ sessions: [] })]);
+		expect(getWorkspaceGroups("ws-a")[0].sessions).toEqual([]);
+		expect(notifications).toBe(4);
+		unsubscribe();
 	});
 
 	/*

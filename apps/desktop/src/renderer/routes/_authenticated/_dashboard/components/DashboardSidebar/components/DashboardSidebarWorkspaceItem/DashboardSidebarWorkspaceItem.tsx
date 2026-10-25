@@ -241,10 +241,8 @@ export function DashboardSidebarWorkspaceItem({
 			{/*
 			 * The workspace's live sessions, nested under its row.
 			 *
-			 * Only for the ACTIVE workspace: a pane registers itself when it mounts,
-			 * so this is empty everywhere else by construction rather than by a
-			 * check. Gating on `isActive` as well makes that intent explicit and
-			 * saves the store read on every other row in the tree.
+			 * Only the active workspace publishes its pane layout into the shared
+			 * group store. Session identity is available before its transport starts.
 			 */}
 			{sidebarSessions && isActive && !isPending ? (
 				<DashboardSidebarWorkspaceSessions workspaceId={id} />

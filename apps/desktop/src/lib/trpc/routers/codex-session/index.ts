@@ -4,6 +4,7 @@ import { enableComputerUse } from "main/lib/computer-use/lifecycle";
 import { computerUseService } from "main/lib/computer-use/service";
 import type { CodexSessionState } from "shared/codex-session/types";
 import type { ComputerUseState } from "shared/computer-use";
+import { chatImageUrlSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
@@ -61,11 +62,19 @@ export const createCodexSessionRouter = () =>
 				}),
 			)
 			.mutation(({ input }) => manager.start(input)),
-		models: publicProcedure.query(() => manager.models()),
-		account: publicProcedure.query(() => manager.account()),
+		models: publicProcedure
+			.input(keyInput.optional())
+			.query(({ input }) => manager.modelsForSession(input?.key)),
+		account: publicProcedure
+			.input(keyInput.optional())
+			.query(({ input }) => manager.account(input?.key)),
 		limits: publicProcedure
-			.input(z.object({ model: z.string().optional() }).optional())
-			.query(({ input }) => manager.limits(input?.model)),
+			.input(
+				z
+					.object({ model: z.string().optional(), key: z.string().optional() })
+					.optional(),
+			)
+			.query(({ input }) => manager.limits(input?.model, input?.key)),
 		skills: publicProcedure
 			.input(z.object({ cwd: z.string().min(1) }))
 			.query(({ input }) => manager.skills(input.cwd)),
@@ -99,15 +108,7 @@ export const createCodexSessionRouter = () =>
 					plan: z.boolean().optional(),
 					fast: z.boolean().optional(),
 					permission: z.enum(["default", "read-only", "full-access"]),
-					images: z
-						.array(
-							z
-								.string()
-								.max(15_000_000)
-								.regex(/^data:image\/(png|jpeg|webp|gif);base64,/),
-						)
-						.max(8)
-						.optional(),
+					images: z.array(chatImageUrlSchema).max(MAX_CHAT_IMAGES).optional(),
 				}),
 			)
 			.mutation(({ input }) => manager.send(input)),

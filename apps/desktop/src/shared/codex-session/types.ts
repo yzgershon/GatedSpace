@@ -56,6 +56,8 @@ export interface CodexModel {
 	defaultEffort: string;
 }
 export interface CodexSessionState {
+	workspaceId?: string;
+	accountId?: string;
 	/** Last explicitly selected permission; collaboration must never elevate it. */
 	permission?: CodexPermission;
 	key: string;

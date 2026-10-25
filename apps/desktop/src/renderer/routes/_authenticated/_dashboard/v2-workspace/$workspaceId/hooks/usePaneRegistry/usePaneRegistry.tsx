@@ -405,7 +405,7 @@ export function usePaneRegistry({
 				),
 				renderMenuHeader: (ctx) =>
 					(ctx.pane.data as SessionPaneData).provider === "codex" ? (
-						<CodexAccount />
+						<CodexAccount paneId={ctx.pane.id} />
 					) : (
 						<SessionAccountChip paneId={ctx.pane.id} />
 					),

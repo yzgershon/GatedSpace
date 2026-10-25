@@ -10,6 +10,7 @@ import { SessionQueue } from "main/lib/session-queue/session-queue";
 import {
 	queuedPromptSchema,
 	type SessionQueueState,
+	storedQueuedPromptSchema,
 } from "shared/session-queue";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
@@ -19,7 +20,7 @@ const stateSchema = z.object({
 		z.object({
 			id: z.string(),
 			createdAt: z.number(),
-			prompt: queuedPromptSchema,
+			prompt: storedQueuedPromptSchema,
 		}),
 	),
 	paused: z.boolean(),

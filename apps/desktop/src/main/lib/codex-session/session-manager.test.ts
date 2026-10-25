@@ -1408,3 +1408,214 @@ test("clicking a requested computer Enable notifies the agent without changing p
 	expect(call?.params).not.toHaveProperty("approvalPolicy");
 	expect(call?.params).not.toHaveProperty("sandboxPolicy");
 });
+
+describe("Codex account switching", () => {
+	function accountsFixture() {
+		class AccountTransport extends FakeTransport {
+			resumeFailure = false;
+			startGate?: Promise<void>;
+			async start() {
+				await this.startGate;
+			}
+			async request(method: string, params: unknown = {}) {
+				if (this.resumeFailure && method === "thread/resume")
+					throw new Error("Account unavailable");
+				return super.request(method, params);
+			}
+		}
+		const original = new AccountTransport();
+		const work = new AccountTransport();
+		const bindings = new Map<string, string>();
+		let selected = "default";
+		const profiles = {
+			resolve: (id?: string) => (id && bindings.get(id)) || selected,
+			bind: (thread: string, id: string) => {
+				bindings.set(thread, id);
+			},
+			get: (id: string) => {
+				if (!["default", "work"].includes(id))
+					throw new Error("Unknown account");
+				return { id, label: id, home: "/fake" };
+			},
+		};
+		const names = new SessionNameStore({
+			load: () => ({ names: {}, aliases: {} }),
+			save: () => {},
+			legacy: () => null,
+			mirror: () => {},
+			generate: async () => null,
+		});
+		const manager = new CodexSessionManager(
+			original,
+			names,
+			profiles,
+			() => work,
+		);
+		managers.push(manager);
+		return {
+			manager,
+			original,
+			work,
+			bindings,
+			select: (id: string) => {
+				selected = id;
+			},
+		};
+	}
+	test("resumes the same thread on another account and leaves other sessions connected", async () => {
+		const { manager, original, work, bindings } = accountsFixture();
+		const first = await manager.start({
+			key: "account-one",
+			cwd: "/workspace",
+			resumeSessionId: "original-id",
+			workspaceId: "account-workspace",
+		});
+		first.permission = "read-only";
+		const other = await manager.start({
+			key: "account-two",
+			cwd: "/workspace",
+			resumeSessionId: first.threadId ?? undefined,
+			forkSession: true,
+		});
+		const changed = await manager.switchAccount(first.key, "work");
+		expect(changed.threadId).toBe(first.threadId);
+		expect(changed.items.map((i) => i.text)).toEqual(
+			first.items.map((i) => i.text),
+		);
+		expect(changed.permission).toBe("read-only");
+		expect(changed.workspaceId).toBe("account-workspace");
+		expect(
+			work.calls.find((c) => c.method === "thread/resume")?.params
+				.developerInstructions,
+		).toContain("workspace's right sidebar");
+		expect(changed.accountId).toBe("work");
+		expect(other.accountId).toBe("default");
+		expect(bindings.get(changed.threadId ?? "")).toBe("work");
+		expect(
+			work.calls.some(
+				(c) =>
+					c.method === "thread/resume" && c.params.threadId === first.threadId,
+			),
+		).toBe(true);
+		await manager.account(first.key);
+		expect(work.calls.at(-1)?.method).toBe("account/read");
+		await manager.limits("gpt-6-astra", first.key);
+		expect(work.calls.at(-1)?.method).toBe("account/rateLimits/read");
+		original.emit("notification", {
+			method: "turn/started",
+			params: { threadId: first.threadId, turn: { id: "stale" } },
+		});
+		expect(changed.status).toBe("idle");
+		work.emit("disconnected", new Error("work offline"));
+		expect(changed.status).toBe("error");
+		expect(other.status).toBe("idle");
+	});
+	test("failed resume rolls back without losing the original transcript or binding", async () => {
+		const { manager, original, work, bindings } = accountsFixture();
+		const first = await manager.start({ key: "rollback", cwd: "/workspace" });
+		const items = first.items;
+		work.resumeFailure = true;
+		await expect(manager.switchAccount(first.key, "work")).rejects.toThrow(
+			"Account unavailable",
+		);
+		expect(manager.get(first.key)?.accountId).toBe("default");
+		expect(manager.get(first.key)?.items).toBe(items);
+		expect(bindings.get(first.threadId ?? "")).toBe("default");
+		expect(original.calls.at(-1)?.method).toBe("thread/resume");
+	});
+	test("busy and approval-waiting sessions cannot be switched or interrupted implicitly", async () => {
+		const { manager, work } = accountsFixture();
+		const first = await manager.start({
+			key: "busy-account",
+			cwd: "/workspace",
+		});
+		first.status = "working";
+		await expect(manager.switchAccount(first.key, "work")).rejects.toThrow(
+			"Wait for this turn",
+		);
+		first.status = "idle";
+		first.approvals.push({
+			id: "pending",
+			method: "approval",
+			title: "Approve",
+			detail: "",
+			questions: [],
+		});
+		await expect(manager.switchAccount(first.key, "work")).rejects.toThrow(
+			"Wait for this turn",
+		);
+		expect(work.calls).toHaveLength(0);
+	});
+	test("changing the default never reroutes an already-open conversation", async () => {
+		const { manager, original, work, select } = accountsFixture();
+		const first = await manager.start({
+			key: "pinned-account",
+			cwd: "/workspace",
+		});
+		select("work");
+		await manager.send({
+			key: first.key,
+			text: "Continue",
+			model: "gpt-6-astra",
+			effort: "low",
+			permission: "read-only",
+		});
+		expect(original.calls.at(-1)?.method).toBe("turn/start");
+		expect(work.calls).toHaveLength(0);
+	});
+	test("closing a pane during a switch waits for it and does not resurrect the session", async () => {
+		const { manager, work } = accountsFixture();
+		const state = await manager.start({
+			key: "closing-account",
+			cwd: "/workspace",
+		});
+		let release!: () => void;
+		work.startGate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const switching = manager.switchAccount(state.key, "work");
+		const closing = manager.close(state.key);
+		expect(manager.get(state.key)?.status).toBe("loading");
+		release();
+		await switching;
+		await closing;
+		expect(manager.get(state.key)).toBeUndefined();
+		expect(work.calls.at(-1)?.method).toBe("thread/unsubscribe");
+	});
+	test("identical request IDs remain isolated across account connections", async () => {
+		const { manager, original, work } = accountsFixture();
+		const first = await manager.start({
+			key: "approval-one",
+			cwd: "/workspace",
+		});
+		const other = await manager.start({
+			key: "approval-two",
+			cwd: "/workspace",
+			resumeSessionId: first.threadId ?? undefined,
+			forkSession: true,
+		});
+		const changed = await manager.switchAccount(first.key, "work");
+		for (const [connection, state] of [
+			[work, changed],
+			[original, other],
+		] as const)
+			connection.emit("request", {
+				id: 91,
+				method: "item/commandExecution/requestApproval",
+				params: { threadId: state.threadId, command: "example" },
+			});
+		const workId = changed.approvals[0].id;
+		expect(workId).not.toBe(other.approvals[0].id);
+		expect(() => manager.answer(other.key, workId, true)).toThrow(
+			"no longer pending",
+		);
+		manager.answer(changed.key, workId, false);
+		expect(work.replies.at(-1)?.id).toBe(91);
+		expect(original.replies).toHaveLength(0);
+		original.emit("notification", {
+			method: "serverRequest/resolved",
+			params: { threadId: other.threadId, requestId: 91 },
+		});
+		expect(other.approvals).toHaveLength(0);
+	});
+});

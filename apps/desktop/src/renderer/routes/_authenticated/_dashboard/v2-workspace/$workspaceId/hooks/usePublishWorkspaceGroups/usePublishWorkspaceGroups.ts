@@ -23,6 +23,7 @@ import {
 import type { StoreApi } from "zustand/vanilla";
 import { paneIdsInLayoutOrder } from "../../components/TabPaneList";
 import type { PaneViewerData } from "../../types";
+import { workspaceSessions } from "./workspace-sessions";
 
 export function usePublishWorkspaceGroups({
 	workspaceId,
@@ -36,12 +37,16 @@ export function usePublishWorkspaceGroups({
 	useEffect(() => {
 		const publish = () => {
 			const { tabs, activeTabId } = store.getState();
-			const groups: WorkspaceGroup[] = tabs.map((tab) => ({
-				id: tab.id,
-				title: resolveTabTitle(tab, tabs, registry),
-				paneIds: paneIdsInLayoutOrder(tab),
-				isActive: tab.id === activeTabId,
-			}));
+			const groups: WorkspaceGroup[] = tabs.map((tab) => {
+				const paneIds = paneIdsInLayoutOrder(tab);
+				return {
+					id: tab.id,
+					title: resolveTabTitle(tab, tabs, registry),
+					paneIds,
+					sessions: workspaceSessions(tab, paneIds),
+					isActive: tab.id === activeTabId,
+				};
+			});
 			publishWorkspaceGroups(workspaceId, groups);
 		};
 

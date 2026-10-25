@@ -5,11 +5,15 @@
  * a token cost on every subsequent turn of the conversation, and "it looked
  * fine" is not a way to check that.
  *
- * Screenshots are the case that matters here, so everything is re-encoded as
- * PNG. JPEG would be smaller but it smears text, and a screenshot whose text
- * can't be read is worth nothing.
+ * Prefer PNG to preserve screenshot text; use high-quality JPEG only when
+ * the scaled PNG still exceeds the per-image byte limit.
  */
 import type { UserImagePayload } from "shared/claude-session/events";
+import {
+	IMAGE_LIMIT_MESSAGE,
+	imageBase64Bytes,
+	MAX_CHAT_IMAGE_BYTES,
+} from "shared/image-attachments";
 
 /**
  * Longest edge we send. Anthropic scales anything larger down to roughly this
@@ -18,12 +22,12 @@ import type { UserImagePayload } from "shared/claude-session/events";
  */
 export const MAX_IMAGE_EDGE = 1568;
 
-/** Files bigger than this aren't screenshots, and won't survive the API anyway. */
-export const MAX_SOURCE_BYTES = 30 * 1024 * 1024;
+/** Source files and encoded attachments share the same per-image byte limit. */
+export const MAX_SOURCE_BYTES = MAX_CHAT_IMAGE_BYTES;
 
 export class ImageTooLargeError extends Error {
 	constructor(name: string) {
-		super(`${name} is too large to attach`);
+		super(`${name} is too large. ${IMAGE_LIMIT_MESSAGE}`);
 		this.name = "ImageTooLargeError";
 	}
 }
@@ -77,7 +81,7 @@ export function attachmentName(file: File, index: number): string {
 }
 
 /**
- * Decode, downscale if needed, re-encode as PNG, hand back base64 plus the
+ * Decode, downscale if needed, encode, hand back base64 plus the
  * dimensions actually being sent.
  */
 export async function prepareImage(
@@ -98,11 +102,17 @@ export async function prepareImage(
 		if (!context) throw new Error("no 2d context");
 		context.drawImage(bitmap, 0, 0, size.width, size.height);
 
-		const dataUrl = canvas.toDataURL("image/png");
+		let dataUrl = canvas.toDataURL("image/png");
+		if (imageBase64Bytes(dataUrl.split(",")[1] ?? "") > MAX_CHAT_IMAGE_BYTES)
+			dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+		if (imageBase64Bytes(dataUrl.split(",")[1] ?? "") > MAX_CHAT_IMAGE_BYTES)
+			throw new ImageTooLargeError(file.name);
 		const data = dataUrl.slice(dataUrl.indexOf(",") + 1);
 		return {
 			name: attachmentName(file, index),
-			mediaType: "image/png",
+			mediaType: dataUrl.startsWith("data:image/jpeg")
+				? "image/jpeg"
+				: "image/png",
 			width: size.width,
 			height: size.height,
 			data,

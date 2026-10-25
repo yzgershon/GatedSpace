@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ResultEvent } from "../../../shared/claude-session/events";
+import { MAX_CHAT_IMAGE_BYTES } from "../../../shared/image-attachments";
 import type {
 	QueuedPrompt,
 	SessionQueueState,
@@ -17,6 +18,16 @@ const prompt = (text: string): QueuedPrompt => ({
 	images: ["data:image/png;base64,aGVsbG8="],
 });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+test("large valid attachments can be queued without the former 30 MB ceiling", () => {
+	const { queue } = setup();
+	const image = `data:image/png;base64,${Buffer.alloc(MAX_CHAT_IMAGE_BYTES).toString("base64")}`;
+	const id = queue.enqueue("pane", {
+		...prompt("Six full-size images"),
+		images: Array(6).fill(image),
+	});
+	expect(queue.get("pane").entries[0].id).toBe(id);
+	expect(queue.get("pane").entries[0].prompt.images).toHaveLength(6);
+});
 function setup(
 	saved: Record<string, SessionQueueState> = {},
 	dispatch?: (

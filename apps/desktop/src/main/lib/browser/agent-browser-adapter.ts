@@ -31,12 +31,14 @@ function element(ref: string | undefined) {
 		throw new Error("Supply an element ref from browser_snapshot.");
 	return `const e = globalThis.__gsBrowserElements?.get(${JSON.stringify(ref)}); if (!e?.isConnected) throw new Error('Stale element ref; take a new snapshot.');`;
 }
-async function snapshot(paneId: string) {
+async function snapshot(paneId: string, cursor = "") {
 	return {
 		content: [
 			{
 				type: "text" as const,
-				text: JSON.stringify(await script(paneId, browserSnapshotScript())),
+				text: JSON.stringify(
+					await script(paneId, `${cursor};${browserSnapshotScript()}`),
+				),
 			},
 		],
 	};
@@ -55,6 +57,7 @@ const adapter: BrowserAdapter = {
 	},
 	async run(tool, paneId, input) {
 		const wc = wcFor(paneId);
+		let cursor = "";
 		if (tool === "browser_open") {
 			if (wc.getURL() !== input.url || input.previewUpdated)
 				await wc.loadURL(input.url as string);
@@ -89,8 +92,8 @@ const adapter: BrowserAdapter = {
 				paneId,
 				`(() => { ${element(input.ref)} e.scrollIntoView({block:'center',inline:'center'}); const r=e.getBoundingClientRect(); const x=r.x+r.width/2, y=r.y+r.height/2; const hit=document.elementFromPoint(x,y); if (!hit || (!e.contains(hit) && !hit.contains(e))) throw new Error('Element is covered; take a new snapshot.'); return { x:Math.round(x), y:Math.round(y) }; })()`,
 			)) as { x: number; y: number };
-			await script(paneId, browserCursorScript(pagePoint, input.session));
 			await clickBrowserPoint(wc, pagePoint);
+			cursor = browserCursorScript(pagePoint, input.session);
 		} else if (tool === "browser_fill") {
 			if (input.text === undefined) throw new Error("Supply text to fill.");
 			await browserInput(wc, async () => {
@@ -99,11 +102,11 @@ const adapter: BrowserAdapter = {
 					`(() => { ${element(input.ref)} if (e.disabled || e.readOnly) throw new Error('Field is not editable.'); e.focus(); const value=${JSON.stringify(input.text)}; if (e instanceof HTMLInputElement || e instanceof HTMLTextAreaElement) { if (e.type==='file' || e.type==='password') throw new Error('Use the browser directly for files or passwords.'); const proto=e instanceof HTMLTextAreaElement?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto,'value').set.call(e,value); } else if (e.isContentEditable) e.textContent=value; else throw new Error('Element is not an editable text field.'); e.dispatchEvent(new InputEvent('input',{bubbles:true,inputType:'insertText',data:value})); e.dispatchEvent(new Event('change',{bubbles:true})); })()`,
 				);
 			});
-			await script(paneId, browserCursorScript(null, input.session));
+			cursor = browserCursorScript(null, input.session);
 		} else if (tool === "browser_press") {
 			const key = input.key ?? "";
 			await pressBrowserKey(wc, key);
-			await script(paneId, browserCursorScript(null, input.session));
+			cursor = browserCursorScript(null, input.session);
 		} else if (tool === "browser_scroll") {
 			const direction = input.direction ?? "down";
 			await script(
@@ -115,7 +118,7 @@ const adapter: BrowserAdapter = {
 			await delay(120);
 			await adapter.ready(paneId);
 		}
-		return snapshot(paneId);
+		return snapshot(paneId, cursor);
 	},
 };
 export function installAgentBrowserAdapter() {

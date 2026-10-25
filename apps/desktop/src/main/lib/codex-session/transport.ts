@@ -74,6 +74,14 @@ export function resolveCodexExecutable() {
 	);
 }
 
+export interface CodexTransportOptions {
+	env?: NodeJS.ProcessEnv;
+	config?: string[];
+	authenticate?: (
+		request: (method: string, params?: unknown) => Promise<unknown>,
+	) => Promise<void>;
+}
+
 export class CodexTransport extends EventEmitter {
 	askUser?: (input: AsyncQuestionInput) => string;
 	private child: ChildProcessWithoutNullStreams | null = null;
@@ -89,7 +97,10 @@ export class CodexTransport extends EventEmitter {
 			timer: ReturnType<typeof setTimeout>;
 		}
 	>();
-	constructor(private readonly executable = resolveCodexExecutable) {
+	constructor(
+		private readonly executable = resolveCodexExecutable,
+		private readonly options: CodexTransportOptions = {},
+	) {
 		super();
 	}
 
@@ -143,6 +154,7 @@ export class CodexTransport extends EventEmitter {
 			[
 				...executable.args,
 				"app-server",
+				...(this.options.config ?? []).flatMap((value) => ["-c", value]),
 				"-c",
 				`mcp_servers.gatedspace_browser={url=${JSON.stringify(bridge.url)},bearer_token_env_var="GATEDSPACE_BROWSER_TOKEN"}`,
 			],
@@ -153,6 +165,7 @@ export class CodexTransport extends EventEmitter {
 				env: {
 					...process.env,
 					...executable.env,
+					...this.options.env,
 					GATEDSPACE_BROWSER_TOKEN: bridge.token,
 					GATEDSPACE_NATIVE_SESSION: "1",
 				},
@@ -219,6 +232,9 @@ export class CodexTransport extends EventEmitter {
 			capabilities: { experimentalApi: true },
 		});
 		this.write({ method: "initialized", params: {} });
+		await this.options.authenticate?.((method, params = {}) =>
+			this.call(method, params),
+		);
 	}
 	private write(message: unknown) {
 		if (!this.child || this.child.stdin.destroyed)

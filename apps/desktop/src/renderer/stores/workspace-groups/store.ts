@@ -20,12 +20,21 @@
  * has: a workspace you have not opened has no groups to list, and inventing
  * rows for it would print a column of "Tab 1".
  */
+export interface WorkspaceSession {
+	paneId: string;
+	provider: "claude" | "codex";
+	/** Persisted pane name (or a single-pane group's explicit name). */
+	title?: string;
+}
+
 export interface WorkspaceGroup {
 	/** The tab id. `setActiveTab` takes this. */
 	id: string;
 	title: string;
 	/** In layout order, deduped — the order the panes appear on screen. */
 	paneIds: string[];
+	/** Native sessions in layout order; identity is known before transport starts. */
+	sessions: WorkspaceSession[];
 	isActive: boolean;
 }
 
@@ -56,7 +65,16 @@ function isSame(a: WorkspaceGroup[], b: WorkspaceGroup[]): boolean {
 			group.title === other.title &&
 			group.isActive === other.isActive &&
 			group.paneIds.length === other.paneIds.length &&
-			group.paneIds.every((paneId, i) => paneId === other.paneIds[i])
+			group.paneIds.every((paneId, i) => paneId === other.paneIds[i]) &&
+			group.sessions.length === other.sessions.length &&
+			group.sessions.every((session, i) => {
+				const next = other.sessions[i];
+				return (
+					session.paneId === next.paneId &&
+					session.provider === next.provider &&
+					session.title === next.title
+				);
+			})
 		);
 	});
 }

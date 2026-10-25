@@ -27,6 +27,11 @@ import {
 } from "shared/claude-account/swap-command";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionStatus } from "shared/claude-session/timeline";
+import {
+	IMAGE_LIMIT_MESSAGE,
+	imageMimeType,
+	MAX_CHAT_IMAGES,
+} from "shared/image-attachments";
 import type { SessionChangeSummary } from "shared/session-changes";
 import { prepareImage } from "./composer-images";
 import { SlashPalette } from "./SlashPalette";
@@ -212,6 +217,9 @@ export function SessionComposer({
 	const [dragging, setDragging] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
+	const imageSlots = useRef(0);
+	const attachedImages = useRef(images);
+	attachedImages.current = images;
 	const isRunning = status === "streaming";
 
 	/**
@@ -236,16 +244,30 @@ export function SessionComposer({
 		if (files.length === 0) return;
 		setImageError(null);
 
-		const images = files.filter((f) => f.type.startsWith("image/"));
-		const others = files.filter((f) => !f.type.startsWith("image/"));
+		const images = files.filter((f) => Boolean(imageMimeType(f)));
+		const others = files.filter((f) => !imageMimeType(f));
 
 		for (const [index, file] of images.entries()) {
+			if (
+				attachedImages.current.length + imageSlots.current >=
+				MAX_CHAT_IMAGES
+			) {
+				setImageError(IMAGE_LIMIT_MESSAGE);
+				break;
+			}
+			imageSlots.current++;
 			void prepareImage(file, index)
-				.then((image) => setImages((current) => [...current, image]))
+				.then((image) => {
+					attachedImages.current = [...attachedImages.current, image];
+					setImages(attachedImages.current);
+				})
 				.catch((error: unknown) => {
 					setImageError(
 						error instanceof Error ? error.message : "Could not attach image",
 					);
+				})
+				.finally(() => {
+					imageSlots.current--;
 				});
 		}
 

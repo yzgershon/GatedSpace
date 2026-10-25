@@ -14,6 +14,7 @@ import { claudeSessionManager } from "main/lib/claude-session/session-manager";
 import { loadSessionTranscript } from "main/lib/claude-session/transcript";
 import { resolveActiveConfigDir } from "main/lib/claude-session/transport";
 import type { ClaudeStreamEvent } from "shared/claude-session/events";
+import { chatImageSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
@@ -107,17 +108,7 @@ export const createClaudeSessionRouter = () => {
 					 * Pasted or dropped images, base64 with no data: prefix. They become
 					 * Anthropic image content blocks ahead of the text on stdin.
 					 */
-					images: z
-						.array(
-							z.object({
-								name: z.string(),
-								mediaType: z.string(),
-								width: z.number().optional(),
-								height: z.number().optional(),
-								data: z.string(),
-							}),
-						)
-						.optional(),
+					images: z.array(chatImageSchema).max(MAX_CHAT_IMAGES).optional(),
 				}),
 			)
 			.mutation(({ input }) => {

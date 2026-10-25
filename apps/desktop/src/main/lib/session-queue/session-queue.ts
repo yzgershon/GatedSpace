@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
+import {
+	MAX_CHAT_IMAGES,
+	MAX_IMAGE_BASE64_LENGTH,
+} from "shared/image-attachments";
 import type {
 	QueuedMessage,
 	QueuedPrompt,
@@ -122,7 +126,10 @@ export class SessionQueue extends EventEmitter {
 		}
 		queue.entries.push(entry);
 		queue.sessionId = session.sessionId;
-		if (JSON.stringify(queue).length > 30_000_000)
+		if (
+			JSON.stringify(queue).length >
+			MAX_CHAT_IMAGES * MAX_IMAGE_BASE64_LENGTH + 2_000_000
+		)
 			throw new Error(
 				"The queue's attachments are too large. Send some messages first.",
 			);
@@ -182,7 +189,10 @@ export class SessionQueue extends EventEmitter {
 		if (!prompt.text.trim() && !prompt.images?.length)
 			throw new Error("Add a message or an image.");
 		entry.prompt = prompt;
-		if (JSON.stringify(queue).length > 30_000_000)
+		if (
+			JSON.stringify(queue).length >
+			MAX_CHAT_IMAGES * MAX_IMAGE_BASE64_LENGTH + 2_000_000
+		)
 			throw new Error("The queue's attachments are too large.");
 		this.commit(key, queue);
 	}

@@ -1,4 +1,9 @@
 export const CODEX_COMMANDS = [
+	{
+		name: "/swap",
+		description: "Continue this conversation on another account",
+		insert: "/swap",
+	},
 	{ name: "/model", description: "Choose a model", insert: "/model " },
 	{
 		name: "/effort",

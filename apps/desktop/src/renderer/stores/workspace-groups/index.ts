@@ -1,4 +1,4 @@
-export type { WorkspaceGroup } from "./store";
+export type { WorkspaceGroup, WorkspaceSession } from "./store";
 export {
 	clearWorkspaceGroups,
 	getWorkspaceGroups,

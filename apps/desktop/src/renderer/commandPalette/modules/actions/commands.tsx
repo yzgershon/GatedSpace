@@ -81,7 +81,7 @@ export const actionsProvider: CommandProvider = {
 		commands.push(
 			{
 				id: "actions.swapClaudeAccount",
-				title: "Swap Claude account",
+				title: "Swap account",
 				section: "actions",
 				icon: SparklesIcon,
 				// The same command that works in a pane and in a terminal, reachable

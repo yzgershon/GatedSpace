@@ -1,4 +1,9 @@
 import type { CodexPermission } from "shared/codex-session/types";
+import {
+	chatImageUrlSchema,
+	IMAGE_LIMIT_MESSAGE,
+	MAX_CHAT_IMAGES,
+} from "shared/image-attachments";
 
 export interface CodexDraft {
 	model?: string;
@@ -56,7 +61,12 @@ export function attachCodexDraftImage(
 	key: string,
 	image: { name: string; url: string },
 ) {
+	if (
+		getCodexDraft(key).images.length >= MAX_CHAT_IMAGES ||
+		!chatImageUrlSchema.safeParse(image.url).success
+	)
+		throw new Error(IMAGE_LIMIT_MESSAGE);
 	updateCodexDraft(key, {
-		images: [...getCodexDraft(key).images, image].slice(0, 8),
+		images: [...getCodexDraft(key).images, image],
 	});
 }

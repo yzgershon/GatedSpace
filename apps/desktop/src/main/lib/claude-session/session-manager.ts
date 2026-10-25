@@ -26,6 +26,8 @@ import type {
 	ClaudeStreamEvent,
 	UserImagePayload,
 } from "shared/claude-session/events";
+import { chatImageSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
+import { z } from "zod";
 import { SUPERSET_HOME_DIR } from "../app-environment";
 import { ClaudeTurnNotifications } from "../notifications/claude-turn-notifications";
 import { sessionEvents } from "../notifications/session-events";
@@ -56,14 +58,6 @@ const STDERR_CONTEXT_LINES = 8;
 
 /** Hard ceiling on buffered events per session (oldest dropped first). */
 const MAX_BUFFERED_EVENTS = 10_000;
-
-/**
- * Per-image base64 ceiling. The API rejects images past roughly 5MB, and a
- * rejection surfaces as a failed turn rather than anything that names the
- * image — so the boundary is enforced here, where it can be explained. The
- * composer already downscales, making this the backstop rather than the rule.
- */
-const MAX_IMAGE_BASE64 = 5_000_000;
 
 /**
  * Does this event change the timeline? Deltas and lifecycle pings don't — they
@@ -431,18 +425,7 @@ class ClaudeSessionManager extends EventEmitter {
 				"This Claude session is disconnected. Reopen it before sending.",
 			);
 
-		const oversized = images.filter((i) => i.data.length > MAX_IMAGE_BASE64);
-		const usable = images.filter((i) => i.data.length <= MAX_IMAGE_BASE64);
-		if (oversized.length > 0) {
-			// Say so rather than dropping them quietly: an image that silently
-			// vanished looks like the model ignoring what it was shown.
-			this.notice(
-				key,
-				`Skipped ${oversized.length} image${oversized.length === 1 ? "" : "s"} over the size limit: ${oversized
-					.map((i) => i.name)
-					.join(", ")}`,
-			);
-		}
+		const usable = z.array(chatImageSchema).max(MAX_CHAT_IMAGES).parse(images);
 
 		transport.sendUserMessage(text, usable);
 		if (!silent) {

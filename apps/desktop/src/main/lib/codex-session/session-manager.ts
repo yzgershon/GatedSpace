@@ -2,6 +2,8 @@ import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { open } from "node:fs/promises";
 import { basename, extname } from "node:path";
+import { chatImageUrlSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
+import { z } from "zod";
 import {
 	defaultCodexEffort,
 	mentionedSkills,
@@ -20,6 +22,11 @@ import {
 	record,
 	text,
 } from "../../../shared/codex-session/types";
+import {
+	type CodexProfiles,
+	codexProfiles,
+} from "../agent-accounts/codex-profiles";
+import { accountCodexTransport } from "../agent-accounts/service";
 import {
 	agentBrowserService,
 	browserInstructions,
@@ -40,9 +47,11 @@ export interface StartCodexSession {
 	model?: string;
 	resumeSessionId?: string;
 	forkSession?: boolean;
+	accountId?: string;
 }
 
 export class CodexSessionManager extends EventEmitter {
+	private connections = new Map<string, CodexTransport>();
 	private sessions = new Map<string, CodexSessionState>();
 	private starts = new Map<string, Promise<CodexSessionState>>();
 	private turnStarts = new Map<string, Promise<unknown>>();
@@ -66,7 +75,7 @@ export class CodexSessionManager extends EventEmitter {
 				continue;
 			if (this.mirroredNames.get(key) === value.title) continue;
 			this.mirroredNames.set(key, value.title);
-			void this.transport
+			void this.connection(key.slice(6))
 				.request("thread/name/set", {
 					threadId: key.slice(6),
 					name: value.title,
@@ -85,6 +94,8 @@ export class CodexSessionManager extends EventEmitter {
 	constructor(
 		readonly transport = new CodexTransport(),
 		private readonly names: SessionNameStore = sessionNames,
+		private readonly profiles?: Pick<CodexProfiles, "resolve" | "bind" | "get">,
+		private readonly connectAccount = accountCodexTransport,
 	) {
 		super();
 		this.mirroredNames = new Map(
@@ -94,14 +105,21 @@ export class CodexSessionManager extends EventEmitter {
 			]),
 		);
 		names.on("change", this.refreshNames);
+		this.attachConnection("default", transport);
+	}
+	private attachConnection(accountId: string, transport: CodexTransport) {
+		this.connections.set(accountId, transport);
 		transport.askUser = (input) => this.queueQuestion(input);
 		transport.on("notification", (message) =>
-			this.notification(record(message)),
+			this.notification(record(message), accountId),
 		);
-		transport.on("request", (message) => this.approval(record(message)));
+		transport.on("request", (message) =>
+			this.approval(record(message), transport, accountId),
+		);
 		transport.on("disconnected", (error: Error) => {
-			void computerUseService.stop();
 			for (const state of this.sessions.values()) {
+				if ((state.accountId ?? "default") !== accountId) continue;
+				computerUseService.release(`codex:${state.key}`);
 				// Pending inferred replies must be recoverable after reconnect. Keep
 				// answered/dismissed tokens suppressed; only release visible cards.
 				for (const approval of state.approvals)
@@ -113,9 +131,99 @@ export class CodexSessionManager extends EventEmitter {
 				this.finishActivity(state, "failed");
 				this.publish(state);
 			}
-			this.requests.clear();
+			for (const [id, pending] of this.requests)
+				if ((this.get(pending.key)?.accountId ?? "default") === accountId)
+					this.requests.delete(id);
 		});
 	}
+	private connection(threadId?: string | null) {
+		const live = threadId
+			? [...this.sessions.values()].find((s) => s.threadId === threadId)
+			: undefined;
+		return this.forAccount(
+			live?.accountId ??
+				this.profiles?.resolve(threadId ?? undefined) ??
+				"default",
+		);
+	}
+	private forAccount(id: string) {
+		let transport = this.connections.get(id);
+		if (!transport) {
+			transport = this.connectAccount(id);
+			this.attachConnection(id, transport);
+		}
+		return transport;
+	}
+	switchAccount(key: string, accountId: string): Promise<CodexSessionState> {
+		if (this.starts.has(key))
+			return Promise.reject(
+				new Error("Wait for the account connection to finish."),
+			);
+		const operation = this.moveAccount(key, accountId).finally(() => {
+			if (this.starts.get(key) === operation) this.starts.delete(key);
+		});
+		this.starts.set(key, operation);
+		return operation;
+	}
+	private async moveAccount(key: string, accountId: string) {
+		this.profiles?.get(accountId);
+		const state = this.get(key);
+		if (!state?.threadId)
+			throw new Error(
+				"Open a Codex conversation before switching its account.",
+			);
+		if (
+			state.status === "working" ||
+			state.status === "loading" ||
+			state.approvals.length ||
+			this.turnStarts.has(key)
+		)
+			throw new Error(
+				"Wait for this turn to finish or stop it before switching accounts.",
+			);
+		if (state.accountId === accountId) return state;
+		const original = { ...state };
+		const oldTransport = this.connection(state.threadId);
+		const nextTransport = this.forAccount(accountId);
+		let detached = false;
+		state.status = "loading";
+		this.publish(state);
+		try {
+			await nextTransport.start();
+			await oldTransport.request("thread/unsubscribe", {
+				threadId: state.threadId,
+			});
+			detached = true;
+			return await this.open({
+				key,
+				cwd: state.cwd,
+				model: state.model,
+				resumeSessionId: state.threadId,
+				workspaceId: state.workspaceId,
+				accountId,
+			});
+		} catch (error) {
+			if (detached)
+				await nextTransport
+					.request("thread/unsubscribe", { threadId: original.threadId })
+					.catch(() => {});
+			this.sessions.set(key, original);
+			try {
+				if (detached)
+					await oldTransport.request("thread/resume", {
+						threadId: original.threadId,
+						excludeTurns: true,
+					});
+			} catch {
+				original.status = "error";
+				original.error =
+					"Could not reconnect the original account. Reopen this conversation to retry.";
+			}
+			this.publish(original);
+			throw error;
+		}
+	}
+
 	get(key: string) {
 		return this.sessions.get(key);
 	}
@@ -155,12 +263,12 @@ export class CodexSessionManager extends EventEmitter {
 			}, 32),
 		);
 	}
-	async models(): Promise<CodexModel[]> {
+	async models(transport = this.connection()): Promise<CodexModel[]> {
 		const models: CodexModel[] = [];
 		let cursor: string | null = null;
 		do {
 			const page = record(
-				await this.transport.request("model/list", { cursor, limit: 100 }),
+				await transport.request("model/list", { cursor, limit: 100 }),
 			);
 			for (const value of list(page.data)) {
 				const m = record(value);
@@ -178,9 +286,20 @@ export class CodexSessionManager extends EventEmitter {
 		} while (cursor);
 		return models;
 	}
-	async account() {
+	modelsForSession(key?: string) {
+		return this.models(
+			key
+				? this.forAccount(this.get(key)?.accountId ?? "default")
+				: this.connection(),
+		);
+	}
+
+	async account(key?: string) {
 		const result = record(
-			await this.transport.request("account/read", { refreshToken: false }),
+			await (key
+				? this.forAccount(this.get(key)?.accountId ?? "default")
+				: this.connection()
+			).request("account/read", { refreshToken: false }),
 		);
 		const account = record(result.account);
 		return {
@@ -189,15 +308,18 @@ export class CodexSessionManager extends EventEmitter {
 			plan: text(account.planType),
 		};
 	}
-	async limits(model?: string) {
+	async limits(model?: string, key?: string) {
 		return normalizeCodexLimits(
-			await this.transport.request("account/rateLimits/read"),
+			await (key
+				? this.forAccount(this.get(key)?.accountId ?? "default")
+				: this.connection()
+			).request("account/rateLimits/read"),
 			model,
 		);
 	}
 	async skills(cwd: string) {
 		return normalizeCodexSkills(
-			await this.transport.request("skills/list", { cwds: [cwd] }),
+			await this.connection().request("skills/list", { cwds: [cwd] }),
 		);
 	}
 	async listThreads(limit: number, searchTerm?: string) {
@@ -241,7 +363,7 @@ export class CodexSessionManager extends EventEmitter {
 	async readSummary(threadId: string) {
 		const thread = record(
 			record(
-				await this.transport.request("thread/read", {
+				await this.connection(threadId).request("thread/read", {
 					threadId,
 					includeTurns: false,
 				}),
@@ -263,7 +385,7 @@ export class CodexSessionManager extends EventEmitter {
 	async archive(threadId: string) {
 		if (this.liveIds().includes(threadId))
 			throw new Error("Close this Codex session before archiving it.");
-		await this.transport.request("thread/archive", { threadId });
+		await this.connection(threadId).request("thread/archive", { threadId });
 	}
 	start(input: StartCodexSession): Promise<CodexSessionState> {
 		// A pane can mount before its workspace resolves. Rebind even when the
@@ -277,6 +399,7 @@ export class CodexSessionManager extends EventEmitter {
 		const pending = this.starts.get(input.key);
 		if (pending) return pending;
 		const existing = this.get(input.key);
+		if (existing && input.workspaceId) existing.workspaceId = input.workspaceId;
 		if (existing && existing.status !== "error")
 			return Promise.resolve(existing);
 		const started = this.open(input).finally(() =>
@@ -295,7 +418,16 @@ export class CodexSessionManager extends EventEmitter {
 			);
 		const previous = this.get(input.key);
 		const id = previous?.threadId || input.resumeSessionId;
+		const accountId =
+			input.accountId ??
+			previous?.accountId ??
+			this.profiles?.resolve(id) ??
+			"default";
+		const transport = this.forAccount(accountId);
 		const state: CodexSessionState = {
+			workspaceId: input.workspaceId ?? previous?.workspaceId,
+			accountId,
+			permission: previous?.permission,
 			key: input.key,
 			threadId: previous?.threadId ?? null,
 			cwd: input.cwd,
@@ -327,7 +459,7 @@ export class CodexSessionManager extends EventEmitter {
 				this.claims.set(id, input.key);
 				const metadata = record(
 					record(
-						await this.transport
+						await transport
 							.request("thread/read", { threadId: id })
 							.catch((error) => {
 								// Some app-server versions only read threads already loaded in
@@ -346,7 +478,7 @@ export class CodexSessionManager extends EventEmitter {
 						"This Codex conversation is still working in another client. Wait for it to finish or open a fork.",
 					);
 			}
-			const models = await this.models();
+			const models = await this.models(transport);
 			const selected =
 				input.model ||
 				previous?.model ||
@@ -355,9 +487,11 @@ export class CodexSessionManager extends EventEmitter {
 				previous?.effort ||
 				defaultCodexEffort(models.find((m) => m.id === selected));
 			const projectId =
-				!id || input.forkSession ? await this.project(input.cwd) : undefined;
+				!id || input.forkSession
+					? await this.project(input.cwd, transport)
+					: undefined;
 			const result = record(
-				await this.transport.request(
+				await transport.request(
 					id
 						? input.forkSession
 							? "thread/fork"
@@ -391,9 +525,10 @@ export class CodexSessionManager extends EventEmitter {
 				throw new Error("Codex returned no conversation ID.");
 			state.cwd = text(thread.cwd) || input.cwd;
 			if (id && !text(thread.projectId)) {
-				const targetProject = projectId || (await this.project(state.cwd));
+				const targetProject =
+					projectId || (await this.project(state.cwd, transport));
 				if (targetProject)
-					await this.transport
+					await transport
 						.request("thread/metadata/update", {
 							threadId: state.threadId,
 							projectId: targetProject,
@@ -419,6 +554,7 @@ export class CodexSessionManager extends EventEmitter {
 			state.model = text(result.model) || text(thread.model) || selected || "";
 			state.effort = effort;
 			if (id) await this.history(state, false, list(thread.turns));
+			this.profiles?.bind(state.threadId, accountId);
 			state.status = "idle";
 			// Only restore the last conversation message; never resurrect an older question.
 			const lastMessage = state.items
@@ -436,10 +572,10 @@ export class CodexSessionManager extends EventEmitter {
 			if (id && this.claims.get(id) === input.key) this.claims.delete(id);
 		}
 	}
-	private async project(cwd: string) {
+	private async project(cwd: string, transport = this.connection()) {
 		try {
 			return await resolveCodexProject(
-				(method, params) => this.transport.request(method, params),
+				(method, params) => transport.request(method, params),
 				cwd,
 			);
 		} catch (error) {
@@ -462,7 +598,7 @@ export class CodexSessionManager extends EventEmitter {
 			let cursor = earlier ? state.historyCursor : null;
 			for (let batch = 0; batch < 3; batch++) {
 				const page = record(
-					await this.transport.request("thread/items/list", {
+					await this.connection(state.threadId).request("thread/items/list", {
 						threadId: state.threadId,
 						limit: 100,
 						sortDirection: "desc",
@@ -509,7 +645,7 @@ export class CodexSessionManager extends EventEmitter {
 				: list(
 						record(
 							record(
-								await this.transport.request("thread/read", {
+								await this.connection(state.threadId).request("thread/read", {
 									threadId: state.threadId,
 									includeTurns: true,
 								}),
@@ -580,6 +716,9 @@ export class CodexSessionManager extends EventEmitter {
 		images?: string[];
 	}) {
 		const state = this.require(input.key);
+		z.array(chatImageUrlSchema)
+			.max(MAX_CHAT_IMAGES)
+			.parse(input.images ?? []);
 		if (state.status !== "idle")
 			throw new Error(
 				"Wait for this turn to finish or stop it before sending another message.",
@@ -629,7 +768,7 @@ export class CodexSessionManager extends EventEmitter {
 									excludeSlashTmp: false,
 								},
 							};
-			const started = this.transport.request("turn/start", {
+			const started = this.connection(state.threadId).request("turn/start", {
 				threadId: state.threadId,
 				input: [
 					{ type: "text", text: input.text, text_elements: [] },
@@ -683,6 +822,9 @@ export class CodexSessionManager extends EventEmitter {
 	async steer(input: { key: string; text: string; images?: string[] }) {
 		await this.turnStarts.get(input.key);
 		const state = this.require(input.key);
+		z.array(chatImageUrlSchema)
+			.max(MAX_CHAT_IMAGES)
+			.parse(input.images ?? []);
 		if (state.status !== "working" || !state.turnId)
 			throw new Error(
 				"This turn has finished. Resume the queue to send a new turn.",
@@ -700,7 +842,7 @@ export class CodexSessionManager extends EventEmitter {
 		state.items.push(optimistic);
 		this.publish(state);
 		try {
-			await this.transport.request("turn/steer", {
+			await this.connection(state.threadId).request("turn/steer", {
 				threadId: state.threadId,
 				expectedTurnId: turnId,
 				input: [
@@ -721,7 +863,7 @@ export class CodexSessionManager extends EventEmitter {
 		await this.turnStarts.get(key)?.catch(() => {});
 		const state = this.require(key);
 		if (state.turnId)
-			await this.transport.request("turn/interrupt", {
+			await this.connection(state.threadId).request("turn/interrupt", {
 				threadId: state.threadId,
 				turnId: state.turnId,
 			});
@@ -736,7 +878,7 @@ export class CodexSessionManager extends EventEmitter {
 		state.workingSince = Date.now();
 		this.publish(state);
 		try {
-			const started = this.transport.request(
+			const started = this.connection(state.threadId).request(
 				command === "review" ? "review/start" : "thread/compact/start",
 				command === "review"
 					? {
@@ -765,14 +907,17 @@ export class CodexSessionManager extends EventEmitter {
 			this.turnStarts.delete(key);
 		}
 	}
-	private notification(message: Record<string, unknown>) {
+	private notification(
+		message: Record<string, unknown>,
+		accountId = "default",
+	) {
 		const method = text(message.method);
 		const p = record(message.params);
 		const threadId = text(p.threadId) || text(record(p.thread).id);
 		const state = [...this.sessions.values()].find(
 			(s) => s.threadId === threadId,
 		);
-		if (!state) return;
+		if (!state || (state.accountId ?? "default") !== accountId) return;
 		const turnId = text(p.turnId) || state.turnId || "";
 		if (method === "turn/started") {
 			state.turnId = text(record(p.turn).id);
@@ -834,7 +979,7 @@ export class CodexSessionManager extends EventEmitter {
 			);
 		}
 		if (method === "serverRequest/resolved") {
-			const token = `${typeof p.requestId}:${p.requestId}`;
+			const token = `${accountId === "default" ? "" : `${accountId}:`}${typeof p.requestId}:${p.requestId}`;
 			if (this.requests.get(token)?.key === state.key) {
 				this.requests.delete(token);
 				state.approvals = state.approvals.filter((a) => a.id !== token);
@@ -1032,7 +1177,11 @@ export class CodexSessionManager extends EventEmitter {
 			if (approval.sourceItemId) this.requests.delete(approval.id);
 		state.approvals = state.approvals.filter((a) => !a.sourceItemId);
 	}
-	private approval(message: Record<string, unknown>) {
+	private approval(
+		message: Record<string, unknown>,
+		transport = this.transport,
+		accountId = "default",
+	) {
 		const p = record(message.params);
 		const method = text(message.method);
 		const id = message.id;
@@ -1046,14 +1195,19 @@ export class CodexSessionManager extends EventEmitter {
 			"item/tool/requestUserInput",
 			"mcpServer/elicitation/request",
 		];
-		if (!state || !supported.includes(method)) {
-			this.transport.reject(
+		if (method === "account/chatgptAuthTokens/refresh") return;
+		if (
+			!state ||
+			(state.accountId ?? "default") !== accountId ||
+			!supported.includes(method)
+		) {
+			transport.reject(
 				id,
 				`GatedSpace does not support this request: ${method}`,
 			);
 			return;
 		}
-		const token = `${typeof id}:${id}`;
+		const token = `${accountId === "default" ? "" : `${accountId}:`}${typeof id}:${id}`;
 		if (this.requests.has(token)) return;
 		if (method === "mcpServer/elicitation/request") {
 			// MCP approvals are not command approvals: the response uses action,
@@ -1185,7 +1339,7 @@ export class CodexSessionManager extends EventEmitter {
 			let delivered = false;
 			if (state.status === "working" && state.turnId) {
 				try {
-					await this.transport.request("turn/steer", {
+					await this.connection(state.threadId).request("turn/steer", {
 						threadId: state.threadId,
 						expectedTurnId: state.turnId,
 						input,
@@ -1211,10 +1365,13 @@ export class CodexSessionManager extends EventEmitter {
 				this.publish(state);
 				try {
 					// Omit permission/model overrides: preserve the session's settings.
-					const started = this.transport.request("turn/start", {
-						threadId: state.threadId,
-						input,
-					});
+					const started = this.connection(state.threadId).request(
+						"turn/start",
+						{
+							threadId: state.threadId,
+							input,
+						},
+					);
 					this.turnStarts.set(state.key, started);
 					const result = record(await started);
 					if (state.status === "working")
@@ -1276,7 +1433,7 @@ export class CodexSessionManager extends EventEmitter {
 					} else content[name] = answer;
 				}
 			}
-			this.transport.respond(pending.id, {
+			this.connection(this.get(pending.key)?.threadId).respond(pending.id, {
 				action: allow ? "accept" : "decline",
 				content: allow ? content : null,
 				_meta: null,
@@ -1314,7 +1471,10 @@ export class CodexSessionManager extends EventEmitter {
 					),
 				}
 			: { decision: allow ? "accept" : "decline" };
-		this.transport.respond(pending.id, result);
+		this.connection(this.get(pending.key)?.threadId).respond(
+			pending.id,
+			result,
+		);
 		this.requests.delete(id);
 		state.approvals = state.approvals.filter((a) => a.id !== id);
 		this.publish(state);
@@ -1330,13 +1490,13 @@ export class CodexSessionManager extends EventEmitter {
 		for (const [id, request] of this.requests)
 			if (request.key === key) {
 				if (request.elicitation)
-					this.transport.respond(request.id, {
+					this.connection(state.threadId).respond(request.id, {
 						action: "cancel",
 						content: null,
 						_meta: null,
 					});
 				else if (request.method !== "gatedspace/requestUserInput")
-					this.transport.reject(request.id, "Pane closed");
+					this.connection(state.threadId).reject(request.id, "Pane closed");
 				this.requests.delete(id);
 			}
 		this.sessions.delete(key);
@@ -1347,7 +1507,7 @@ export class CodexSessionManager extends EventEmitter {
 		clearTimeout(this.timers.get(key));
 		this.timers.delete(key);
 		if (state.threadId)
-			await this.transport
+			await this.connection(state.threadId)
 				.request("thread/unsubscribe", { threadId: state.threadId })
 				.catch(() => {});
 	}
@@ -1361,8 +1521,13 @@ export class CodexSessionManager extends EventEmitter {
 		for (const timer of this.timers.values()) clearTimeout(timer);
 		this.timers.clear();
 		this.recoveredQuestions.clear();
-		this.transport.dispose();
+		for (const transport of this.connections.values()) transport.dispose();
+		this.connections.clear();
 	}
 }
 
-export const codexSessionManager = new CodexSessionManager();
+export const codexSessionManager = new CodexSessionManager(
+	new CodexTransport(),
+	sessionNames,
+	codexProfiles,
+);

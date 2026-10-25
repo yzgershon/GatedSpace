@@ -15,6 +15,7 @@
 import { create } from "zustand";
 
 export type SwapTarget =
+	| { kind: "codex"; paneKey: string; paneTitle?: string }
 	/**
 	 * Swap the account a LIVE session pane is running on. The pane restarts
 	 * under the new account with `--resume`, so the conversation carries over.

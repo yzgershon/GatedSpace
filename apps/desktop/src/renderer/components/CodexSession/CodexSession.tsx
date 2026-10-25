@@ -34,8 +34,9 @@ export function CodexSession(props: CodexSessionProps) {
 	const [retry, setRetry] = useState(0);
 	const [loadingEarlier, setLoadingEarlier] = useState(false);
 	const models = useQuery({
-		queryKey: ["native-codex-models"],
-		queryFn: () => electronTrpcClient.codexSession.models.query(),
+		queryKey: ["native-codex-models", paneId, state?.accountId],
+		queryFn: () =>
+			electronTrpcClient.codexSession.models.query({ key: paneId }),
 		staleTime: 300_000,
 		retry: false,
 	});

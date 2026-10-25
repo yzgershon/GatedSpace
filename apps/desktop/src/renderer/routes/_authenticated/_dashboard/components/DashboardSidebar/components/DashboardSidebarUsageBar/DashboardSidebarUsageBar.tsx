@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import {
 	getCodexSession,
 	subscribeCodexSession,
@@ -100,6 +100,14 @@ export function DashboardSidebarUsageBar() {
 				: () => {},
 		() => (provider === "codex" ? getCodexSession(paneId)?.model : undefined),
 	);
+	const accountId = useSyncExternalStore(
+		(listener) =>
+			provider === "codex" && paneId
+				? subscribeCodexSession(paneId, listener)
+				: () => {},
+		() =>
+			provider === "codex" ? getCodexSession(paneId)?.accountId : undefined,
+	);
 	const queryOptions = {
 		staleTime: 0,
 		refetchInterval: 5_000,
@@ -115,7 +123,7 @@ export function DashboardSidebarUsageBar() {
 		{ ...queryOptions, enabled: provider === "claude" && Boolean(configDir) },
 	);
 	const codex = electronTrpc.codexSession.limits.useQuery(
-		{ model },
+		{ model, key: paneId || undefined },
 		{
 			...queryOptions,
 			refetchInterval: 30_000,
@@ -123,6 +131,10 @@ export function DashboardSidebarUsageBar() {
 			retry: false,
 		},
 	);
+	const { refetch: refreshCodexLimits } = codex;
+	useEffect(() => {
+		if (provider === "codex" && accountId) void refreshCodexLimits();
+	}, [provider, accountId, refreshCodexLimits]);
 	const limits =
 		provider === "codex" ? codex.data : configDir ? claude.data : active.data;
 

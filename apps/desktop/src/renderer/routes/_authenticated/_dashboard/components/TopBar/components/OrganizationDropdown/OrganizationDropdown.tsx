@@ -358,7 +358,7 @@ export function OrganizationDropdown({
 					className="gap-2"
 				>
 					<HiOutlineSparkles className="size-4" />
-					<span>Swap Claude account</span>
+					<span>Swap account</span>
 					<span className="ml-auto font-mono text-muted-foreground text-xs">
 						/swap
 					</span>
