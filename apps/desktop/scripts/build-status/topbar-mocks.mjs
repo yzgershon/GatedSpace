@@ -26,7 +26,7 @@ export function topBarPreviewMocks(desktop) {
 			"export const useQuickOpenStore=select=>select({openFor:()=>{}});",
 		"renderer/stores/workspace-sidebar-state":
 			"export const useWorkspaceSidebarStore=select=>select({isOpen:true,isCollapsed:()=>false});",
-		"renderer/lib/electron-trpc": `const branch=(path=[])=>new Proxy(()=>{}, {get:(_,key)=>key==='useQuery'?()=>({data:path.join('.')==='window.getPlatform'?'win32':path.join('.')==='diagnostics.appVersion'?{version:'1.18.32',isDev:false}:undefined}):key==='useMutation'?()=>({mutate:()=>{}}):branch([...path,key])}); export const electronTrpc=branch();`,
+		"renderer/stores/session-activity": `export const getSessionWorkspaceEntries=()=>Array.from({length:window.updatePreview.busySessions},(_,i)=>[String(i),'preview']); export const getSessionActivity=()=>({status:'streaming'});`,
 	};
 	return {
 		name: "topbar-preview-mocks",
@@ -44,6 +44,8 @@ export function topBarPreviewMocks(desktop) {
 					`${resolve(desktop, "src/renderer").replaceAll("\\", "/")}/`,
 					"renderer/",
 				);
+			if (normalized === "renderer/lib/electron-trpc")
+				return resolve(desktop, "scripts/build-status/update-transport.mjs");
 			let code = hooks[normalized];
 			if (importer.replaceAll("\\", "/").endsWith("/TopBar/TopBar.tsx")) {
 				const name = source.split("/").at(-1);
@@ -60,8 +62,6 @@ export function topBarPreviewMocks(desktop) {
 					code = `export const ${name}=()=>null;`;
 				if (name === "SidebarToggle")
 					code = `import {createElement as h} from 'react'; export const SidebarToggle=()=>h('button',{type:'button','aria-label':'Toggle sidebar',className:'size-10 shrink-0'},'◫');`;
-				if (name === "UpdateButton")
-					code = `import {createElement as h} from 'react'; export const UpdateButton=()=>h('button',{type:'button','aria-label':'Update',className:'size-9 shrink-0'},'↓');`;
 				if (name === "BuildStatus")
 					code = `import {createElement as h,useEffect,useState} from 'react'; import {BuildStatusView} from ${JSON.stringify(resolve(desktop, "src/renderer/routes/_authenticated/_dashboard/components/TopBar/components/BuildStatus/BuildStatus.tsx"))}; export function BuildStatus(){const [jobs,setJobs]=useState([]);useEffect(()=>{const update=e=>setJobs(e.detail);window.addEventListener('preview-builds',update);return()=>window.removeEventListener('preview-builds',update)},[]);return h(BuildStatusView,{jobs,onDismiss:job=>window.dispatchEvent(new CustomEvent('preview-dismiss',{detail:job.id})),onOpen:url=>window.dispatchEvent(new CustomEvent('preview-open',{detail:url}))})}`;
 			}

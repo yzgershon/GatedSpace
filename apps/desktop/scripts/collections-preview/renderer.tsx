@@ -1,5 +1,12 @@
 import { TooltipProvider } from "@superset/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+	createMemoryHistory,
+	createRootRoute,
+	createRoute,
+	createRouter,
+	RouterProvider,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
@@ -173,12 +180,22 @@ function Preview() {
 }
 const root = document.createElement("div");
 document.body.append(root);
+// The real navigation reads and changes routes, including the Flock overview.
+// Keep it inside a router just as it is in the desktop application.
+const rootRoute = createRootRoute({ component: Preview });
+const router = createRouter({
+	history: createMemoryHistory({ initialEntries: ["/v2-workspace"] }),
+	routeTree: rootRoute.addChildren([
+		createRoute({ getParentRoute: () => rootRoute, path: "/v2-workspace" }),
+		createRoute({ getParentRoute: () => rootRoute, path: "/ensemble" }),
+	]),
+});
 createRoot(root).render(
 	<QueryClientProvider
 		client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
 	>
 		<TooltipProvider>
-			<Preview />
+			<RouterProvider router={router} />
 		</TooltipProvider>
 	</QueryClientProvider>,
 );

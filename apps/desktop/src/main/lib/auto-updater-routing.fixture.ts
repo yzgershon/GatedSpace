@@ -8,9 +8,11 @@ const skipConfirmation = mock(() => {});
 const message = mock(async (_options: unknown) => ({ response: 1 }));
 const publicCheck = mock(async () => ({ updateInfo: { version: "1.18.10" } }));
 const publicInstall = mock(() => {});
+const setFeedURL = mock((_options: unknown) => {});
 const updater = Object.assign(new EventEmitter(), {
 	checkForUpdates: publicCheck,
 	quitAndInstall: publicInstall,
+	setFeedURL,
 });
 let target: { version: string; installerPath: string } | null = {
 	version: "1.18.10",
@@ -26,11 +28,16 @@ const launch = mock(async (_path: string, onQuit: () => void) => {
 	onQuit();
 });
 mock.module("electron", () => ({
-	app: { getVersion: () => "1.18.9", quit },
+	app: {
+		getVersion: () => "1.18.9",
+		quit,
+		isReady: () => false,
+		whenReady: () => new Promise(() => {}),
+	},
 	dialog: { showMessageBox: message },
 }));
 mock.module("electron-log/main", () => ({
-	default: { info() {}, warn() {}, error() {} },
+	default: { info() {}, warn() {}, error() {}, transports: { file: {} } },
 }));
 mock.module("electron-updater", () => ({ autoUpdater: updater }));
 mock.module("main/env.main", () => ({
@@ -43,7 +50,10 @@ mock.module("main/env.main", () => ({
 mock.module("main/index", () => ({
 	setSkipQuitConfirmation: skipConfirmation,
 }));
-mock.module("main/lib/app-state", () => ({ appState: { data: {} } }));
+mock.module("main/lib/app-state", () => ({
+	appState: { data: {}, write: async () => {} },
+}));
+mock.module("shared/constants", () => ({ PLATFORM: { IS_WINDOWS: true } }));
 mock.module("./crash-sentinel", () => ({ crashSentinel: { expectExit() {} } }));
 mock.module("./personal-update", () => ({
 	findPersonalUpdate: () => target,
@@ -67,7 +77,57 @@ describe(`${personal ? "personal" : "public"} updater routing`, () => {
 			expect(api.getPersonalUpdate()).toBeNull();
 		}
 	});
-	if (!personal) return;
+	if (!personal) {
+		it("publishes download and ready events for public Windows installs without a personal config", async () => {
+			api.setupAutoUpdater();
+			expect(setFeedURL).toHaveBeenCalledWith({
+				provider: "generic",
+				url: "https://github.com/yzgershon/GatedSpace/releases/latest/download",
+			});
+			const events: unknown[] = [];
+			const onStatus = (event: unknown) => events.push(event);
+			api.autoUpdateEmitter.on("status-changed", onStatus);
+			try {
+				updater.emit("update-available", { version: "1.18.10" });
+				updater.emit("download-progress", {
+					percent: 42,
+					transferred: 42,
+					total: 100,
+				});
+				expect(api.getUpdateStatus()).toMatchObject({
+					status: "downloading",
+					version: "1.18.10",
+					progress: { percent: 42 },
+				});
+				await api.installUpdate();
+				expect(publicInstall).not.toHaveBeenCalled();
+				updater.emit("update-downloaded", { version: "1.18.10" });
+				expect(api.getUpdateStatus()).toMatchObject({
+					status: "ready",
+					version: "1.18.10",
+				});
+				expect(events).toHaveLength(3);
+				await api.installUpdate();
+				await api.installUpdate();
+				expect(publicInstall).toHaveBeenCalledTimes(1);
+				expect(publicInstall).toHaveBeenCalledWith(false, true);
+				expect(skipConfirmation).toHaveBeenCalledTimes(1);
+				expect(launch).not.toHaveBeenCalled();
+				updater.emit("error", new Error("Installer failed to start"));
+				expect(api.getUpdateStatus()).toMatchObject({
+					status: "error",
+					error: "Installer failed to start",
+				});
+				api.checkForUpdates();
+				expect(publicCheck).toHaveBeenCalledTimes(2);
+				updater.emit("update-not-available", { version: "1.18.9" });
+				expect(api.getUpdateStatus().status).toBe("idle");
+			} finally {
+				api.autoUpdateEmitter.off("status-changed", onStatus);
+			}
+		});
+		return;
+	}
 	it("manual check finds the personal installer without calling the public feed", async () => {
 		api.checkForUpdatesInteractive();
 		await new Promise((done) => setTimeout(done, 0));

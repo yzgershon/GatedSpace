@@ -188,7 +188,12 @@ if (!process.argv.includes("--serve")) {
 			"Real workspace search/clear and active-toggle keyboard behavior; separate count/filter at 220/260/320px and 100/125/150/200% zoom",
 		);
 
-		for (const name of ["Workspaces · 2", "Recent sessions", "Usage"]) {
+		for (const name of [
+			"Workspaces · 2",
+			"Recent sessions",
+			"Flock · collaborative teams",
+			"Usage",
+		]) {
 			await page.getByRole("button", { name, exact: true }).hover();
 			const tip = page.locator(
 				'.dashboard-sidebar-nav-tooltip[data-state="delayed-open"], .dashboard-sidebar-nav-tooltip[data-state="instant-open"]',
@@ -203,6 +208,28 @@ if (!process.argv.includes("--serve")) {
 			});
 			await page.mouse.move(1140, 880);
 		}
+		const flock = page.getByRole("button", {
+			name: "Flock · collaborative teams",
+			exact: true,
+		});
+		await flock.click();
+		await page.waitForFunction(
+			() =>
+				document
+					.querySelector('[aria-label="Flock · collaborative teams"]')
+					?.getAttribute("aria-pressed") === "true",
+		);
+		await page
+			.getByRole("button", { name: "Recent sessions", exact: true })
+			.click();
+		await page.waitForFunction(
+			() =>
+				document
+					.querySelector('[aria-label="Recent sessions"]')
+					?.getAttribute("aria-pressed") === "true",
+		);
+		assert.equal(await flock.getAttribute("aria-pressed"), "false");
+		checks.push("Flock routing and return to the session panel");
 
 		await page.waitForFunction(
 			() => document.querySelectorAll(".collection-session-row").length === 3,
@@ -489,6 +516,14 @@ if (!process.argv.includes("--serve")) {
 			JSON.stringify({ checks, errors }, null, 2),
 		);
 		console.log(JSON.stringify({ passed: checks.length, errors }));
+	} catch (error) {
+		await writeFile(
+			resolve(output, "failure.json"),
+			JSON.stringify({ error: String(error), errors, checks }, null, 2),
+		);
+		await page.screenshot({ path: resolve(output, "failure.png") });
+		console.error("Collections page errors:", errors);
+		throw error;
 	} finally {
 		await browser.close();
 		server.close();

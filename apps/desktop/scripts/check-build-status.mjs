@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { build } from "vite";
+import { checkUpdateButton } from "./build-status/check-update-button.mjs";
 import { topBarPreviewMocks } from "./build-status/topbar-mocks.mjs";
 
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -97,6 +98,7 @@ if (!process.argv.includes("--serve")) {
 	try {
 		await page.goto(url);
 		await page.locator(".build-status-chip").waitFor();
+		const updateChecks = await checkUpdateButton(page, output);
 		await page.evaluate(() => {
 			// Even high-z pane overlays must stay inside the content layer.
 			const overlay = document.createElement("div");
@@ -352,6 +354,7 @@ if (!process.argv.includes("--serve")) {
 			layoutChecks,
 			verticalChecks,
 			checks: [
+				...updateChecks,
 				"header lower edges remain visible and hit-testable above positioned panes and high-z overlays",
 				"vertical center, unchanged heights and pane clearance at three zoom levels and two shell insets",
 				"real TopBar gap centering and non-overlap at seven widths",
