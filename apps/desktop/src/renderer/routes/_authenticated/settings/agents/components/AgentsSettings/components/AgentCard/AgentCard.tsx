@@ -224,6 +224,7 @@ export function AgentCard({
 				/>
 				<CollapsibleContent id={`${preset.id}-settings`}>
 					<CardContent className="space-y-4">
+						{preset.id === "claude" && <ClaudeCompactionSettings />}
 						<AgentCardFields
 							preset={preset}
 							inputVersion={inputVersion}
@@ -249,3 +250,5 @@ export function AgentCard({
 		</Card>
 	);
 }
+
+import { ClaudeCompactionSettings } from "../../../ClaudeCompactionSettings/ClaudeCompactionSettings";

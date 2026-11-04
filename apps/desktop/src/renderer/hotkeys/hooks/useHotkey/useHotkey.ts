@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useContext, useRef } from "react";
 import { type Options, useHotkeys } from "react-hotkeys-hook";
 import { formatHotkeyDisplay } from "../../display";
+import { HotkeyEnabledContext } from "../../HotkeyScope";
 import type { HotkeyId } from "../../registry";
 import { PLATFORM } from "../../registry";
 import { useEffectiveLayoutMap } from "../../stores/keyboardPreferencesStore";
@@ -26,6 +27,7 @@ export function useHotkey(
 	options?: Options,
 ): HotkeyDisplay {
 	const binding = useBinding(id);
+	const scopeEnabled = useContext(HotkeyEnabledContext);
 	const layoutMap = useEffectiveLayoutMap();
 	const chord = bindingToDispatchChord(binding, layoutMap);
 	const callbackRef = useRef(callback);
@@ -45,7 +47,8 @@ export function useHotkey(
 			...options,
 			// An empty binding matches media keys whose Windows event.code is empty.
 			// Never register unassigned shortcuts, even if the caller enabled them.
-			enabled: chord?.trim() ? (options?.enabled ?? true) : false,
+			enabled:
+				scopeEnabled && chord?.trim() ? (options?.enabled ?? true) : false,
 			ignoreEventWhen: callerIgnore
 				? (e) => shouldIgnoreEvent(e) || callerIgnore(e)
 				: shouldIgnoreEvent,

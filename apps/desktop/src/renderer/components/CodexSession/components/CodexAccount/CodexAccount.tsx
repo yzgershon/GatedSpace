@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useSyncExternalStore } from "react";
+import { SessionAccountButton } from "renderer/components/SessionComposerControls/SessionAccountButton";
 import {
 	getCodexSession,
 	subscribeCodexSession,
@@ -7,7 +8,13 @@ import {
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 
-export function CodexAccount({ paneId }: { paneId: string }) {
+export function CodexAccount({
+	paneId,
+	compact = false,
+}: {
+	paneId: string;
+	compact?: boolean;
+}) {
 	const state = useSyncExternalStore(
 		(fn) => subscribeCodexSession(paneId, fn),
 		() => getCodexSession(paneId),
@@ -16,6 +23,7 @@ export function CodexAccount({ paneId }: { paneId: string }) {
 		queryKey: ["agent-accounts", "codex"],
 		queryFn: () =>
 			electronTrpcClient.agentAccounts.list.query({ provider: "codex" }),
+		refetchInterval: 30_000,
 	});
 	const nickname = profiles.data?.accounts.find(
 		(a) => a.id === state?.accountId,
@@ -26,7 +34,16 @@ export function CodexAccount({ paneId }: { paneId: string }) {
 			electronTrpcClient.codexSession.account.query({ key: paneId }),
 		staleTime: 60_000,
 		retry: false,
+		enabled: !compact,
 	});
+	if (compact)
+		return (
+			<SessionAccountButton
+				provider="Codex"
+				label={nickname}
+				onClick={() => requestAccountSwap({ kind: "codex", paneKey: paneId })}
+			/>
+		);
 	return (
 		<div className="max-w-64 px-2 py-1 text-xs text-muted-foreground">
 			<div>{nickname || "Codex account"}</div>

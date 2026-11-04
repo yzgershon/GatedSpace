@@ -146,6 +146,15 @@ export interface SystemStatusEvent {
 	uuid: string;
 }
 
+export interface CompactBoundaryEvent {
+	type: "system";
+	subtype: "compact_boundary";
+	uuid: string;
+	session_id: string;
+	parent_tool_use_id?: string | null;
+	compact_metadata: { trigger: "auto" | "manual"; pre_tokens: number };
+}
+
 export interface HookStartedEvent {
 	type: "system";
 	subtype: "hook_started";
@@ -335,6 +344,7 @@ export type ClaudeStreamEvent =
 	| LocalUserMessageEvent
 	| SystemInitEvent
 	| SystemStatusEvent
+	| CompactBoundaryEvent
 	| HookStartedEvent
 	| HookResponseEvent
 	| AssistantEvent
@@ -352,6 +362,7 @@ export function isSystemEvent(
 ): e is
 	| SystemInitEvent
 	| SystemStatusEvent
+	| CompactBoundaryEvent
 	| HookStartedEvent
 	| HookResponseEvent {
 	return e.type === "system";

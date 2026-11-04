@@ -17,8 +17,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { LuCheck, LuChevronRight, LuPlus } from "react-icons/lu";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
+import { publishCodexSession } from "renderer/lib/codex-session/store";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { AccountSignIn } from "../AccountSignIn";
+import { CodexSwapUsage } from "./components/CodexSwapUsage";
 
 type Provider = "claude" | "codex";
 
@@ -26,10 +28,12 @@ export function AccountSwapDialog({
 	onClose,
 	initialProvider,
 	paneKey,
+	usageLimit = false,
 }: {
 	onClose: () => void;
 	initialProvider?: Provider;
 	paneKey?: string;
+	usageLimit?: boolean;
 }) {
 	const icons = {
 		claude: usePresetIcon("claude"),
@@ -58,11 +62,13 @@ export function AccountSwapDialog({
 		setPending(true);
 		setError("");
 		try {
-			await electronTrpcClient.agentAccounts.select.mutate({
+			const result = await electronTrpcClient.agentAccounts.select.mutate({
 				provider,
 				id,
 				key: provider === "codex" && scope !== "new" ? scope : undefined,
 			});
+			if (result.state) publishCodexSession(result.state);
+			await client.invalidateQueries({ queryKey: ["codex-account-usage"] });
 			await client.invalidateQueries({ queryKey: ["agent-accounts"] });
 			await client.invalidateQueries({ queryKey: ["native-codex-account"] });
 			await client.invalidateQueries({ queryKey: ["native-codex-models"] });
@@ -84,21 +90,25 @@ export function AccountSwapDialog({
 				if (!open && !pending) onClose();
 			}}
 		>
-			<DialogContent className="gap-4 sm:max-w-[420px]">
+			<DialogContent className="max-h-[85dvh] gap-4 overflow-y-auto sm:max-w-[420px]">
 				<DialogHeader>
 					<DialogTitle>
 						{adding
 							? `Add ${provider === "codex" ? "Codex" : "Claude Code"} account`
-							: "Swap account"}
+							: usageLimit
+								? "Continue with another account"
+								: "Swap account"}
 					</DialogTitle>
 					<DialogDescription>
 						{adding
 							? "Connect your subscription using the official sign-in flow."
-							: !provider
-								? "Choose the agent whose account you want to switch."
-								: scope === "new"
-									? "Choose the account for new sessions. Running sessions keep their account."
-									: "Continue this conversation with another account. Its history and settings stay with it."}
+							: usageLimit
+								? "This account has reached its usage limit. Switch here to reconnect this same conversation. Your history and draft stay in place."
+								: !provider
+									? "Choose the agent whose account you want to switch."
+									: scope === "new"
+										? "Choose the account for new sessions. Running sessions keep their account."
+										: "Continue this conversation with another account. Its history and settings stay with it."}
 					</DialogDescription>
 				</DialogHeader>
 				{!provider ? (
@@ -162,7 +172,7 @@ export function AccountSwapDialog({
 								</Button>
 							)}
 						</div>
-						{provider === "codex" && (
+						{provider === "codex" && !paneKey && (
 							<Select value={scope} onValueChange={setScope} disabled={pending}>
 								<SelectTrigger aria-label="Apply account to">
 									<SelectValue />
@@ -187,7 +197,7 @@ export function AccountSwapDialog({
 								<button
 									key={a.id}
 									type="button"
-									disabled={pending}
+									disabled={pending || (a.ready && a.id === activeId)}
 									onClick={() => {
 										if (a.ready) void pick(a.id);
 										else {
@@ -205,8 +215,15 @@ export function AccountSwapDialog({
 											{a.label}
 										</span>
 										<span className="block truncate text-xs text-muted-foreground">
-											{a.ready ? a.detail : "Sign in with browser"}
+											{a.id === activeId
+												? "Current account"
+												: a.ready
+													? a.detail
+													: "Sign in with browser"}
 										</span>
+										{provider === "codex" && a.ready && (
+											<CodexSwapUsage id={a.id} />
+										)}
 									</span>
 									{a.id === activeId && (
 										<LuCheck

@@ -31,4 +31,5 @@ export interface EnsembleProps {
 	actions: EnsembleActions;
 	workspaces: { id: string; name: string; project: string }[];
 	evidenceLabel?: string;
+	onClose?: () => void;
 }

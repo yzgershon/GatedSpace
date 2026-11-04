@@ -6,9 +6,23 @@ const listeners = new Set<() => void>();
 Object.assign(window, {
 	setUsageWindow: (minutes: number) => {
 		windowMinutes = minutes;
+		window.dispatchEvent(new Event("codex-fixture-usage"));
 		for (const listener of listeners) listener();
 	},
 });
+export function getFixtureCodexLimits() {
+	return normalizeCodexLimits({
+		rateLimits: {
+			primary: windowMinutes
+				? {
+						usedPercent: 25,
+						windowDurationMins: windowMinutes,
+						resetsAt: 1790474931,
+					}
+				: null,
+		},
+	});
+}
 function useCodexUsage() {
 	const minutes = useSyncExternalStore(
 		(listener) => {

@@ -17,7 +17,7 @@ function restoreDraft() {
   var saved = drafts[draftKey()];
   if (!saved) { var text = ""; try { text = localStorage.getItem("gs-draft:" + draftKey()) || ""; } catch (_) {} saved = {text:text, images:[]}; }
   input.value = saved.text; pending = saved.images.slice(); autosize(); renderShelf();
-  sendBtn.disabled = !!sending[draftKey()];
+  updateAttachmentState();
 }
 function networkMessage(text) { connection.textContent = text; connection.hidden = !text; }
 function createButton(text, action, className) {
@@ -235,7 +235,7 @@ function openSession(id, provider) {
 }
 function send() {
   var text = input.value.trim(), key = draftKey(), path = sessionPath(), generation = viewGeneration;
-  if ((!text && !pending.length) || !current || sending[key]) return;
+  if ((!text && !pending.length) || !current || sending[key] || (attachmentJob && attachmentJob.key === key)) return;
   var original = input.value, images = pending.slice(), signature = JSON.stringify({text:text, images:images});
   var request = draftRequests[key];
   if (!request || request.signature !== signature) request = draftRequests[key] = {signature:signature, id:crypto.randomUUID()};
@@ -251,7 +251,7 @@ function send() {
         var saved = drafts[key]; if (saved && saved.text === original) { saved.text = ""; saved.images = saved.images.filter(function (i) { return !images.includes(i); }); try { localStorage.removeItem("gs-draft:" + key); } catch (_) {} }
       }
     }).catch(function (e) { if (generation === viewGeneration) fail(e.message + " Your draft is saved; you can retry."); })
-    .finally(function () { sending[key] = false; if (generation === viewGeneration) sendBtn.disabled = false; });
+    .finally(function () { sending[key] = false; if (generation === viewGeneration) updateAttachmentState(); });
 }
 stopBtn.onclick = function () {
   var generation = viewGeneration; stopBtn.disabled = true;
@@ -265,7 +265,9 @@ window.addEventListener("online", function () { networkMessage(""); refresh(); }
 window.addEventListener("offline", function () { networkMessage("Offline. Your draft is saved. Reconnect to reach your desktop."); });
 document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
 window.addEventListener("pagehide", saveDraft);
-new ResizeObserver(function () {
+var composerObserver = new ResizeObserver(function () {
   document.documentElement.style.setProperty("--composer-height", composer.getBoundingClientRect().height + "px");
-}).observe(composer);
+  document.documentElement.style.setProperty("--shelf-height", shelf.getBoundingClientRect().height + "px");
+});
+composerObserver.observe(composer); composerObserver.observe(shelf);
 `;

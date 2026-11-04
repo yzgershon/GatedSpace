@@ -22,7 +22,7 @@
  * releases for a one-line CSS fix. Bump the last part for each change worth
  * confirming on the device.
  */
-export const MOBILE_BRIDGE_PAGE_VERSION = "1.4.0";
+export const MOBILE_BRIDGE_PAGE_VERSION = "1.4.1";
 
 export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
 	name: "GatedSpace",

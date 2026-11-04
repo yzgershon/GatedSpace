@@ -32,6 +32,7 @@ import {
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join } from "node:path";
 import { accountNickname } from "./agent-accounts/codex-profiles";
+import { inheritClaudeCompaction } from "./claude-compaction/settings";
 import { ensureSecureDir } from "./secure-file";
 
 export interface ClaudeAccountProfile {
@@ -235,6 +236,7 @@ export function addClaudeProfile(label: string): ClaudeAccountProfile {
 
 	const configDir = join(homedir(), `.claude-${id}`);
 	ensureSecureDir(configDir);
+	inheritClaudeCompaction(configDir);
 
 	profiles[id] = { label: trimmed, configDir };
 	state.profiles = profiles;

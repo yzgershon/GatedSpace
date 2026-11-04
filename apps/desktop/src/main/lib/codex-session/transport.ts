@@ -21,6 +21,7 @@ export class CodexRpcError extends Error {
 	constructor(
 		message: string,
 		readonly code: number,
+		readonly data?: unknown,
 	) {
 		super(message);
 	}
@@ -194,7 +195,11 @@ export class CodexTransport extends EventEmitter {
 			if (message.error) {
 				const error = record(message.error);
 				waiter.reject(
-					new CodexRpcError(text(error.message), Number(error.code)),
+					new CodexRpcError(
+						text(error.message),
+						Number(error.code),
+						error.data,
+					),
 				);
 			} else waiter.resolve(message.result);
 		});

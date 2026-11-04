@@ -57,7 +57,7 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 <p id="connection" class="connection" role="status" hidden></p>
 <main id="main"><p class="muted">Loading…</p></main>
 
-<p class="hint" id="hint" hidden></p>
+<p class="hint" id="hint" role="status" aria-live="polite" hidden></p>
 
 <div id="shelf" hidden></div>
 

@@ -7,8 +7,10 @@ import {
 } from "renderer/lib/codex-session/store";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import type { CodexTurnReview } from "shared/codex-session/review";
+import { CodexAccount } from "./components/CodexAccount/CodexAccount";
 import { CodexComposer } from "./components/CodexComposer/CodexComposer";
 import { CodexTranscript } from "./components/CodexTranscript/CodexTranscript";
+import { CodexUsageRecovery } from "./components/CodexUsageRecovery";
 import "./codex-session.css";
 
 export interface CodexSessionProps {
@@ -81,8 +83,13 @@ export function CodexSession(props: CodexSessionProps) {
 	useEffect(() => {
 		if (state?.threadId) callback.current(state.threadId);
 	}, [state?.threadId]);
+	// Account recovery publishes a new state in the same pane; clear the old local error too.
+	useEffect(() => {
+		if (state?.accountId) setError(null);
+	}, [state?.accountId]);
 	return (
 		<section className="codex-native" aria-label="Codex conversation">
+			<CodexAccount paneId={paneId} compact />
 			<CodexTranscript
 				state={state}
 				loadingEarlier={loadingEarlier}
@@ -107,7 +114,8 @@ export function CodexSession(props: CodexSessionProps) {
 					)
 				}
 			/>
-			{(error || state?.error) && (
+			{state?.usageLimit && <CodexUsageRecovery state={state} />}
+			{!state?.usageLimit && (error || state?.error) && (
 				<div className="codex-error select-text cursor-text" role="alert">
 					<span>{error || state?.error}</span>
 					{state?.status === "error" && (

@@ -10,6 +10,7 @@ import { createBuildStatusRouter } from "./build-status";
 import { createCacheRouter } from "./cache";
 import { createChangesRouter } from "./changes";
 import { createChatServiceRouter } from "./chat-service";
+import { createClaudeCompactionRouter } from "./claude-compaction";
 import { createClaudeSessionRouter } from "./claude-session";
 import { createClaudeSessionsRouter } from "./claude-sessions";
 import { createCodexSessionRouter } from "./codex-session";
@@ -49,6 +50,7 @@ export const createAppRouter = (getWindow: () => BrowserWindow | null) => {
 		chatService: createChatServiceRouter(),
 		claudeSessions: createClaudeSessionsRouter(),
 		claudeSession: createClaudeSessionRouter(),
+		claudeCompaction: createClaudeCompactionRouter(),
 		codexSession: createCodexSessionRouter(),
 		sessionQueue: createSessionQueueRouter(),
 		flowDictation: createFlowDictationRouter(),

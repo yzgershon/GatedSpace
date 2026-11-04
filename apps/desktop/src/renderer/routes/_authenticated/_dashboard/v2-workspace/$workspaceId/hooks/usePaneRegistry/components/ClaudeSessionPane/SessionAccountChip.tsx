@@ -20,17 +20,28 @@
  * Shown for every identified running account, including a single account.
  */
 import { cn } from "@superset/ui/utils";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { LuUserRound } from "react-icons/lu";
 import { useClaudeAccounts } from "renderer/components/ClaudeAccountSwap";
+import { SessionAccountButton } from "renderer/components/SessionComposerControls/SessionAccountButton";
+import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { getSessionSnapshot, subscribeSession } from "./sessionStore";
 
-export function SessionAccountChip({ paneId }: { paneId: string }) {
+export function SessionAccountChip({
+	paneId,
+	compact = false,
+}: {
+	paneId: string;
+	compact?: boolean;
+}) {
 	const configDir = useSyncExternalStore(
 		(callback) => subscribeSession(paneId, callback),
 		() => getSessionSnapshot(paneId).accountConfigDir,
 	);
-	const { accounts } = useClaudeAccounts();
+	const { accounts, refresh } = useClaudeAccounts();
+	useEffect(() => {
+		if (configDir) void refresh();
+	}, [configDir, refresh]);
 
 	/*
 	 * Matched on the config dir, not an id, because that is the only thing the
@@ -40,8 +51,17 @@ export function SessionAccountChip({ paneId }: { paneId: string }) {
 	const account = configDir
 		? accounts.find((a) => a.configDir === configDir)
 		: undefined;
-	// Nothing has spawned yet, or it spawned onto a directory no configured
-	// account claims. Either way the honest chip is no chip.
+	// A not-yet-identified process must never borrow the global default's label.
+	if (compact)
+		return (
+			<SessionAccountButton
+				provider="Claude"
+				label={
+					account?.label ?? (configDir ? "Unregistered account" : undefined)
+				}
+				onClick={() => requestAccountSwap({ kind: "session", paneKey: paneId })}
+			/>
+		);
 	if (!account) return null;
 
 	return (

@@ -28,6 +28,7 @@ export function EnsembleWorkspace({
 	actions,
 	workspaces,
 	evidenceLabel,
+	onClose,
 }: EnsembleProps) {
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [creating, setCreating] = useState(false);
@@ -132,7 +133,10 @@ export function EnsembleWorkspace({
 							workspaces={workspaces}
 							evidenceLabel={evidenceLabel}
 							actions={actions}
-							onClose={() => setCreating(false)}
+							onClose={() => {
+								setCreating(false);
+								if (!group) onClose?.();
+							}}
 							onCreated={(id) => {
 								setActiveId(id);
 								setCreating(false);

@@ -6,10 +6,21 @@ import {
 	DialogTitle,
 } from "@superset/ui/dialog";
 import { cn } from "@superset/ui/utils";
-import { useEffect, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { LuRefreshCw } from "react-icons/lu";
+import {
+	refreshCodexUsage,
+	useCodexAccounts,
+} from "renderer/components/ClaudeAccountSwap/useCodexAccounts";
+import {
+	getCodexSession,
+	subscribeCodexSession,
+} from "renderer/lib/codex-session/store";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { estimateCostUsd, formatUsd } from "renderer/lib/usage-cost";
+import { useFocusedSession } from "renderer/stores/focused-session";
+import { CodexUsageCard } from "./components/CodexUsageCard";
 
 interface UsageDialogProps {
 	open: boolean;
@@ -34,7 +45,6 @@ interface ProviderQuota {
 }
 
 const CLAUDE_COLOR = "var(--chart-1)";
-const CODEX_COLOR = "var(--chart-2)";
 
 function fmtTokens(n: number): string {
 	if (n >= 1e9) return `${(n / 1e9).toFixed(1)}B`;
@@ -380,6 +390,17 @@ function ContributionGraph({
 
 export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 	const utils = electronTrpc.useUtils();
+	const queryClient = useQueryClient();
+	const codexAccounts = useCodexAccounts(open);
+	const focused = useFocusedSession((state) => state.session);
+	const focusedCodexKey = focused?.provider === "codex" ? focused.paneId : "";
+	const currentCodexAccount = useSyncExternalStore(
+		(listener) =>
+			focusedCodexKey
+				? subscribeCodexSession(focusedCodexKey, listener)
+				: () => {},
+		() => getCodexSession(focusedCodexKey)?.accountId,
+	);
 	// Local-file reads only — this query never asks anyone anything, it just
 	// re-reads what's on disk. Which was the problem: re-reading a file nothing
 	// rewrites shows the same stale number however often you do it.
@@ -435,7 +456,6 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 	);
 
 	const quotas = (data?.quotas ?? []) as ProviderQuota[];
-	const codex = quotas.find((q) => q.provider === "Codex");
 	const claudeProfiles = profile?.profiles ?? [];
 
 	// Real Claude limits only exist locally if the status line is writing
@@ -451,7 +471,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onOpenChange} modal>
-			<DialogContent className="sm:max-w-xl">
+			<DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
 				<DialogHeader>
 					<div className="flex items-center gap-2">
 						<DialogTitle>Usage</DialogTitle>
@@ -461,7 +481,11 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 							// Re-ask the accounts, don't just re-read the file. Invalidating
 							// alone re-renders the same stale snapshot, which is why this
 							// button looked like it did nothing.
-							onClick={() => refreshLimits.mutate({ all: true, force: true })}
+							onClick={() => {
+								refreshLimits.mutate({ all: true, force: true });
+								void codexAccounts.refetch();
+								void refreshCodexUsage(queryClient);
+							}}
 							className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
 						>
 							<LuRefreshCw
@@ -473,8 +497,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 						</button>
 					</div>
 					<DialogDescription>
-						Read locally from your Claude Code and Codex data. Nothing is sent
-						anywhere.
+						Usage and reset times for each connected account.
 					</DialogDescription>
 				</DialogHeader>
 
@@ -483,7 +506,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 						Reading your usage…
 					</div>
 				) : (
-					<div className="flex flex-col gap-4">
+					<div className="flex min-w-0 flex-col gap-4">
 						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 							{(claudeProfiles.length > 0
 								? claudeProfiles
@@ -491,9 +514,7 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 							).map((p) => (
 								<ProviderCard
 									key={p.id}
-									name={
-										claudeProfiles.length > 1 ? `Claude · ${p.label}` : "Claude"
-									}
+									name={`Claude · ${p.label}`}
 									color={CLAUDE_COLOR}
 									quota={quotas.find(
 										(q) => q.provider === "Claude" && q.account === p.label,
@@ -511,12 +532,35 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 									}
 								/>
 							))}
-							<ProviderCard
-								name="Codex"
-								color={CODEX_COLOR}
-								quota={codex}
-								emptyHint="Limits appear after your next Codex session."
-							/>
+							{codexAccounts.data?.accounts.map((account) => (
+								<CodexUsageCard
+									key={account.id}
+									id={account.id}
+									label={account.label}
+									current={account.id === currentCodexAccount}
+									isDefault={account.id === codexAccounts.data.activeId}
+								/>
+							))}
+							{codexAccounts.isPending && (
+								<output className="p-4 text-xs text-muted-foreground">
+									Reading Codex accounts…
+								</output>
+							)}
+							{codexAccounts.isError && (
+								<p
+									role="alert"
+									className="select-text p-4 text-xs text-destructive"
+								>
+									Could not read Codex accounts.{" "}
+									<button
+										type="button"
+										onClick={() => void codexAccounts.refetch()}
+										className="underline"
+									>
+										Retry
+									</button>
+								</p>
+							)}
 						</div>
 
 						{statusLine && !statusLine.installed && (
@@ -546,7 +590,9 @@ export function UsageDialog({ open, onOpenChange }: UsageDialogProps) {
 							</div>
 						)}
 
-						<ContributionGraph perDay={data?.perDay ?? []} />
+						<div className="min-w-0 overflow-x-auto">
+							<ContributionGraph perDay={data?.perDay ?? []} />
+						</div>
 
 						<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
 							<span>

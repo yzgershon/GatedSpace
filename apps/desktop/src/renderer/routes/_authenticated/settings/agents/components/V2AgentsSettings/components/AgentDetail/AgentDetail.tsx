@@ -157,6 +157,7 @@ export function AgentDetail({
 			/>
 
 			<div className="space-y-6">
+				{config.presetId === "claude" && <ClaudeCompactionSettings />}
 				<Section title="Label">
 					<Input
 						id={`label-${config.id}`}
@@ -212,3 +213,5 @@ export function AgentDetail({
 		</div>
 	);
 }
+
+import { ClaudeCompactionSettings } from "../../../ClaudeCompactionSettings/ClaudeCompactionSettings";

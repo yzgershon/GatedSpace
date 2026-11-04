@@ -69,8 +69,11 @@ export function normalizeCodexLimits(value: unknown, model?: string) {
 		fiveHourPercent: percent(five),
 		weeklyPercent: percent(weekly),
 		fiveHourResets: resetLabel(five),
+		weeklyResets: resetLabel(weekly),
 	};
 }
+
+export type CodexLimits = ReturnType<typeof normalizeCodexLimits>;
 
 export function normalizeCodexSkills(value: unknown) {
 	return list(record(value).data)

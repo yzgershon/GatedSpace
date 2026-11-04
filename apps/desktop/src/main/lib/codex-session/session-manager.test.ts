@@ -1413,11 +1413,16 @@ describe("Codex account switching", () => {
 	function accountsFixture() {
 		class AccountTransport extends FakeTransport {
 			resumeFailure = false;
+			quotaFailure = false;
 			startGate?: Promise<void>;
 			async start() {
 				await this.startGate;
 			}
 			async request(method: string, params: unknown = {}) {
+				if (this.quotaFailure && method === "turn/start")
+					throw new CodexRpcError("Request rejected", -32000, {
+						code: "usage_limit_reached",
+					});
 				if (this.resumeFailure && method === "thread/resume")
 					throw new Error("Account unavailable");
 				return super.request(method, params);
@@ -1462,6 +1467,135 @@ describe("Codex account switching", () => {
 			},
 		};
 	}
+	test("a quota-rejected send offers recovery without leaving a phantom user message", async () => {
+		const { manager, original } = accountsFixture();
+		const state = await manager.start({
+			key: "quota-rejected-send",
+			cwd: "/workspace",
+		});
+		const history = structuredClone(state.items);
+		original.quotaFailure = true;
+		await expect(
+			manager.send({
+				key: state.key,
+				text: "Preserve this draft",
+				model: "gpt-6-astra",
+				effort: "low",
+				permission: "read-only",
+			}),
+		).rejects.toThrow("Request rejected");
+		expect(manager.get(state.key)?.usageLimit?.accountId).toBe("default");
+		expect(manager.get(state.key)?.items).toEqual(history);
+	});
+	test("quota recovery resumes the same thread and routes subsequent work to the selected account", async () => {
+		const { manager, original, work, bindings } = accountsFixture();
+		const state = await manager.start({
+			key: "quota-recovery",
+			cwd: "/workspace",
+		});
+		state.permission = "read-only";
+		state.status = "working";
+		state.turnId = "quota-turn";
+		original.emit("notification", {
+			method: "turn/completed",
+			params: {
+				threadId: state.threadId,
+				turn: {
+					id: "quota-turn",
+					status: "failed",
+					error: {
+						message: "Limit reached",
+						codexErrorInfo: "usageLimitExceeded",
+					},
+				},
+			},
+		});
+		expect(state.usageLimit?.accountId).toBe("default");
+		expect(manager.get(state.key)?.status).toBe("idle");
+		const incident = state.usageLimit?.id;
+		original.emit("notification", {
+			method: "error",
+			params: {
+				threadId: state.threadId,
+				error: { message: "You've hit your usage limit" },
+				willRetry: false,
+			},
+		});
+		expect(state.usageLimit?.id).toBe(incident);
+		const changed = await manager.switchAccount(state.key, "work");
+		expect(changed.threadId).toBe(state.threadId);
+		expect(changed.permission).toBe("read-only");
+		expect(changed.usageLimit).toBeUndefined();
+		expect(changed.error).toBeNull();
+		expect(bindings.get(state.threadId ?? "")).toBe("work");
+		expect(
+			work.calls.filter((call) => call.method === "thread/start"),
+		).toHaveLength(0);
+		await manager.send({
+			key: state.key,
+			text: "Continue the task",
+			model: "gpt-6-astra",
+			effort: "low",
+			permission: "read-only",
+		});
+		expect(work.calls.at(-1)?.method).toBe("turn/start");
+		expect(original.calls.some((call) => call.method === "turn/start")).toBe(
+			false,
+		);
+	});
+	test("a failed account change retains the quota recovery incident and original history", async () => {
+		const { manager, original, work } = accountsFixture();
+		const state = await manager.start({
+			key: "quota-rollback",
+			cwd: "/workspace",
+		});
+		original.emit("notification", {
+			method: "error",
+			params: {
+				threadId: state.threadId,
+				error: { codexErrorInfo: "usageLimitExceeded" },
+				willRetry: false,
+			},
+		});
+		const incident = state.usageLimit;
+		work.resumeFailure = true;
+		await expect(manager.switchAccount(state.key, "work")).rejects.toThrow(
+			"Account unavailable",
+		);
+		expect(manager.get(state.key)?.usageLimit).toEqual(incident);
+		expect(manager.get(state.key)?.accountId).toBe("default");
+		expect(manager.get(state.key)?.items).toBe(state.items);
+	});
+	test("transient retrying provider errors never offer an account switch", async () => {
+		const { manager, original } = accountsFixture();
+		const state = await manager.start({
+			key: "retry-throttle",
+			cwd: "/workspace",
+		});
+		state.status = "working";
+		original.emit("notification", {
+			method: "error",
+			params: {
+				threadId: state.threadId,
+				error: { message: "Rate limit exceeded" },
+				willRetry: true,
+			},
+		});
+		expect(state.usageLimit).toBeUndefined();
+		expect(state.status).toBe("working");
+	});
+	test("account usage reads never switch the default or an open conversation", async () => {
+		const { manager, original, work, bindings } = accountsFixture();
+		const state = await manager.start({ key: "usage-only", cwd: "/workspace" });
+		const originalCalls = original.calls.length;
+		await manager.limitsForAccount("work");
+		expect(work.calls.map((call) => call.method)).toEqual([
+			"account/rateLimits/read",
+		]);
+		expect(original.calls).toHaveLength(originalCalls);
+		expect(state.accountId).toBe("default");
+		expect(bindings.get(state.threadId ?? "")).toBe("default");
+	});
 	test("resumes the same thread on another account and leaves other sessions connected", async () => {
 		const { manager, original, work, bindings } = accountsFixture();
 		const first = await manager.start({

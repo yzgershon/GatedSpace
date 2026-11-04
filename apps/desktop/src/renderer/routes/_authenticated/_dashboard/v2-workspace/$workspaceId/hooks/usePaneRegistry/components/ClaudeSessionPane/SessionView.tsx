@@ -6,6 +6,7 @@ import { claudeTaskChanges } from "shared/claude-session/changes";
 import type { UserImagePayload } from "shared/claude-session/events";
 import type { SessionTimeline } from "shared/claude-session/timeline";
 import { ResumeWithAccount } from "./ResumeWithAccount";
+import { SessionAccountChip } from "./SessionAccountChip";
 import {
 	type EffortLevel,
 	type FileMention,
@@ -115,6 +116,7 @@ export function SessionView({
 	return (
 		// The dock reserves the real composer height, including long prompts.
 		<div className="relative flex h-full min-h-0 w-full flex-col bg-background">
+			{draftKey && <SessionAccountChip paneId={draftKey} compact />}
 			<div
 				ref={scrollRef}
 				onScroll={onScroll}

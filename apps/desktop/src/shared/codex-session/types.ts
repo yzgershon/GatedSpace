@@ -71,6 +71,8 @@ export interface CodexSessionState {
 	items: CodexItem[];
 	approvals: CodexApproval[];
 	error: string | null;
+	/** One quota incident; used to offer recovery once without losing the thread. */
+	usageLimit?: { id: string; accountId: string };
 	historyCursor: string | null;
 	diff: string;
 	contextTokens: number | null;

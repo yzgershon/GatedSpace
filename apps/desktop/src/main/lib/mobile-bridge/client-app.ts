@@ -681,46 +681,104 @@ var MAX_IMAGE_EDGE = 1600;
 var MAX_ATTACHMENTS = 6;
 
 var pending = [];   // images chosen but not yet sent
+var attachmentJob = null;
 
 function readImage(file) {
   return new Promise(function (resolve, reject) {
-    var url = URL.createObjectURL(file);
-    var img = new Image();
+    var reader = new FileReader(), img = new Image(), canvas, thumb, original;
+    var name = file.name || "image.jpg", settled = false;
+    var timeout = setTimeout(function () {
+      finish(new Error("Reading " + name + " took too long. Select it again to retry."));
+    }, 30000);
+    function finish(error, image) {
+      if (settled) return;
+      settled = true; clearTimeout(timeout);
+      reader.onload = reader.onerror = reader.onabort = null;
+      if (reader.readyState === 1) reader.abort();
+      img.onload = img.onerror = null; img.src = "";
+      // Safari retains canvas backing stores until they are explicitly released.
+      if (canvas) canvas.width = canvas.height = 0;
+      if (thumb) thumb.width = thumb.height = 0;
+      original = null;
+      if (error) reject(error); else resolve(image);
+    }
+    function originalImage() {
+      var source = original || "", comma = source.indexOf(",");
+      var mediaType = source.slice(5, source.indexOf(";")), data = source.slice(comma + 1);
+      // The bridge limit is on base64 characters, not the source file size.
+      if (["image/png", "image/jpeg", "image/webp", "image/gif"].indexOf(mediaType) < 0 ||
+          !source.startsWith("data:" + mediaType + ";base64,") || !data || data.length > 5000000) return null;
+      return { name: name, mediaType: mediaType, data: data,
+        width: img.naturalWidth, height: img.naturalHeight,
+        thumbnail: original.length <= 200000 ? original : undefined };
+    }
     img.onload = function () {
-      URL.revokeObjectURL(url);
-      var scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.width, img.height));
-      var w = Math.max(1, Math.round(img.width * scale));
-      var h = Math.max(1, Math.round(img.height * scale));
-      var canvas = document.createElement("canvas");
-      canvas.width = w; canvas.height = h;
-      canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+      try {
+        if (!img.naturalWidth || !img.naturalHeight) throw new Error("Image has no dimensions");
+        var scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+        var w = Math.max(1, Math.round(img.naturalWidth * scale));
+        var h = Math.max(1, Math.round(img.naturalHeight * scale));
+        canvas = document.createElement("canvas");
+        canvas.width = w; canvas.height = h;
+        var context = canvas.getContext("2d");
+        if (!context) throw new Error("Image memory unavailable");
+        context.drawImage(img, 0, 0, w, h);
 
-      // A separate, much smaller render for the chip and the desktop's own
-      // transcript. It rides inside the event, which lives for the whole
-      // session, so it has to stay tiny.
-      var ts = Math.min(1, 160 / Math.max(w, h));
-      var thumb = document.createElement("canvas");
-      thumb.width = Math.max(1, Math.round(w * ts));
-      thumb.height = Math.max(1, Math.round(h * ts));
-      thumb.getContext("2d").drawImage(canvas, 0, 0, thumb.width, thumb.height);
+        // A separate, much smaller render for the chip and the desktop's own
+        // transcript. It rides inside the event, which lives for the whole
+        // session, so it has to stay tiny.
+        var ts = Math.min(1, 160 / Math.max(w, h));
+        thumb = document.createElement("canvas");
+        thumb.width = Math.max(1, Math.round(w * ts));
+        thumb.height = Math.max(1, Math.round(h * ts));
+        var thumbContext = thumb.getContext("2d");
+        if (!thumbContext) throw new Error("Image memory unavailable");
+        thumbContext.drawImage(canvas, 0, 0, thumb.width, thumb.height);
+        var data = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
+        var thumbnail = thumb.toDataURL("image/jpeg", 0.6);
+        if (!data || data.length > 5000000 || !thumbnail.startsWith("data:image/jpeg;base64,")) {
+          throw new Error("Image encoding failed");
+        }
 
-      resolve({
-        name: file.name || "image.jpg",
-        mediaType: "image/jpeg",
-        width: w,
-        height: h,
-        // JPEG regardless of what came in: a PNG screenshot re-encodes to a
-        // fraction of the size at a quality no one can tell apart on a phone.
-        data: canvas.toDataURL("image/jpeg", 0.85).split(",")[1],
-        thumbnail: thumb.toDataURL("image/jpeg", 0.6)
-      });
+        finish(null, {
+          name: name,
+          mediaType: "image/jpeg",
+          width: w,
+          height: h,
+          // JPEG regardless of what came in: a PNG screenshot re-encodes to a
+          // fraction of the size at a quality no one can tell apart on a phone.
+          data: data,
+          thumbnail: thumbnail
+        });
+      } catch (_) {
+        // If resizing runs out of memory, a supported original can still send.
+        var fallback = originalImage();
+        if (fallback) finish(null, fallback);
+        else finish(new Error("Could not prepare " + name + ". Try a smaller photo or screenshot."));
+      }
     };
     img.onerror = function () {
-      URL.revokeObjectURL(url);
-      reject(new Error("Could not read " + (file.name || "that image")));
+      finish(new Error("Could not read " + name + ". Try a JPEG, PNG, or screenshot."));
     };
-    img.src = url;
+    reader.onerror = reader.onabort = function () {
+      finish(new Error("Could not read " + name + ". Select it again to retry."));
+    };
+    reader.onload = function () {
+      try { original = String(reader.result || ""); img.src = original; }
+      catch (_) { finish(new Error("Could not read " + name + ". Select it again to retry.")); }
+    };
+    // Read the selected bytes before clearing the picker. In particular, do
+    // not depend on a Photos-backed blob URL surviving a picker reset on iOS.
+    try { reader.readAsDataURL(file); }
+    catch (_) { finish(new Error("Could not read " + name + ". Select it again to retry.")); }
   });
+}
+
+function updateAttachmentState() {
+  attachBtn.disabled = !!attachmentJob;
+  var preparing = attachmentJob && attachmentJob.key === draftKey();
+  sendBtn.disabled = !!sending[draftKey()] || !!preparing;
+  if (preparing) showHint("Preparing photo " + attachmentJob.index + " of " + attachmentJob.total + "…", false);
 }
 
 function renderShelf() {
@@ -730,7 +788,7 @@ function renderShelf() {
     var chip = document.createElement("div");
     chip.className = "chip";
     var img = document.createElement("img");
-    img.src = image.thumbnail;
+    img.src = image.thumbnail || "data:" + image.mediaType + ";base64," + image.data;
     img.alt = image.name;
     var remove = document.createElement("button");
     remove.className = "x";
@@ -753,34 +811,42 @@ attachBtn.onclick = function () { fileInput.click(); };
 
 fileInput.onchange = function () {
   var files = Array.prototype.slice.call(fileInput.files || []);
-  // Reset immediately: without this, picking the same photo twice in a row
-  // fires no change event the second time.
-  fileInput.value = "";
-  if (!files.length) return;
+  if (!files.length || attachmentJob || !current) return;
 
   var room = MAX_ATTACHMENTS - pending.length;
   if (room <= 0) {
+    fileInput.value = "";
     showHint("That is as many images as one message takes.", true);
     return;
   }
-  if (files.length > room) {
-    showHint("Only the first " + room + " images were added.", true);
-  }
-
-  var attachmentSession = draftKey(), attachmentGeneration = viewGeneration;
-  attachBtn.disabled = true;
-  Promise.all(files.slice(0, room).map(readImage)).then(function (images) {
-    if (attachmentGeneration !== viewGeneration) {
-      var oldDraft = drafts[attachmentSession]; if (oldDraft) oldDraft.images = oldDraft.images.concat(images).slice(0, MAX_ATTACHMENTS);
+  var job = {key: draftKey(), total: Math.min(files.length, room), index: 0};
+  var failures = [], added = 0, truncated = files.length > room;
+  saveDraft(); attachmentJob = job;
+  function next() {
+    if (job.index >= job.total) {
+      attachmentJob = null;
+      // Now it is safe to reset, and selecting the same photo again still works.
+      fileInput.value = ""; updateAttachmentState();
+      if (job.key === draftKey()) {
+        if (failures.length) showHint((added ? added + " photo(s) attached. " : "") + failures.join(" "), true);
+        else if (truncated) showHint("Only the first " + job.total + " images were added.", true);
+        else hint.hidden = true;
+      }
       return;
     }
-    pending = pending.concat(images).slice(0, MAX_ATTACHMENTS);
-    renderShelf(); saveDraft();
-  }).catch(function (e) {
-    showHint(e.message, true);
-  }).then(function () {
-    attachBtn.disabled = false;
-  });
+    var file = files[job.index++]; updateAttachmentState();
+    // One decoded photo at a time: a camera roll can otherwise exhaust Safari's
+    // image/canvas memory. A failed file must not discard the other selections.
+    readImage(file).then(function (image) {
+      if (job.key === draftKey()) {
+        pending.push(image); renderShelf(); saveDraft();
+      } else {
+        var draft = drafts[job.key]; if (draft) draft.images.push(image);
+      }
+      added++;
+    }).catch(function (error) { failures.push(error.message); }).then(next);
+  }
+  next();
 };
 
 /* ------------------------------------------------------------------- hint */

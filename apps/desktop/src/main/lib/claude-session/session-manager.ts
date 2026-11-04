@@ -32,6 +32,7 @@ import { SUPERSET_HOME_DIR } from "../app-environment";
 import { ClaudeTurnNotifications } from "../notifications/claude-turn-notifications";
 import { sessionEvents } from "../notifications/session-events";
 import { sessionNames } from "../session-names";
+import { CompactionGuard } from "./compaction-guard";
 import { getSessionCost, recordSessionCost } from "./cost-store";
 import { resolveResumeClaim } from "./resume-claim";
 import { canResumeUnderConfigDir } from "./transcript";
@@ -255,8 +256,27 @@ class ClaudeSessionManager extends EventEmitter {
 		// handler checks it's the CURRENT one for this key, so a dying process
 		// can't emit into — or worse, deregister — its successor.
 		const isCurrent = () => this.sessions.get(key) === transport;
+		const compactionGuard = new CompactionGuard();
 		transport.on("event", (event: ClaudeStreamEvent) => {
 			if (!isCurrent()) return;
+			if (compactionGuard.observe(event)) {
+				// Stop the runaway process; keep the transcript, session id and replay buffer.
+				// Deregister first so late result events cannot restart queued work.
+				this.sessions.delete(key);
+				transport.dispose();
+				this.busy.delete(key);
+				this.resolveCapture(key, null);
+				this.releaseLockFor(key);
+				this.turnNotifications.clear(key);
+				sessionEvents.status(key, "error");
+				this.notice(
+					key,
+					"Claude stopped after three automatic compactions within ten minutes to prevent a compaction loop. Your conversation is preserved. In Settings → Agents → Claude, increase the compaction window or turn automatic compaction off, then reopen this session to continue.",
+					true,
+				);
+				this.emit(`exit:${key}`, { code: null, signal: null });
+				return;
+			}
 			if (event.type === "system" && event.subtype === "init") {
 				this.sessionIds.set(key, event.session_id);
 				sessionNames.bind("claude", key, event.session_id);

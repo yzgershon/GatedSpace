@@ -20,55 +20,50 @@ const output = resolve(
 		: "../../../.tmp/codex-activity-ui",
 );
 await mkdir(output, { recursive: true });
-await build({
-	configFile: false,
-	envFile: false,
-	logLevel: "warn",
-	plugins: [
-		react(),
-		tailwindcss(),
-		{
-			name: "fixture-ipc",
-			enforce: "pre",
-			load(id) {
-				if (/[/\\]renderer[/\\]lib[/\\]electron-trpc\.ts$/.test(id))
-					return readFile(
-						resolve(import.meta.dirname, "codex-session/fixture-usage.ts"),
-						"utf8",
-					);
-				if (/[/\\]useSkinTokens[/\\]useSkinTokens\.ts$/.test(id))
-					return 'import { VSCODE_TOKENS, LIQUID_GLASS_TOKENS } from "./skin-tokens"; export function useSkinTokens() { return location.search.includes("loading") ? {...VSCODE_TOKENS,paneGap:18,paneRadius:8,paneSurface:"raised"} : location.search.includes("inline") ? LIQUID_GLASS_TOKENS : VSCODE_TOKENS; }';
-				if (/[/\\]renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
-					return readFile(
-						resolve(import.meta.dirname, "codex-session/fixture-client.ts"),
-						"utf8",
-					);
+if (!process.env.ACTIVITY_SKIP_BUILD)
+	await build({
+		configFile: false,
+		envFile: false,
+		logLevel: "warn",
+		plugins: [
+			react(),
+			tailwindcss(),
+			{
+				name: "fixture-ipc",
+				enforce: "pre",
+				load(id) {
+					if (/[/\\]renderer[/\\]lib[/\\]electron-trpc\.ts$/.test(id))
+						return `export { electronTrpc } from ${JSON.stringify(resolve(import.meta.dirname, "codex-session/fixture-usage.ts").replaceAll("\\", "/"))};`;
+					if (/[/\\]useSkinTokens[/\\]useSkinTokens\.ts$/.test(id))
+						return 'import { VSCODE_TOKENS, LIQUID_GLASS_TOKENS } from "./skin-tokens"; export function useSkinTokens() { return location.search.includes("loading") ? {...VSCODE_TOKENS,paneGap:18,paneRadius:8,paneSurface:"raised"} : location.search.includes("inline") ? LIQUID_GLASS_TOKENS : VSCODE_TOKENS; }';
+					if (/[/\\]renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
+						return `export { electronTrpcClient } from ${JSON.stringify(resolve(import.meta.dirname, "codex-session/fixture-client.ts").replaceAll("\\", "/"))};`;
+				},
+			},
+		],
+		resolve: {
+			alias: {
+				renderer: resolve(import.meta.dirname, "../src/renderer"),
+				shared: resolve(import.meta.dirname, "../src/shared"),
 			},
 		},
-	],
-	resolve: {
-		alias: {
-			renderer: resolve(import.meta.dirname, "../src/renderer"),
-			shared: resolve(import.meta.dirname, "../src/shared"),
+		define: {
+			"process.env": "{}",
+			"process.platform": JSON.stringify(process.platform),
 		},
-	},
-	define: {
-		"process.env": "{}",
-		"process.platform": JSON.stringify(process.platform),
-	},
-	build: {
-		outDir: output,
-		emptyOutDir: false,
-		minify: false,
-		lib: {
-			entry: resolve(import.meta.dirname, "codex-session/renderer.tsx"),
-			formats: ["iife"],
-			name: "CodexFixture",
-			fileName: () => "renderer.js",
-			cssFileName: "style",
+		build: {
+			outDir: output,
+			emptyOutDir: false,
+			minify: false,
+			lib: {
+				entry: resolve(import.meta.dirname, "codex-session/renderer.tsx"),
+				formats: ["iife"],
+				name: "CodexFixture",
+				fileName: () => "renderer.js",
+				cssFileName: "style",
+			},
 		},
-	},
-});
+	});
 await writeFile(
 	resolve(output, "index.html"),
 	`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css?v=${Date.now()}"></head><body><script src="/renderer.js?v=${Date.now()}"></script></body></html>`,
@@ -834,7 +829,7 @@ try {
 	await page.screenshot({ path: resolve(output, "async-question.png") });
 	await page
 		.getByRole("textbox", { name: "Your answer: Are both panels closed?" })
-		.press("Enter");
+		.press("Control+Enter");
 	await page.locator(".codex-question-card").waitFor({ state: "detached" });
 	replies = await page.evaluate(
 		() =>
@@ -910,12 +905,15 @@ try {
 				);
 			});
 		await composer.getByRole("button", { name: /Preview/ }).waitFor();
+		// The approved compact composer uses a 1px outline; preserve that design.
 		if (
-			(await composer.evaluate((e) =>
-				parseFloat(getComputedStyle(e).borderTopWidth),
-			)) < 1.3
+			Math.abs(
+				(await composer.evaluate((e) =>
+					parseFloat(getComputedStyle(e).borderTopWidth),
+				)) - 1,
+			) > 0.1
 		)
-			throw Error("Composer outline too thin");
+			throw Error("Compact composer outline changed");
 		if (
 			(await composer
 				.locator(".session-image-preview img")
@@ -946,11 +944,11 @@ try {
 			throw Error("Remove image failed");
 	}
 	checks.push(
-		"both composers paste uncropped thumbnails, open full-size previews, dismiss with Escape and remove images; stronger borders and narrow panes pass",
+		"both composers paste uncropped thumbnails, open full-size previews, dismiss with Escape and remove images; approved compact borders and narrow panes pass",
 	);
 	await page.goto(`http://127.0.0.1:${port}/?usage`);
 	await page.getByText("25%", { exact: true }).waitFor();
-	await page.getByText("week", { exact: true }).waitFor();
+	await page.getByTitle("Codex - Personal - week", { exact: true }).waitFor();
 	if (await page.getByText(/usage unavailable/).count())
 		throw Error("Weekly-only plan still unavailable");
 	await page.getByText("25%", { exact: true }).hover();
@@ -965,7 +963,7 @@ try {
 			300,
 		),
 	);
-	await page.getByText("5h", { exact: true }).waitFor();
+	await page.getByTitle("Codex - Personal - 5h", { exact: true }).waitFor();
 	await page.evaluate(() =>
 		(
 			window as unknown as { setUsageProvider(p: string): void }
@@ -983,7 +981,9 @@ try {
 			0,
 		),
 	);
-	await page.getByText("Codex usage unavailable", { exact: true }).waitFor();
+	await page
+		.getByText("Codex - Personal usage unavailable", { exact: true })
+		.waitFor();
 	if (await page.getByText("0%", { exact: true }).count())
 		throw Error("Unknown quota shown as zero");
 	checks.push(

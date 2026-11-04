@@ -1,9 +1,9 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
-import { useMatchRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import "./sidebar-nav.css";
 import type { IconType } from "react-icons";
 import { LuGauge, LuHistory, LuLayers, LuNetwork } from "react-icons/lu";
+import { useFlockNavigation } from "renderer/components/EnsembleWorkspace/flock-navigation";
 import { UsageDialog } from "renderer/routes/_authenticated/_dashboard/components/UsageDialog/UsageDialog";
 import {
 	type SidebarPanel,
@@ -57,15 +57,13 @@ export function DashboardSidebarNav({
 	const panelOpen = useSidebarPanelStore((state) => state.panelOpen);
 	const selectPanel = useSidebarPanelStore((state) => state.selectPanel);
 	const [usageOpen, setUsageOpen] = useState(false);
-	const navigate = useNavigate();
-	const match = useMatchRoute();
-	const ensembleOpen = Boolean(match({ to: "/ensemble", fuzzy: true }));
+	const flock = useFlockNavigation();
 
 	const isPanel = (panel: SidebarPanel) =>
-		!ensembleOpen && panelOpen && activePanel === panel;
+		!flock.open && panelOpen && activePanel === panel;
 	const openPanel = (panel: SidebarPanel) => {
 		selectPanel(panel);
-		if (ensembleOpen) void navigate({ to: "/v2-workspace" });
+		if (flock.open) void flock.hide();
 	};
 
 	return (
@@ -86,8 +84,8 @@ export function DashboardSidebarNav({
 			<NavGlyph
 				label="Flock · collaborative teams"
 				Icon={LuNetwork}
-				selected={!usageOpen && ensembleOpen}
-				onClick={() => void navigate({ to: "/ensemble" })}
+				selected={!usageOpen && flock.open}
+				onClick={() => void flock.show()}
 			/>
 			{/*
 			 * Usage stays a DIALOG rather than becoming a panel, for the reason the

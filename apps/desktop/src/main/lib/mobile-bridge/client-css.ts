@@ -274,7 +274,7 @@ button.danger {
   font-weight: 500;
 }
 
-.hint { padding: 8px 2px 0; font-size: 12px; color: var(--muted); }
+.hint { position: fixed; z-index: 5; bottom: calc(var(--composer-height, 76px) + var(--shelf-height, 0px)); left: 12px; right: 12px; margin: 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); font-size: 12px; color: var(--muted); }
 .hint.warn { color: var(--warning); }
 .err { color: var(--danger); padding: 14px 0; }
 

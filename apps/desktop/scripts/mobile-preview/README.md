@@ -6,6 +6,8 @@ From the repository root, start `bun apps/desktop/scripts/mobile-preview/server.
 
 The test covers both providers, pagination, offline recovery, draft persistence, send/navigation races, image-only prompts, question replies, collapsed tools, small screens, reduced motion, and browser errors. This is fixture evidence, not a physical Android or live agent test.
 
+Run `node apps/desktop/scripts/mobile-preview/verify-attachments.mjs` against the same fixture server for photo regressions (Edge required). It covers both providers, camera-size images, same-file reselection, sequential decoding and canvas cleanup, partial failures, read timeouts, canvas-memory fallback, visible errors, and navigation while processing. APIs are simulated; it never sends to a real session. Physical iPhone verification is separate.
+
 Run manager route and bridge lifecycle tests in separate Bun processes because they mock singleton modules:
 
 - `bun test apps/desktop/src/main/lib/mobile-bridge/session-api.test.ts`

@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { shell } from "electron";
 import { codexProfiles } from "main/lib/agent-accounts/codex-profiles";
+import { CodexAccountUsage } from "main/lib/agent-accounts/codex-usage";
 import { AgentAccounts } from "main/lib/agent-accounts/service";
 import {
 	getClaudeProfile,
@@ -12,9 +13,36 @@ import { z } from "zod";
 import { publicProcedure, router } from "..";
 
 const accounts = new AgentAccounts((url) => shell.openExternal(url));
+const codexUsage = new CodexAccountUsage((id, model) =>
+	codexSessionManager.limitsForAccount(id, model),
+);
 const provider = z.enum(["claude", "codex"]);
 export const createAgentAccountsRouter = () =>
 	router({
+		codexUsage: publicProcedure
+			.input(
+				z.object({
+					id: z.string(),
+					model: z.string().optional(),
+					force: z.boolean().optional(),
+				}),
+			)
+			.query(async ({ input }) => {
+				const profile = codexProfiles.get(input.id);
+				const ready = existsSync(join(profile.home, "auth.json"));
+				return {
+					id: profile.id,
+					label: profile.label,
+					ready,
+					...(ready
+						? await codexUsage.get(profile.id, input.model, input.force)
+						: {
+								limits: null,
+								updatedAt: null,
+								error: "Sign in to see this account's usage.",
+							}),
+				};
+			}),
 		list: publicProcedure.input(z.object({ provider })).query(({ input }) => {
 			if (input.provider === "claude") {
 				const state = getClaudeProfile();
@@ -52,6 +80,7 @@ export const createAgentAccountsRouter = () =>
 		select: publicProcedure
 			.input(z.object({ provider, id: z.string(), key: z.string().optional() }))
 			.mutation(async ({ input }) => {
+				let state = null;
 				if (input.provider === "claude") {
 					if (input.key)
 						throw new Error(
@@ -63,14 +92,14 @@ export const createAgentAccountsRouter = () =>
 						throw new Error("Sign in to this account first.");
 					setClaudeProfileMode(input.id);
 				} else if (input.key)
-					await codexSessionManager.switchAccount(input.key, input.id);
+					state = await codexSessionManager.switchAccount(input.key, input.id);
 				else {
 					const profile = codexProfiles.get(input.id);
 					if (!existsSync(join(profile.home, "auth.json")))
 						throw new Error("Sign in to this account first.");
 					codexProfiles.select(input.id);
 				}
-				return { ok: true };
+				return { ok: true, state };
 			}),
 		login: publicProcedure
 			.input(

@@ -271,6 +271,7 @@ export function CreateEnsemble({
 						<label>
 							Goal
 							<textarea
+								aria-label="Goal"
 								value={goal}
 								onChange={(e) => setGoal(e.target.value)}
 								rows={4}
@@ -281,6 +282,7 @@ export function CreateEnsemble({
 						<label>
 							Definition of done
 							<textarea
+								aria-label="Definition of done"
 								value={criteria}
 								onChange={(e) => setCriteria(e.target.value)}
 								rows={2}

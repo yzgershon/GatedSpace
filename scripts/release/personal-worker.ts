@@ -307,6 +307,12 @@ try {
 			"collections-preview/results.json",
 		],
 		[
+			"Flock navigation",
+			"check-flock-navigation.mjs",
+			"FLOCK_PACKAGED",
+			"flock-navigation-preview/results.json",
+		],
+		[
 			"Tabs and questions",
 			"preview-session-controls.mjs",
 			"CONTROLS_PACKAGED",

@@ -2,6 +2,7 @@ import type { CodexSessionState } from "../../src/shared/codex-session/types";
 import type { ComputerUseState } from "../../src/shared/computer-use";
 import type { QueuedPrompt } from "../../src/shared/session-queue";
 import { electronTrpcClient as collectionClient } from "../collections-preview/mock";
+import { getFixtureCodexLimits } from "./fixture-usage";
 
 let computer: ComputerUseState = { phase: "off" };
 const computerListeners = new Set<(s: ComputerUseState) => void>();
@@ -33,6 +34,7 @@ function state(key: string): CodexSessionState {
 	if (s) return s;
 	s = {
 		key,
+		accountId: "default",
 		threadId: `thread-${key}`,
 		cwd: "C:\\Dev\\superset",
 		title: "Native Codex in GatedSpace",
@@ -109,6 +111,36 @@ function state(key: string): CodexSessionState {
 	return s;
 }
 export const electronTrpcClient = {
+	agentAccounts: {
+		list: {
+			query: async () => ({
+				activeId: "default",
+				accounts: [
+					{
+						id: "default",
+						label: "Personal",
+						ready: true,
+						detail: "Connected",
+					},
+				],
+				sessions: [...states.values()].map((s) => ({
+					key: s.key,
+					title: s.title,
+					accountId: s.accountId,
+				})),
+			}),
+		},
+		codexUsage: {
+			query: async () => ({
+				id: "default",
+				label: "Personal",
+				ready: true,
+				limits: getFixtureCodexLimits(),
+				updatedAt: Date.now(),
+				error: null,
+			}),
+		},
+	},
 	sessionQueue: {
 		...collectionClient.sessionQueue,
 		enqueue: {

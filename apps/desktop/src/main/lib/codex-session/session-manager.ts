@@ -22,6 +22,7 @@ import {
 	record,
 	text,
 } from "../../../shared/codex-session/types";
+import { isCodexUsageLimit } from "../../../shared/codex-session/usage-limit";
 import {
 	type CodexProfiles,
 	codexProfiles,
@@ -223,6 +224,19 @@ export class CodexSessionManager extends EventEmitter {
 			throw error;
 		}
 	}
+	private recordFailure(state: CodexSessionState, error: unknown) {
+		state.error =
+			error instanceof Error
+				? error.message
+				: text(record(error).message) || text(error);
+		if (isCodexUsageLimit(error)) {
+			state.usageLimit ??= {
+				id: randomUUID(),
+				accountId: state.accountId ?? "default",
+			};
+			state.error ||= "This Codex account has reached its usage limit.";
+		}
+	}
 
 	get(key: string) {
 		return this.sessions.get(key);
@@ -314,6 +328,13 @@ export class CodexSessionManager extends EventEmitter {
 				? this.forAccount(this.get(key)?.accountId ?? "default")
 				: this.connection()
 			).request("account/rateLimits/read"),
+			model,
+		);
+	}
+	async limitsForAccount(id: string, model?: string) {
+		this.profiles?.get(id);
+		return normalizeCodexLimits(
+			await this.forAccount(id).request("account/rateLimits/read"),
 			model,
 		);
 	}
@@ -427,6 +448,7 @@ export class CodexSessionManager extends EventEmitter {
 		const state: CodexSessionState = {
 			workspaceId: input.workspaceId ?? previous?.workspaceId,
 			accountId,
+			usageLimit: previous?.usageLimit,
 			permission: previous?.permission,
 			key: input.key,
 			threadId: previous?.threadId ?? null,
@@ -555,6 +577,7 @@ export class CodexSessionManager extends EventEmitter {
 			state.effort = effort;
 			if (id) await this.history(state, false, list(thread.turns));
 			this.profiles?.bind(state.threadId, accountId);
+			state.usageLimit = undefined;
 			state.status = "idle";
 			// Only restore the last conversation message; never resurrect an older question.
 			const lastMessage = state.items
@@ -565,7 +588,7 @@ export class CodexSessionManager extends EventEmitter {
 			return state;
 		} catch (error) {
 			state.status = "error";
-			state.error = error instanceof Error ? error.message : String(error);
+			this.recordFailure(state, error);
 			this.publish(state);
 			throw error;
 		} finally {
@@ -724,6 +747,7 @@ export class CodexSessionManager extends EventEmitter {
 				"Wait for this turn to finish or stop it before sending another message.",
 			);
 		state.error = null;
+		state.usageLimit = undefined;
 		state.status = "working";
 		state.permission = input.permission;
 		sessionEvents.work(input.key, "starting");
@@ -811,7 +835,7 @@ export class CodexSessionManager extends EventEmitter {
 			)
 				? "error"
 				: "idle";
-			state.error = error instanceof Error ? error.message : String(error);
+			this.recordFailure(state, error);
 			this.finishActivity(state, "failed");
 			this.publish(state);
 			throw error;
@@ -874,6 +898,7 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("Wait for Codex to finish before running this command.");
 		state.status = "working";
 		state.error = null;
+		state.usageLimit = undefined;
 		sessionEvents.work(key, "starting");
 		state.workingSince = Date.now();
 		this.publish(state);
@@ -899,7 +924,7 @@ export class CodexSessionManager extends EventEmitter {
 			this.publish(state);
 		} catch (error) {
 			state.status = "idle";
-			state.error = error instanceof Error ? error.message : String(error);
+			this.recordFailure(state, error);
 			this.finishActivity(state, "failed");
 			this.publish(state);
 			throw error;
@@ -961,6 +986,7 @@ export class CodexSessionManager extends EventEmitter {
 				(turn.status === "interrupted"
 					? "Stopped. You can continue below."
 					: null);
+			if (turn.error) this.recordFailure(state, turn.error);
 			state.approvals = state.approvals.filter(
 				(approval) => approval.isBlocking === false,
 			);
@@ -987,6 +1013,7 @@ export class CodexSessionManager extends EventEmitter {
 		}
 		if (method === "error") {
 			state.error = text(record(p.error).message) || text(p.message);
+			if (!p.willRetry) this.recordFailure(state, p.error ?? p.message);
 			if (!p.willRetry) {
 				this.finishActivity(state, "failed");
 				state.status = "idle";

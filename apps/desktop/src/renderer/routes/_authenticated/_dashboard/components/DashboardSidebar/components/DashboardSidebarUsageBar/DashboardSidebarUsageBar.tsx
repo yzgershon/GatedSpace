@@ -1,4 +1,5 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
+import { useCodexAccountUsage } from "renderer/components/ClaudeAccountSwap/useCodexAccounts";
 import {
 	getCodexSession,
 	subscribeCodexSession,
@@ -122,23 +123,21 @@ export function DashboardSidebarUsageBar() {
 		{ configDir: configDir ?? "" },
 		{ ...queryOptions, enabled: provider === "claude" && Boolean(configDir) },
 	);
-	const codex = electronTrpc.codexSession.limits.useQuery(
-		{ model, key: paneId || undefined },
-		{
-			...queryOptions,
-			refetchInterval: 30_000,
-			enabled: provider === "codex",
-			retry: false,
-		},
+	const codex = useCodexAccountUsage(
+		provider === "codex" ? accountId : undefined,
+		model,
 	);
-	const { refetch: refreshCodexLimits } = codex;
-	useEffect(() => {
-		if (provider === "codex" && accountId) void refreshCodexLimits();
-	}, [provider, accountId, refreshCodexLimits]);
 	const limits =
-		provider === "codex" ? codex.data : configDir ? claude.data : active.data;
+		provider === "codex"
+			? codex.data?.limits
+			: configDir
+				? claude.data
+				: active.data;
+	const accountLabel = provider === "codex" ? codex.data?.label : limits?.label;
+	const providerName = provider === "codex" ? "Codex" : "Claude";
+	const usageLabel = `${providerName}${accountLabel ? ` - ${accountLabel}` : ""}`;
 
-	const codexWindow = provider === "codex" ? codex.data?.window : null;
+	const codexWindow = provider === "codex" ? codex.data?.limits?.window : null;
 	const percent =
 		provider === "codex"
 			? (codexWindow?.usedPercent ?? null)
@@ -148,7 +147,7 @@ export function DashboardSidebarUsageBar() {
 	if (percent === null)
 		return (
 			<output className="block px-2 py-2 text-xs text-muted-foreground">
-				{provider === "codex" ? "Codex" : "Claude"} usage{" "}
+				{usageLabel} usage{" "}
 				{(
 					provider === "codex"
 						? codex.isPending
@@ -183,10 +182,13 @@ export function DashboardSidebarUsageBar() {
 					)}
 				>
 					<div className="flex items-baseline gap-2 font-mono text-[9.5px] uppercase tracking-[0.14em] text-muted-foreground/45">
-						<span className="min-w-0 truncate tracking-[0.06em] text-foreground/80">
-							{limits?.label ?? "Claude"}
+						<span
+							title={`${usageLabel} - ${windowLabel}`}
+							className="min-w-0 truncate tracking-[0.06em] text-foreground/80"
+						>
+							{usageLabel}
 						</span>
-						<span>{windowLabel}</span>
+						<span className="shrink-0">- {windowLabel}</span>
 						<span
 							className="ml-auto text-[11.5px] tabular-nums tracking-normal"
 							style={{ color: "var(--gs-usage)" }}
@@ -236,7 +238,7 @@ export function DashboardSidebarUsageBar() {
 				</div>
 			</TooltipTrigger>
 			<TooltipContent side="top">
-				{limits?.label ? `${limits.label} · ` : ""}
+				{usageLabel} · {codex.data?.error ? "Last reported · " : ""}
 				{percent}% of the {windowDescription} used
 				{windowLabel === "week" ||
 				limits?.weeklyPercent === null ||

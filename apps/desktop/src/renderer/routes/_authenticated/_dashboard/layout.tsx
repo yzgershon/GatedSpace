@@ -8,6 +8,7 @@ import {
 import { useMemo, useState } from "react";
 import { CommandPaletteHost } from "renderer/commandPalette";
 import { ClaudeAccountSwapHost } from "renderer/components/ClaudeAccountSwap";
+import { validateFlockSearch } from "renderer/components/EnsembleWorkspace/flock-navigation";
 import { ResizablePanel } from "renderer/components/ResizablePanel";
 import { DeleteWorkspaceDialog } from "renderer/components/WorkspaceSidebar/WorkspaceListItem/components";
 import { useIsV2CloudEnabled } from "renderer/hooks/useIsV2CloudEnabled";
@@ -30,9 +31,11 @@ import {
 } from "renderer/stores/workspace-sidebar-state";
 import { AddRepositoryModals } from "./components/AddRepositoryModals";
 import { CrossVersionMismatchState } from "./components/CrossVersionMismatchState";
+import { DashboardContent } from "./components/DashboardContent/DashboardContent";
 import { TopBar } from "./components/TopBar";
 
 export const Route = createFileRoute("/_authenticated/_dashboard")({
+	validateSearch: validateFlockSearch,
 	component: DashboardLayout,
 });
 
@@ -371,7 +374,9 @@ function DashboardLayout() {
 				<div className="workspace-content-layer flex flex-1 min-h-0 min-w-0 overflow-hidden">
 					{!sidebarOutsideColumn && animatedSidebar}
 					<div style={mainZoom} className="flex flex-1 min-h-0 min-w-0">
-						{versionMismatch ? <CrossVersionMismatchState /> : <Outlet />}
+						<DashboardContent>
+							{versionMismatch ? <CrossVersionMismatchState /> : <Outlet />}
+						</DashboardContent>
 					</div>
 				</div>
 			</div>

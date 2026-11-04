@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { validateFlockSearch } from "renderer/components/EnsembleWorkspace/flock-navigation";
 import { useSidebarPanelStore } from "renderer/stores/sidebar-panel";
 import { MessageQueue } from "../../src/renderer/components/SessionComposerControls/MessageQueue/MessageQueue";
 import { useMessageQueue } from "../../src/renderer/components/SessionComposerControls/MessageQueue/useMessageQueue";
@@ -182,7 +183,10 @@ const root = document.createElement("div");
 document.body.append(root);
 // The real navigation reads and changes routes, including the Flock overview.
 // Keep it inside a router just as it is in the desktop application.
-const rootRoute = createRootRoute({ component: Preview });
+const rootRoute = createRootRoute({
+	component: Preview,
+	validateSearch: validateFlockSearch,
+});
 const router = createRouter({
 	history: createMemoryHistory({ initialEntries: ["/v2-workspace"] }),
 	routeTree: rootRoute.addChildren([
