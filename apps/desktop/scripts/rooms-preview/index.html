@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Friends · GatedSpace preview</title><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="project.css"><link rel="stylesheet" href="sessions.css"></head><body>
+<svg class="symbols" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5"/></symbol>
+<symbol id="i-chat" viewBox="0 0 24 24"><path d="M20 11a8 8 0 0 1-8 8H4l-1 3V11a9 9 0 0 1 17 0Z"/><path d="M7 10h9M7 14h6"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="m10 14 4-4m-6 6-1 1a4 4 0 0 1-6-6l4-4a4 4 0 0 1 6 0m2 10a4 4 0 0 0 6 0l4-4a4 4 0 0 0-6-6l-1 1" transform="translate(1 0) scale(.9)"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 20V4m-6 6 6-6 6 6"/></symbol>
+<symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H5v18h14V8l-5-5Zm0 0v6h5M8 13h8M8 17h6"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+<symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+<symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+<symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-3a6 6 0 0 1 12 0v3m2-16a3 3 0 0 1 0 6m2 3c3 1 3 4 3 7"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="m8 4 12 8-12 8Z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+<symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/></symbol>
+<symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+<symbol id="i-history" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1 8M3 3v7h7m2-4v7l4 2"/></symbol>
+</defs></svg>
+<div class="app">
+<header class="titlebar"><div class="brand">GatedSpace<span class="version">Friends</span></div><span class="preview-label">Interactive concept</span><div class="title-actions"><button type="button" class="icon-button" id="help" aria-label="About this preview"><svg aria-hidden="true"><use href="#i-panel"/></svg></button></div></header>
+<div class="shell">
+<aside class="sidebar" aria-label="Friends navigation">
+<div class="primary-nav"><button type="button" class="icon-button" data-view="local" aria-label="Your workspace" title="Your workspace"><svg aria-hidden="true"><use href="#i-layers"/></svg></button><button type="button" class="icon-button" data-view="recent" aria-label="Recent activity" title="Recent activity"><svg aria-hidden="true"><use href="#i-history"/></svg></button><button type="button" class="icon-button selected" data-view="project" aria-label="Friends" title="Friends"><svg aria-hidden="true"><use href="#i-people"/></svg></button></div>
+<div class="sidebar-section"><span>Friends <b id="friend-count">1</b></span><button type="button" class="icon-button small" id="add-friend" aria-label="Add a friend"><svg aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+<div id="friend-list"><button type="button" class="friend selected" data-friend="daniel" aria-label="Open Daniel"><span class="avatar daniel mini">D<i></i></span><span><strong>Daniel</strong><small id="sidebar-presence">Online now</small></span><i class="friend-unread"></i></button></div>
+<div class="sidebar-projects"><span class="sidebar-label">Together with Daniel</span><button type="button" class="project-shortcut selected" data-view="project"><svg aria-hidden="true"><use href="#i-layers"/></svg><span>Campus planner</span></button><button type="button" class="project-shortcut" data-action="invite"><svg aria-hidden="true"><use href="#i-plus"/></svg><span>Share a project</span></button></div>
+<button type="button" class="add-friend-link" data-action="add-friend"><svg aria-hidden="true"><use href="#i-people"/></svg><span>Add a friend</span></button>
+<div class="sidebar-note"><svg aria-hidden="true"><use href="#i-lock"/></svg><p>Friendship connects you.<br>You choose what to share.</p></div>
+<button type="button" class="profile" aria-label="Your workspace sharing settings" data-action="sharing"><span class="avatar you mini">Y</span><span><strong>You</strong><small>Sharing 2 sessions</small></span><svg aria-hidden="true"><use href="#i-chevron"/></svg></button>
+</aside>
+<main class="room-main">
+<header class="friend-header"><button type="button" class="friend-identity" data-action="connection"><span class="avatar daniel">D<i></i></span><span><strong>Daniel</strong><small><span id="friend-presence">Online</span><b>·</b>Working on Campus planner</small></span></button><div class="friend-header-actions"><span class="friendship"><svg aria-hidden="true"><use href="#i-check"/></svg>Friends</span><button type="button" class="secondary" id="sharing" aria-label="Sharing settings"><svg aria-hidden="true"><use href="#i-lock"/></svg><span>Sharing</span></button><button type="button" class="icon-button" id="toggle-chat" aria-label="Toggle project chat" aria-expanded="true"><svg aria-hidden="true"><use href="#i-chat"/></svg></button></div></header>
+<div class="workspace-split">
+<section class="project-pane" aria-label="Shared project and sessions">
+<header class="project-header"><div><span class="project-overline">Shared project <svg aria-hidden="true"><use href="#i-chevron"/></svg></span><h1>Campus planner</h1></div><button type="button" class="secondary compact" data-file="brief"><svg aria-hidden="true"><use href="#i-file"/></svg>Brief</button></header>
+<div class="viewbar"><div class="view-tabs" role="tablist" aria-label="Project views"><button type="button" role="tab" aria-selected="true" data-tab="project">Sessions</button><button type="button" role="tab" aria-selected="false" data-tab="files">Files <span>2</span></button><button type="button" role="tab" aria-selected="false" data-tab="activity">Activity</button></div><button type="button" class="icon-button" id="add-session" aria-label="Share a session" title="Share a session"><svg aria-hidden="true"><use href="#i-plus"/></svg></button></div>
+<div class="project-scroll">
+<section class="team-panel" id="team-panel" aria-label="Shared sessions"><div class="team-head"><h2>Shared sessions</h2><span>3 sessions</span></div><div class="session-grid">
+<button type="button" class="session selected" data-select-session="claude" data-session-card="claude" aria-pressed="true"><span class="agent-icon"><img src="assets/claude.svg" alt="Claude Code"></span><span><strong>Calendar interface</strong><small>Daniel · Claude Code</small><em id="claude-state" class="quiet">Waiting for review</em></span><i class="session-dot"></i></button>
+<button type="button" class="session" data-select-session="codex" data-session-card="codex" aria-pressed="false"><span class="agent-icon"><img src="assets/codex.svg" alt="Codex"></span><span><strong>Data model</strong><small>You · Codex</small><em id="codex-state">Reviewing the schema</em></span><i class="session-dot"></i></button>
+<button type="button" class="session" data-select-session="gemini" data-session-card="gemini" aria-pressed="false"><span class="agent-icon"><img src="assets/gemini.svg" alt="Gemini"></span><span><strong>Student research</strong><small>You · Gemini</small><em id="gemini-state" class="quiet">Ready for a question</em></span><i class="session-dot"></i></button>
+</div></section>
+<div id="work-content"></div>
+</div>
+<div class="project-status"><div class="task-progress"><span></span></div><span id="progress-label">2 of 3 handoffs ready</span><button type="button" class="text-action" data-tab="activity">View activity <svg aria-hidden="true"><use href="#i-chevron"/></svg></button></div>
+</section>
+<div class="chat-divider" role="separator" aria-label="Resize project and chat" aria-orientation="vertical" aria-valuemin="300" aria-valuemax="520" aria-valuenow="370" tabindex="0"></div>
+<aside class="conversation-pane" aria-label="Project chat"><header class="chat-header"><div><svg aria-hidden="true"><use href="#i-chat"/></svg><strong>Project chat</strong><span id="conversation-count">5</span></div><div class="chat-people"><span class="avatar you mini">Y</span><span class="avatar daniel mini">D<i></i></span></div></header><div class="chat-context"><span class="tiny-dot"></span>You, Daniel, and 3 shared sessions</div>
+<div id="view-content" class="view-content" aria-live="polite" aria-relevant="additions"></div>
+<div class="composer-wrap"><div id="delivery-note" class="delivery-note" hidden></div><form id="composer" class="composer"><label class="sr-only" for="message">Message the room</label><textarea id="message" rows="2" placeholder="Message Daniel & the team…"></textarea><div class="composer-tools"><button type="button" class="icon-button" id="attach" aria-label="Share a file"><svg aria-hidden="true"><use href="#i-plus"/></svg></button><button type="button" id="audience" class="audience"><svg aria-hidden="true"><use href="#i-people"/></svg>Everyone<svg aria-hidden="true"><use href="#i-chevron"/></svg></button><button type="submit" class="send" aria-label="Send message"><svg aria-hidden="true"><use href="#i-arrow"/></svg></button></div></form><p class="composer-caption"><svg aria-hidden="true"><use href="#i-lock"/></svg>Only shared project messages appear here.</p></div></aside>
+</div>
+<footer class="demo-controls"><span class="simulation-label"><i class="demo-dot"></i>Simulated design preview</span><button type="button" class="connection" data-action="connection"><span id="connection-label"><i class="tiny-dot"></i>Connected</span><small id="connection-detail">Only what you share</small></button><div><button type="button" id="offline"><svg aria-hidden="true"><use href="#i-globe"/></svg><span>Try disconnect</span></button><button type="button" id="play"><svg aria-hidden="true"><use href="#i-play"/></svg><span>Play handoff</span></button></div></footer>
+</main></div></div>
+<dialog id="inspector" aria-labelledby="inspector-title"><header><span class="eyebrow" id="inspector-kicker"></span><button type="button" class="icon-button" id="close-inspector" aria-label="Close details"><svg aria-hidden="true"><use href="#i-close"/></svg></button></header><h2 id="inspector-title"></h2><div id="inspector-content"></div></dialog><div id="toast" role="status"></div><script src="app.js"></script><script src="project.js"></script></body></html>

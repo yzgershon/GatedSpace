@@ -295,3 +295,12 @@ job identity/log paths in `HANDOFF.md` as usual. Native dependencies and source 
 stripped. A successful compile checkpoint attests that sequence; do not rerun the
 source-map validator against stripped output. The packaged native architecture and
 file-content checks still run on every attempt.
+
+## In-app release highlights
+
+When preparing a desktop version, add its shipped user-facing changes to
+`apps/desktop/src/shared/release-highlights.ts`. Match the entry's version to the
+installer version. The app shows unread entries once after an update, on both
+architectures and in personal/public builds. The version badge reopens the latest
+notes. Do not include unfinished features or design previews. Notes are bundled
+locally so they work offline.

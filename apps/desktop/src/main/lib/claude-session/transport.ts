@@ -34,6 +34,7 @@ import { getClaudeProfile } from "../claude-profile";
 import { ensureSecureDir, writeSecureFile } from "../secure-file";
 import { sessionNamingInstructions } from "../session-names";
 import { withFastSettings } from "./fast-settings";
+import { ClaudeModelCatalog } from "./model-catalog";
 import { NdjsonLineBuffer } from "./ndjson-line-buffer";
 import { PermissionRequests } from "./permission-requests";
 import { resolveNativeClaude } from "./resolve-native";
@@ -106,6 +107,12 @@ export class ClaudeSessionTransport extends EventEmitter {
 	private queued: string[] = [];
 	private browserDispose?: () => void;
 	private browserConfig?: string;
+	private readonly modelCatalog = new ClaudeModelCatalog((value) => {
+		// A menu can open while browser setup is still awaiting the spawn. Keep
+		// initialization ahead of any user messages queued during that interval.
+		if (!this.child) this.queued.unshift(`${JSON.stringify(value)}\n`);
+		else this.writeStdin(value);
+	});
 	private permissions = new PermissionRequests(
 		(value) => this.writeStdin(value),
 		(event) => this.emit("event", event),
@@ -167,6 +174,7 @@ export class ClaudeSessionTransport extends EventEmitter {
 		if (this.started || this.disposed) return;
 		this.started = true;
 		void this.spawnSession().catch((error: Error) => {
+			this.modelCatalog.dispose();
 			this.cleanupBrowser();
 			if (!this.disposed) this.emit("error", error);
 		});
@@ -238,13 +246,20 @@ export class ClaudeSessionTransport extends EventEmitter {
 				if (line.trim()) this.emit("stderr", line);
 			}
 		});
-		this.child.on("error", (err) => this.emit("error", err));
+		this.child.on("error", (err) => {
+			this.modelCatalog.dispose();
+			this.emit("error", err);
+		});
 		this.child.on("exit", (code, signal) => {
+			this.modelCatalog.dispose();
 			this.cleanupBrowser();
 			for (const line of this.stdoutBuffer.flush()) this.handleStdoutLine(line);
 			this.permissions.clear();
 			this.emit("exit", { code, signal });
 		});
+		// Claude's own picker metadata includes new model names, aliases and
+		// account/project restrictions. Initialize before the first user message.
+		void this.modelCatalog.read();
 		for (const line of this.queued.splice(0)) this.child.stdin.write(line);
 		this.child.stdin.on("error", (error: Error) => {
 			if (!this.disposed) this.emit("error", error);
@@ -264,6 +279,7 @@ export class ClaudeSessionTransport extends EventEmitter {
 	private handleStdoutLine(line: string): void {
 		if (!line.trim()) return;
 		const event = parseStreamLine(line);
+		if (this.modelCatalog.handle(event)) return;
 		if (this.permissions.handle(event)) return;
 		if (event?.type === "result") this.permissions.clear();
 		if (event) this.emit("event", event);
@@ -325,6 +341,10 @@ export class ClaudeSessionTransport extends EventEmitter {
 		this.permissions.answer(id, allow);
 	}
 
+	getModels() {
+		return this.modelCatalog.read();
+	}
+
 	private writeStdin(payload: unknown): void {
 		if (this.disposed) return;
 		const line = `${JSON.stringify(payload)}\n`;
@@ -347,6 +367,7 @@ export class ClaudeSessionTransport extends EventEmitter {
 	/** Terminate the process and release listeners. Safe to call repeatedly. */
 	dispose(): void {
 		if (this.disposed) return;
+		this.modelCatalog.dispose();
 		this.permissions.clear();
 		this.disposed = true;
 		this.cleanupBrowser();

@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
 	chatImageSchema,
 	chatImageUrlSchema,
+	detectImageMime,
 	imageMimeType,
 	MAX_CHAT_IMAGE_BYTES,
 	MAX_CHAT_IMAGES,
@@ -10,6 +11,26 @@ import {
 import { queuedPromptSchema, storedQueuedPromptSchema } from "./session-queue";
 
 describe("chat image limits", () => {
+	test("detects image bytes despite Windows text MIME, missing names, and JFIF aliases", async () => {
+		const png = new File(
+			[
+				new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
+				new Uint8Array(300_000),
+			],
+			"clipboard",
+			{ type: "text/plain" },
+		);
+		expect(await detectImageMime(png)).toBe("image/png");
+		expect(imageMimeType({ name: "photo.jfif", type: "" })).toBe("image/jpeg");
+		expect(imageMimeType({ name: "photo", type: "image/pjpeg" })).toBe(
+			"image/jpeg",
+		);
+		expect(
+			await detectImageMime(
+				new File(["actual text"], "notes.txt", { type: "text/plain" }),
+			),
+		).toBeNull();
+	});
 	test("an older oversized queued image stays recoverable but cannot be sent unchanged", () => {
 		const prompt = {
 			provider: "codex",

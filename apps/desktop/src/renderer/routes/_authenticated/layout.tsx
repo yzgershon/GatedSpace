@@ -13,6 +13,7 @@ import { DndProvider } from "react-dnd";
 import { HiOutlineWifi } from "react-icons/hi2";
 import { NewWorkspaceModal } from "renderer/components/NewWorkspaceModal";
 import { Paywall } from "renderer/components/Paywall";
+import { WhatsNew } from "renderer/components/WhatsNew";
 import { WorkspaceInitEffects } from "renderer/components/WorkspaceInitEffects";
 import { env } from "renderer/env.renderer";
 import { useIsV2CloudEnabled } from "renderer/hooks/useIsV2CloudEnabled";
@@ -233,6 +234,7 @@ function AuthenticatedLayout() {
 								<DockBadgeController />
 								<DaemonAutoUpdateFailureDialog />
 								<Outlet />
+								<WhatsNew />
 								<V1ImportModal />
 								<WorkspaceInitEffects />
 								{isV2CloudEnabled ? (

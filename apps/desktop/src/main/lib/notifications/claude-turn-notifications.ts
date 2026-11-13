@@ -26,6 +26,8 @@ export class ClaudeTurnNotifications {
 			if (event.requests.length) this.sessions.status(key, "attention");
 			else if (this.pending.get(key)?.length)
 				this.sessions.status(key, "working");
+			else if (this.sessions.get(key)?.status === "attention")
+				this.sessions.status(key, "idle");
 		}
 		if (event.type !== "result" || event.parent_tool_use_id) return;
 		const resultKey = `${key}:${event.uuid}`;

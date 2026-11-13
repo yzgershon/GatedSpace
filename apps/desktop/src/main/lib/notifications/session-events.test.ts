@@ -37,6 +37,29 @@ const result = (
 	...extra,
 });
 describe("authoritative session completion", () => {
+	test("errors carry an acknowledgement key, remain stable, and relight on the next failed turn", () => {
+		const { sessions } = fixture();
+		sessions.work("pane", "quota-turn");
+		sessions.status("pane", "error");
+		expect(sessions.get("pane")?.turnId).toBe("quota-turn");
+		sessions.status("pane", "error");
+		expect(sessions.get("pane")?.turnId).toBe("quota-turn");
+		sessions.work("pane", "next-turn");
+		sessions.status("pane", "error");
+		expect(sessions.get("pane")?.turnId).toBe("next-turn");
+	});
+	test("answering a question after the result clears attention without inventing running work", () => {
+		const { sessions, claude } = fixture();
+		claude.sent("pane", "prompt", "Work");
+		claude.event("pane", {
+			type: "local_permissions",
+			requests: [{ id: "q", tool: "AskUserQuestion", input: {} }],
+		});
+		claude.event("pane", result("end"));
+		expect(sessions.get("pane")?.status).toBe("attention");
+		claude.event("pane", { type: "local_permissions", requests: [] });
+		expect(sessions.get("pane")?.status).toBe("idle");
+	});
 	test("history, child results and duplicate results never produce extra completions", () => {
 		const { sessions, notices, claude } = fixture();
 		claude.event("pane", result("replay"));

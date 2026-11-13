@@ -4,11 +4,11 @@ interface DropZoneOverlayProps {
 	position: SplitPosition | null;
 }
 
-const ZONE_STYLES: Record<SplitPosition, React.CSSProperties> = {
-	top: { top: 0, left: 0, width: "100%", height: "50%" },
-	bottom: { top: "50%", left: 0, width: "100%", height: "50%" },
-	left: { top: 0, left: 0, width: "50%", height: "100%" },
-	right: { top: 0, left: "50%", width: "50%", height: "100%" },
+const ZONE_TRANSFORMS: Record<SplitPosition, string> = {
+	top: "scaleY(0.5)",
+	bottom: "translateY(50%) scaleY(0.5)",
+	left: "scaleX(0.5)",
+	right: "translateX(50%) scaleX(0.5)",
 };
 
 export function DropZoneOverlay({ position }: DropZoneOverlayProps) {
@@ -17,10 +17,9 @@ export function DropZoneOverlay({ position }: DropZoneOverlayProps) {
 	return (
 		<div className="pointer-events-none absolute inset-0 z-10">
 			<div
-				className="absolute rounded-sm border-2 border-primary/70 bg-primary/10"
+				className="absolute inset-0 origin-top-left rounded-sm border-2 border-primary/70 bg-primary/10 transition-transform duration-150 ease-out motion-reduce:transition-none"
 				style={{
-					...ZONE_STYLES[position],
-					transition: "all 150ms ease",
+					transform: ZONE_TRANSFORMS[position],
 				}}
 			/>
 		</div>

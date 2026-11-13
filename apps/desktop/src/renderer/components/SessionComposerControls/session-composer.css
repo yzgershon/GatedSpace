@@ -404,6 +404,13 @@
 .session-composer[data-dragging="true"] {
 	border-color: var(--primary);
 }
+.session-attachment-status {
+	display: block;
+	padding: 2px 0 8px;
+	color: var(--muted-foreground);
+	font-size: 12px;
+	pointer-events: none;
+}
 .session-composer button:focus-visible,
 .session-settings select:focus-visible {
 	outline: 2px solid var(--ring);

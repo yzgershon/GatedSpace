@@ -30,11 +30,14 @@ import type {
 } from "renderer/components/ClaudeAccountSwap/useClaudeAccounts";
 import {
 	type ContextReport,
-	MODEL_CHOICES,
 	type ModelReport,
 	parseContextReport,
 	parseModelReport,
 } from "shared/claude-session/context-report";
+import {
+	type ClaudeModelChoice,
+	claudeModelChoices,
+} from "shared/claude-session/models";
 import {
 	parseUsageReport,
 	type UsageReport,
@@ -204,20 +207,14 @@ function ContextPanel({ report }: { report: ContextReport }) {
 
 function ModelPanel({
 	report,
+	catalog,
 	onPick,
 }: {
 	report: ModelReport | null;
+	catalog?: ClaudeModelChoice[];
 	onPick: (id: string) => void;
 }) {
-	// Offer the CLI's own list when it gave one, so a model added upstream shows
-	// up without a release here; fall back to the curated set for descriptions.
-	const known = new Set(report?.available ?? []);
-	const choices = MODEL_CHOICES.filter(
-		(choice) => known.size === 0 || known.has(choice.id),
-	);
-	const extra = (report?.available ?? []).filter(
-		(id) => !MODEL_CHOICES.some((choice) => choice.id === id),
-	);
+	const choices = claudeModelChoices(report, catalog);
 	const current = report?.current?.toLowerCase() ?? "";
 
 	return (
@@ -254,11 +251,6 @@ function ModelPanel({
 					</button>
 				);
 			})}
-			{extra.length > 0 ? (
-				<div className="px-2 pt-1 pb-0.5 font-mono text-[11px] text-muted-foreground/60">
-					also accepts: {extra.join(", ")}
-				</div>
-			) : null}
 		</div>
 	);
 }
@@ -407,6 +399,7 @@ export function SlashPalette({
 	accounts,
 	pinnedAccountId,
 	builtins,
+	modelCatalog,
 }: {
 	/** What's in the composer right now, starting with "/". */
 	text: string;
@@ -437,6 +430,7 @@ export function SlashPalette({
 	 * an icon, and the right-hand column doubles as a status readout.
 	 */
 	builtins?: BuiltinActions;
+	modelCatalog?: ClaudeModelChoice[];
 }) {
 	const panel = panelFor(text);
 	const [raw, setRaw] = useState<string | null>(null);
@@ -606,7 +600,11 @@ export function SlashPalette({
 					) : panel === "context" ? (
 						<ContextPanel report={parseContextReport(raw)} />
 					) : panel === "model" ? (
-						<ModelPanel report={parseModelReport(raw)} onPick={onPickModel} />
+						<ModelPanel
+							report={parseModelReport(raw)}
+							catalog={modelCatalog}
+							onPick={onPickModel}
+						/>
 					) : (
 						<UsagePanel report={parseUsageReport(raw)} />
 					)}

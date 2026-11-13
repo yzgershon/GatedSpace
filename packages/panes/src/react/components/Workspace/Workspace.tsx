@@ -167,6 +167,7 @@ export function Workspace<TData>({
 					))
 				) : activeTab ? (
 					<Tab
+						key={activeTab.id}
 						store={store}
 						tab={activeTab}
 						registry={registry}

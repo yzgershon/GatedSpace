@@ -673,6 +673,17 @@ export function createWorkspaceStore<TData>(
 			set((s) => {
 				const tab = s.tabs.find((t) => t.id === args.tabId);
 				if (!tab || !tab.layout) return s;
+				if (!Number.isFinite(args.splitPercentage)) return s;
+				let target = tab.layout;
+				for (const side of args.path) {
+					if (target.type !== "split") return s;
+					target = target[side];
+				}
+				if (
+					target.type !== "split" ||
+					Math.abs((target.splitPercentage ?? 50) - args.splitPercentage) < 0.01
+				)
+					return s;
 
 				return {
 					tabs: s.tabs.map((t) =>

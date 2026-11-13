@@ -547,6 +547,10 @@ class ClaudeSessionManager extends EventEmitter {
 		return this.sessions.get(key)?.isRunning ?? false;
 	}
 
+	getModels(key: string) {
+		return this.sessions.get(key)?.getModels() ?? Promise.resolve([]);
+	}
+
 	isBusy(key: string): boolean {
 		return this.busy.has(key);
 	}

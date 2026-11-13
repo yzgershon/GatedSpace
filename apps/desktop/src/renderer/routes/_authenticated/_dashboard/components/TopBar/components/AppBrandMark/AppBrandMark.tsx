@@ -12,6 +12,8 @@
  * BELOW that bar and line up with the pane cards. Same mark either way, so it
  * lives in one file rather than being spelled twice and drifting.
  */
+
+import { OPEN_WHATS_NEW } from "renderer/components/WhatsNew";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 
 export function AppBrandMark() {
@@ -23,7 +25,10 @@ export function AppBrandMark() {
 				GatedSpace
 			</span>
 			{appVersion && (
-				<span
+				<button
+					type="button"
+					onClick={() => window.dispatchEvent(new Event(OPEN_WHATS_NEW))}
+					aria-label={`What’s new in GatedSpace ${appVersion.version}`}
 					className="no-drag shrink-0 select-text rounded-md border border-border/70 bg-muted/40 px-2 py-1 font-mono text-[12.5px] text-muted-foreground/80 leading-[14px]"
 					title={
 						appVersion.isDev
@@ -33,7 +38,7 @@ export function AppBrandMark() {
 				>
 					v{appVersion.version}
 					{appVersion.isDev ? " dev" : ""}
-				</span>
+				</button>
 			)}
 		</>
 	);

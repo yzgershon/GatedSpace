@@ -54,6 +54,9 @@ export class SessionEvents extends EventEmitter {
 		if (this.active.has(key)) this.active.set(key, turnId);
 	}
 	status(key: string, status: "working" | "attention" | "idle" | "error") {
+		const state = this.sessions.get(key);
+		if (state && status === "error" && state.status !== "error")
+			state.turnId = this.active.get(key) ?? `error:${crypto.randomUUID()}`;
 		if (status === "idle" || status === "error") this.active.delete(key);
 		this.setStatus(key, status);
 	}

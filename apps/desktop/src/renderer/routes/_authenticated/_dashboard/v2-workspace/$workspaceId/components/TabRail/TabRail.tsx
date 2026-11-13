@@ -119,7 +119,6 @@ function TabRailItem({
 	const status = useV2SourcesNotificationStatus(
 		workspace.id,
 		getV2NotificationSourcesForTab(tab),
-		true,
 	);
 
 	const paneIds = Object.keys(tab.panes);

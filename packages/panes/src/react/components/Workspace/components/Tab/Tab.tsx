@@ -3,7 +3,7 @@ import {
 	ResizablePanel,
 	ResizablePanelGroup,
 } from "@superset/ui/resizable";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { StoreApi } from "zustand/vanilla";
 import type { WorkspaceStore } from "../../../../../core/store";
 import type {
@@ -19,6 +19,14 @@ import type {
 } from "../../../../types";
 import { Pane } from "./components/Pane";
 import { PANE_MIN_SIZE_CLASS_NAME } from "./constants";
+
+function layoutIdentity(node: LayoutNode): string {
+	if (!node || (node.type !== "pane" && node.type !== "split"))
+		return "missing";
+	return node.type === "pane"
+		? node.paneId
+		: `${node.direction}(${layoutIdentity(node.first)},${layoutIdentity(node.second)})`;
+}
 
 interface TabProps<TData> {
 	store: StoreApi<WorkspaceStore<TData>>;
@@ -56,25 +64,59 @@ function SplitView<TData>({
 	const firstSize = node.splitPercentage ?? 50;
 	const secondSize = 100 - firstSize;
 	const resizeSourceId = `${tab.id}:${path.join(".") || "root"}`;
+	const pathKey = path.join(".");
+	const stablePath = useMemo(
+		() => pathKey.split(".").filter(Boolean) as SplitPath,
+		[pathKey],
+	);
+	const identity = layoutIdentity(node);
+	const dragging = useRef(false);
+	const pendingSize = useRef<number | null>(null);
+	const commitSize = useCallback(() => {
+		const size = pendingSize.current;
+		pendingSize.current = null;
+		let current = store.getState().getTab(tab.id)?.layout;
+		for (const side of stablePath)
+			current = current?.type === "split" ? current[side] : undefined;
+		if (size !== null && current && layoutIdentity(current) === identity)
+			store.getState().resizeSplit({
+				tabId: tab.id,
+				path: stablePath,
+				splitPercentage: size,
+			});
+	}, [store, tab.id, stablePath, identity]);
 
+	// The panel library moves the divider locally. Persist once at release, so
+	// dragging does not rerender every transcript or write the DB on each move.
 	useEffect(() => {
-		return () => {
+		const finish = () => {
+			dragging.current = false;
+			commitSize();
 			onSplitResizeDragging?.(resizeSourceId, false);
 		};
-	}, [onSplitResizeDragging, resizeSourceId]);
+		window.addEventListener("blur", finish);
+		return () => {
+			window.removeEventListener("blur", finish);
+			finish();
+		};
+	}, [commitSize, onSplitResizeDragging, resizeSourceId]);
+	useEffect(() => {
+		if (dragging.current) return;
+		const current = groupRef.current?.getLayout()[0];
+		if (current !== undefined && Math.abs(current - firstSize) > 0.01)
+			groupRef.current?.setLayout([firstSize, secondSize]);
+	}, [firstSize, secondSize]);
 
 	return (
 		<ResizablePanelGroup
 			ref={groupRef}
+			id={resizeSourceId}
 			className="min-h-full min-w-full overflow-auto"
 			direction={node.direction}
 			onLayout={(sizes) => {
 				if (sizes[0] != null) {
-					store.getState().resizeSplit({
-						tabId: tab.id,
-						path,
-						splitPercentage: sizes[0],
-					});
+					pendingSize.current = sizes[0];
+					if (!dragging.current) commitSize();
 				}
 			}}
 		>
@@ -109,9 +151,12 @@ function SplitView<TData>({
 				 * and must not import a desktop-only hook.
 				 */
 				className="bg-[var(--gs-split-handle,var(--border))] transition-colors hover:bg-border data-[resize-handle-state=drag]:bg-border"
-				onDragging={(isDragging) =>
-					onSplitResizeDragging?.(resizeSourceId, isDragging)
-				}
+				hitAreaMargins={{ coarse: 24, fine: 10 }}
+				onDragging={(isDragging) => {
+					dragging.current = isDragging;
+					if (!isDragging) commitSize();
+					onSplitResizeDragging?.(resizeSourceId, isDragging);
+				}}
 				onDoubleClick={(e) => {
 					e.stopPropagation();
 					groupRef.current?.setLayout([50, 50]);
@@ -217,6 +262,7 @@ function LayoutNodeView<TData>({
 
 	return (
 		<SplitView
+			key={`${tab.id}:${layoutIdentity(node)}`}
 			store={store}
 			tab={tab}
 			node={node}

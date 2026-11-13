@@ -39,6 +39,10 @@ const startInput = z.object({
 
 export const createClaudeSessionRouter = () => {
 	return router({
+		models: publicProcedure
+			.input(z.object({ key: z.string() }))
+			.query(({ input }) => claudeSessionManager.getModels(input.key)),
+
 		start: publicProcedure.input(startInput).mutation(({ input }) => {
 			/*
 			 * RESOLVE THE ACCOUNT HERE, AND HAND IT BACK.

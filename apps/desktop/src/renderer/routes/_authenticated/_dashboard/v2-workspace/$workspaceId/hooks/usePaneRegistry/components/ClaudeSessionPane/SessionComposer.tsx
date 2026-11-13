@@ -21,17 +21,19 @@ import { useMessageQueue } from "renderer/components/SessionComposerControls/Mes
 import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerButtons as SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerButtons/SessionComposerButtons";
+import { useComposerFileDrop } from "renderer/components/SessionComposerControls/useComposerFileDrop";
+import {
+	appendFileReference,
+	resolveChatFile,
+} from "renderer/lib/chat-file-attachments";
 import {
 	matchSwapCandidate,
 	parseSwapCommand,
 } from "shared/claude-account/swap-command";
 import type { UserImagePayload } from "shared/claude-session/events";
+import { claudeModelChoices } from "shared/claude-session/models";
 import type { SessionStatus } from "shared/claude-session/timeline";
-import {
-	IMAGE_LIMIT_MESSAGE,
-	imageMimeType,
-	MAX_CHAT_IMAGES,
-} from "shared/image-attachments";
+import { IMAGE_LIMIT_MESSAGE, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import type { SessionChangeSummary } from "shared/session-changes";
 import { prepareImage } from "./composer-images";
 import { SlashPalette } from "./SlashPalette";
@@ -40,6 +42,7 @@ import {
 	setSessionDraft,
 	subscribeSessionDraft,
 } from "./sessionStore";
+import { useClaudeModels } from "./useClaudeModels";
 
 export const EFFORT_LEVELS = [
 	"low",
@@ -162,26 +165,6 @@ export function nextMode(mode: SessionMode): SessionMode {
 	return next?.id ?? "manual";
 }
 
-const MODEL_CHOICES: { id: string; label: string; description: string }[] = [
-	{
-		id: "default",
-		label: "Default",
-		description: "Whatever the CLI is configured to use",
-	},
-	{ id: "opus", label: "Opus", description: "Most capable, slowest" },
-	{
-		id: "sonnet",
-		label: "Sonnet",
-		description: "Balanced speed and capability",
-	},
-	{ id: "haiku", label: "Haiku", description: "Fastest, for simple work" },
-	{
-		id: "opusplan",
-		label: "Opus Plan",
-		description: "Opus for planning, Sonnet to execute",
-	},
-];
-
 export function SessionComposer({
 	changes,
 	model = "Claude",
@@ -208,95 +191,87 @@ export function SessionComposer({
 		draftKey ? getSessionDraft(draftKey).text : "",
 	);
 	const [settingsBusy, setSettingsBusy] = useState(false);
+	const [modelMenuOpen, setModelMenuOpen] = useState(false);
+	const modelCatalog = useClaudeModels(
+		draftKey,
+		pinnedAccountId,
+		modelMenuOpen || text.trim() === "/model",
+	);
 	const [caret, setCaret] = useState(0);
 	const [mentions, setMentions] = useState<FileMention[]>([]);
 	const [images, setImages] = useState<UserImagePayload[]>(() =>
 		draftKey ? getSessionDraft(draftKey).images : [],
 	);
 	const [imageError, setImageError] = useState<string | null>(null);
-	const [dragging, setDragging] = useState(false);
+	const changeModel = async (id: string): Promise<boolean> => {
+		if (!onRunCommand || settingsBusy || status === "streaming") return false;
+		setSettingsBusy(true);
+		try {
+			const reply = await onRunCommand(`/model ${id}`);
+			if (!reply || !/set model to/i.test(reply))
+				throw new Error(
+					reply ||
+						"Could not change the model. Wait for Claude to finish and retry.",
+				);
+			setImageError(null);
+			return true;
+		} catch (error) {
+			setImageError(error instanceof Error ? error.message : String(error));
+			return false;
+		} finally {
+			setSettingsBusy(false);
+		}
+	};
+	const [preparing, setPreparing] = useState(0);
+	const pendingAttachments = useRef(0);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
-	const imageSlots = useRef(0);
 	const attachedImages = useRef(images);
 	attachedImages.current = images;
 	const isRunning = status === "streaming";
 
-	/**
-	 * Attach anything, by two different routes.
-	 *
-	 * IMAGES ride in the message as base64 blocks, because that is the only way
-	 * the model can look at a picture, and it is verified to work (transport.ts).
-	 *
-	 * EVERYTHING ELSE goes in as an absolute PATH, and the model reads it off
-	 * disk with its own tools. That is deliberate, not a shortcut. The CLI's
-	 * stream-json input is not known to accept `document` blocks, and inventing
-	 * one that gets silently dropped would look exactly like the model ignoring
-	 * a PDF. Reading from disk is how the CLI already handles files, it works
-	 * for anything it can open — pdf, csv, source, logs — and it costs nothing
-	 * in message size, which matters when the file is 40MB.
-	 *
-	 * Decoding and downscaling images happens in the background, appending as
-	 * each finishes. Failures are named rather than swallowed: a screenshot that
-	 * silently didn't attach looks exactly like the model ignoring it.
-	 */
-	const attachFiles = (files: File[]) => {
-		if (files.length === 0) return;
+	// Images are sent as image blocks. Other local files are referenced by path
+	// and read by the native agent with its existing tools and permissions.
+	const attachFiles = async (files: File[]) => {
+		if (!files.length) return;
+		pendingAttachments.current++;
+		setPreparing(pendingAttachments.current);
 		setImageError(null);
-
-		const images = files.filter((f) => Boolean(imageMimeType(f)));
-		const others = files.filter((f) => !imageMimeType(f));
-
-		for (const [index, file] of images.entries()) {
-			if (
-				attachedImages.current.length + imageSlots.current >=
-				MAX_CHAT_IMAGES
-			) {
-				setImageError(IMAGE_LIMIT_MESSAGE);
-				break;
-			}
-			imageSlots.current++;
-			void prepareImage(file, index)
-				.then((image) => {
-					attachedImages.current = [...attachedImages.current, image];
-					setImages(attachedImages.current);
-				})
-				.catch((error: unknown) => {
+		try {
+			for (const file of files) {
+				try {
+					const result = await resolveChatFile(file);
+					if (result.kind === "image") {
+						if (attachedImages.current.length >= MAX_CHAT_IMAGES) {
+							setImageError(IMAGE_LIMIT_MESSAGE);
+							continue;
+						}
+						const image = await prepareImage(
+							file,
+							attachedImages.current.length,
+						);
+						if (attachedImages.current.length >= MAX_CHAT_IMAGES) {
+							setImageError(IMAGE_LIMIT_MESSAGE);
+							continue;
+						}
+						attachedImages.current = [...attachedImages.current, image];
+						setImages(attachedImages.current);
+					} else
+						setText((current) => appendFileReference(current, result.text));
+				} catch (error) {
 					setImageError(
-						error instanceof Error ? error.message : "Could not attach image",
+						error instanceof Error
+							? error.message
+							: `Could not attach ${file.name}.`,
 					);
-				})
-				.finally(() => {
-					imageSlots.current--;
-				});
+				}
+			}
+		} finally {
+			pendingAttachments.current--;
+			setPreparing(pendingAttachments.current);
 		}
-
-		if (others.length === 0) return;
-		const paths: string[] = [];
-		const unresolved: string[] = [];
-		for (const file of others) {
-			// Electron 32 dropped File.path; webUtils is the supported replacement
-			// and is already on the preload surface. A file with no real path on
-			// disk (a synthetic blob) cannot be read by the CLI, so say so rather
-			// than attach a name that resolves to nothing.
-			const path = window.webUtils?.getPathForFile(file);
-			if (path) paths.push(path);
-			else unresolved.push(file.name);
-		}
-		if (unresolved.length > 0) {
-			setImageError(
-				`Could not resolve a file path for ${unresolved.join(", ")} — save it to disk first.`,
-			);
-		}
-		if (paths.length === 0) return;
-		// Appended to the prompt rather than shown as a chip: the path IS the
-		// instruction here, and the user can see and edit exactly what the model
-		// will be told to read.
-		setText((current) => {
-			const separator = current.trim() ? "\n\n" : "";
-			return `${current}${separator}${paths.join("\n")}`;
-		});
 	};
+	const fileDrop = useComposerFileDrop(attachFiles);
 
 	// Mirror the draft out to the module store on every change, so an unmount
 	// mid-sentence loses nothing. Cheap: two references into a Map.
@@ -404,12 +379,26 @@ export function SessionComposer({
 		focus: () => textareaRef.current?.focus(),
 	});
 	const submit = async () => {
-		if (queueSending || editor.busy) return;
+		if (
+			pendingAttachments.current > 0 ||
+			queueSending ||
+			editor.busy ||
+			settingsBusy
+		)
+			return;
 		if (editor.id) {
 			await editor.save({ provider: "claude", text, images });
 			return;
 		}
 		const value = text.trim();
+		// Full model IDs use the same acknowledged, persistent selection path as
+		// the picker, including releases this build has never heard of.
+		const modelCommand = /^\/model\s+([\w.[\]-]+)$/.exec(value)?.[1];
+		if (modelCommand && onRunCommand && !isRunning && images.length === 0) {
+			if (await changeModel(modelCommand))
+				setText((current) => (current === text ? "" : current));
+			return;
+		}
 		/*
 		 * `/swap` never reaches the CLI, which has no such command and would
 		 * answer with an error. Enter picks the account when the name is
@@ -452,34 +441,15 @@ export function SessionComposer({
 		<div className="session-composer-area">
 			<SessionChangesPill changes={changes} provider="claude" />
 			<MessageQueue queue={queue} provider="claude" editor={editor} />
-			{/* biome-ignore lint/a11y/noStaticElementInteractions: a drop target is
-			    a region, not a control; the same files go in via the + button,
-			    which is the keyboard-reachable path. */}
 			<div
-				onDragOver={(e) => {
-					// Only claim the drop for files, or dragging selected text within
-					// the textarea would light up the whole composer.
-					if (!e.dataTransfer.types.includes("Files")) return;
-					e.preventDefault();
-					setDragging(true);
-				}}
-				onDragLeave={(e) => {
-					// Ignore the leave events fired while crossing child elements.
-					if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
-					setDragging(false);
-				}}
-				onDrop={(e) => {
-					const files = Array.from(e.dataTransfer.files ?? []);
-					if (files.length === 0) return;
-					e.preventDefault();
-					setDragging(false);
-					attachFiles(files);
-				}}
+				{...fileDrop.handlers}
+				aria-busy={preparing > 0}
 				className="session-composer"
-				data-dragging={dragging}
+				data-dragging={fileDrop.dragging}
 			>
 				{showPalette && onRunCommand ? (
 					<SlashPalette
+						modelCatalog={modelCatalog}
 						text={text}
 						commands={slashCommands}
 						onRunCommand={onRunCommand}
@@ -487,8 +457,10 @@ export function SessionComposer({
 						onPickModel={(id) => {
 							// Applying the model is itself a local command, and the composer
 							// shouldn't be left holding "/model" afterwards.
-							void onRunCommand(`/model ${id}`);
-							setText("");
+							void changeModel(id).then((changed) => {
+								if (changed)
+									setText((current) => (current === text ? "" : current));
+							});
 						}}
 						onSwapAccount={onSwapAccount}
 						accounts={accounts}
@@ -551,6 +523,13 @@ export function SessionComposer({
 						))}
 					</fieldset>
 				)}
+				{(fileDrop.dragging || preparing > 0) && (
+					<output className="session-attachment-status">
+						{preparing > 0
+							? "Preparing attachments..."
+							: "Drop files to attach"}
+					</output>
+				)}
 				{imageError && (
 					<p
 						className="px-4 pt-3 text-xs text-destructive select-text cursor-text"
@@ -573,7 +552,9 @@ export function SessionComposer({
 							if (files.length === 0) return;
 							if (e.clipboardData?.getData("text/plain")) return;
 							e.preventDefault();
-							attachFiles(files);
+							void attachFiles(files).catch((error) =>
+								setImageError(String(error)),
+							);
 						}}
 						onChange={(e) => {
 							setText(e.target.value);
@@ -628,7 +609,9 @@ export function SessionComposer({
 					multiple
 					className="hidden"
 					onChange={(e) => {
-						attachFiles(Array.from(e.target.files ?? []));
+						void attachFiles(Array.from(e.target.files ?? [])).catch((error) =>
+							setImageError(String(error)),
+						);
 						// Clear it, or picking the same file twice in a row is a no-op.
 						e.target.value = "";
 					}}
@@ -645,25 +628,15 @@ export function SessionComposer({
 					<SessionComposerSettings
 						provider="Claude"
 						model={model}
-						models={MODEL_CHOICES.map((m) => ({
+						onModelMenuOpenChange={setModelMenuOpen}
+						models={claudeModelChoices(null, modelCatalog).map((m) => ({
 							id: m.id,
-							name: m.id === "default" ? "Default model" : `Claude ${m.label}`,
+							name: m.label,
 						}))}
 						onModelChange={
 							onRunCommand
 								? (id) => {
-										setSettingsBusy(true);
-										void onRunCommand(`/model ${id}`)
-											.then((reply) => {
-												if (!reply || !/set model to/i.test(reply))
-													throw new Error(
-														reply ||
-															"Could not change the model. Wait for Claude to finish and retry.",
-													);
-												setImageError(null);
-											})
-											.catch((error: Error) => setImageError(error.message))
-											.finally(() => setSettingsBusy(false));
+										void changeModel(id);
 									}
 								: undefined
 						}
@@ -725,7 +698,7 @@ export function SessionComposer({
 								<button
 									type="button"
 									onClick={submit}
-									disabled={queueSending || editor.busy}
+									disabled={preparing > 0 || queueSending || editor.busy}
 									aria-label={
 										editor.id ? "Save queued message" : "Queue message"
 									}
@@ -751,7 +724,9 @@ export function SessionComposer({
 						<button
 							type="button"
 							onClick={submit}
-							disabled={!canSend || queueSending || editor.busy}
+							disabled={
+								preparing > 0 || !canSend || queueSending || editor.busy
+							}
 							aria-label={editor.id ? "Save queued message" : "Send"}
 							className="session-send"
 						>

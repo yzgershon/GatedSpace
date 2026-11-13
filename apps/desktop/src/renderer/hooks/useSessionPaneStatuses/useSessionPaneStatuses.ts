@@ -36,7 +36,6 @@ export function useSessionPaneStatus(paneId: string | undefined): PaneStatus {
  */
 export function useSessionPaneStatuses(
 	paneIds: readonly string[],
-	keepCompleted = false,
 ): Map<string, PaneStatus> {
 	useSyncExternalStore(subscribeSessionActivity, getSessionActivityVersion);
 	const sessionSeenTurn = useV2NotificationStore(
@@ -51,7 +50,7 @@ export function useSessionPaneStatuses(
 			paneId,
 			deriveSessionPaneStatus({
 				activity: getSessionActivity(paneId),
-				seenTurn: keepCompleted ? undefined : sessionSeenTurn[paneId],
+				seenTurn: sessionSeenTurn[paneId],
 			}),
 		);
 	}
@@ -69,7 +68,9 @@ export function useMarkSessionSeen(): (paneId: string) => void {
 	);
 	return useCallback(
 		(paneId: string) => {
-			const turnKey = getSessionActivity(paneId)?.turnKey;
+			const activity = getSessionActivity(paneId);
+			if (activity?.status !== "done" && activity?.status !== "error") return;
+			const turnKey = activity.turnKey;
 			if (!turnKey) return;
 			markSessionSeen(paneId, turnKey);
 		},

@@ -16,11 +16,17 @@ import { useMessageQueue } from "renderer/components/SessionComposerControls/Mes
 import { useQueuedMessageEdit } from "renderer/components/SessionComposerControls/MessageQueue/useQueuedMessageEdit";
 import { SessionChangesPill } from "renderer/components/SessionComposerControls/SessionChangesPill";
 import { SessionComposerButtons as SessionComposerSettings } from "renderer/components/SessionComposerControls/SessionComposerButtons/SessionComposerButtons";
+import { useComposerFileDrop } from "renderer/components/SessionComposerControls/useComposerFileDrop";
+import {
+	appendFileReference,
+	resolveChatFile,
+} from "renderer/lib/chat-file-attachments";
 import {
 	getCodexDraft,
 	subscribeCodexDraft,
 	updateCodexDraft,
 } from "renderer/lib/codex-session/draft";
+import { readChatImage } from "renderer/lib/prepare-chat-image";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { codexTaskChanges } from "shared/codex-session/changes";
@@ -31,12 +37,7 @@ import type {
 	CodexPermission,
 	CodexSessionState,
 } from "shared/codex-session/types";
-import {
-	IMAGE_LIMIT_MESSAGE,
-	imageMimeType,
-	MAX_CHAT_IMAGE_BYTES,
-	MAX_CHAT_IMAGES,
-} from "shared/image-attachments";
+import { IMAGE_LIMIT_MESSAGE, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { ComputerControl } from "../ComputerControl/ComputerControl";
 import { CODEX_COMMANDS, parseCodexCommand } from "./commands";
 
@@ -81,6 +82,8 @@ export function CodexComposer({
 	const fast = saved.fast ?? false;
 	const setFast = (value: boolean) => updateCodexDraft(paneId, { fast: value });
 	const [sending, setSending] = useState(false);
+	const [preparing, setPreparing] = useState(0);
+	const pendingAttachments = useRef(0);
 	const [notice, setNotice] = useState("");
 	const [caret, setCaret] = useState(0);
 	const [menuIndex, setMenuIndex] = useState(0);
@@ -269,52 +272,43 @@ export function CodexComposer({
 		return () => window.removeEventListener(`codex-draft:${paneId}`, listener);
 	}, [paneId]);
 	const attach = async (files: File[]) => {
-		for (const file of files) {
-			try {
-				const mime = imageMimeType(file);
-				if (mime) {
-					if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
-						onError(IMAGE_LIMIT_MESSAGE);
-						break;
-					}
-					if (file.size > MAX_CHAT_IMAGE_BYTES) {
-						onError("Choose an image no larger than 5 MB.");
-						continue;
-					}
-					const url = await new Promise<string>((resolve, reject) => {
-						const reader = new FileReader();
-						reader.onload = () => resolve(String(reader.result));
-						reader.onerror = reject;
-						reader.readAsDataURL(
-							file.type === mime ? file : new Blob([file], { type: mime }),
-						);
-					});
-					if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
-						onError(IMAGE_LIMIT_MESSAGE);
-						break;
-					}
-					setImages((prev) => [...prev, { name: file.name, url }]);
-				} else if (
-					file.size <= 200_000 &&
-					(file.type.startsWith("text/") ||
-						/\.(txt|md|json|csv|ts|tsx|js|jsx|css|html|py|rs|go|sh|ps1|yaml|yml|toml|xml|sql|log)$/i.test(
-							file.name,
-						))
-				) {
-					const content = await file.text();
-					setDraft(
-						(prev) =>
-							`${prev}\n\nFile: ${file.name}\n\`\`\`\n${content}\n\`\`\``,
+		if (!files.length) return;
+		pendingAttachments.current++;
+		setPreparing(pendingAttachments.current);
+		onError(null);
+		try {
+			for (const file of files) {
+				try {
+					const result = await resolveChatFile(file);
+					if (result.kind === "image") {
+						if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
+							onError(IMAGE_LIMIT_MESSAGE);
+							continue;
+						}
+						const url = await readChatImage(file, result.mime);
+						if (getCodexDraft(paneId).images.length >= MAX_CHAT_IMAGES) {
+							onError(IMAGE_LIMIT_MESSAGE);
+							continue;
+						}
+						setImages((prev) => [...prev, { name: file.name, url }]);
+					} else setDraft((prev) => appendFileReference(prev, result.text));
+				} catch (error) {
+					onError(
+						error instanceof Error
+							? error.message
+							: `Could not read ${file.name}. Try attaching it again.`,
 					);
-				} else
-					onError("Images: up to 20, 5 MB each. Text files: up to 200 KB.");
-			} catch {
-				onError(`Could not read ${file.name}. Try attaching it again.`);
+				}
 			}
+		} finally {
+			pendingAttachments.current--;
+			setPreparing(pendingAttachments.current);
 		}
 	};
+	const fileDrop = useComposerFileDrop(attach);
 	const send = async () => {
 		if (
+			pendingAttachments.current > 0 ||
 			sending ||
 			editor.busy ||
 			(!editor.id && !working && state?.status !== "idle") ||
@@ -425,7 +419,19 @@ export function CodexComposer({
 				</div>
 			)}
 			<MessageQueue queue={queue} provider="codex" editor={editor} />
-			<div className="session-composer">
+			<div
+				className="session-composer"
+				{...fileDrop.handlers}
+				data-dragging={fileDrop.dragging}
+				aria-busy={preparing > 0}
+			>
+				{(fileDrop.dragging || preparing > 0) && (
+					<output className="session-attachment-status">
+						{preparing > 0
+							? "Preparing attachments..."
+							: "Drop files to attach"}
+					</output>
+				)}
 				{images.length > 0 && (
 					<fieldset className="session-images" aria-label="Attached images">
 						{images.map((image, index) => (
@@ -529,8 +535,8 @@ export function CodexComposer({
 					<button
 						type="button"
 						className="session-attach"
-						aria-label="Attach images or text files"
-						title="Attach images or text files"
+						aria-label="Attach files"
+						title="Attach files"
 						onClick={() => fileInput.current?.click()}
 					>
 						<Plus size={23} />
@@ -604,7 +610,7 @@ export function CodexComposer({
 									? "Save queued message"
 									: "Send after the current turn"
 							}
-							disabled={sending || editor.busy}
+							disabled={preparing > 0 || sending || editor.busy}
 							onClick={() => void send()}
 						>
 							{editor.id ? <Check size={17} /> : <ListPlus size={17} />}
@@ -622,7 +628,8 @@ export function CodexComposer({
 						}
 						disabled={
 							!working &&
-							(sending ||
+							(preparing > 0 ||
+								sending ||
 								editor.busy ||
 								(!editor.id && state?.status !== "idle") ||
 								(!draft.trim() && !images.length))

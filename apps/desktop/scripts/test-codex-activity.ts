@@ -74,9 +74,21 @@ if (releaseCss) {
 	const entry = html.match(/href="\.\/assets\/([^"<>]+\.css)"/)?.[1];
 	if (!entry) throw new Error("Release entry CSS not found");
 	const assets = resolve(releaseCss, "assets");
+	// Auxiliary windows have their own documents and global CSS. Loading the
+	// computer-control overlay's stylesheet here invents a cascade the app never uses.
+	const separateWindowStyles = new Set<string>();
+	for (const document of (await readdir(releaseCss)).filter(
+		(file) => file.endsWith(".html") && file !== "index.html",
+	)) {
+		const content = await readFile(resolve(releaseCss, document), "utf8");
+		for (const match of content.matchAll(/href="\.\/assets\/([^"<>]+\.css)"/g))
+			if (match[1] !== entry) separateWindowStyles.add(match[1]);
+	}
 	const files = [
 		entry,
-		...(await readdir(assets)).filter((f) => f.endsWith(".css") && f !== entry),
+		...(await readdir(assets)).filter(
+			(f) => f.endsWith(".css") && f !== entry && !separateWindowStyles.has(f),
+		),
 	];
 	const css = await Promise.all(
 		files.map((file) => readFile(resolve(assets, file), "utf8")),

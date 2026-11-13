@@ -29,6 +29,7 @@ export function SessionComposerSettings({
 	model,
 	models,
 	onModelChange,
+	onModelMenuOpenChange,
 	mode,
 	modes,
 	onModeChange,
@@ -44,6 +45,7 @@ export function SessionComposerSettings({
 	model: string;
 	models: { id: string; name: string }[];
 	onModelChange?: (value: string) => void;
+	onModelMenuOpenChange?: (open: boolean) => void;
 	mode: string;
 	modes: ComposerMode[];
 	onModeChange: (value: string) => void;
@@ -61,7 +63,11 @@ export function SessionComposerSettings({
 	const modeName = modes.find((m) => m.id === mode)?.label ?? mode;
 	const iconLayout = section !== "all";
 	return (
-		<Popover>
+		<Popover
+			onOpenChange={
+				section === "permissions" ? undefined : onModelMenuOpenChange
+			}
+		>
 			<PopoverTrigger asChild>
 				<button
 					type="button"
