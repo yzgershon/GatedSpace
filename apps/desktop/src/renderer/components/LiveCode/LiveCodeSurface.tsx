@@ -92,21 +92,48 @@ const highlight = HighlightStyle.define([
 	{ tag: tags.attributeName, color: "#8be9fd" },
 	{ tag: tags.operator, color: "#ff79c6" },
 ]);
+const patchLines = StateField.define({
+	create: () => Decoration.none,
+	update(value, transaction) {
+		if (!transaction.docChanged) return value;
+		const ranges = [];
+		for (let number = 1; number <= transaction.state.doc.lines; number++) {
+			const line = transaction.state.doc.line(number);
+			const kind = line.text.startsWith("@@")
+				? "hunk"
+				: line.text.startsWith("+") && !line.text.startsWith("+++")
+					? "insert"
+					: line.text.startsWith("-") && !line.text.startsWith("---")
+						? "remove"
+						: "context";
+			ranges.push(
+				Decoration.line({ class: `live-patch-${kind}` }).range(line.from),
+			);
+		}
+		return Decoration.set(ranges);
+	},
+	provide: (field) => EditorView.decorations.from(field),
+});
 export function LiveCodeSurface({
 	code,
 	path,
 	animate,
 	follow,
 	animateInitial = false,
+	wrap = false,
+	diff = false,
 }: {
 	code: string;
 	path: string;
 	animate: boolean;
 	follow: boolean;
 	animateInitial?: boolean;
+	wrap?: boolean;
+	diff?: boolean;
 }) {
 	const language = detectLanguage(path);
 	const languageCompartment = useRef(new Compartment()).current;
+	const wrapCompartment = useRef(new Compartment()).current;
 	const label = "Live file content";
 	const initialized = useRef(false);
 	const host = useRef<HTMLDivElement>(null);
@@ -117,13 +144,13 @@ export function LiveCodeSurface({
 			parent: host.current,
 			state: EditorState.create({
 				extensions: [
-					lineNumbers(),
-					foldGutter(),
+					...(diff ? [patchLines] : [lineNumbers(), foldGutter()]),
 					highlightActiveLineGutter(),
 					bracketMatching(),
 					lines,
 					caretField,
 					languageCompartment.of([]),
+					wrapCompartment.of([]),
 					syntaxHighlighting(highlight),
 					EditorState.readOnly.of(true),
 					EditorView.editable.of(false),
@@ -133,18 +160,18 @@ export function LiveCodeSurface({
 							"&": {
 								height: "100%",
 								color: "var(--foreground)",
-								backgroundColor: "var(--background)",
+								backgroundColor: "var(--live-editor-bg, var(--background))",
 							},
 							".cm-scroller": {
 								fontFamily: "Cascadia Code, Consolas, monospace",
-								fontSize: "12px",
-								lineHeight: "1.85",
+								fontSize: "13px",
+								lineHeight: "1.8",
 								overflow: "auto",
 							},
-							".cm-content": { padding: "16px 0 120px" },
+							".cm-content": { padding: "18px 0 80px" },
 							".cm-line": { padding: "0 20px 0 12px" },
 							".cm-gutters": {
-								backgroundColor: "var(--background)",
+								backgroundColor: "var(--live-editor-bg, var(--background))",
 								color: "var(--muted-foreground)",
 								border: "none",
 								paddingLeft: "12px",
@@ -165,11 +192,16 @@ export function LiveCodeSurface({
 			view.destroy();
 			editor.current = null;
 		};
-	}, [languageCompartment]);
+	}, [languageCompartment, wrapCompartment, diff]);
+	useEffect(() => {
+		editor.current?.dispatch({
+			effects: wrapCompartment.reconfigure(wrap ? EditorView.lineWrapping : []),
+		});
+	}, [wrap, wrapCompartment]);
 	useEffect(() => {
 		const view = editor.current;
 		let disposed = false;
-		void loadLanguageSupport(language)
+		void (diff ? Promise.resolve(null) : loadLanguageSupport(language))
 			.then((support) => {
 				if (!disposed && view && editor.current === view)
 					view.dispatch({
@@ -180,7 +212,7 @@ export function LiveCodeSurface({
 		return () => {
 			disposed = true;
 		};
-	}, [language, languageCompartment]);
+	}, [language, languageCompartment, diff]);
 	useEffect(() => {
 		const view = editor.current;
 		if (!view) return;

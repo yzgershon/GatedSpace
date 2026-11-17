@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Floating tabs · GatedSpace</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<div class="small-note">Expand the panel to try the full desktop layout.</div>
+<div class="stage" id="stage"><div class="app" id="app">
+  <header class="topbar">
+    <div class="left-tools"><strong>GatedSpace</strong><span class="version">Preview</span><button type="button" id="toggle-sidebar" class="icon" aria-label="Toggle left sidebar"><i data-icon="PanelLeft"></i></button><button type="button" id="search-button" class="icon" aria-label="Search sessions"><i data-icon="Search"></i></button></div>
+    <nav class="rail" id="rail" aria-label="Floating tabs"><div class="tab-viewport" id="tab-viewport"><div id="tabs" role="tablist" aria-label="Open session groups"></div></div><div class="rail-end"><button type="button" id="previous" class="icon arrow" aria-label="Previous tabs"><i data-icon="ChevronLeft"></i></button><button type="button" id="next" class="icon arrow" aria-label="Next tabs"><i data-icon="ChevronRight"></i></button><button type="button" id="new-tab" class="icon" aria-label="Add a preview tab"><i data-icon="Plus"></i></button></div></nav>
+    <div class="right-tools"><button type="button" class="icon build" id="build" aria-label="Installer status"><i data-icon="Check"></i></button><span></span><i data-icon="Minus"></i><i data-icon="Square"></i><i data-icon="X"></i></div>
+  </header>
+  <div class="workspace"><aside class="sidebar" id="sidebar"><div class="sidebar-nav"><i data-icon="Folder"></i><span class="chosen"><i data-icon="History"></i></span><i data-icon="Gauge"></i></div><label class="search"><i data-icon="Search"></i><input id="session-search" placeholder="Search sessions or conversations" aria-label="Search recent sessions"></label><div class="filters"><img src="assets/claude.svg" alt="Claude"><img src="assets/codex.svg" alt="Codex"><img src="assets/gemini.svg" alt="Gemini"><span></span><i data-icon="Folder"></i></div><div class="pinned"><i data-icon="Pin"></i>Pinned <span id="count"></span></div><div class="session-list" id="session-list"></div><div class="profile-footer"><div class="usage">CODEX · YISH · WEEK <b>24%</b></div><div class="usage-track"><span></span></div><div class="profile"><span class="avatar">Y</span><div><strong>Yish</strong><small>Personal workspace</small></div><i data-icon="Settings"></i></div></div></aside><main id="panes" class="panes" aria-label="Selected group's session panes"></main></div>
+  <section id="hover-preview" class="hover-preview" aria-label="Tab preview" hidden></section>
+  <div id="toast" class="toast" role="status"></div><span id="demo-pointer" class="demo-pointer" hidden></span>
+</div></div>
+<footer class="controls"><div class="preview-label"><b>Floating tabs</b><span>Interactive design · sample conversations</span></div><div class="tab-count" aria-label="Number of tabs"><button type="button" data-count="3">3</button><button type="button" data-count="6" aria-pressed="true">6</button><button type="button" data-count="10">10</button><button type="button" data-count="16">16 tabs</button></div><button type="button" id="demo">Show hover demo</button><button type="button" id="reset">Reset</button><span class="hint">Hover a tab, then click its thumbnail to open it.</span></footer>
+<script src="assets/icons.js"></script><script src="app.js"></script>
+</body></html>

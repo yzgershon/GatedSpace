@@ -3,11 +3,60 @@ import type { CodexSessionState } from "shared/codex-session/types";
 import {
 	absoluteCodePath,
 	claudeLiveFiles,
+	codePathKey,
 	codeReplacement,
 	codexLiveFiles,
+	snapshotPatch,
 } from "./live-code-files";
 
 describe("live code file events", () => {
+	test("merges Windows absolute, relative, dot segments and aggregate diff paths", () => {
+		const state = {
+			cwd: "C:/Dev",
+			status: "working",
+			turnId: "turn",
+			items: [
+				{
+					id: "1",
+					turnId: "turn",
+					changes: [
+						{
+							path: "C:\\Dev\\superset\\src\\app.ts",
+							diff: "+first",
+							kind: "update",
+						},
+					],
+				},
+				{
+					id: "2",
+					turnId: "turn",
+					changes: [
+						{ path: "superset/src/./APP.ts", diff: "+latest", kind: "update" },
+					],
+				},
+			],
+			turns: [
+				{
+					id: "turn",
+					diff: "diff --git a/superset/src/app.ts b/superset/src/app.ts\n--- a/superset/src/app.ts\n+++ b/superset/src/app.ts\n@@ -1 +1 @@\n-before\n+after",
+				},
+			],
+		} as CodexSessionState;
+		const files = codexLiveFiles(state);
+		expect(files).toHaveLength(1);
+		expect(files[0].revision).toContain("2:");
+		expect(files[0].patch).toContain("+after");
+		expect(codePathKey("C:/Dev", "./superset/src/../src/app.ts")).toBe(
+			"c:/dev/superset/src/app.ts",
+		);
+		expect(codePathKey("/work", "A.ts")).not.toBe(codePathKey("/work", "a.ts"));
+	});
+	test("snapshot diff includes removals and additions, not two identical views", () => {
+		expect(snapshotPatch("one\nold\nthree", "one\nnew\nthree")).toContain(
+			"-old\n+new",
+		);
+		expect(snapshotPatch("same", "same")).toBe("");
+	});
 	test("shows only the current Codex turn, excludes failed edits and follows the most recent file", () => {
 		const state = {
 			status: "working",

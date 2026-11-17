@@ -1,7 +1,7 @@
-import { Bot, Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
+import { DefaultHeaderContent } from "../../../../packages/panes/src/react/components/Workspace/components/Tab/components/Pane/components/PaneHeader/components/DefaultHeaderContent/DefaultHeaderContent";
 import { TopBar } from "../../src/renderer/routes/_authenticated/_dashboard/components/TopBar/TopBar";
 import type { BuildJob } from "../../src/shared/build-status";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
@@ -70,9 +70,6 @@ function Preview() {
 			window.removeEventListener("preview-dismiss", dismiss);
 		};
 	}, []);
-	const presetsSlot = mounted
-		? document.getElementById("workspace-topbar-presets-slot")
-		: null;
 	const tabsSlot = mounted
 		? document.getElementById("workspace-topbar-tabs-slot")
 		: null;
@@ -81,41 +78,7 @@ function Preview() {
 			<div className="workspace-topbar-layer">
 				<TopBar />
 			</div>
-			{presetsSlot &&
-				createPortal(
-					<div
-						className="flex min-w-0 shrink-0 items-center overflow-x-auto overflow-y-hidden h-[46px] gap-[3px] rounded-[13px] border border-border bg-muted/40 p-[3px]"
-						style={{ scrollbarWidth: "none" }}
-					>
-						{["Codex", "Claude", "Gemini", "Copilot"].map((name, index) => (
-							<div key={name} data-preset-index={index}>
-								<button
-									type="button"
-									aria-label={name}
-									className="h-10 shrink-0 px-3.5 text-[15px] text-muted-foreground"
-									style={{ display: "flex", alignItems: "center", gap: 8 }}
-								>
-									<Bot
-										size={20}
-										style={{
-											color: name === "Claude" ? "#d97757" : "#9386ff",
-											flexShrink: 0,
-										}}
-									/>
-									<span>{name}</span>
-								</button>
-							</div>
-						))}
-						<button
-							type="button"
-							aria-label="Manage presets"
-							style={{ width: 30, flexShrink: 0 }}
-						>
-							<Settings size={16} />
-						</button>
-					</div>,
-					presetsSlot,
-				)}
+
 			{tabsSlot && createPortal(<HeaderPreviewTabs />, tabsSlot)}
 			{/* Include the positioned, painted workspace that sits below the real
 			    header. A detached toolbar fixture cannot detect sibling occlusion. */}
@@ -199,6 +162,45 @@ function Preview() {
 							)}
 						</div>
 						{opened && <output aria-label="Opened URL">{opened}</output>}
+						{[280, 360, 640, 1000].map((width) => (
+							<div
+								key={width}
+								data-context-header={width}
+								style={{
+									width,
+									height: 40,
+									background: "var(--muted)",
+									marginTop: 12,
+								}}
+							>
+								<DefaultHeaderContent
+									title="A long conversation name"
+									isActive
+									icon={<span style={{ width: 20 }}>C</span>}
+									headerCenter={
+										<span
+											data-context-value
+											style={{ fontSize: 11, whiteSpace: "nowrap" }}
+										>
+											173k / 1m
+										</span>
+									}
+									actionsContent={
+										<>
+											<button type="button" style={{ width: 24 }}>
+												+
+											</button>
+											<button type="button" style={{ width: 24 }}>
+												...
+											</button>
+											<button type="button" style={{ width: 24 }}>
+												x
+											</button>
+										</>
+									}
+								/>
+							</div>
+						))}
 					</div>
 				</div>
 			</div>

@@ -27,6 +27,69 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.58",
+		title: "Find your place faster",
+		changes: [
+			{
+				title: "More room for your sessions",
+				detail:
+					"A wider, centered tab rail shows more sessions. Hover names appear beneath stationary tabs. Context counters stay visible in narrow panes, and the build button uses a compact progress ring.",
+			},
+			{
+				title: "Search by what you remember",
+				detail:
+					"Find files by name or words without typing their full path. Recent sessions can search conversation content, show more rows, and take you straight to a session that is already open.",
+			},
+			{
+				title: "Recognizable browser tabs",
+				detail:
+					"Website favicons stay with your tabs across reloads and restarts. Closing a tab keeps its neighbor in view. The cleaner address bar includes a working Open in Chrome button for websites and saved previews.",
+			},
+		],
+	},
+	{
+		version: "1.18.59",
+		title: "Your sessions, at a glance",
+		changes: [
+			{
+				title: "Compact tabs with a preview",
+				detail:
+					"The floating rail fits your tabs, with larger agent icons, a subtle hover lift, and one compact thumbnail of the last viewed tab. Matching pink edges add a soft glow to the rail and composers.",
+			},
+			{
+				title: "Live code is working again",
+				detail:
+					"Live code follows your session's actual folder, merges duplicate file paths, and keeps readable code available during reconnects. File icons, colored diffs, wrap controls, and smoother resizing make changes easier to follow.",
+			},
+			{
+				title: "Preferences that stay yours",
+				detail:
+					"Codex model, effort, and Fast mode are remembered when you return to a conversation. Recent-session rows can be dragged directly, leaving more room for their names.",
+			},
+		],
+	},
+	{
+		version: "1.18.60",
+		title: "Speak, open, and pick up where you left off",
+		changes: [
+			{
+				title: "Voice typing is built in",
+				detail:
+					"Flow dictation is included on Windows ARM64 and x64. Use the microphone in a Claude or Codex composer to turn speech into text locally, with no separate app, account, or first-run download.",
+			},
+			{
+				title: "File links open correctly",
+				detail:
+					"Pink, underlined file links work in Claude and Codex replies, including Windows paths with spaces and source-line references.",
+			},
+			{
+				title: "Long Claude conversations return intact",
+				detail:
+					"Restoring a conversation now reads past large image and internal request records so they no longer hide the earlier discussion.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

@@ -130,6 +130,7 @@
 	animation: gs-tool-content-in 180ms ease-out;
 }
 .gs-tool-tab-list {
+	overflow-anchor: none;
 	scrollbar-width: none;
 	overscroll-behavior-x: contain;
 }

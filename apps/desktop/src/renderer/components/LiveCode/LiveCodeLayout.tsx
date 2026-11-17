@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useLiveCodeState } from "./live-code-state";
 import "./live-code.css";
 
@@ -22,7 +22,21 @@ export function LiveCodeLayout({
 	const [width, setWidth] = useState(380);
 	const root = useRef<HTMLDivElement>(null);
 	const drag = useRef(false);
+	const pendingWidth = useRef(width);
+	const frame = useRef(0);
+	useEffect(() => () => cancelAnimationFrame(frame.current), []);
 	const size = (next: number) => setWidth(Math.max(280, Math.min(600, next)));
+	const finishDrag = () => {
+		if (!drag.current) return;
+		drag.current = false;
+		cancelAnimationFrame(frame.current);
+		frame.current = 0;
+		root.current?.style.setProperty(
+			"--live-chat-width",
+			`${pendingWidth.current}px`,
+		);
+		size(pendingWidth.current);
+	};
 	return (
 		<div
 			className="gs-live-code-layout"
@@ -65,19 +79,32 @@ export function LiveCodeLayout({
 						size(width + (event.key === "ArrowLeft" ? 20 : -20));
 					}}
 					onPointerDown={(event) => {
+						if (event.button !== 0) return;
+						event.preventDefault();
 						drag.current = true;
+						pendingWidth.current = width;
 						event.currentTarget.setPointerCapture(event.pointerId);
 					}}
 					onPointerMove={(event) => {
-						if (drag.current && root.current)
-							size(root.current.getBoundingClientRect().right - event.clientX);
+						if (!drag.current || !root.current) return;
+						const rect = root.current.getBoundingClientRect();
+						const scale = rect.width / root.current.offsetWidth || 1;
+						pendingWidth.current = Math.max(
+							280,
+							Math.min(600, (rect.right - event.clientX) / scale),
+						);
+						if (!frame.current)
+							frame.current = requestAnimationFrame(() => {
+								frame.current = 0;
+								root.current?.style.setProperty(
+									"--live-chat-width",
+									`${pendingWidth.current}px`,
+								);
+							});
 					}}
-					onPointerUp={() => {
-						drag.current = false;
-					}}
-					onLostPointerCapture={() => {
-						drag.current = false;
-					}}
+					onPointerUp={finishDrag}
+					onPointerCancel={finishDrag}
+					onLostPointerCapture={finishDrag}
 				>
 					<span />
 				</div>

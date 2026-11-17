@@ -19,6 +19,16 @@ export const buildJobSchema = z
 		verified: z.boolean().default(false),
 		published: z.boolean().default(false),
 		url: z.string().url().optional(),
+		progress: z
+			.object({
+				completed: z.number().finite().min(0),
+				total: z.number().finite().positive(),
+				basis: z.enum(["steps", "timing-estimate"]).optional(),
+				// Present only when previous measured phase timings are available.
+				estimatedRemainingMs: z.number().finite().nonnegative().optional(),
+			})
+			.refine((p) => p.completed <= p.total)
+			.optional(),
 	})
 	.superRefine((job, ctx) => {
 		if (
@@ -46,6 +56,28 @@ export function isBuildUrl(value: string): boolean {
 }
 
 export type BuildJob = z.infer<typeof buildJobSchema>;
+export function buildProgress(job: BuildJob): number | undefined {
+	if (job.stage === "ready") return 100;
+	if (!job.progress) return undefined;
+	return Math.min(
+		99,
+		Math.floor((100 * job.progress.completed) / job.progress.total),
+	);
+}
+export function buildProgressLabel(job: BuildJob): string {
+	const progress = buildProgress(job);
+	const remaining = job.progress?.estimatedRemainingMs;
+	return [
+		progress === undefined
+			? "Progress not reported yet"
+			: `${progress}% ${job.progress?.basis === "timing-estimate" ? "estimated build progress" : "of build steps complete"}`,
+		remaining === undefined
+			? null
+			: `About ${Math.max(1, Math.ceil(remaining / 60_000))} min remaining (estimate)`,
+	]
+		.filter(Boolean)
+		.join(" · ");
+}
 export const isBuildActive = (job: BuildJob) =>
 	job.stage === "building" || job.stage === "verifying";
 /** History stays in the popover. An old failure must not mask a new running/ready job. */

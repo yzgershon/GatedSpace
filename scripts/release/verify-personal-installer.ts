@@ -11,6 +11,7 @@ import {
 import { createRequire } from "node:module";
 import { basename, dirname, join, normalize, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { verifyFlowBundle } from "../../apps/desktop/scripts/flow-bundle";
 import { buildJobSchema } from "../../apps/desktop/src/shared/build-status";
 import {
 	compareBundles,
@@ -123,6 +124,7 @@ async function main() {
 				installer,
 				`-o${inspection}`,
 				"-ir!resources/app.asar",
+				"-ir!resources/resources/flow-dictation/*",
 				"-ir!GatedSpace.exe",
 				"-ir!resources/app.asar.unpacked/*",
 				"-y",
@@ -143,6 +145,10 @@ async function main() {
 		listPackage: (file: string) => string[];
 	};
 	const archive = join(inspection, "resources/app.asar");
+	const flow = verifyFlowBundle(
+		join(inspection, "resources/resources/flow-dictation"),
+		"arm64",
+	);
 	const read = (name: string) => asar.extractFile(archive, normalize(name));
 	const packagedPackage = JSON.parse(read("package.json").toString());
 	assert.equal(packagedPackage.version, job.version);
@@ -214,6 +220,7 @@ async function main() {
 		architecture: "arm64",
 		...checked,
 		matchedNativeFiles: nativeFiles,
+		bundledDictationFiles: Object.keys(flow.files).length,
 		asarSha256: await hash(archive),
 		sha256: await hash(installer),
 		sha512,

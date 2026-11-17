@@ -1,0 +1,103 @@
+.live-demo-conversation {
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	font-size: 13px;
+}
+.live-demo-conversation > header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 17px 20px;
+	border-bottom: 1px solid var(--border);
+}
+.live-demo-conversation > header strong {
+	font-weight: 500;
+}
+.live-demo-conversation > header span {
+	font-size: 11px;
+	color: var(--muted-foreground);
+}
+.live-demo-transcript {
+	flex: 1;
+	padding: 24px 22px;
+	overflow: auto;
+	line-height: 1.8;
+}
+.live-demo-prompt {
+	padding: 15px 17px;
+	border-radius: 15px;
+	background: color-mix(in srgb, var(--foreground) 5%, transparent);
+	margin-bottom: 25px;
+}
+.live-demo-transcript p {
+	margin: 18px 0;
+}
+.live-demo-action {
+	display: flex;
+	gap: 9px;
+	color: var(--muted-foreground);
+	font-size: 11px;
+	margin-top: 26px;
+}
+.live-demo-action > span {
+	color: var(--primary);
+}
+.live-demo-artifact {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px;
+	font-size: 11px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	margin-top: 24px;
+}
+.live-demo-artifact b {
+	color: #9de9b0;
+	font-weight: 400;
+}
+.live-demo-composer {
+	margin: 12px;
+	border: 2px solid color-mix(in srgb, var(--primary) 48%, transparent);
+	border-radius: 20px;
+	padding: 12px 14px 9px;
+	background: var(--accent);
+	box-shadow: 0 0 14px #ff79c607;
+}
+.live-demo-composer textarea {
+	width: 100%;
+	height: 65px;
+	resize: none;
+	outline: none;
+	background: transparent;
+	font-size: 12px;
+}
+.live-demo-composer > div {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	color: var(--muted-foreground);
+}
+.live-demo-composer > div > span:last-child {
+	background: var(--primary);
+	color: var(--background);
+	border-radius: 50%;
+	width: 28px;
+	height: 28px;
+	display: grid;
+	place-items: center;
+}
+.live-demo-replay {
+	margin-left: auto;
+	margin-right: 16px;
+	font-size: 11px;
+	padding: 5px 12px;
+	border: 1px solid var(--border);
+	border-radius: 6px;
+}
+.live-demo-replay:hover {
+	color: var(--primary);
+	background: var(--accent);
+}

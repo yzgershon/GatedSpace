@@ -438,7 +438,9 @@
 /* Approved compact composer; retains the existing settings sheets and editor behavior. */
 .session-composer {
 	border-radius: 26px;
-	border-width: 1px;
+	border-width: 2px;
+	border-color: color-mix(in srgb, var(--primary) 68%, var(--border));
+	box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 9%, transparent);
 	background: color-mix(in srgb, var(--card) 86%, var(--foreground) 4%);
 }
 .session-composer-toolbar {

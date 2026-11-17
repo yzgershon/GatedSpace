@@ -77,25 +77,12 @@
 .organizer-toolbar > button:hover {
 	background: color-mix(in srgb, var(--foreground) 9%, transparent);
 }
-.session-drag-handle {
-	width: 18px;
-	min-width: 18px;
-	height: 32px;
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	color: var(--muted-foreground);
+.collection-session-open[aria-roledescription="draggable session"] {
 	cursor: grab;
 	touch-action: none;
-	opacity: 0.25;
-	border-radius: 4px;
 }
-.session-drag-handle:active {
+.collection-session-open[aria-roledescription="draggable session"]:active {
 	cursor: grabbing;
-}
-.collection-session-row:hover .session-drag-handle,
-.session-drag-handle:focus-visible {
-	opacity: 1;
 }
 .session-organizer .collection-session-open {
 	padding-left: 3px;

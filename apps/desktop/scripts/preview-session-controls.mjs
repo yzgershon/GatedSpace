@@ -49,7 +49,7 @@ await build({
 });
 await writeFile(
 	resolve(output, "index.html"),
-	'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>@layer theme, base, components, utilities;</style><title>GatedSpace — Tabs and replies</title><link rel="stylesheet" href="/style.css"></head><body><script src="/renderer.js"></script></body></html>',
+	'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>@layer theme, base, components, utilities;</style><title>GatedSpace â€” Tabs and replies</title><link rel="stylesheet" href="/style.css"></head><body><script src="/renderer.js"></script></body></html>',
 );
 const server = createServer(async (req, res) => {
 	const name =
@@ -263,20 +263,63 @@ if (!process.argv.includes("--serve")) {
 					active.querySelector(".gs-tabrail-label").style.maxWidth
 			);
 		});
+		const tabTargets = () =>
+			production.locator("[data-rail-tab]").evaluateAll((tabs) =>
+				tabs.map((tab) => {
+					const { x, y, width, height } = tab.getBoundingClientRect();
+					return { x, y, width, height };
+				}),
+			);
+		const beforeHover = await tabTargets();
 		await production
 			.getByRole("button", { name: "Filtrsoft 2", exact: true })
 			.hover();
-		await page.waitForFunction(() => {
-			const root = document.querySelector(".production-rail");
-			const expanded = root.querySelectorAll('[data-expanded="true"]');
-			const first = root.querySelector("[data-rail-tab] .gs-tabrail-label");
-			return (
-				expanded.length === 1 &&
-				expanded[0].textContent === "Filtrsoft 2" &&
-				getComputedStyle(first).opacity === "0" &&
-				getComputedStyle(first).maxWidth === "0px"
-			);
-		});
+		const hoverName = page
+			.locator(".gs-tabrail-namecard")
+			.filter({ hasText: "Filtrsoft 2" })
+			.first();
+		await hoverName.waitFor({ state: "visible" });
+		assert.ok(
+			(await hoverName.boundingBox()).height < 230,
+			"One compact thumbnail, no footer",
+		);
+		assert.equal(
+			await hoverName.locator(".gs-tabrail-namecard-meta").count(),
+			0,
+		);
+		assert.equal(await hoverName.locator(".gs-tabrail-thumbnail").count(), 1);
+		assert.equal(
+			await production
+				.locator(".gs-agent-status-ring")
+				.first()
+				.evaluate((e) => getComputedStyle(e).width),
+			"28px",
+		);
+		assert.equal(
+			await production
+				.locator(".gs-tabrail")
+				.evaluate((e) => getComputedStyle(e).borderTopWidth),
+			"2px",
+		);
+		await page.waitForTimeout(250);
+		assert.deepEqual(
+			await tabTargets(),
+			beforeHover,
+			"Hover must not move any tab target",
+		);
+		const nameBounds = await hoverName.boundingBox();
+		const railBounds = await production.boundingBox();
+		assert.ok(
+			nameBounds &&
+				railBounds &&
+				nameBounds.y >= railBounds.y + railBounds.height,
+			"Hovered session name must appear beneath the rail",
+		);
+		assert.equal(
+			await production.locator('[data-expanded="true"]').innerText(),
+			"GS Edits 1",
+		);
+
 		await contained(".production-rail", "New group");
 		await production
 			.getByRole("button", { name: "Next tabs", exact: true })
@@ -368,10 +411,51 @@ if (!process.argv.includes("--serve")) {
 			beforeOrder[0],
 		);
 		checks.push(
-			"Chosen hybrid production component: hover expands one tab and contracts others, arrow scrolling stays put, directional fades, no count/dropdown, keyboard End/Enter, pointer drag reorder",
+			"Production stable hover: names below stationary targets, active label retained, arrow scrolling stays put, directional fades, no count/dropdown, keyboard End/Enter, pointer drag reorder",
 		);
 		checks.push(
 			"Actual production TabRail: 16-17 tabs, permanent + at narrow widths, click creates group",
+		);
+		await switchTo("GS Edits 1");
+		await page.waitForTimeout(1100);
+		await production
+			.getByRole("button", { name: "GS Edits 1", exact: true })
+			.hover();
+		const card = page
+			.locator(".gs-tabrail-namecard")
+			.filter({ hasText: "GS Edits 1" })
+			.first();
+		await card
+			.locator(".gs-tabrail-thumbnail > img")
+			.waitFor({ state: "visible" });
+		await card
+			.getByRole("button", { name: "Open GS Edits 1", exact: true })
+			.hover();
+		await page.waitForTimeout(400);
+		assert.ok(
+			await card.isVisible(),
+			"Crossing the gap keeps the preview available",
+		);
+		await card.screenshot({ path: resolve(output, "compact-thumbnail.png") });
+		await card
+			.getByRole("button", { name: "Open GS Edits 1", exact: true })
+			.click();
+		await card.waitFor({ state: "hidden" });
+		await page.evaluate(() => {
+			window.thumbnailIdleCaptures = 0;
+			window.addEventListener(
+				"fixture-thumbnail-capture",
+				() => window.thumbnailIdleCaptures++,
+			);
+		});
+		await page.waitForTimeout(1500);
+		assert.equal(
+			await page.evaluate(() => window.thumbnailIdleCaptures),
+			0,
+			"No idle thumbnail polling",
+		);
+		checks.push(
+			"Compact captured thumbnail (simulated IPC), gap crossing, click to open, no footer, 28px icons, matching 2px edge, no idle capture polling",
 		);
 		await page.locator(".production-rail").waitFor({ state: "visible" });
 		await page.getByLabel("Question scenario").selectOption("single");
@@ -402,6 +486,54 @@ if (!process.argv.includes("--serve")) {
 		assert.deepEqual(errors, []);
 		checks.push(
 			"Dark/light/narrow screenshots; reduced motion; no page overflow or browser errors",
+		);
+		await page.setViewportSize({ width: 1200, height: 900 });
+		await range(720);
+		for (
+			let remaining = await production.locator("[data-rail-tab]").count();
+			remaining > 3;
+			remaining--
+		) {
+			await production
+				.locator("[data-rail-tab] > button:first-of-type")
+				.first()
+				.click();
+			await production
+				.locator("[data-active=true] > .gs-tabrail-close")
+				.click();
+			await page.waitForFunction(
+				(remaining) =>
+					document.querySelectorAll(".production-rail [data-rail-tab]").length <
+					remaining,
+				remaining,
+				{ timeout: 2000 },
+			);
+		}
+		await page.waitForTimeout(300);
+		const fit = await production.locator(".gs-tabrail").evaluate((e) => {
+			const right = e
+				.querySelector(".gs-tabrail-fixed")
+				.getBoundingClientRect().right;
+			return {
+				width: e.getBoundingClientRect().width,
+				trailing: e.getBoundingClientRect().right - right,
+			};
+		});
+		assert.ok(
+			fit.width < 450 && fit.trailing < 10,
+			"Three tabs shrink to fit, without trailing filler",
+		);
+		assert.equal(
+			await production
+				.getByRole("button", { name: "Next tabs", exact: true })
+				.count(),
+			0,
+		);
+		await production.screenshot({
+			path: resolve(output, "fit-three-tabs.png"),
+		});
+		checks.push(
+			"Three-tab rail shrinks to its contents and hides unnecessary overflow arrows",
 		);
 		await writeFile(
 			resolve(output, "results.json"),

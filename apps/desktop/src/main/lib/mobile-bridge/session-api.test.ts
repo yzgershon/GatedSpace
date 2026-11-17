@@ -72,6 +72,7 @@ mock.module("../codex-session/session-manager", () => ({
 	codexSessionManager: fakeCodex,
 }));
 let claudeBusy = false;
+let claudePermissions: Array<{ id: string; tool: string; input: object }> = [];
 mock.module("../claude-session/session-manager", () => ({
 	claudeSessionManager: {
 		listSessions: () => [
@@ -81,7 +82,12 @@ mock.module("../claude-session/session-manager", () => ({
 		isBusy: () => claudeBusy,
 		getBufferedEvents: () => [
 			{ type: "local_user_message", id: "user", text: "Claude prompt" },
+			{ type: "local_permissions", requests: claudePermissions },
 		],
+		answerPermission: (...args: unknown[]) => {
+			answers.push(args);
+			claudePermissions = [];
+		},
 		send: (...args: unknown[]) => sent.push(args),
 		interrupt: () => {},
 		start: (...args: unknown[]) => sent.push(args),
@@ -93,7 +99,17 @@ mock.module("../claude-sessions/claude-sessions", () => ({
 	],
 }));
 mock.module("../claude-session/transcript", () => ({
-	loadSessionTranscript: () => [],
+	loadSessionTranscript: async () => {
+		await new Promise((resolve) => setTimeout(resolve, 5));
+		return [
+			{
+				type: "user",
+				uuid: "stored-prompt",
+				parent_tool_use_id: null,
+				message: { role: "user", content: "Earlier saved prompt" },
+			},
+		];
+	},
 }));
 mock.module("./workspace-targets", () => ({
 	listBridgeWorkspaceTargets: () => [
@@ -136,6 +152,46 @@ test("both provider transcripts expose the same phone contract", async () => {
 		const data = await (await fetch(origin + path)).json();
 		expect(data.messages[0].kind).toBe("user");
 		expect(typeof data.working).toBe("boolean");
+	}
+});
+test("Claude waits for disk history before merging the live buffer", async () => {
+	const data = await (await fetch(`${origin}/claude/claude-pane`)).json();
+	expect(
+		data.messages.map((message: { text: string }) => message.text),
+	).toEqual(["Earlier saved prompt", "Claude prompt"]);
+});
+test("Claude send and approval checks use current permissions without waiting on disk", async () => {
+	const before = sent.length;
+	claudePermissions = [{ id: "approval", tool: "Bash", input: {} }];
+	try {
+		expect(
+			(
+				await post("/claude/claude-pane/send", {
+					requestId: crypto.randomUUID(),
+					text: "Wait for approval",
+				})
+			).status,
+		).toBe(409);
+		expect(sent.length).toBe(before);
+		expect(
+			(
+				await post("/claude/claude-pane/answer", {
+					id: "approval",
+					allow: false,
+				})
+			).status,
+		).toBe(200);
+		expect(answers.at(-1)).toEqual(["claude-pane", "approval", false]);
+		expect(
+			(
+				await post("/claude/claude-pane/answer", {
+					id: "approval",
+					allow: true,
+				})
+			).status,
+		).toBe(409);
+	} finally {
+		claudePermissions = [];
 	}
 });
 test("retrying a lost response calls the real route action once", async () => {

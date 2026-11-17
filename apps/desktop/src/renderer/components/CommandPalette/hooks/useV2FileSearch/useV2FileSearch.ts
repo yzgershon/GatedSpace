@@ -8,17 +8,18 @@ export function useV2FileSearch(
 ) {
 	const trimmedQuery = query.trim();
 
-	const { data, isFetching } = workspaceTrpc.filesystem.searchFiles.useQuery(
-		{
-			workspaceId: workspaceId ?? "",
-			query: trimmedQuery,
-			limit: SEARCH_LIMIT,
-		},
-		{
-			enabled: Boolean(workspaceId) && trimmedQuery.length > 0,
-			placeholderData: (previous) => previous ?? { matches: [] },
-		},
-	);
+	const { data, isFetching, error } =
+		workspaceTrpc.filesystem.searchFiles.useQuery(
+			{
+				workspaceId: workspaceId ?? "",
+				query: trimmedQuery,
+				limit: SEARCH_LIMIT,
+			},
+			{
+				enabled: Boolean(workspaceId) && trimmedQuery.length > 0,
+				placeholderData: (previous) => previous ?? { matches: [] },
+			},
+		);
 
 	const results =
 		data?.matches.map((match) => ({
@@ -28,5 +29,5 @@ export function useV2FileSearch(
 			relativePath: match.relativePath,
 		})) ?? [];
 
-	return { results, isFetching };
+	return { results, isFetching, error };
 }

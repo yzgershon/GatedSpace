@@ -24,6 +24,10 @@ for (const title of [
 	"Emails/texts",
 	"Research",
 	"Mobile",
+	"Resume revision v7",
+	"Component design system",
+	"College",
+	"Calendar",
 ])
 	addTab(title);
 store.getState().setActiveTab(store.getState().tabs[0].id);

@@ -12,6 +12,12 @@ import rehypeRaw from "rehype-raw";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import { SafeImage } from "renderer/components/MarkdownRenderer/components";
+import { MarkdownLink } from "renderer/components/MarkdownRenderer/components/MarkdownLink";
+import {
+	fileLinkSchema,
+	markdownUrlTransform,
+	rehypeLocalFileLinks,
+} from "renderer/components/MarkdownRenderer/file-links";
 import { CommentCodeBlock } from "./components/CommentCodeBlock";
 
 type ReactMarkdownComponents = ComponentProps<
@@ -78,14 +84,9 @@ const baseComponents = {
 		<SafeImage src={src} alt={alt} className="comment-md-img" />
 	),
 	a: ({ href, children }: { href?: string; children?: ReactNode }) => (
-		<a
-			href={href}
-			target="_blank"
-			rel="noopener noreferrer"
-			className="comment-md-link"
-		>
+		<MarkdownLink href={href} className="comment-md-link">
 			{children}
-		</a>
+		</MarkdownLink>
 	),
 	details: CopyableDetails,
 } satisfies ReactMarkdownComponents;
@@ -105,7 +106,12 @@ export function CommentMarkdown({ body, components }: CommentMarkdownProps) {
 	return (
 		<ReactMarkdown
 			remarkPlugins={[remarkGfm]}
-			rehypePlugins={[rehypeRaw, rehypeSanitize]}
+			rehypePlugins={[
+				rehypeRaw,
+				rehypeLocalFileLinks,
+				[rehypeSanitize, fileLinkSchema],
+			]}
+			urlTransform={markdownUrlTransform}
 			components={{ ...baseComponents, ...(components ?? {}) }}
 		>
 			{body}

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,12 @@ import { build } from "vite";
 const directory = dirname(fileURLToPath(import.meta.url)),
 	output = resolve(directory, "../../../../.tmp/live-code-production");
 await mkdir(output, { recursive: true });
+await mkdir(resolve(output, "file-icons"), { recursive: true });
+for (const name of ["typescript", "react_ts", "css"])
+	await copyFile(
+		resolve(directory, `../../src/resources/public/file-icons/${name}.svg`),
+		resolve(output, `file-icons/${name}.svg`),
+	);
 await build({
 	configFile: false,
 	envFile: false,
@@ -22,7 +28,7 @@ await build({
 			enforce: "pre",
 			load(id) {
 				if (/renderer[/\\]lib[/\\]trpc-client\.ts$/.test(id))
-					return `export const electronTrpcClient={filesystem:{readFile:{query:async()=>{window.live.reads++;return {kind:'text',content:window.live.content,byteLength:window.live.content.length}}},watchPath:{subscribe:(_,handlers)=>{window.live.watches++;window.live.listeners.add(handlers.onData);return {unsubscribe:()=>{window.live.watches--;window.live.listeners.delete(handlers.onData)}}}}}};`;
+					return `export const electronTrpcClient={filesystem:{readFile:{query:async(input)=>{window.live.reads++;if(!input.session||input.session.key!=='live-test')throw Error('Workspace not found: new-host-workspace');if(window.live.error)throw Error(window.live.error);const content=window.live.files[input.absolutePath]??window.live.content;return {kind:'text',content,byteLength:content.length}}},watchPath:{subscribe:(input,handlers)=>{if(!input.session)throw Error('Missing session scope');window.live.watches++;window.live.onWatchError=handlers.onError;window.live.listeners.add(handlers.onData);return {unsubscribe:()=>{window.live.watches--;window.live.listeners.delete(handlers.onData)}}}}}};`;
 				if (
 					id.endsWith("ClaudeSessionPane/sessionStore.ts") ||
 					id.endsWith("ClaudeSessionPane\\sessionStore.ts")
@@ -35,6 +41,7 @@ await build({
 		alias: {
 			renderer: resolve(directory, "../../src/renderer"),
 			shared: resolve(directory, "../../src/shared"),
+			resources: resolve(directory, "../../src/resources"),
 		},
 	},
 	define: { "process.env": JSON.stringify({}) },
@@ -52,12 +59,21 @@ await build({
 });
 await writeFile(
 	resolve(output, "index.html"),
-	'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="fixture.css"></head><body><script src="fixture.js"></script></body></html>',
+	'<!doctype html><html><head><meta charset="utf-8"><title>Live code · GatedSpace</title><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="fixture.css"></head><body><script src="fixture.js"></script></body></html>',
 );
 const server = createServer(async (req, res) => {
 	const name =
 		new URL(req.url, "http://localhost").pathname.slice(1) || "index.html";
-	if (!["index.html", "fixture.js", "fixture.css"].includes(name))
+	if (
+		![
+			"index.html",
+			"fixture.js",
+			"fixture.css",
+			"file-icons/typescript.svg",
+			"file-icons/react_ts.svg",
+			"file-icons/css.svg",
+		].includes(name)
+	)
 		return void res.writeHead(404).end();
 	res.setHeader(
 		"Content-Type",
@@ -65,7 +81,9 @@ const server = createServer(async (req, res) => {
 			? "text/javascript"
 			: name.endsWith(".css")
 				? "text/css"
-				: "text/html",
+				: name.endsWith(".svg")
+					? "image/svg+xml"
+					: "text/html",
 	);
 	res.end(await readFile(resolve(output, name)));
 });
@@ -85,7 +103,7 @@ const text = () =>
 		.locator(".cm-line")
 		.allTextContents();
 try {
-	await page.goto(`http://127.0.0.1:${server.address().port}`);
+	await page.goto(`http://127.0.0.1:${server.address().port}/?test`);
 	await page.getByLabel("Draft").fill("Preserve this draft");
 	assert.equal(await page.evaluate(() => live.reads), 0);
 	await page.getByLabel("Watch live code").click();
@@ -122,7 +140,72 @@ try {
 	);
 	await page.getByRole("button", { name: "Diff", exact: true }).click();
 	assert.equal(await page.locator(".cm-editor").count(), 2);
+	assert.ok((await page.locator(".live-patch-insert").count()) > 0);
 	await page.getByRole("button", { name: "Code", exact: true }).click();
+	await page.getByLabel("Wrap lines").click();
+	assert.ok((await page.locator(".cm-lineWrapping").count()) > 0);
+	await page.evaluate(() => {
+		live.error = "File temporarily unavailable";
+	});
+	await page.getByLabel("Refresh live file").click();
+	await page
+		.getByText("File temporarily unavailable", { exact: true })
+		.waitFor();
+	assert.ok((await text()).join("\n").includes("should stream"));
+	await page.evaluate(() => {
+		live.error = undefined;
+	});
+	await page.getByRole("button", { name: "Retry", exact: true }).click();
+	await page
+		.getByText("File temporarily unavailable", { exact: true })
+		.waitFor({ state: "hidden" });
+	await page.evaluate(() => live.onWatchError({ message: "Connection lost" }));
+	await page
+		.getByText("Live updates disconnected.", { exact: false })
+		.waitFor();
+	await page.getByRole("button", { name: "Retry", exact: true }).click();
+	await page
+		.getByText("Live updates disconnected.", { exact: false })
+		.waitFor({ state: "hidden" });
+	assert.equal(await page.evaluate(() => live.watches), 1);
+	checks.push(
+		"Read failures preserve code; watcher disconnects have an explicit retry and recover with one watch",
+	);
+	await page.evaluate(() =>
+		live.edit("C:\\Dev\\superset\\a.ts", "export const final = true;\n"),
+	);
+	await page.waitForTimeout(900);
+	assert.equal(await page.getByRole("tab").count(), 1);
+	await page.evaluate(() => live.edit("b.ts", "export const second = true;\n"));
+	await page.waitForTimeout(900);
+	assert.equal(await page.getByRole("tab").count(), 2);
+	await page.getByRole("tab", { name: "a.ts", exact: true }).click();
+	await page.waitForTimeout(150);
+	assert.ok((await text()).join("\n").includes("final"));
+	await page.evaluate(() =>
+		live.edit("b.ts", "export const second = false;\n"),
+	);
+	await page.waitForTimeout(150);
+	assert.equal(
+		await page
+			.getByRole("tab", { name: "a.ts", exact: true })
+			.getAttribute("aria-selected"),
+		"true",
+	);
+	await page.getByRole("button", { name: "Follow agent", exact: true }).click();
+	await page.waitForTimeout(900);
+	assert.ok((await text()).join("\n").includes("second = false"));
+	await page.getByRole("tab", { name: "b.ts", exact: true }).focus();
+	await page.keyboard.press("ArrowLeft");
+	assert.equal(
+		await page
+			.getByRole("tab", { name: "a.ts", exact: true })
+			.getAttribute("aria-selected"),
+		"true",
+	);
+	checks.push(
+		"Windows path aliases share one tab; manual selection stays put; follow and keyboard switching work",
+	);
 	await page.getByLabel("Resize live conversation").focus();
 	await page.keyboard.press("ArrowLeft");
 	assert.equal(
@@ -131,6 +214,21 @@ try {
 			.getAttribute("aria-valuenow"),
 		"400",
 	);
+	const divider = await page
+		.getByLabel("Resize live conversation")
+		.boundingBox();
+	await page.mouse.move(divider.x + divider.width / 2, divider.y + 100);
+	await page.mouse.down();
+	await page.mouse.move(divider.x - 36, divider.y + 100, { steps: 10 });
+	await page.mouse.up();
+	assert.ok(
+		Number(
+			await page
+				.getByLabel("Resize live conversation")
+				.getAttribute("aria-valuenow"),
+		) >= 435,
+	);
+	assert.equal(await page.evaluate(() => live.mounts), 1);
 	await page.screenshot({ path: resolve(output, "live-code-1200.png") });
 	await page.getByLabel("Return to conversation").click();
 	assert.equal(
@@ -170,6 +268,33 @@ try {
 	assert.equal(await page.locator(".live-code-caret").count(), 0);
 	assert.deepEqual(errors, []);
 	checks.push("Reduced motion skips typing; no runtime errors");
+	await page.emulateMedia({ reducedMotion: "no-preference" });
+	await page.setViewportSize({ width: 1440, height: 920 });
+	await page.goto(`http://127.0.0.1:${server.address().port}/`);
+	await page
+		.getByRole("tab", { name: "SessionList.tsx", exact: true })
+		.waitFor();
+	await page.locator(".cm-line").first().waitFor();
+	await page.waitForTimeout(1000);
+	assert.equal(await page.getByRole("tab").count(), 3);
+	assert.ok(
+		await page
+			.locator(".gs-live-file-tabs img")
+			.evaluateAll((nodes) =>
+				nodes.every((image) => image.complete && image.naturalWidth > 0),
+			),
+	);
+	await page.getByRole("button", { name: "Play edit" }).click();
+	await page.waitForTimeout(1000);
+	assert.ok((await text()).join("\n").includes("session.summary"));
+	await page.screenshot({ path: resolve(output, "live-code-demo.png") });
+	await page.getByRole("button", { name: "Diff", exact: true }).click();
+	assert.ok((await page.locator(".live-patch-remove").count()) > 0);
+	await page.screenshot({ path: resolve(output, "live-code-demo-diff.png") });
+	assert.deepEqual(errors, []);
+	checks.push(
+		"Actual source preview renders file icons, syntax colors, replayed edits and a colored patch",
+	);
 	await writeFile(
 		resolve(output, "results.json"),
 		JSON.stringify({ checks, errors }, null, 2),

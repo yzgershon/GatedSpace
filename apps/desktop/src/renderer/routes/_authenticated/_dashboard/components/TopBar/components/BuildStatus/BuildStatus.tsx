@@ -2,7 +2,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@superset/ui/popover";
 import { toast } from "@superset/ui/sonner";
 import {
 	Check,
-	ChevronDown,
 	CircleAlert,
 	ExternalLink,
 	LoaderCircle,
@@ -14,6 +13,8 @@ import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
 	BUILD_STAGE_LABELS,
 	type BuildJob,
+	buildProgress,
+	buildProgressLabel,
 	buildRevision,
 	isBuildActive,
 	isBuildUrl,
@@ -45,6 +46,9 @@ export function BuildStatusView({
 	const stage = error ? "failed" : (primary?.stage ?? "failed");
 	const Icon = icons[stage];
 	const label = BUILD_STAGE_LABELS[stage];
+	const progress = primary ? buildProgress(primary) : undefined;
+	const detail =
+		primary && isBuildActive(primary) ? buildProgressLabel(primary) : label;
 	return (
 		<Popover>
 			<PopoverTrigger asChild>
@@ -53,21 +57,49 @@ export function BuildStatusView({
 					className="build-status-chip no-drag"
 					data-stage={stage}
 					aria-label={`Installer builds: ${label}${primary ? `, ${primary.version}` : ""}`}
-					title={`Installer builds: ${label}`}
+					title={`Installer builds: ${detail}`}
 				>
-					<Icon
-						size={14}
-						className={
-							active && stage !== "failed" ? "build-status-working" : undefined
-						}
-						aria-hidden="true"
-					/>
-					<span className="build-status-label">{label}</span>
-					<span className="build-status-compact-label">Builds</span>
-					{jobs.length > 1 && (
-						<span className="build-status-count">{jobs.length}</span>
+					{active && stage !== "failed" ? (
+						<svg
+							width="21"
+							height="21"
+							viewBox="0 0 24 24"
+							role="progressbar"
+							aria-label="Installer build progress"
+							aria-valuemin={0}
+							aria-valuemax={100}
+							aria-valuenow={progress}
+							className={
+								progress === undefined
+									? "build-progress-indeterminate"
+									: "build-progress"
+							}
+						>
+							<circle
+								cx="12"
+								cy="12"
+								r="9"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								opacity="0.18"
+							/>
+							<circle
+								cx="12"
+								cy="12"
+								r="9"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2.5"
+								strokeLinecap="round"
+								pathLength="100"
+								strokeDasharray={`${progress ?? 24} 100`}
+								transform="rotate(-90 12 12)"
+							/>
+						</svg>
+					) : (
+						<Icon size={18} aria-hidden="true" />
 					)}
-					<ChevronDown size={12} aria-hidden="true" />
 				</button>
 			</PopoverTrigger>
 			<output className="sr-only" aria-live="polite">
@@ -128,6 +160,11 @@ export function BuildStatusView({
 									</span>
 								</div>
 								<p className="select-text cursor-text">{job.message}</p>
+								{isBuildActive(job) && (
+									<p className="build-progress-description">
+										{buildProgressLabel(job)}
+									</p>
+								)}
 								<footer>
 									<span title={`Source commit ${job.sourceCommit}`}>
 										{job.sourceCommit.slice(0, 7)}

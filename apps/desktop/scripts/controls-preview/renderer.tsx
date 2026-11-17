@@ -428,7 +428,10 @@ function Preview() {
 					</select>
 				</label>
 			</div>
-			<section className="production-check selected-hybrid">
+			<section
+				className="production-check selected-hybrid"
+				data-workspace-preview="preview"
+			>
 				<span className="eyebrow">
 					Selected design / A + current hover behavior
 				</span>

@@ -32,6 +32,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { $ } from "bun";
 import {
+	buildStatusDirectory,
+	writeBuildJob,
+} from "../../apps/desktop/src/main/lib/build-status/store";
+import type { BuildJob } from "../../apps/desktop/src/shared/build-status";
+import {
 	bumpDaemonPatch,
 	fail,
 	findWorkflowRun,
@@ -45,6 +50,7 @@ import {
 	warn,
 	writeVersion,
 } from "./lib.ts";
+import { workflowProgress } from "./workflow-progress";
 
 const DESKTOP_DIR = "apps/desktop";
 const PUBLIC_REMOTE = "origin";
@@ -250,27 +256,75 @@ async function publishRelease(
 	opts: ShipOptions,
 ): Promise<void> {
 	const sha = snapshot;
+	let job: BuildJob = {
+		id: `public-${opts.version}`,
+		version: opts.version,
+		channel: "public",
+		architectures: ["x64", "arm64"],
+		sourceCommit: snapshot,
+		stage: "building",
+		message: "Waiting for the public build workflow",
+		updatedAt: new Date().toISOString(),
+		verified: false,
+		published: false,
+	};
+	const report = (update: Partial<BuildJob>) => {
+		job = { ...job, ...update, updatedAt: new Date().toISOString() };
+		if (opts.publish) writeBuildJob(buildStatusDirectory(), job);
+	};
+	report({});
 	const repo = await publicRepoSlug();
 	info("Waiting for the release workflow…");
 	const runId = await findWorkflowRun(root, "release-desktop.yml", sha, {
 		repo,
 	});
 	if (!runId) {
-		warn("Could not find the workflow run — check the Actions tab.");
+		report({
+			stage: "failed",
+			message: "Could not find the release workflow; nothing published",
+		});
+		fail(
+			"Could not find the workflow run — check the Actions tab. Nothing published.",
+		);
 	} else {
 		console.log(`  https://github.com/${repo}/actions/runs/${runId}`);
-		await $`gh run watch ${runId} -R ${repo}`.nothrow();
+		report({ url: `https://github.com/${repo}/actions/runs/${runId}` });
 
 		// `gh run watch` exits early on a transient API blip while the run keeps
 		// going, so its exit is not evidence of anything. Poll the run's own
 		// status until it reports completed, and only then read the conclusion.
 		let conclusion = "";
 		let settled = false;
-		for (let i = 0; i < 120 && !settled; i++) {
-			const line = await text(
-				$`gh run view ${runId} -R ${repo} --json status,conclusion --jq ${'.status + "|" + .conclusion'}`,
-			);
-			const [status, value] = line.split("|");
+		for (let i = 0; i < 480 && !settled; i++) {
+			let state: {
+				status: string;
+				conclusion: string;
+				jobs: Array<{
+					name?: string;
+					status?: string;
+					steps?: Array<{ status: string }>;
+				}>;
+			};
+			try {
+				state = JSON.parse(
+					await text(
+						$`gh run view ${runId} -R ${repo} --json status,conclusion,jobs`,
+					),
+				);
+			} catch {
+				report({ message: "Waiting for GitHub build status to reconnect" });
+				await sleep(15_000);
+				continue;
+			}
+			const { status, conclusion: value } = state;
+			const running = state.jobs
+				.filter((job) => job.status === "in_progress")
+				.map((job) => job.name)
+				.join(" / ");
+			report({
+				progress: workflowProgress(state.jobs),
+				message: running || "Waiting for workflow steps",
+			});
 			if (status === "completed") {
 				conclusion = value ?? "";
 				settled = true;
@@ -279,13 +333,27 @@ async function publishRelease(
 			await sleep(15_000);
 		}
 		if (!settled) {
+			report({
+				stage: "failed",
+				message:
+					"Timed out waiting for the release workflow; nothing published",
+			});
 			fail(`Timed out waiting for the release workflow — nothing published.`);
 		}
 		if (conclusion !== "success") {
+			report({
+				stage: "failed",
+				message: `Release workflow ${conclusion || "did not succeed"}`,
+			});
 			fail(
 				`Release workflow ${conclusion || "did not succeed"} — nothing published.`,
 			);
 		}
+		report({
+			stage: "verifying",
+			verified: true,
+			message: "Installers verified; preparing publication",
+		});
 		success("Installers built for x64 and arm64");
 	}
 
@@ -297,6 +365,10 @@ async function publishRelease(
 		found = (await code($`gh release view ${tag} -R ${repo}`)) === 0;
 	}
 	if (!found) {
+		report({
+			stage: "failed",
+			message: "Draft release not visible; nothing published",
+		});
 		warn(`Draft release not visible yet — check the Releases tab for ${tag}.`);
 		return;
 	}
@@ -309,7 +381,22 @@ async function publishRelease(
 		return;
 	}
 
-	await $`gh release edit ${tag} -R ${repo} --draft=false`;
+	try {
+		await $`gh release edit ${tag} -R ${repo} --draft=false`;
+	} catch (error) {
+		report({
+			stage: "failed",
+			message: "Could not confirm publication; check the GitHub release",
+		});
+		throw error;
+	}
+	if (job.verified)
+		report({
+			stage: "ready",
+			published: true,
+			message: "Public x64 and ARM64 installers verified and published",
+			url: `https://github.com/${repo}/releases/tag/${tag}`,
+		});
 	success(`Published ${tag} — every installed app will offer this update.`);
 }
 

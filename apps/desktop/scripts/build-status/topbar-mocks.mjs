@@ -5,6 +5,8 @@ import { resolve } from "node:path";
 export function topBarPreviewMocks(desktop) {
 	const mocks = new Map();
 	const hooks = {
+		"renderer/lib/trpc-client":
+			"export const electronTrpcClient={window:{captureTabThumbnail:{query:async()=>null}}};",
 		"renderer/lib/session-names": "export const renameSessionTab=async()=>{};",
 		"renderer/routes/_authenticated/_dashboard/v2-workspace/providers/WorkspaceProvider":
 			'export const useWorkspace=()=>({workspace:{id:"preview"}});',

@@ -1,11 +1,46 @@
-# Flow composer dictation
+# Built-in Flow dictation
 
-Both native session composers use the existing model/effort and permission controls behind separate icon buttons. Clicking the microphone starts Flow; clicking it again finishes transcription and inserts text into that same composer without sending it. Typing during recording is preserved. Closing the composer cancels its capture.
+Claude and Codex composers use the same compact microphone control. Click to
+record; click again to transcribe into that composer's draft without sending.
+Typing during recording is preserved. Closing the composer cancels its capture.
 
-The main process connects to the same-user Windows named pipe `GatedSpace.Flow.<username>`. Flow protocol 1 accepts newline-delimited `status`, `start`, `stop`, and `cancel` commands and returns JSON lines. The connection owns its recording; disconnect discards unfinished audio. Status checks never start recording. The renderer never synthesizes desktop hotkeys or pastes into the foreground window.
+Both public Windows installers and the personal installer include a private Flow
+engine, its English speech model, .NET runtime and Microsoft C++ dependencies.
+No separate Flow download, account, cloud API, first-run model download, or system
+runtime install is needed. Standalone Flow's settings and history are untouched.
 
-Install a Flow build containing its `ComposerPipe` integration (Flow commit `71b7d06`). The launch lookup is `FLOW_APP_EXE`, `C:/Dev/Flow/dist/Flow.exe`, then `%LOCALAPPDATA%/Programs/Flow/Flow.exe`. An older running copy produces an actionable error. Flow remains a separate application; its models, settings and history are unchanged by the GatedSpace installer.
+The engine is adapted from GatedVoice/Flow commit `71b7d06` (MIT). Its source,
+locked dependencies and notices live in `native/flow-dictation`. `bun run
+bundle:flow` prepares `dist/resources/flow-dictation` for `TARGET_ARCH`. The common
+`compile:app` path runs it for personal and public builds. Electron Builder checks
+checksums and native architecture before packaging and checks the copied resources
+after packaging. The helper and model live outside app.asar, with no duplicate
+model inside the archive. Build machines fetch pinned dependencies; installed
+apps do not download anything for voice typing.
 
-Validation: `node apps/desktop/scripts/verify-flow-connection.mjs` checks the real Node named-pipe client without microphone access. Run `apps/desktop/scripts/test-codex-session.ts` with Node and `COMPOSER_REFRESH_ONLY=1` for production composer and expanded-tool-panel checks. The Flow text is simulated in browser tests; audio quality requires a real microphone test.
+Each capture starts one hidden child process with a random same-user-only pipe.
+Protocol 1 supports `status`, `start`, `stop`, and `cancel`. Audio stays in memory.
+The helper exits on connection loss, parent exit, cancellation, or app quit. The
+composer stops after three minutes, with backend and helper watchdogs as backups.
+No global hotkeys, clipboard writes, or foreground-window control are used.
 
-The expanded-preview activity footer uses the owning session's public progress messages and tool events. It excludes reasoning content and marks completion only from a completed turn/result. Its footer occupies real layout space so Electron's native browser view cannot cover its buttons. Returning restores the preview and focuses the owning session.
+## Verification
+
+- `node scripts/verify-flow-connection.mjs`: real Node pipe transport against a
+  fixture server, without microphone access.
+- `bun scripts/test-flow-lifecycle.ts`: real capture manager and hidden child
+  launches with a fixture Electron lifecycle. Cancels synchronously before any
+  microphone command; covers pane ownership, missing assets and app quit.
+- `node scripts/verify-bundled-flow.mjs dist/resources/flow-dictation [jfk.wav]`:
+  real native engine readiness, errors, disconnect/parent-exit cleanup, local CRT
+  loading and optional offline audio transcription. The public whisper.cpp JFK
+  fixture must be 16 kHz, mono, 16-bit WAV. Never activates a microphone.
+- `node scripts/test-session-links.ts`: production shared microphone control and
+  both Markdown renderers in an isolated browser. Dictation text and OS opening
+  are mocked; concurrent typing and failures preserve the draft. The broader
+  `COMPOSER_REFRESH_ONLY=1` harness currently hits an unrelated missing `query`
+  fixture in the model/effort picker; it is not a passing check for this change.
+
+ARM64 and x64 helpers were exercised on Windows ARM64 (x64 under Windows
+emulation). Real microphone capture, a clean physical x64 PC, and the next
+installer remain release acceptance checks; don't label fixtures as those tests.

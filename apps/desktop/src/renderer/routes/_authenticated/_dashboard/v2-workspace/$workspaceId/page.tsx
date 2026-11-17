@@ -602,9 +602,6 @@ function V2WorkspaceContent() {
 	// `tabStrip` is "switcher". Portaled for the same reason as the rest: it
 	// needs this page's pane store.
 	const tabsSlotEl = useSlotElement("workspace-topbar-tabs-slot");
-	// TopBar centre slot. Under Liquid Glass the presets live up there instead
-	// of on a row of their own, which reclaims ~36px of vertical space.
-	const presetsSlotEl = useSlotElement("workspace-topbar-presets-slot");
 
 	useWorkspaceHotkeys({
 		store: toolState.focus === "main" ? store : tools.store,
@@ -752,7 +749,11 @@ function V2WorkspaceContent() {
 				store={store}
 				sidebarOpen={sidebarOpen}
 			>
-				<div className="flex min-h-0 min-w-0 flex-1" style={paneChromeVars}>
+				<div
+					data-workspace-preview={workspaceId}
+					className="flex min-h-0 min-w-0 flex-1"
+					style={paneChromeVars}
+				>
 					<WorkspaceToolPanels
 						key={`${activeHostUrl ?? "local"}:${workspaceId}`}
 						tools={tools}
@@ -851,23 +852,6 @@ function V2WorkspaceContent() {
 							/>
 						</div>,
 						tabsSlotEl,
-					)}
-				{/*
-				 * The run button needs the top bar whenever the presets row is not
-				 * on screen — either hidden by preference, or moved into the header.
-				 */}
-				{showPresetsBar &&
-					presetsInHeader &&
-					presetsSlotEl &&
-					createPortal(
-						<V2PresetsBar
-							executePreset={runPresetOrSession}
-							matchedPresets={matchedPresets}
-							onToggleShowPresetsBar={setShowPresetsBar}
-							showPresetsBar={showPresetsBar}
-							variant="header"
-						/>,
-						presetsSlotEl,
 					)}
 			</WorkspaceGitStatusProvider>
 			<CommandPalette

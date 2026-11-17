@@ -1,5 +1,6 @@
 import { cn } from "@superset/ui/utils";
 import { useMatchRoute, useParams } from "@tanstack/react-router";
+import { useLayoutEffect, useRef } from "react";
 import { HiOutlineWifi } from "react-icons/hi2";
 import { LuSearch } from "react-icons/lu";
 import { useQuickOpenStore } from "renderer/commandPalette/ui/QuickOpen/quickOpenStore";
@@ -24,6 +25,25 @@ import { WindowControls } from "./components/WindowControls";
 import "./top-bar.css";
 
 export function TopBar() {
+	const barRef = useRef<HTMLDivElement>(null);
+	useLayoutEffect(() => {
+		const bar = barRef.current;
+		if (!bar) return;
+		const wings = [
+			bar.querySelector(".topbar-left"),
+			bar.querySelector(".topbar-actions"),
+		];
+		const measure = () => {
+			const width = Math.max(
+				...wings.map((wing) => (wing as HTMLElement | null)?.offsetWidth ?? 0),
+			);
+			bar.style.setProperty("--topbar-wing", `${Math.ceil(width)}px`);
+		};
+		const observer = new ResizeObserver(measure);
+		for (const wing of wings) if (wing) observer.observe(wing);
+		measure();
+		return () => observer.disconnect();
+	}, []);
 	const matchRoute = useMatchRoute();
 	const { data: platform } = electronTrpc.window.getPlatform.useQuery();
 	const { workspaceId } = useParams({ strict: false });
@@ -71,6 +91,7 @@ export function TopBar() {
 
 	return (
 		<div
+			ref={barRef}
 			className={cn(
 				"workspace-topbar drag h-12 w-full relative",
 				/*
@@ -160,16 +181,16 @@ export function TopBar() {
 						<V2WorkspaceTitle workspaceId={v2WorkspaceId} />
 					</div>
 				)}
-				<div className="topbar-build-slot">
-					<BuildStatus />
-				</div>
 			</div>
-			{/* In-flow columns reserve space for all three groups. The build chip
-			    centers in the gap between the brand controls and the launcher. */}
-			<div
-				className="no-drag topbar-presets empty:hidden"
-				id="workspace-topbar-presets-slot"
-			/>
+			{/* Equal measured wings keep the rail centered in the entire window. */}
+			<div className="topbar-tabs">
+				{isV2WorkspaceRoute && (
+					<div
+						id="workspace-topbar-tabs-slot"
+						className="no-drag flex min-w-0 items-center"
+					/>
+				)}
+			</div>
 
 			<div className="topbar-actions flex items-center gap-3 h-full pr-4">
 				{!isOnline && (
@@ -179,13 +200,7 @@ export function TopBar() {
 					</div>
 				)}
 				<UpdateButton />
-				{/* Tabs shrink and scroll inside the reserved right column. */}
-				{isV2WorkspaceRoute && (
-					<div
-						id="workspace-topbar-tabs-slot"
-						className="no-drag flex min-w-0 items-center empty:hidden"
-					/>
-				)}
+				<BuildStatus />
 				{/*
 				 * Open in moved into the pane header's ⋯ menu under this chrome.
 				 *

@@ -37,6 +37,7 @@ export interface SidebarSessionOpenRequest {
 	cwd: string | null;
 	title: string;
 	mode: "resume" | "fork";
+	terminalId?: string;
 }
 
 export function SidebarSessionsPanel({
@@ -159,21 +160,28 @@ export function SidebarSessionsPanel({
 	);
 	const content = useQuery({
 		queryKey: ["sidebar-session-content", provider, debouncedQuery],
-		queryFn: async () =>
-			(
-				await Promise.all(
-					providers.map(async (agent) =>
-						(
-							await electronTrpcClient.claudeSessions.searchContent.query({
-								provider: agent,
-								query: debouncedQuery,
-							})
-						).map((id) => `${agent}:${id}`),
-					),
-				)
-			).flat(),
+		queryFn: async () => {
+			const results = await Promise.allSettled(
+				providers.map((agent) =>
+					electronTrpcClient.claudeSessions.searchConversations.query({
+						provider: agent,
+						query: debouncedQuery,
+					}),
+				),
+			);
+			return {
+				rows: results.flatMap((result) =>
+					result.status === "fulfilled" ? result.value : [],
+				),
+				errors: results.flatMap((result, index) =>
+					result.status === "rejected"
+						? [`${providers[index]} conversation search failed.`]
+						: [],
+				),
+			};
+		},
 		enabled: debouncedQuery.length >= 3 && !archived,
-		staleTime: 60_000,
+		staleTime: 15_000,
 		refetchOnWindowFocus: false,
 	});
 	const activity = new Map(
@@ -197,13 +205,17 @@ export function SidebarSessionsPanel({
 		staleTime: 30_000,
 		refetchOnWindowFocus: false,
 	});
-	const candidates = new Map(
+	const candidates = new Map<string, CollectionSession>(
 		(sessions.data?.rows ?? []).map((s) => [sessionKey(s), s]),
 	);
 	if (provider !== "claude" && !archived && debouncedQuery.length >= 2)
 		for (const row of historySearch.data ?? [])
 			candidates.set(sessionKey(row), row);
-	const matches = new Set(content.data ?? []);
+	const conversationRows =
+		!archived && debouncedQuery.length >= 3 ? (content.data?.rows ?? []) : [];
+	for (const row of conversationRows)
+		if (!candidates.has(sessionKey(row))) candidates.set(sessionKey(row), row);
+	const matches = new Set(conversationRows.map(sessionKey));
 	const filtered = [...candidates.values()].filter((s) => {
 		const key = `${s.provider}:${s.sessionId}`;
 		const textMatch =
@@ -251,7 +263,7 @@ export function SidebarSessionsPanel({
 				<Search size={14} />
 				<input
 					aria-label="Search sessions"
-					placeholder="Search title or project"
+					placeholder="Search sessions or conversations"
 					value={query}
 					onChange={(e) => setQuery(e.target.value)}
 				/>
@@ -266,6 +278,15 @@ export function SidebarSessionsPanel({
 				)}
 			</label>
 			<div className="collection-list">
+				{query.trim().length >= 3 && !archived && (
+					<output className="collection-search-status">
+						{content.isFetching
+							? "Searching conversations..."
+							: content.data?.errors.length
+								? content.data.errors.join(" ")
+								: "Titles, projects and conversation text (400 recent sessions per agent)"}
+					</output>
+				)}
 				{sessions.isError || sessions.data?.errors.length ? (
 					<div className="collection-empty select-text cursor-text">
 						{sessions.error?.message || sessions.data?.errors.join(" / ")}
@@ -380,6 +401,11 @@ export function SidebarSessionsPanel({
 									onOpenSession({
 										...session,
 										mode: live ? "fork" : "resume",
+										terminalId: bindings.data?.find(
+											(binding) =>
+												binding.agentId === session.provider &&
+												binding.agentSessionId === session.sessionId,
+										)?.terminalId,
 									})
 								}
 								onPin={() =>

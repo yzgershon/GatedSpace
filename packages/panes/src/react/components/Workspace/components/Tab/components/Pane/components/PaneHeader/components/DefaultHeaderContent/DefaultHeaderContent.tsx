@@ -41,7 +41,12 @@ export function DefaultHeaderContent({
 }: DefaultHeaderContentProps) {
 	return (
 		<div className="@container relative flex h-full w-full min-w-0 items-center gap-2 px-3">
-			<div className="relative z-10 flex min-w-0 flex-1 items-center gap-2 @min-[640px]:max-w-[calc(50%-50px)]">
+			<div
+				className={cn(
+					"relative z-10 flex min-w-0 items-center gap-2",
+					headerCenter ? "max-w-[50%] shrink" : "flex-1",
+				)}
+			>
 				{headerLead}
 				{/* Custom file/review titles already own their icon. Session headers
 				    have a folder lead and retain a separate provider identity. */}
@@ -80,16 +85,9 @@ export function DefaultHeaderContent({
 					</span>
 				) : null}
 			</div>
-			{/*
-			 * Centred against the PANE, not packed between the two clusters.
-			 *
-			 * `absolute inset-x-0 mx-auto w-fit` is the same trick the top bar's
-			 * presets use: out of flow, so a long title on the left or an extra
-			 * action on the right cannot shove it off centre. `pointer-events-none`
-			 * because it is a readout, and it overlaps a draggable header.
-			 */}
+			{/* The readout owns space between the title and actions at every pane width. */}
 			{headerCenter ? (
-				<div className="pointer-events-none absolute inset-x-0 mx-auto hidden w-fit items-center @min-[640px]:flex">
+				<div className="pointer-events-none flex min-w-max flex-1 items-center justify-center whitespace-nowrap px-1">
 					{headerCenter}
 				</div>
 			) : null}

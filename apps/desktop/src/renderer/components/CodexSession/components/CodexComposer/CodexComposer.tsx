@@ -70,17 +70,30 @@ export function CodexComposer({
 		});
 	const chosenModel = saved.model ?? "";
 	const setChosenModel = (value: string) =>
-		updateCodexDraft(paneId, { model: value });
+		updateCodexDraft(
+			paneId,
+			{ model: value },
+			{ transient: Boolean(editor.id) },
+		);
 	const chosenEffort = saved.effort ?? "";
 	const setChosenEffort = (value: string) =>
-		updateCodexDraft(paneId, { effort: value });
+		updateCodexDraft(
+			paneId,
+			{ effort: value },
+			{ transient: Boolean(editor.id) },
+		);
 	const permission = saved.permission ?? defaultCodexPermission();
 	const setPermission = (value: CodexPermission) =>
 		updateCodexDraft(paneId, { permission: value });
 	const plan = saved.plan ?? false;
 	const setPlan = (value: boolean) => updateCodexDraft(paneId, { plan: value });
 	const fast = saved.fast ?? false;
-	const setFast = (value: boolean) => updateCodexDraft(paneId, { fast: value });
+	const setFast = (value: boolean) =>
+		updateCodexDraft(
+			paneId,
+			{ fast: value },
+			{ transient: Boolean(editor.id) },
+		);
 	const [sending, setSending] = useState(false);
 	const [preparing, setPreparing] = useState(0);
 	const pendingAttachments = useRef(0);
@@ -121,13 +134,17 @@ export function CodexComposer({
 		},
 		write: (prompt) => {
 			if (prompt.provider !== "codex") return;
-			updateCodexDraft(paneId, {
-				...prompt,
-				images: (prompt.images ?? []).map((url, i) => ({
-					name: `Image ${i + 1}`,
-					url,
-				})),
-			});
+			updateCodexDraft(
+				paneId,
+				{
+					...prompt,
+					images: (prompt.images ?? []).map((url, i) => ({
+						name: `Image ${i + 1}`,
+						url,
+					})),
+				},
+				{ transient: true },
+			);
 			setCaret(prompt.text.length);
 			setMenuDismissed(true);
 		},
@@ -352,6 +369,9 @@ export function CodexComposer({
 				fast,
 				images: images.map((i) => i.url),
 			};
+			// Save resolved defaults too, so a later provider default cannot change
+			// the choices this conversation actually used.
+			updateCodexDraft(paneId, { model, effort, fast });
 			if (working || queue.state.entries.length) await queue.enqueue(prompt);
 			else
 				await electronTrpcClient.codexSession.send.mutate({

@@ -6,6 +6,12 @@ import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
 import { useMarkdownStyle } from "renderer/stores";
 import { SelectionContextMenu } from "./components";
+import { MarkdownLink } from "./components/MarkdownLink";
+import {
+	fileLinkSchema,
+	markdownUrlTransform,
+	rehypeLocalFileLinks,
+} from "./file-links";
 import { remarkHardBreaks } from "./remark-hard-breaks";
 import { defaultConfig } from "./styles/default/config";
 import { tufteConfig } from "./styles/tufte/config";
@@ -53,8 +59,13 @@ export function MarkdownRenderer({
 				<article ref={articleRef} className={config.articleClass}>
 					<ReactMarkdown
 						remarkPlugins={remarkPlugins}
-						rehypePlugins={[rehypeRaw, rehypeSanitize]}
-						components={config.components}
+						rehypePlugins={[
+							rehypeRaw,
+							rehypeLocalFileLinks,
+							[rehypeSanitize, fileLinkSchema],
+						]}
+						urlTransform={markdownUrlTransform}
+						components={{ ...config.components, a: MarkdownLink }}
 					>
 						{content}
 					</ReactMarkdown>

@@ -3,12 +3,25 @@ import { homedir } from "node:os";
 import type { BrowserWindow } from "electron";
 import { dialog } from "electron";
 import { prepareUploadImage } from "main/lib/prepare-upload-image";
+import { captureTabThumbnail } from "main/lib/tab-thumbnail";
 import { getImageMimeType } from "shared/file-types";
 import { z } from "zod";
 import { publicProcedure, router } from "..";
 
 export const createWindowRouter = (getWindow: () => BrowserWindow | null) => {
 	return router({
+		// Only this app's rendered content; no desktop/screen capture or disk cache.
+		captureTabThumbnail: publicProcedure
+			.input(
+				z.object({
+					x: z.number().finite(),
+					y: z.number().finite(),
+					width: z.number().positive().max(20000),
+					height: z.number().positive().max(20000),
+				}),
+			)
+			.query(({ input }) => captureTabThumbnail(getWindow(), input)),
+
 		minimize: publicProcedure.mutation(() => {
 			const window = getWindow();
 			if (!window) return { success: false };

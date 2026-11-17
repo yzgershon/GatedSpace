@@ -3,7 +3,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { type PaneRegistry, type Tab, useTabTitle } from "@superset/panes";
 import { cn } from "@superset/ui/utils";
 import { X } from "lucide-react";
-import type { PaneViewerData } from "../../../../types";
+import { BrowserTabIcon } from "../../../../hooks/usePaneRegistry/components/BrowserPane/BrowserTabIcon";
+import type { BrowserPaneData, PaneViewerData } from "../../../../types";
 
 export function ToolTab({
 	tab,
@@ -73,7 +74,11 @@ export function ToolTab({
 				title={`${title} · Drag to reorder; Space then arrow keys to move`}
 			>
 				<span className="flex size-3.5 shrink-0 items-center justify-center [&>svg]:size-3.5">
-					{pane && registry[pane.kind]?.getTabIcon?.(pane)}
+					{pane?.kind === "browser" ? (
+						<BrowserTabIcon data={pane.data as BrowserPaneData} />
+					) : (
+						pane && registry[pane.kind]?.getTabIcon?.(pane)
+					)}
 				</span>
 				<span className="gs-tool-tab-title truncate">{title}</span>
 			</button>

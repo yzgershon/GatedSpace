@@ -100,7 +100,7 @@ export function FlowMicrophone({
 			: state === "recording"
 				? "Finish Flow dictation"
 				: state === "starting"
-					? "Opening Flow"
+					? "Preparing dictation"
 					: "Transcribing with Flow";
 	return (
 		<button

@@ -2,7 +2,36 @@ import { toErrorMessage } from "@superset/workspace-fs/host";
 import { observable } from "@trpc/server/observable";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
-import { getServiceForWorkspace } from "../workspace-fs-service";
+import {
+	getServiceForRootPath,
+	getServiceForWorkspace,
+} from "../workspace-fs-service";
+import { type FileSessionScope, sessionFileRoot } from "./session-file-scope";
+
+const sessionScopeSchema = z.object({
+	provider: z.enum(["codex", "claude"]),
+	key: z.string().min(1).max(200),
+});
+
+async function getReadService(input: {
+	workspaceId: string;
+	absolutePath: string;
+	session?: FileSessionScope;
+}) {
+	if (!input.session) return getServiceForWorkspace(input.workspaceId);
+	const session = input.session;
+	const cwd =
+		session.provider === "codex"
+			? (
+					await import("main/lib/codex-session/session-manager")
+				).codexSessionManager.get(session.key)?.cwd
+			: (
+					await import("main/lib/claude-session/session-manager")
+				).claudeSessionManager.getContext(session.key)?.cwd;
+	return getServiceForRootPath(
+		await sessionFileRoot(session, input.absolutePath, () => cwd),
+	);
+}
 
 function isClosedStreamError(error: unknown): boolean {
 	return (
@@ -48,6 +77,7 @@ export const createFilesystemRouter = () => {
 			.input(
 				z.object({
 					workspaceId: z.string(),
+					session: sessionScopeSchema.optional(),
 					absolutePath: z.string(),
 					offset: z.number().optional(),
 					maxBytes: z.number().optional(),
@@ -55,7 +85,7 @@ export const createFilesystemRouter = () => {
 				}),
 			)
 			.query(async ({ input }) => {
-				const service = getServiceForWorkspace(input.workspaceId);
+				const service = await getReadService(input);
 				const result = await service.readFile({
 					absolutePath: input.absolutePath,
 					offset: input.offset,
@@ -245,23 +275,19 @@ export const createFilesystemRouter = () => {
 			.input(
 				z.object({
 					workspaceId: z.string(),
+					session: sessionScopeSchema.optional(),
 					absolutePath: z.string(),
 					recursive: z.boolean().optional(),
 				}),
 			)
 			.subscription(({ input }) => {
 				return observable<WatchPathEventBatch>((emit) => {
-					const service = getServiceForWorkspace(input.workspaceId);
 					let isDisposed = false;
-					const stream = service.watchPath({
-						absolutePath: input.absolutePath,
-						recursive: input.recursive,
-					});
-					const iterator = stream[Symbol.asyncIterator]();
+					let iterator: AsyncIterator<WatchPathEventBatch> | undefined;
 
 					const runCleanup = () => {
 						isDisposed = true;
-						void iterator.return?.().catch((error) => {
+						void iterator?.return?.().catch((error) => {
 							console.error("[filesystem/watchPath] Cleanup failed:", {
 								workspaceId: input.workspaceId,
 								error,
@@ -285,6 +311,14 @@ export const createFilesystemRouter = () => {
 
 					void (async () => {
 						try {
+							const service = await getReadService(input);
+							if (isDisposed) return;
+							iterator = service
+								.watchPath({
+									absolutePath: input.absolutePath,
+									recursive: input.recursive,
+								})
+								[Symbol.asyncIterator]();
 							while (!isDisposed) {
 								const next = await iterator.next();
 								if (next.done || isDisposed) {
@@ -296,23 +330,27 @@ export const createFilesystemRouter = () => {
 								}
 							}
 						} catch (error) {
+							if (isDisposed) return;
 							console.error("[filesystem/watchPath] Failed:", {
 								workspaceId: input.workspaceId,
 								error: toErrorMessage(error),
 							});
 
-							if (
+							if (input.session) {
+								emit.error(
+									error instanceof Error
+										? error
+										: new Error(toErrorMessage(error)),
+								);
+							} else {
+								// Preserve the existing overflow contract for workspace clients.
 								emitIfOpen({
 									events: [
-										{
-											kind: "overflow",
-											absolutePath: input.absolutePath,
-										},
+										{ kind: "overflow", absolutePath: input.absolutePath },
 									],
-								})
-							) {
-								runCleanup();
+								});
 							}
+							runCleanup();
 						}
 					})();
 

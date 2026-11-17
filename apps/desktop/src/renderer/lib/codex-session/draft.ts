@@ -4,6 +4,7 @@ import {
 	IMAGE_LIMIT_MESSAGE,
 	MAX_CHAT_IMAGES,
 } from "shared/image-attachments";
+import { CodexPreferenceStore } from "./preferences";
 
 export interface CodexDraft {
 	model?: string;
@@ -16,6 +17,8 @@ export interface CodexDraft {
 }
 const drafts = new Map<string, CodexDraft>();
 const listeners = new Map<string, Set<() => void>>();
+const preferences = new CodexPreferenceStore(() => localStorage);
+const sessions = new Map<string, string>();
 export function getCodexDraft(key: string): CodexDraft {
 	const existing = drafts.get(key);
 	if (existing) return existing;
@@ -23,12 +26,17 @@ export function getCodexDraft(key: string): CodexDraft {
 	try {
 		text = localStorage.getItem(`codex-draft:${key}`) ?? "";
 	} catch {}
-	const draft = { text, images: [] };
+	const draft = { ...preferences.get(key), text, images: [] };
 	drafts.set(key, draft);
 	return draft;
 }
-export function updateCodexDraft(key: string, patch: Partial<CodexDraft>) {
+export function updateCodexDraft(
+	key: string,
+	patch: Partial<CodexDraft>,
+	options?: { transient?: boolean },
+) {
 	const draft = { ...getCodexDraft(key), ...patch };
+	if (!options?.transient) preferences.update(key, patch);
 	drafts.set(key, draft);
 	if (patch.text !== undefined) {
 		try {
@@ -38,6 +46,12 @@ export function updateCodexDraft(key: string, patch: Partial<CodexDraft>) {
 		}
 	}
 	for (const fn of listeners.get(key) ?? []) fn();
+}
+export function bindCodexDraftSession(key: string, threadId: string) {
+	if (sessions.get(key) === threadId) return;
+	const saved = preferences.bind(key, threadId);
+	sessions.set(key, threadId);
+	updateCodexDraft(key, saved, { transient: true });
 }
 export function subscribeCodexDraft(key: string, fn: () => void) {
 	let set = listeners.get(key);

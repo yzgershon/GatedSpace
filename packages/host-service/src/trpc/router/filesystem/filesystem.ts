@@ -6,7 +6,6 @@ import {
 	isAbsolute,
 	join,
 	normalize,
-	relative,
 	resolve,
 } from "node:path";
 import {
@@ -17,7 +16,11 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import type { HostServiceContext } from "../../../types";
 import { protectedProcedure, queryProcedure, router } from "../../index";
-import { readExtraSearchRoots, resolveTypedPath } from "./search-roots";
+import {
+	additionalSearchRoots,
+	readExtraSearchRoots,
+	resolveTypedPath,
+} from "./search-roots";
 
 function expandTildeAbsolute(input: string): string {
 	const trimmed = input.trim();
@@ -80,7 +83,7 @@ function withTypedPathFirst(
 		});
 	}
 
-	for (const match of matches) {
+	for (const match of [...matches].sort((a, b) => b.score - a.score)) {
 		const key = match.absolutePath.toLowerCase();
 		if (seen.has(key)) continue;
 		seen.add(key);
@@ -453,12 +456,8 @@ export const filesystemRouter = router({
 			);
 
 			const extraMatches: FsSearchMatch[] = [];
-			for (const root of extraRoots) {
-				// Skip a root that already contains the workspace, or its files
-				// would appear twice under two different relative paths.
-				if (workspaceRoot && !relative(root, workspaceRoot).startsWith("..")) {
-					continue;
-				}
+			// Parent roots include sibling projects. Only identical roots are redundant.
+			for (const root of additionalSearchRoots(extraRoots, workspaceRoot)) {
 				try {
 					extraMatches.push(
 						...(await searchFilesInRoot({

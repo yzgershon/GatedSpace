@@ -1,7 +1,6 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { sessionKey } from "shared/session-organization";
 import type { CollectionSession } from "../../SessionCollectionRow/SessionCollectionRow";
 
@@ -16,7 +15,7 @@ export function SortableSession({
 	session: CollectionSession;
 	group: string;
 	disabled: boolean;
-	children: (handle: ReactNode) => ReactNode;
+	children: (dragProps: ComponentProps<"button">) => ReactNode;
 }) {
 	const {
 		attributes,
@@ -42,19 +41,14 @@ export function SortableSession({
 			}}
 		>
 			{children(
-				!disabled && (
-					<button
-						type="button"
-						className="session-drag-handle"
-						ref={setActivatorNodeRef}
-						{...attributes}
-						{...listeners}
-						aria-label={`Move ${session.title}`}
-						title="Drag to reorder or move to a project. Space to pick up, arrows to move, Escape to cancel."
-					>
-						<GripVertical size={13} />
-					</button>
-				),
+				disabled
+					? {}
+					: {
+							...attributes,
+							...listeners,
+							ref: setActivatorNodeRef,
+							"aria-roledescription": "draggable session",
+						},
 			)}
 		</div>
 	);

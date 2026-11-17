@@ -1,44 +1,17 @@
 import { renameSessionTab } from "renderer/lib/session-names";
-/**
- * The tab strip, as a rail of collapsing pills in the top bar.
- *
- * Replaces `GroupSwitcher`, which replaced the 40px strip. The pill said the
- * name of the group you were IN and hid the rest behind a dropdown, so every
- * other group cost a click to even identify. The rail keeps the pill's saved
- * vertical space and gives the other groups back: one expanded tab, the rest
- * collapsed to their agent mark, opening on hover or focus.
- *
- * ANCHORED RIGHT, GROWING LEFT. It sits between the centred preset launcher
- * and the right-hand cluster, and expands into the empty middle. Anchoring it
- * left would push the window controls sideways every time a tab opened.
- *
- * THE DROP TARGET IS LOAD-BEARING, and it is the reason this component cannot
- * just be a list. Dragging a pane out of its tab onto empty strip space was the
- * only one-gesture way to give a pane its own group; the strip's deletion
- * nearly took it, and the pill existed largely to keep it alive. The rail is
- * that target, and it says so mid-drag rather than relying on anyone guessing.
- *
- * EACH TAB IS ALSO A DRAG SOURCE, on POINTER EVENTS ONLY — see
- * `useTabRailDrag.ts`, whose header documents the two-drag-systems collision
- * that produced the crossed-circle cursor, the tab that would not move, the
- * merge nobody asked for, and the tab that could not be clicked again until the
- * app was restarted. Nothing here may become an HTML5 drag source again.
- *
- * Reordering is the DEFAULT and the merge is the deliberate one: pull a tab
- * clear of the rail and a pane lights up saying what will happen. It used to be
- * the other way round — a sideways drag merged silently and reordering did
- * nothing.
- *
- * STATUS IS NOT COLOUR ALONE. The ring around the mark carries it, a working
- * tab pulses, and the accessible name says the word — "Claude, working". A
- * collapsed tab whose only signal is a colour is unreadable to anyone who
- * cannot separate amber from the orange agent mark beside it, and on this
- * palette `--warning` (#d4a84b) and `--highlight` (#e07850) genuinely are
- * close.
+import { BrowserTabIcon } from "../../hooks/usePaneRegistry/components/BrowserPane/BrowserTabIcon";
+/** Fixed tab targets; only the selected tab shows its inline title.
+ * Hover and keyboard focus reveal a name card below the rail without moving
+ * neighboring targets. Pointer-based reorder and pane merge remain separate.
  */
 
-import type { PaneRegistry, WorkspaceStore } from "@superset/panes";
+import type { LayoutNode, PaneRegistry, WorkspaceStore } from "@superset/panes";
 import { PANE_DRAG_TYPE, resolveTabTitle } from "@superset/panes";
+import {
+	HoverCard,
+	HoverCardContent,
+	HoverCardTrigger,
+} from "@superset/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
 import {
@@ -57,7 +30,7 @@ import { useWorkspace } from "renderer/routes/_authenticated/_dashboard/v2-works
 import { getV2NotificationSourcesForTab } from "renderer/stores/v2-notifications";
 import { useStore } from "zustand";
 import type { StoreApi } from "zustand/vanilla";
-import type { PaneViewerData } from "../../types";
+import type { BrowserPaneData, PaneViewerData } from "../../types";
 import { AgentStatusRing } from "./components/AgentStatusRing";
 import { computeSlideOffset, overlayRect } from "./tabRailDrag";
 import {
@@ -68,6 +41,7 @@ import {
 } from "./useTabRailDrag";
 import { useTabRailHover } from "./useTabRailHover";
 import { useTabRailOverflow } from "./useTabRailOverflow";
+import { useTabThumbnails } from "./useTabThumbnails";
 
 import "./tab-rail.css";
 
@@ -82,7 +56,7 @@ interface TabRailProps {
 	onNewGroup: () => void;
 	newGroupHint?: string;
 	/**
-	 * Closes a group through the SAME path the strip's × used.
+	 * Closes a group through the SAME path the strip's Ã— used.
 	 *
 	 * Not `store.removeTab` directly: that skips `onBeforeCloseTab`, which is
 	 * the dirty-tab guard. A group holding a half-written prompt would close
@@ -98,6 +72,11 @@ function TabRailItem({
 	registry,
 	isActive,
 	isExpanded,
+	showName,
+	thumbnail,
+	onPreviewEnter,
+	onPreviewLeave,
+	onDismissPreview,
 	drag,
 	onSelect,
 	onCloseGroup,
@@ -110,6 +89,11 @@ function TabRailItem({
 	registry: PaneRegistry<PaneViewerData>;
 	isActive: boolean;
 	isExpanded: boolean;
+	showName: boolean;
+	thumbnail?: string;
+	onPreviewEnter: () => void;
+	onPreviewLeave: () => void;
+	onDismissPreview: () => void;
 	drag: TabRailDrag;
 	onSelect: (tabId: string) => void;
 	onCloseGroup: (tabId: string) => void;
@@ -135,22 +119,26 @@ function TabRailItem({
 			? tab.activePaneId
 			: paneIds[0];
 	const facePane = facePaneId ? tab.panes[facePaneId] : undefined;
-	const icon = facePane
-		? registry[facePane.kind]?.getTabIcon?.(facePane)
-		: null;
+	const icon = facePane ? (
+		facePane.kind === "browser" ? (
+			<BrowserTabIcon data={facePane.data as BrowserPaneData} />
+		) : (
+			registry[facePane.kind]?.getTabIcon?.(facePane)
+		)
+	) : null;
 	const title = resolveTabTitle(tab, tabs, registry);
 
-	// The word, not just the colour — this is the accessible name and the
+	// The word, not just the colour â€” this is the accessible name and the
 	// tooltip both, so status survives for anyone who cannot read the ring.
 	const statusWord = status ? getStatusTooltip(status) : null;
-	const label = statusWord ? `${title} — ${statusWord}` : title;
+	const label = statusWord ? `${title} â€” ${statusWord}` : title;
 
 	/*
 	 * The chip's own drag state, derived from the rail's single session.
 	 *
 	 * Held by the PARENT, not here: opening a gap means moving the chips this
 	 * one is passing, and a per-item handler can only see itself. That is why
-	 * the old version could not animate anything — it mutated store order on
+	 * the old version could not animate anything â€” it mutated store order on
 	 * every pointer move instead, so the row jumped between two arrangements
 	 * rather than sliding between them.
 	 */
@@ -185,7 +173,7 @@ function TabRailItem({
 			const gap = Number.parseFloat(getComputedStyle(label).columnGap) || 0;
 			setLabelWidth(
 				Math.min(
-					190,
+					320,
 					Math.ceil(
 						children.reduce((sum, child) => {
 							const range = document.createRange();
@@ -204,12 +192,13 @@ function TabRailItem({
 	}, [title, paneCount]);
 
 	return (
-		<Tooltip>
-			<TooltipTrigger asChild>
+		<HoverCard open={showName && !drag.state}>
+			<HoverCardTrigger asChild>
 				<div
 					ref={nodeRef}
 					data-active={isActive}
 					data-expanded={isExpanded}
+					data-hovered={showName}
 					data-rail-tab={tab.id}
 					onPointerDown={(event) => drag.start(event, tab.id)}
 					onClickCapture={(event) => {
@@ -223,7 +212,7 @@ function TabRailItem({
 					style={{
 						transform,
 						/*
-						 * The lifted chip tracks the pointer 1:1 — a transition here
+						 * The lifted chip tracks the pointer 1:1 â€” a transition here
 						 * would put it behind the finger, which is precisely the lag
 						 * that makes a drag feel cheap. Everything else eases, because
 						 * a gap opening instantly reads as a glitch rather than as room
@@ -246,8 +235,8 @@ function TabRailItem({
 						// picked UP rather than merely displaced.
 						isDragged &&
 							"shadow-[0_10px_24px_-8px_rgba(0,0,0,0.85)] ring-1 ring-highlight/50",
-						// Over a pane the chip is no longer the thing being placed —
-						// the overlay is — so it steps back rather than competing.
+						// Over a pane the chip is no longer the thing being placed â€”
+						// the overlay is â€” so it steps back rather than competing.
 						isDragged && overPane && "opacity-45",
 						isActive
 							? "bg-card text-foreground"
@@ -263,7 +252,7 @@ function TabRailItem({
 						 * size the whole top bar uses now.
 						 *
 						 * NO `gap` here. The label is collapsed with `max-width: 0`, not
-						 * `display: none`, so it stays a flex item — a gap would pad every
+						 * `display: none`, so it stays a flex item â€” a gap would pad every
 						 * icon-only tab with dead space it never had. The spacing is the
 						 * label's own `margin-left`, which animates 0 -> 7px with the
 						 * reveal (globals.css).
@@ -289,7 +278,11 @@ function TabRailItem({
 							style={{ maxWidth: isExpanded ? labelWidth : 0 }}
 							className="gs-tabrail-label flex items-center gap-1.5"
 						>
-							<span className="truncate">{title}</span>
+							<span className="whitespace-nowrap">
+								{Array.from(title).length > 15
+									? `${Array.from(title).slice(0, 15).join("")}...`
+									: title}
+							</span>
 							{paneCount > 1 ? (
 								<span className="shrink-0 text-[11.5px] text-muted-foreground/60 tabular-nums">
 									{paneCount}
@@ -305,7 +298,7 @@ function TabRailItem({
 					 * pointer that opened it. Hovering a tab to read its name put the
 					 * cursor on the button that closes it.
 					 *
-					 * Moving the ✕ to the lead fixed that and broke the look: it read
+					 * Moving the âœ• to the lead fixed that and broke the look: it read
 					 * as a stray mark floating in front of the tab, and the 20px it
 					 * claimed on every open tab pushed the rail into an overflow it
 					 * could not scroll out of.
@@ -318,7 +311,7 @@ function TabRailItem({
 						type="button"
 						/*
 						 * Not a drag handle. The chip as a whole is, so without this
-						 * the ✕ would begin a drag on press and its click would then
+						 * the âœ• would begin a drag on press and its click would then
 						 * be swallowed as drag fallout.
 						 */
 						{...{ [NO_DRAG_ATTRIBUTE]: "" }}
@@ -335,21 +328,97 @@ function TabRailItem({
 						<LuX className="size-3.5" />
 					</button>
 				</div>
-			</TooltipTrigger>
-			{/*
-			 * No tooltip mid-drag. The trigger is being translated around, and a
-			 * popover anchored to a moving element chases it across the screen —
-			 * so the name of a tab you are already holding obscures the row you
-			 * are trying to drop it into. Unmounting the CONTENT rather than
-			 * controlling `open` keeps the tooltip uncontrolled throughout;
-			 * flipping between controlled and uncontrolled is its own bug.
-			 */}
-			{drag.state ? null : (
-				<TooltipContent side="bottom" showArrow={false}>
-					{label}
-				</TooltipContent>
-			)}
-		</Tooltip>
+			</HoverCardTrigger>
+			<HoverCardContent
+				side="bottom"
+				sideOffset={10}
+				collisionPadding={8}
+				className="gs-tabrail-namecard"
+				onPointerEnter={onPreviewEnter}
+				onPointerLeave={onPreviewLeave}
+				onEscapeKeyDown={onDismissPreview}
+			>
+				<div className="gs-tabrail-preview-heading">
+					<span className="gs-tabrail-preview-icon">{icon}</span>
+					<span className="gs-tabrail-namecard-title">{title}</span>
+					<button
+						type="button"
+						aria-label={`Close ${title} from preview`}
+						onClick={() => {
+							onDismissPreview();
+							onCloseGroup(tab.id);
+						}}
+					>
+						<LuX size={15} />
+					</button>
+				</div>
+				<button
+					type="button"
+					className="gs-tabrail-thumbnail"
+					aria-label={`Open ${title}`}
+					onClick={() => {
+						onDismissPreview();
+						onSelect(tab.id);
+					}}
+				>
+					{thumbnail ? (
+						<img
+							src={thumbnail}
+							alt={`Last viewed ${title}`}
+							draggable={false}
+						/>
+					) : (
+						<TabLayoutThumbnail
+							layout={tab.layout}
+							tab={tab}
+							registry={registry}
+						/>
+					)}
+				</button>
+			</HoverCardContent>
+		</HoverCard>
+	);
+}
+
+function TabLayoutThumbnail({
+	layout,
+	tab,
+	registry,
+}: {
+	layout: LayoutNode;
+	tab: WorkspaceStore<PaneViewerData>["tabs"][number];
+	registry: PaneRegistry<PaneViewerData>;
+}) {
+	if (layout.type === "split")
+		return (
+			<span className="gs-tabrail-mini-split" data-direction={layout.direction}>
+				<span style={{ flex: layout.splitPercentage ?? 50 }}>
+					<TabLayoutThumbnail
+						layout={layout.first}
+						tab={tab}
+						registry={registry}
+					/>
+				</span>
+				<span style={{ flex: 100 - (layout.splitPercentage ?? 50) }}>
+					<TabLayoutThumbnail
+						layout={layout.second}
+						tab={tab}
+						registry={registry}
+					/>
+				</span>
+			</span>
+		);
+	const pane = tab.panes[layout.paneId];
+	if (!pane) return null;
+	return (
+		<span className="gs-tabrail-mini-pane">
+			<span>
+				{registry[pane.kind]?.getTabIcon?.(pane)}
+				{pane.titleOverride ??
+					registry[pane.kind]?.getTitle?.(pane) ??
+					pane.kind}
+			</span>
+		</span>
 	);
 }
 
@@ -360,8 +429,14 @@ export function TabRail({
 	newGroupHint,
 	onCloseGroup,
 }: TabRailProps) {
+	const { workspace } = useWorkspace();
 	const tabs = useStore(store, (s) => s.tabs);
 	const activeTabId = useStore(store, (s) => s.activeTabId);
+	const thumbnails = useTabThumbnails(
+		workspace.id,
+		activeTabId,
+		tabs.map((tab) => tab.id),
+	);
 
 	/*
 	 * The strip's drop behaviour, kept whole.
@@ -396,8 +471,7 @@ export function TabRail({
 	 */
 	const railRef = useRef<HTMLDivElement | null>(null);
 	const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
-	const holdPositionRef = useRef<() => void>(() => {});
-	const hover = useTabRailHover(() => holdPositionRef.current());
+	const hover = useTabRailHover();
 	const setRef = useCallback(
 		(node: HTMLDivElement | null) => {
 			railRef.current = node;
@@ -418,18 +492,12 @@ export function TabRail({
 	 * needs a dependency that only changes at that moment.
 	 */
 	const [renamingTabId, setRenamingTabId] = useState<string | null>(null);
-	const expandedId = drag.state
-		? activeTabId
-		: ([hover.hoveredId, focusedTabId, activeTabId].find((id) =>
-				tabs.some((tab) => tab.id === id),
-			) ?? null);
-	const { scrollRef, edges, step, reveal, holdPosition } = useTabRailOverflow(
-		expandedId,
+	const { scrollRef, edges, step } = useTabRailOverflow(
+		activeTabId,
 		tabs.length,
 		Boolean(renamingTabId),
 		activeTabId,
 	);
-	holdPositionRef.current = holdPosition;
 	const [draftTitle, setDraftTitle] = useState("");
 	const inputRef = useRef<HTMLInputElement>(null);
 	useEffect(() => {
@@ -488,12 +556,13 @@ export function TabRail({
 	return (
 		<div
 			ref={setRef}
+			onPointerEnter={() => void thumbnails.capture()}
 			className={cn(
 				/*
 				 * A border that survives the well.
 				 *
 				 * `--border` (#2a2827) at 65% over a #0d0a09 ground lands around
-				 * #1e1c1b, which is a nine-value step and effectively invisible —
+				 * #1e1c1b, which is a nine-value step and effectively invisible â€”
 				 * the same "under 10% is not a step" problem the pane surface hit.
 				 * Lifting it toward white gives the floating objects an edge you can
 				 * find, and the presets bar uses the identical value so the two read
@@ -502,10 +571,10 @@ export function TabRail({
 				/*
 				 * `h-[46px]`, the same row the agents surface sits on. It used to size
 				 * itself from its contents (36px tabs + 3px padding = 42px), which
-				 * put it two pixels off the launcher across the bar — near enough to
+				 * put it two pixels off the launcher across the bar â€” near enough to
 				 * look like a rendering difference rather than a decision.
 				 */
-				"gs-tabrail no-drag flex h-[46px] min-w-0 items-center gap-[3px] rounded-[13px] border border-[color-mix(in_oklab,var(--border)_100%,white_14%)] bg-[rgba(13,10,9,0.72)] p-[3px]",
+				"gs-tabrail no-drag flex h-[50px] min-w-0 items-center gap-[3px] rounded-[13px] border border-[color-mix(in_oklab,var(--border)_100%,white_14%)] bg-[rgba(13,10,9,0.72)] p-[3px]",
 				"shadow-[0_6px_20px_-10px_rgba(0,0,0,0.9)] transition-colors",
 				// Mid-drag the rail stops being a list and starts being a target,
 				// and says which of the two it currently is.
@@ -525,7 +594,11 @@ export function TabRail({
 					className="gs-tabrail-scroll"
 					role="toolbar"
 					aria-label="Session tabs"
-					onPointerDownCapture={hover.cancel}
+					onPointerDownCapture={() => {
+						hover.clear();
+						setFocusedTabId(null);
+					}}
+					onScroll={hover.clear}
 					onPointerMove={(event) => {
 						if (event.pointerType !== "mouse" || event.buttons || drag.state)
 							return;
@@ -537,7 +610,8 @@ export function TabRail({
 					}}
 					onFocusCapture={(event) => {
 						hover.clear();
-						reveal();
+						if (!(event.target as HTMLElement).matches(":focus-visible"))
+							return;
 						setFocusedTabId(
 							(event.target as HTMLElement).closest<HTMLElement>(
 								"[data-rail-tab]",
@@ -551,6 +625,11 @@ export function TabRail({
 							setFocusedTabId(null);
 					}}
 					onKeyDown={(event) => {
+						if (event.key === "Escape") {
+							hover.clear();
+							setFocusedTabId(null);
+							return;
+						}
 						if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key))
 							return;
 						const buttons = [
@@ -589,7 +668,15 @@ export function TabRail({
 								index={index}
 								registry={registry}
 								isActive={tab.id === activeTabId}
-								isExpanded={tab.id === expandedId}
+								isExpanded={tab.id === activeTabId}
+								showName={tab.id === (hover.hoveredId ?? focusedTabId)}
+								thumbnail={thumbnails.images.get(tab.id)}
+								onPreviewEnter={hover.cancel}
+								onPreviewLeave={hover.leave}
+								onDismissPreview={() => {
+									hover.clear();
+									setFocusedTabId(null);
+								}}
 								drag={drag}
 								onSelect={selectTab}
 								onCloseGroup={onCloseGroup}
@@ -600,7 +687,7 @@ export function TabRail({
 				</div>
 			</div>
 			<div className="gs-tabrail-fixed">
-				<div className="gs-tabrail-arrows">
+				<div className="gs-tabrail-arrows" hidden={!edges.left && !edges.right}>
 					<button
 						type="button"
 						className="gs-tabrail-control"
@@ -635,7 +722,7 @@ export function TabRail({
 						</button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom" showArrow={false}>
-						{newGroupHint ? `New group · ${newGroupHint}` : "New group"}
+						{newGroupHint ? `New group Â· ${newGroupHint}` : "New group"}
 					</TooltipContent>
 				</Tooltip>
 			</div>
@@ -650,7 +737,7 @@ export function TabRail({
  * This gesture used to be INVISIBLE: releasing a tab anywhere over a pane
  * merged the two groups with nothing having said so, which is why it read as
  * the tab teleporting to the cursor. Naming the half it will take turns the
- * same capability into something you can aim, and — more to the point — see
+ * same capability into something you can aim, and â€” more to the point â€” see
  * coming and abort.
  *
  * Portalled to the body because the rail sits in a horizontally scrolling bar;

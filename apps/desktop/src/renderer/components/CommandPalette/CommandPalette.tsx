@@ -145,7 +145,7 @@ export function CommandPalette({
 							<SearchIcon className="size-5 shrink-0 opacity-50" />
 							<CommandPrimitive.Input
 								ref={inputRef}
-								placeholder="Search files..."
+								placeholder="Search by filename or words, e.g. resume_v7"
 								value={query}
 								onValueChange={setQuery}
 								className="flex h-12 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -183,10 +183,20 @@ export function CommandPalette({
 							</div>
 						)}
 
+						{variant === "v2" && v2Search.error && (
+							<p
+								className="select-text cursor-text px-3 py-2 text-sm text-destructive"
+								role="alert"
+							>
+								{v2Search.error.message}
+							</p>
+						)}
 						<CommandPrimitive.List className="max-h-[400px] overflow-x-hidden overflow-y-auto scroll-py-1 p-1">
 							{showEmptyState && (
 								<CommandPrimitive.Empty className="py-6 text-center text-sm text-muted-foreground">
-									No files found.
+									{variant === "v2" && v2Search.isFetching
+										? "Searching files..."
+										: "No files found. Try part of the filename."}
 								</CommandPrimitive.Empty>
 							)}
 

@@ -35,6 +35,12 @@ interface Checkpoint {
 }
 export class BuildCheckpoints {
 	private records: Record<string, Checkpoint> = {};
+	estimatedDuration(step: string): number | undefined {
+		const value = this.records[step]?.durationMs;
+		return typeof value === "number" && Number.isFinite(value) && value > 0
+			? value
+			: undefined;
+	}
 	readonly timings: Array<{
 		step: string;
 		reused: boolean;

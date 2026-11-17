@@ -93,6 +93,35 @@ test("unused dropdown CSS is allowed, executable dropdown UI is rejected", () =>
 	);
 });
 
+test("build progress contract follows the compact control rather than the removed toolbar slot", () => {
+	const source = readFileSync(
+		resolve(
+			import.meta.dir,
+			"../../apps/desktop/src/renderer/routes/_authenticated/_dashboard/components/TopBar/components/BuildStatus/BuildStatus.tsx",
+		),
+		"utf8",
+	);
+	expect(REQUIRED_MARKERS).not.toContain("topbar-build-slot");
+	for (const marker of [
+		"build-status-chip",
+		"Installer build progress",
+		"build-progress-indeterminate",
+	]) {
+		expect(REQUIRED_MARKERS).toContain(marker);
+		expect(source).toContain(marker);
+		const bundle = fixture();
+		const main = bundle.get("dist/main/index.js");
+		if (!main) throw new Error("Missing main fixture");
+		bundle.set(
+			"dist/main/index.js",
+			Buffer.from(main.toString().replace(marker, "")),
+		);
+		expect(() => validatePersonalBundle(bundle)).toThrow(
+			`Bundle contract missing: ${marker}`,
+		);
+	}
+});
+
 test("sidebar input markers require the current isolation and cursor implementation", () => {
 	const directory = resolve(
 		import.meta.dir,

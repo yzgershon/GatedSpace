@@ -251,7 +251,7 @@ export function createToolPanels({
 		}));
 	}
 	function connect() {
-		function reconcile() {
+		function reconcile(previousTabs: WorkspaceState<PaneViewerData>["tabs"]) {
 			const tabs = store.getState().tabs;
 			state.setState((s) => {
 				const placement = Object.fromEntries(
@@ -260,15 +260,29 @@ export function createToolPanels({
 						s.placement[t.id] ?? (s.focus === "bottom" ? "bottom" : "right"),
 					]),
 				);
-				const repair = (side: ToolPlacement) => ({
-					...s[side],
-					activeTabId:
-						tabs.find(
-							(t) => t.id === s[side].activeTabId && placement[t.id] === side,
-						)?.id ??
-						tabs.find((t) => placement[t.id] === side)?.id ??
-						null,
-				});
+				const repair = (side: ToolPlacement) => {
+					const oldIndex = previousTabs.findIndex(
+						(tab) => tab.id === s[side].activeTabId,
+					);
+					// Prefer the next neighbor, then the previous one, within this panel.
+					const neighbors =
+						oldIndex < 0
+							? []
+							: [
+									...previousTabs.slice(oldIndex + 1),
+									...previousTabs.slice(0, oldIndex).reverse(),
+								];
+					return {
+						...s[side],
+						activeTabId:
+							tabs.find(
+								(t) => t.id === s[side].activeTabId && placement[t.id] === side,
+							)?.id ??
+							neighbors.find((tab) => placement[tab.id] === side)?.id ??
+							tabs.find((t) => placement[t.id] === side)?.id ??
+							null,
+					};
+				};
 				return { placement, right: repair("right"), bottom: repair("bottom") };
 			});
 		}
@@ -295,7 +309,7 @@ export function createToolPanels({
 			}
 		}
 		const offLayout = store.subscribe((next, prev) => {
-			if (next.tabs !== prev.tabs) reconcile();
+			if (next.tabs !== prev.tabs) reconcile(prev.tabs);
 			const previousActivePane = prev.tabs.find(
 				(tab) => tab.id === prev.activeTabId,
 			)?.activePaneId;

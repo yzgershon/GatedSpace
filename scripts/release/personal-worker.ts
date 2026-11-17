@@ -29,6 +29,7 @@ import {
 	buildJobSchema,
 } from "../../apps/desktop/src/shared/build-status";
 import { BuildCheckpoints, hashFiles } from "./build-checkpoints";
+import { phaseProgress } from "./phase-progress";
 import { resolvePlaywrightRuntime } from "./playwright-runtime";
 
 const { values } = parseArgs({
@@ -165,6 +166,21 @@ function acquireLock() {
 	}
 	writeFileSync(lock, String(process.pid), { flag: "wx" });
 }
+const phaseNames = [
+	"Dependencies",
+	"Compile app",
+	"Session notifications",
+	"Build indicator",
+	"Queue and collections",
+	"Flock navigation",
+	"Tabs and questions",
+	"Project organizer",
+	"Package ARM64 installer",
+	"Verify packaged files",
+];
+const previousDurations = phaseNames.map((name) =>
+	steps.estimatedDuration(name),
+);
 async function phase(
 	name: string,
 	input: string,
@@ -173,8 +189,33 @@ async function phase(
 	verifying = false,
 ) {
 	sourceUnchanged();
-	report(verifying ? "verifying" : "building", name);
-	return steps.run(name, input, outputs, action);
+	const index = phaseNames.indexOf(name);
+	const phaseStarted = Date.now();
+	const updateProgress = () => {
+		job.progress = phaseProgress(
+			previousDurations,
+			index,
+			Date.now() - phaseStarted,
+		);
+		report(verifying ? "verifying" : "building", name);
+	};
+	updateProgress();
+	const timer = setInterval(() => {
+		try {
+			updateProgress();
+		} catch (error) {
+			console.warn("Progress report unavailable", error);
+		}
+	}, 5000);
+	let result: string;
+	try {
+		result = await steps.run(name, input, outputs, action);
+	} finally {
+		clearInterval(timer);
+	}
+	job.progress = phaseProgress(previousDurations, index + 1, 0);
+	report(verifying ? "verifying" : "building", `${name} complete`);
+	return result;
 }
 let locked = false;
 try {
@@ -235,7 +276,7 @@ try {
 		...git("ls-files", "-z", "apps/desktop/scripts", "packages/cli/scripts")
 			.split("\0")
 			.filter((p) =>
-				/(?:build-|copy-native|validate-native|strip-dist|generate-file|check-pty)/.test(
+				/(?:build-|flow-bundle|copy-native|validate-native|strip-dist|generate-file|check-pty)/.test(
 					p,
 				),
 			),

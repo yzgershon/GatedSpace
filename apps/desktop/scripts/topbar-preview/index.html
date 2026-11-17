@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Centered tabs · GatedSpace preview</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="compact-note">Expand the preview panel to try the bar at full size.</div>
+  <div class="stage" id="stage">
+    <div class="app" id="app" data-layout="proposed" data-hover="stable">
+      <header class="topbar" aria-label="GatedSpace top bar">
+        <div class="left-cluster" id="left-cluster">
+          <strong class="wordmark">GatedSpace</strong><span class="version">v1.18.57</span>
+          <button type="button" class="icon-button" id="sidebar-toggle" title="Toggle sidebar" aria-label="Toggle sidebar" aria-pressed="true"><i data-icon="PanelLeft"></i></button>
+          <button type="button" class="icon-button" id="search" title="Search sessions · Ctrl K" aria-label="Search sessions"><i data-icon="Search"></i></button>
+          <div class="launchers" aria-label="Start an agent session">
+            <button type="button" class="agent-launch" data-launch="codex" aria-label="New Codex session" title="New Codex session"><img src="assets/codex.svg" alt=""><span>Codex</span></button>
+            <button type="button" class="agent-launch" data-launch="claude" aria-label="New Claude session" title="New Claude session"><img src="assets/claude.svg" alt=""><span>Claude</span></button>
+            <button type="button" class="agent-launch" data-launch="gemini" aria-label="New Gemini session" title="New Gemini session"><img src="assets/gemini.svg" alt=""><span>Gemini</span></button>
+          </div>
+        </div>
+        <div id="hover-card" class="hover-card" hidden aria-hidden="true"></div>
+        <span id="demo-pointer" class="demo-pointer" hidden></span>
+        <nav class="tab-rail" id="tab-rail" aria-label="Session tabs">
+          <div class="tab-window" id="tab-window"><div class="tabs" id="tabs" role="tablist" aria-label="Open sessions"></div></div>
+          <div class="rail-controls">
+            <button type="button" class="rail-arrow" id="previous" aria-label="Scroll tabs left" title="Previous tabs"><i data-icon="ChevronLeft"></i></button>
+            <button type="button" class="rail-arrow" id="next" aria-label="Scroll tabs right" title="Next tabs"><i data-icon="ChevronRight"></i></button>
+            <button type="button" class="rail-count" id="all-tabs" aria-label="All sessions" title="All sessions"></button>
+            <span class="rail-divider"></span>
+            <button type="button" class="icon-button add-tab" id="add-tab" aria-label="New tab" title="New tab"><i data-icon="Plus"></i></button>
+          </div>
+        </nav>
+        <div class="right-cluster" id="right-cluster">
+          <button type="button" class="build-status" id="build-status" title="Installer builds" aria-label="Installer builds"><i data-icon="Check"></i><span>Ready</span><b>3</b><i data-icon="ChevronDown"></i></button>
+          <div class="window-controls" aria-label="Window controls (preview only)">
+            <button type="button" class="icon-button" data-window="Minimize" aria-label="Minimize window (preview)"><i data-icon="Minus"></i></button>
+            <button type="button" class="icon-button" data-window="Maximize" aria-label="Maximize window (preview)"><i data-icon="Square"></i></button>
+            <button type="button" class="icon-button close-window" data-window="Close" aria-label="Close window (preview)"><i data-icon="X"></i></button>
+          </div>
+        </div>
+      </header>
+      <div class="workspace">
+        <aside class="sidebar" id="sidebar">
+          <div class="sidebar-tabs"><button type="button" class="icon-button" data-sidebar="Workspaces" aria-label="Workspaces"><i data-icon="Folder"></i></button><button type="button" class="icon-button chosen" data-sidebar="Recent sessions" aria-label="Recent sessions"><i data-icon="History"></i></button><button type="button" class="icon-button" data-sidebar="Usage" aria-label="Usage"><i data-icon="Gauge"></i></button></div>
+          <button type="button" class="search-hint" id="sidebar-search"><i data-icon="Search"></i><span>Search sessions or conversations</span></button>
+          <div class="pinned-label"><i data-icon="Pin"></i>Pinned<span id="pinned-count">7</span></div>
+          <div class="session-list" id="session-list"></div>
+          <div class="sidebar-footer"><div class="usage-label">CODEX · YISH · WEEK<span>8%</span></div><div class="usage-track"><span></span></div><div class="profile"><span class="avatar">Y</span><div><b>Yish</b><small>Personal workspace</small></div><i data-icon="Settings"></i></div></div>
+        </aside>
+        <main class="session-pane" id="session-pane" role="tabpanel" aria-label="Selected session">
+          <div class="pane-header"><i data-icon="Folder"></i><img id="pane-agent" src="assets/codex.svg" alt="Codex"><strong id="pane-title">GS Edits</strong><button type="button" class="icon-button" id="pane-add" aria-label="Add a session"><i data-icon="Plus"></i></button><span class="pane-context" id="pane-context">128k</span><i data-icon="Code"></i><i data-icon="Maximize2"></i><i data-icon="Ellipsis"></i></div>
+          <div class="account-line" id="account-line">Codex · Yish</div>
+          <div class="conversation" id="conversation"></div>
+          <form class="composer" id="composer"><label class="sr-only" for="prompt">Message in preview</label><textarea id="prompt" rows="2" placeholder="Ask to make changes, /commands, or $skills…"></textarea><div class="composer-controls"><button type="button" class="icon-button" data-note="Attachments stay in the existing composer." aria-label="Attach file"><i data-icon="Plus"></i></button><button type="button" class="icon-button" data-note="Computer control is unchanged in this design." aria-label="Computer control"><i data-icon="Square"></i></button><span></span><button type="button" class="icon-button" data-note="Your existing model and effort menus stay the same." aria-label="Model and effort"><i data-icon="Brain"></i></button><button type="button" class="icon-button" data-note="Your existing permissions menu stays the same." aria-label="Permissions"><i data-icon="Shield"></i></button><button type="button" class="icon-button" data-note="Flow is not started by this preview." aria-label="Voice dictation"><i data-icon="Mic"></i></button><button class="send" type="submit" aria-label="Send preview message"><i data-icon="ArrowUp"></i></button></div></form>
+        </main>
+        <aside class="context-pane"><div class="pane-header"><i data-icon="Code"></i><strong>Changes</strong><span></span><span class="change-total">+86 −24</span></div><div class="context-content"><p class="context-label">Working changes</p><div class="file-row"><i data-icon="Code"></i><div>TopBar.tsx<small>Desktop / workspace</small></div><span>+42</span></div><div class="file-row"><i data-icon="Code"></i><div>top-bar.css<small>Desktop / workspace</small></div><span>+44</span></div><div class="code-preview"><div><em>18</em><span class="code-muted">// Give sessions the center</span></div><div><em>19</em><span class="code-pink">.topbar</span> {</div><div><em>20</em>  display: <span class="code-green">grid</span>;</div><div><em>21</em>  align-items: <span class="code-green">center</span>;</div><div><em>22</em>}</div><div class="code-gap"></div><div><em>24</em><span class="code-pink">.agent-shortcuts</span> {</div><div><em>25</em>  gap: <span class="code-purple">4px</span>;</div><div><em>26</em>}</div></div><p class="preview-disclaimer">Sample workspace content.<br>Only the top bar is being redesigned.</p></div></aside>
+      </div>
+      <div id="popover" class="popover" hidden></div>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+  <footer class="preview-tools">
+    <div class="preview-label"><span>Design preview</span><small id="physics-status">Targets stay still · 120ms hover intent</small></div>
+    <div class="segmented" aria-label="Compare hover behavior"><button type="button" data-hover-choice="stable" aria-pressed="true">Stable hover</button><button type="button" data-hover-choice="classic" aria-pressed="false">Old movement</button></div><button id="hover-demo" type="button">Show hover demo</button><button id="build-demo" type="button">Build circle demo</button><div class="segmented layout-compare" aria-label="Compare layouts"><button type="button" data-layout-choice="current" aria-pressed="false">Current</button><button type="button" data-layout-choice="proposed" aria-pressed="true">Proposed</button></div>
+    <div class="preview-options"><label for="preview-width">Window</label><select id="preview-width"><option value="auto">Fit</option><option value="1100">1,100 px</option><option value="1440">1,440 px</option><option value="1920">1,920 px</option></select><button id="stress-tabs" type="button">Try 16 tabs</button><button class="reset" id="reset" type="button" title="Reset preview" aria-label="Reset preview"><i data-icon="RotateCcw"></i></button></div>
+  </footer>
+  <script src="assets/icons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

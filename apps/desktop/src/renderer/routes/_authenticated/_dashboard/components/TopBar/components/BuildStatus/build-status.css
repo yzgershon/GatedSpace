@@ -2,8 +2,10 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 7px;
-	height: 30px;
-	padding: 0 10px;
+	height: 32px;
+	width: 32px;
+	justify-content: center;
+	padding: 0;
 	border: 1px solid var(--border);
 	border-radius: 9px;
 	background: color-mix(in srgb, var(--foreground) 4%, transparent);
@@ -184,5 +186,29 @@
 	}
 	.build-status-chip {
 		transition: none;
+	}
+}
+
+.build-progress {
+	color: var(--primary);
+}
+.build-progress circle:last-child {
+	transition: stroke-dasharray 400ms ease;
+}
+.build-progress-indeterminate {
+	color: var(--primary);
+	animation: build-progress-spin 1.2s linear infinite;
+}
+@keyframes build-progress-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.build-progress circle:last-child {
+		transition: none;
+	}
+	.build-progress-indeterminate {
+		animation: none;
 	}
 }

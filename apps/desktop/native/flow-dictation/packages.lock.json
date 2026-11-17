@@ -1,0 +1,118 @@
+{
+	"version": 1,
+	"dependencies": {
+		"net8.0-windows7.0": {
+			"NAudio.WinMM": {
+				"type": "Direct",
+				"requested": "[2.2.1, )",
+				"resolved": "2.2.1",
+				"contentHash": "xFHRFwH4x6aq3IxRbewvO33ugJRvZFEOfO62i7uQJRUNW2cnu6BeBTHUS0JD5KBucZbHZaYqxQG8dwZ47ezQuQ==",
+				"dependencies": {
+					"Microsoft.Win32.Registry": "4.7.0",
+					"NAudio.Core": "2.2.1"
+				}
+			},
+			"Whisper.net": {
+				"type": "Direct",
+				"requested": "[1.8.1, )",
+				"resolved": "1.8.1",
+				"contentHash": "NOcPlajorIQ5bIaf21PESirTvhCSb/T4qbUZreoU31jOu2W6kGJRgy+1f/M7PK/atcWXLF5FsXIj2lHi5sym1w=="
+			},
+			"Whisper.net.Runtime": {
+				"type": "Direct",
+				"requested": "[1.8.1, )",
+				"resolved": "1.8.1",
+				"contentHash": "DW2JhlBbt0W5W+cIP8Uevt5+7XnjPIsG9b5FyAdeB9taNk9w1WFw9W7TYSNaqgyEbEHHPNOXA6hl+yrmBwOfsQ=="
+			},
+			"Whisper.net.Runtime.NoAvx": {
+				"type": "Direct",
+				"requested": "[1.8.1, )",
+				"resolved": "1.8.1",
+				"contentHash": "KADZ74RhKi+LlaoNiHgbuTwpdfqFMgpymPn6cfB1C2PZAqCaEc1ICwLsC5R1Dg/8ff/Bmd46GmexnsaulFjcvw=="
+			},
+			"Microsoft.NETCore.Platforms": {
+				"type": "Transitive",
+				"resolved": "3.1.0",
+				"contentHash": "z7aeg8oHln2CuNulfhiLYxCVMPEwBl3rzicjvIX+4sUuCwvXw5oXQEtbiU2c0z4qYL5L3Kmx0mMA/+t/SbY67w=="
+			},
+			"Microsoft.Win32.Registry": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "KSrRMb5vNi0CWSGG1++id2ZOs/1QhRqROt+qgbEAdQuGjGrFcl4AOl4/exGPUYz2wUnU42nvJqon1T3U0kPXLA==",
+				"dependencies": {
+					"System.Security.AccessControl": "4.7.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"NAudio.Core": {
+				"type": "Transitive",
+				"resolved": "2.2.1",
+				"contentHash": "GgkdP6K/7FqXFo7uHvoqGZTJvW4z8g2IffhOO4JHaLzKCdDOUEzVKtveoZkCuUX8eV2HAINqi7VFqlFndrnz/g=="
+			},
+			"System.Security.AccessControl": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "JECvTt5aFF3WT3gHpfofL2MNNP6v84sxtXxpqhLBCcDRzqsPBmHhQ6shv4DwwN2tRlzsUxtb3G9M3763rbXKDg==",
+				"dependencies": {
+					"Microsoft.NETCore.Platforms": "3.1.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"System.Security.Principal.Windows": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "ojD0PX0XhneCsUbAZVKdb7h/70vyYMDYs85lwEI+LngEONe/17A0cFaRFqZU+sOEidcVswYWikYOQ9PPfjlbtQ=="
+			}
+		},
+		"net8.0-windows7.0/win-arm64": {
+			"Microsoft.Win32.Registry": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "KSrRMb5vNi0CWSGG1++id2ZOs/1QhRqROt+qgbEAdQuGjGrFcl4AOl4/exGPUYz2wUnU42nvJqon1T3U0kPXLA==",
+				"dependencies": {
+					"System.Security.AccessControl": "4.7.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"System.Security.AccessControl": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "JECvTt5aFF3WT3gHpfofL2MNNP6v84sxtXxpqhLBCcDRzqsPBmHhQ6shv4DwwN2tRlzsUxtb3G9M3763rbXKDg==",
+				"dependencies": {
+					"Microsoft.NETCore.Platforms": "3.1.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"System.Security.Principal.Windows": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "ojD0PX0XhneCsUbAZVKdb7h/70vyYMDYs85lwEI+LngEONe/17A0cFaRFqZU+sOEidcVswYWikYOQ9PPfjlbtQ=="
+			}
+		},
+		"net8.0-windows7.0/win-x64": {
+			"Microsoft.Win32.Registry": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "KSrRMb5vNi0CWSGG1++id2ZOs/1QhRqROt+qgbEAdQuGjGrFcl4AOl4/exGPUYz2wUnU42nvJqon1T3U0kPXLA==",
+				"dependencies": {
+					"System.Security.AccessControl": "4.7.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"System.Security.AccessControl": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "JECvTt5aFF3WT3gHpfofL2MNNP6v84sxtXxpqhLBCcDRzqsPBmHhQ6shv4DwwN2tRlzsUxtb3G9M3763rbXKDg==",
+				"dependencies": {
+					"Microsoft.NETCore.Platforms": "3.1.0",
+					"System.Security.Principal.Windows": "4.7.0"
+				}
+			},
+			"System.Security.Principal.Windows": {
+				"type": "Transitive",
+				"resolved": "4.7.0",
+				"contentHash": "ojD0PX0XhneCsUbAZVKdb7h/70vyYMDYs85lwEI+LngEONe/17A0cFaRFqZU+sOEidcVswYWikYOQ9PPfjlbtQ=="
+			}
+		}
+	}
+}

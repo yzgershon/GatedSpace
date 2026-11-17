@@ -42,13 +42,33 @@ try {
 	await page.goto(process.env.ORGANIZER_PREVIEW_URL ?? "http://127.0.0.1:8146");
 
 	await group("Pinned")
-		.getByLabel("Move GatedSpace improvements", { exact: true })
+		.locator(".collection-session-open")
+		.filter({ hasText: "GatedSpace improvements" })
 		.waitFor();
+	assert.equal(await page.locator(".session-drag-handle").count(), 0);
+	const firstRow = group("Pinned")
+		.locator(".collection-session-open")
+		.filter({ hasText: "GatedSpace improvements" });
+	await firstRow.click();
+	await page
+		.getByText("Selected: GatedSpace improvements", { exact: true })
+		.waitFor();
+	await firstRow.focus();
+	await page.keyboard.press("Enter");
+	assert.equal(
+		await page.locator(".session-drag-preview").count(),
+		0,
+		"Enter opens rather than picking up a row",
+	);
 	const originalPins = await titles(group("Pinned"));
 	assert.equal(originalPins.length, 3);
 	await drag(
-		group("Pinned").getByLabel(`Move ${originalPins[2]}`, { exact: true }),
-		group("Pinned").getByLabel(`Move ${originalPins[0]}`, { exact: true }),
+		group("Pinned")
+			.locator(".collection-session-open")
+			.filter({ hasText: originalPins[2] }),
+		group("Pinned")
+			.locator(".collection-session-open")
+			.filter({ hasText: originalPins[0] }),
 	);
 	await page.waitForFunction(
 		(title) =>
@@ -56,14 +76,23 @@ try {
 				?.textContent === title,
 		originalPins[2],
 	);
-	checks.push("Mouse drag reorders mixed-provider pins");
+	checks.push(
+		"Whole-row mouse drag reorders pins; ordinary click opens the session",
+	);
+	assert.equal(
+		await page
+			.getByText("Selected: GatedSpace improvements", { exact: true })
+			.count(),
+		1,
+		"Dragging must not open the dragged session",
+	);
 	await page.reload();
 	await group("Pinned").waitFor();
 	assert.equal((await titles(group("Pinned")))[0], originalPins[2]);
 	checks.push("Pinned order survives refresh");
-	const handle = group("Pinned").getByLabel(`Move ${originalPins[2]}`, {
-		exact: true,
-	});
+	const handle = group("Pinned")
+		.locator(".collection-session-open")
+		.filter({ hasText: originalPins[2] });
 	await handle.focus();
 	await page.keyboard.press("Space");
 	await page.locator(".session-drag-preview").waitFor();
@@ -107,9 +136,9 @@ try {
 		node.scrollTop = 0;
 	});
 	await drag(
-		group("Pinned").getByLabel("Move Filtrsoft reliability audit", {
-			exact: true,
-		}),
+		group("Pinned")
+			.locator(".collection-session-open")
+			.filter({ hasText: "Filtrsoft reliability audit" }),
 		group("GatedSpace").getByRole("button", { name: /^GatedSpace, / }),
 	);
 	await group("GatedSpace")

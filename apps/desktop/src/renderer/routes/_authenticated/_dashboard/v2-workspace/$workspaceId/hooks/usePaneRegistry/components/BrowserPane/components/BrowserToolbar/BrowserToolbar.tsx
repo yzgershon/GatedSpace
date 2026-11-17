@@ -1,4 +1,5 @@
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
+import { Search } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	TbArrowLeft,
@@ -6,6 +7,7 @@ import {
 	TbLoader2,
 	TbRefresh,
 } from "react-icons/tb";
+import { BrowserTabIcon } from "../../BrowserTabIcon";
 import { UrlSuggestions } from "./components/UrlSuggestions";
 import { useUrlAutocomplete } from "./hooks/useUrlAutocomplete";
 
@@ -17,6 +19,7 @@ function displayUrl(url: string): string {
 interface BrowserToolbarProps {
 	currentUrl: string;
 	pageTitle: string;
+	faviconUrl?: string | null;
 	isLoading: boolean;
 	canGoBack: boolean;
 	canGoForward: boolean;
@@ -29,6 +32,7 @@ interface BrowserToolbarProps {
 export function BrowserToolbar({
 	currentUrl,
 	pageTitle,
+	faviconUrl,
 	isLoading,
 	canGoBack,
 	canGoForward,
@@ -107,17 +111,18 @@ export function BrowserToolbar({
 	);
 
 	return (
-		<div className="flex h-full min-w-0 flex-1 items-center px-2">
+		<div className="gs-browser-toolbar flex h-full min-w-0 flex-1 items-center gap-2 px-2">
 			<div className="flex shrink-0 items-center gap-0.5">
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<button
 							type="button"
+							aria-label="Go back"
 							onClick={onGoBack}
 							disabled={!canGoBack}
-							className={`rounded p-1 transition-colors ${canGoBack ? "text-muted-foreground/60 hover:text-muted-foreground" : "opacity-30 pointer-events-none"}`}
+							className="gs-browser-nav-button"
 						>
-							<TbArrowLeft className="size-3.5" />
+							<TbArrowLeft className="size-4" />
 						</button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom" showArrow={false}>
@@ -128,11 +133,12 @@ export function BrowserToolbar({
 					<TooltipTrigger asChild>
 						<button
 							type="button"
+							aria-label="Go forward"
 							onClick={onGoForward}
 							disabled={!canGoForward}
-							className={`rounded p-1 transition-colors ${canGoForward ? "text-muted-foreground/60 hover:text-muted-foreground" : "opacity-30 pointer-events-none"}`}
+							className="gs-browser-nav-button"
 						>
-							<TbArrowRight className="size-3.5" />
+							<TbArrowRight className="size-4" />
 						</button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom" showArrow={false}>
@@ -143,13 +149,14 @@ export function BrowserToolbar({
 					<TooltipTrigger asChild>
 						<button
 							type="button"
+							aria-label="Reload page"
 							onClick={onReload}
-							className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+							className="gs-browser-nav-button"
 						>
 							{isLoading ? (
-								<TbLoader2 className="size-3.5 animate-spin" />
+								<TbLoader2 className="size-4 animate-spin" />
 							) : (
-								<TbRefresh className="size-3.5" />
+								<TbRefresh className="size-4" />
 							)}
 						</button>
 					</TooltipTrigger>
@@ -158,8 +165,14 @@ export function BrowserToolbar({
 					</TooltipContent>
 				</Tooltip>
 			</div>
-			<div className="mx-1.5 h-3.5 w-px shrink-0 bg-muted-foreground/30" />
-			<div className="relative flex min-w-0 flex-1 items-center">
+			<div className="gs-browser-address relative flex min-w-0 flex-1 items-center">
+				<span className="gs-browser-address-icon">
+					{isBlank || isEditing ? (
+						<Search className="size-3.5" />
+					) : (
+						<BrowserTabIcon data={{ url: currentUrl, pageTitle, faviconUrl }} />
+					)}
+				</span>
 				{isEditing ? (
 					<form
 						onSubmit={handleSubmit}
@@ -172,8 +185,9 @@ export function BrowserToolbar({
 							onChange={handleInputChange}
 							onBlur={exitEditMode}
 							onKeyDown={handleKeyDown}
-							placeholder="Enter URL or search..."
-							className="h-[22px] w-full rounded-sm border border-ring bg-transparent px-2 text-xs text-foreground outline-none placeholder:text-muted-foreground/40"
+							aria-label="Address or search"
+							placeholder="Search Google or type a URL"
+							className="h-8 w-full min-w-0 bg-transparent pr-3 text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
 							spellCheck={false}
 							autoComplete="off"
 						/>
@@ -181,25 +195,19 @@ export function BrowserToolbar({
 				) : (
 					<button
 						type="button"
+						aria-label="Edit address or search"
 						title={isBlank ? undefined : url}
 						onClick={enterEditMode}
-						className="group flex w-full min-w-0 items-center rounded-sm border border-transparent px-2 py-0.5 text-left text-xs"
+						className="group flex h-8 w-full min-w-0 items-center pr-3 text-left text-xs"
 					>
 						{isBlank ? (
 							<span className="min-w-0 truncate text-muted-foreground/40">
-								Enter URL or search...
+								Search Google or type a URL
 							</span>
 						) : (
-							<>
-								<span className="min-w-0 shrink truncate text-muted-foreground/60 transition-colors group-hover:text-foreground">
-									{url}
-								</span>
-								{pageTitle && (
-									<span className="ml-1 min-w-0 flex-1 truncate text-muted-foreground/40 transition-opacity group-hover:opacity-0">
-										/ {pageTitle}
-									</span>
-								)}
-							</>
+							<span className="min-w-0 shrink truncate text-muted-foreground transition-colors group-hover:text-foreground">
+								{url}
+							</span>
 						)}
 					</button>
 				)}

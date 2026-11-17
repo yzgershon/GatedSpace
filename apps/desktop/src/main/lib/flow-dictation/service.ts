@@ -1,65 +1,65 @@
-import { execFile, spawn } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { promisify } from "node:util";
+import { app } from "electron";
 import { FlowConnection } from "./client";
 
 type Capture = {
 	key: string;
+	child?: ChildProcess;
 	connection?: FlowConnection;
 	timer?: ReturnType<typeof setTimeout>;
 };
 let capture: Capture | undefined;
 
-async function connectFlow() {
-	try {
-		return await FlowConnection.open();
-	} catch {
-		/* Launch only after the user clicks the mic. */
-	}
-	const processes = await promisify(execFile)(
-		"tasklist.exe",
-		["/FO", "CSV", "/NH"],
-		{ windowsHide: true, timeout: 5000 },
-	);
-	if (/"(?:Flow|GatedVoice)\.exe"/i.test(processes.stdout))
-		throw new Error(
-			"An older copy of Flow is running without the composer connection. Quit Flow once, then try again.",
-		);
-	const candidates = [
-		process.env.FLOW_APP_EXE,
-		"C:/Dev/Flow/dist/Flow.exe",
-		join(process.env.LOCALAPPDATA ?? "", "Programs/Flow/Flow.exe"),
-	];
-	const executable = candidates.find((path) => path && existsSync(path));
-	if (!executable)
-		throw new Error(
-			"Flow was not found. Install Flow or set FLOW_APP_EXE to its executable.",
-		);
-	const child = spawn(executable, [], {
-		detached: true,
-		stdio: "ignore",
-		windowsHide: true,
-	});
-	let launchError: Error | undefined;
-	child.on("error", (error) => {
-		launchError = error;
-	});
-	child.unref();
-	for (let attempt = 0; attempt < 20; attempt++) {
-		if (launchError) throw launchError;
-		await new Promise((resolve) => setTimeout(resolve, 500));
-		try {
-			return await FlowConnection.open();
-		} catch {
-			/* app startup */
-		}
-	}
-	throw new Error(
-		"Flow could not connect. Quit an older running copy of Flow, then try the microphone again.",
-	);
+export function bundledFlowDirectory() {
+	return app.isPackaged
+		? join(process.resourcesPath, "resources", "flow-dictation")
+		: join(app.getAppPath(), "dist", "resources", "flow-dictation");
 }
 
+async function connectFlow(current: Capture) {
+	const directory = bundledFlowDirectory();
+	const executable = join(directory, "GatedSpace.Flow.exe");
+	if (
+		!existsSync(executable) ||
+		!existsSync(join(directory, "ggml-base.en-q5_1.bin"))
+	)
+		throw new Error(
+			"Built-in dictation files are missing. Reinstall GatedSpace to restore voice typing.",
+		);
+	// A private helper belongs to this capture. No global Flow app or clipboard.
+	const pipe = `GatedSpace.Flow.${process.pid}.${randomUUID()}`;
+	const child = spawn(executable, ["--pipe", pipe], {
+		cwd: directory,
+		windowsHide: true,
+		stdio: ["pipe", "ignore", "pipe"],
+	});
+	current.child = child;
+	let failure = "";
+	child.stderr?.on("data", (data: Buffer) => {
+		failure = (failure + data.toString()).slice(-2000);
+	});
+	child.on("error", (error) => {
+		failure = error.message;
+	});
+	child.stdin?.on("error", () => {});
+	for (let attempt = 0; attempt < 100; attempt++) {
+		if (capture !== current) throw new Error("Dictation was cancelled.");
+		if (child.exitCode !== null || child.signalCode !== null)
+			throw new Error(
+				"Built-in dictation could not start. " +
+					(failure || "Try the microphone again."),
+			);
+		try {
+			return await FlowConnection.open(`\\\\.\\pipe\\${pipe}`);
+		} catch {
+			await new Promise((resolve) => setTimeout(resolve, 100));
+		}
+	}
+	throw new Error(`Built-in dictation did not start. ${failure}`);
+}
 export async function startFlow(key: string) {
 	if (process.platform !== "win32")
 		throw new Error("Flow dictation is available on Windows.");
@@ -67,21 +67,16 @@ export async function startFlow(key: string) {
 	const current: Capture = { key };
 	capture = current;
 	try {
-		const connection = await connectFlow();
+		const connection = await connectFlow(current);
 		if (capture !== current) {
 			connection.close();
 			throw new Error("Dictation was cancelled.");
 		}
 		current.connection = connection;
-		for (let attempt = 0; attempt < 60; attempt++) {
-			const status = await connection.request("status");
-			if (status.protocol !== 1)
-				throw new Error(
-					"This Flow version needs the composer integration update.",
-				);
-			if (status.state !== "loading") break;
-			await new Promise((resolve) => setTimeout(resolve, 500));
-		}
+		const status = await connection.request("status", 60_000);
+		if (status.protocol !== 1 || status.state !== "ready")
+			throw new Error("Built-in dictation is not ready. Try again.");
+		if (capture !== current) throw new Error("Dictation was cancelled.");
 		await connection.request("start");
 		current.timer = setTimeout(() => cancelFlow(key), 4 * 60_000);
 		return { recording: true };
@@ -93,7 +88,7 @@ export async function startFlow(key: string) {
 export async function stopFlow(key: string) {
 	const current = capture;
 	if (!current || current.key !== key || !current.connection)
-		throw new Error("No active Flow dictation for this composer.");
+		throw new Error("No active dictation for this composer.");
 	clearTimeout(current.timer);
 	try {
 		return {
@@ -105,7 +100,13 @@ export async function stopFlow(key: string) {
 }
 export function cancelFlow(key: string) {
 	if (capture?.key !== key) return;
-	clearTimeout(capture.timer);
-	capture.connection?.close(); // Flow discards this connection's recording on disconnect.
+	const current = capture;
 	capture = undefined;
+	clearTimeout(current.timer);
+	current.connection?.close();
+	current.child?.stdin?.end();
+	current.child?.kill(); // Cancels startup/inference without touching standalone Flow.
 }
+app.once("before-quit", () => {
+	if (capture) cancelFlow(capture.key);
+});

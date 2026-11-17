@@ -1,6 +1,23 @@
 import { readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { isAbsolute, join, normalize, parse, resolve, sep } from "node:path";
+import {
+	isAbsolute,
+	join,
+	normalize,
+	parse,
+	relative,
+	resolve,
+	sep,
+} from "node:path";
+
+export function additionalSearchRoots(
+	roots: string[],
+	workspaceRoot?: string,
+): string[] {
+	return roots.filter(
+		(root) => !workspaceRoot || relative(root, workspaceRoot) !== "",
+	);
+}
 
 /**
  * Extra folders that Ctrl+T searches in addition to the open workspace.

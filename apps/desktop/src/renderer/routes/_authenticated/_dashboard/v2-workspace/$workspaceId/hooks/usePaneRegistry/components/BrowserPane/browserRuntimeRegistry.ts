@@ -330,7 +330,11 @@ class BrowserRuntimeRegistryImpl {
 		}
 	}
 
-	private createEntry(paneId: string, initialUrl: string): RegistryEntry {
+	private createEntry(
+		paneId: string,
+		initialUrl: string,
+		saved?: Partial<PersistableBrowserState>,
+	): RegistryEntry {
 		const webview = document.createElement("webview") as Electron.WebviewTag;
 		webview.setAttribute("partition", "persist:superset");
 		webview.setAttribute("allowpopups", "");
@@ -349,7 +353,12 @@ class BrowserRuntimeRegistryImpl {
 		const entry: RegistryEntry = {
 			paneId,
 			webview,
-			state: { ...EMPTY_STATE, currentUrl: initialUrl },
+			state: {
+				...EMPTY_STATE,
+				currentUrl: initialUrl,
+				pageTitle: saved?.pageTitle ?? "",
+				faviconUrl: saved?.faviconUrl ?? null,
+			},
 			onPersist: null,
 			webContentsId: null,
 			detachHandlers: () => {},
@@ -374,6 +383,38 @@ class BrowserRuntimeRegistryImpl {
 				faviconUrl: entry.state.faviconUrl,
 			});
 		};
+		let faviconRequest = 0;
+		let reportedIcons: string[] = [];
+		const resolveFavicon = async () => {
+			if (entry.suspended || !entry.registered) return;
+			const pageUrl = webview.getURL();
+			const request = ++faviconRequest;
+			try {
+				const { faviconUrl } = await electronTrpcClient.browser.favicon.mutate({
+					paneId,
+					pageUrl,
+					candidates: reportedIcons,
+				});
+				if (
+					!faviconUrl ||
+					faviconUrl === entry.state.faviconUrl ||
+					request !== faviconRequest ||
+					entry.suspended ||
+					this.entries.get(paneId) !== entry ||
+					webview.getURL() !== pageUrl
+				)
+					return;
+				this.setState(paneId, { faviconUrl });
+				firePersist();
+				await electronTrpcClient.browserHistory.upsert.mutate({
+					url: pageUrl,
+					title: entry.state.pageTitle,
+					faviconUrl,
+				});
+			} catch (error) {
+				console.warn("[browserRuntimeRegistry] favicon unavailable:", error);
+			}
+		};
 		const handleFocus = () => {
 			// The native guest is outside the pane DOM; forward its focus to the
 			// placeholder so the owning workspace/tool group gets keyboard state.
@@ -396,6 +437,7 @@ class BrowserRuntimeRegistryImpl {
 					entry.webContentsId = webContentsId;
 					entry.registered = true;
 				}
+				void resolveFavicon();
 				entry.previewApplied = null;
 				this.updateLayout(entry);
 				void this.syncPreview(entry);
@@ -411,7 +453,6 @@ class BrowserRuntimeRegistryImpl {
 			this.setState(paneId, {
 				isLoading: true,
 				error: null,
-				faviconUrl: null,
 			});
 		};
 
@@ -421,6 +462,7 @@ class BrowserRuntimeRegistryImpl {
 				this.setState(paneId, { isLoading: false });
 				return;
 			}
+			void resolveFavicon();
 			const url = webview.getURL() ?? "";
 			const title = webview.getTitle() ?? "";
 			this.setState(paneId, {
@@ -442,6 +484,10 @@ class BrowserRuntimeRegistryImpl {
 		const handleDidNavigate = (e: Electron.DidNavigateEvent) => {
 			if (entry.suspended) return;
 			const url = e.url ?? "";
+			faviconRequest++;
+			reportedIcons = [];
+			if (url !== entry.state.currentUrl)
+				this.setState(paneId, { faviconUrl: null });
 			const title = webview.getTitle() ?? "";
 			this.setState(paneId, {
 				currentUrl: url,
@@ -466,18 +512,8 @@ class BrowserRuntimeRegistryImpl {
 
 		const handlePageFaviconUpdated = (e: Electron.PageFaviconUpdatedEvent) => {
 			if (entry.suspended) return;
-			const favicon = e.favicons?.[0];
-			if (!favicon || favicon === entry.state.faviconUrl) return;
-			this.setState(paneId, { faviconUrl: favicon });
-			const { currentUrl, pageTitle } = entry.state;
-			if (currentUrl && currentUrl !== "about:blank") {
-				electronTrpcClient.browserHistory.upsert
-					.mutate({ url: currentUrl, title: pageTitle, faviconUrl: favicon })
-					.catch((err) => {
-						console.error("[browserRuntimeRegistry] upsert favicon:", err);
-					});
-			}
-			firePersist();
+			reportedIcons = (e.favicons ?? []).slice(0, 12);
+			void resolveFavicon();
 		};
 
 		const handleDidFailLoad = (e: Electron.DidFailLoadEvent) => {
@@ -577,6 +613,8 @@ class BrowserRuntimeRegistryImpl {
 		paneId: string,
 		data: {
 			url: string;
+			pageTitle?: string;
+			faviconUrl?: string | null;
 			previewMode?: BrowserPreviewMode;
 			previewOrientation?: BrowserPreviewOrientation;
 		},
@@ -584,7 +622,7 @@ class BrowserRuntimeRegistryImpl {
 	): void {
 		let entry = this.entries.get(paneId);
 		if (!entry) {
-			entry = this.createEntry(paneId, data.url);
+			entry = this.createEntry(paneId, data.url, data);
 			entry.webview.style.width = "420px";
 			entry.webview.style.height = "600px";
 			entry.webview.style.pointerEvents = "none";
@@ -604,11 +642,12 @@ class BrowserRuntimeRegistryImpl {
 		placeholder: HTMLElement,
 		initialUrl: string,
 		onPersist: (state: PersistableBrowserState) => void,
+		saved?: Partial<PersistableBrowserState>,
 	): void {
 		const root = this.ensureRootContainer();
 		let entry = this.entries.get(paneId);
 		if (!entry) {
-			entry = this.createEntry(paneId, initialUrl);
+			entry = this.createEntry(paneId, initialUrl, saved);
 			this.entries.set(paneId, entry);
 			root.appendChild(entry.webview);
 		} else {

@@ -1,5 +1,7 @@
+import { toast } from "@superset/ui/sonner";
 import { Pin } from "lucide-react";
 import { useNativeSessionStates } from "renderer/hooks/useNativeSessionStates/useNativeSessionStates";
+import { focusExistingSession } from "renderer/stores/workspace-creates/focusExistingSession";
 import "./components/DashboardSidebarPanels/collections.css";
 import {
 	closestCenter,
@@ -192,7 +194,30 @@ export function DashboardSidebar({
 			cwd: string | null;
 			title: string;
 			mode: "resume" | "fork";
+			terminalId?: string;
 		}) => {
+			const target = focusExistingSession(
+				collections,
+				request,
+				activeWorkspaceId,
+			);
+			if (target) {
+				void navigate({
+					to: "/v2-workspace/$workspaceId",
+					params: { workspaceId: target },
+				});
+				return;
+			}
+			if (request.mode === "fork") {
+				toast.info(
+					"This session is already running or its status is still loading.",
+					{
+						description:
+							"Open its existing workspace, or try again once the session list has refreshed.",
+					},
+				);
+				return;
+			}
 			if (
 				activeWorkspaceId &&
 				openSessionInWorkspace(collections, activeWorkspaceId, {
@@ -200,7 +225,7 @@ export function DashboardSidebar({
 					sessionId: request.sessionId,
 					cwd: request.cwd,
 					title: request.title,
-					fork: request.mode === "fork",
+					fork: false,
 				})
 			) {
 				return;

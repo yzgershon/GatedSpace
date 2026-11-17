@@ -23,10 +23,10 @@
 }
 .gs-live-code-layout[data-enabled="true"] {
 	display: grid;
-	grid-template-columns: minmax(0, 1fr) 10px clamp(
+	grid-template-columns: minmax(0, 1fr) 8px clamp(
 			280px,
 			var(--live-chat-width),
-			48%
+			46%
 		);
 }
 .gs-live-code-main,
@@ -46,125 +46,189 @@
 	background: var(--background);
 }
 .gs-live-code-divider span {
-	width: 3px;
-	height: 40px;
+	width: 2px;
+	height: 36px;
 	border-radius: 3px;
 	background: var(--border);
+	transition: background 120ms;
 }
-.gs-live-code-divider:hover span {
-	background: var(--muted-foreground);
+.gs-live-code-divider:hover span,
+.gs-live-code-divider:active span {
+	background: var(--primary);
 }
 .gs-live-editor {
+	--live-editor-bg: color-mix(in srgb, var(--background) 92%, #080a11);
 	height: 100%;
 	min-width: 0;
 	min-height: 0;
 	display: flex;
 	flex-direction: column;
-	background: var(--background);
+	background: var(--live-editor-bg);
 	border-right: 1px solid var(--border);
+	container: live-editor / inline-size;
 }
-.gs-live-editor > header {
-	height: 43px;
+.gs-live-toolbar {
+	min-height: 44px;
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	padding: 0 12px;
+	padding: 6px 12px;
 	border-bottom: 1px solid var(--border);
+	background: var(--background);
 }
-.gs-live-editor > header strong {
+.gs-live-toolbar > svg {
+	color: var(--primary);
+	flex-shrink: 0;
+}
+.gs-live-toolbar > strong {
 	font-size: 12px;
-	font-weight: 500;
+	font-weight: 600;
+	letter-spacing: -0.1px;
+	white-space: nowrap;
 }
-.gs-live-editor > header button {
+.gs-live-toolbar-actions {
 	margin-left: auto;
 	display: flex;
 	align-items: center;
+	gap: 8px;
+}
+.gs-live-follow {
+	display: flex;
+	align-items: center;
 	gap: 6px;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 4px 7px;
-	font-size: 10px;
+	padding: 5px 8px;
+	border-radius: 5px;
+	font-size: 11px;
 	color: var(--muted-foreground);
 	white-space: nowrap;
 }
-.gs-live-editor > header button[aria-pressed="true"] {
-	color: #99dec5;
-	background: #8be9bb08;
-	border-color: #4b6e64;
+.gs-live-follow[aria-pressed="true"] {
+	color: var(--primary);
+	background: color-mix(in srgb, var(--primary) 9%, transparent);
+}
+.gs-live-follow:hover {
+	background: var(--accent);
+}
+.gs-live-mode {
+	display: flex;
+	border: 1px solid var(--border);
+	background: var(--live-editor-bg);
+	border-radius: 7px;
+	padding: 2px;
+}
+.gs-live-mode button {
+	font-size: 11px;
+	padding: 3px 9px;
+	color: var(--muted-foreground);
+	border-radius: 4px;
+}
+.gs-live-mode button[aria-pressed="true"] {
+	color: var(--foreground);
+	background: var(--accent);
+	box-shadow: 0 1px 3px #0002;
+}
+.gs-live-icon-button {
+	width: 26px;
+	height: 26px;
+	display: grid;
+	place-items: center;
+	border-radius: 5px;
+	color: var(--muted-foreground);
+	flex-shrink: 0;
+}
+.gs-live-icon-button:hover,
+.gs-live-icon-button[aria-pressed="true"] {
+	color: var(--foreground);
+	background: var(--accent);
 }
 .gs-live-file-tabs {
 	display: flex;
-	min-height: 38px;
+	min-height: 39px;
 	flex-shrink: 0;
 	overflow-x: auto;
 	scrollbar-width: thin;
 	border-bottom: 1px solid var(--border);
-	background: var(--card);
+	background: color-mix(in srgb, var(--card) 50%, var(--background));
 }
 .gs-live-file-tabs button {
 	display: flex;
 	align-items: center;
-	gap: 7px;
+	gap: 8px;
 	flex-shrink: 0;
-	min-width: 100px;
-	max-width: 210px;
-	padding: 8px 12px;
-	font-size: 11px;
+	min-width: 112px;
+	max-width: 230px;
+	padding: 9px 15px;
+	font-size: 12px;
 	color: var(--muted-foreground);
-	border-right: 1px solid var(--border);
-	border-top: 2px solid transparent;
+	border-right: 1px solid color-mix(in srgb, var(--border) 65%, transparent);
+	position: relative;
 }
-.gs-live-file-tabs button[aria-current="page"] {
+.gs-live-file-tabs button:hover {
 	color: var(--foreground);
-	background: var(--background);
-	border-top-color: var(--primary);
+	background: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.gs-live-file-tabs button[aria-selected="true"] {
+	color: var(--foreground);
+	background: var(--live-editor-bg);
+}
+.gs-live-file-tabs button[aria-selected="true"]::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 12px;
+	right: 12px;
+	height: 2px;
+	background: var(--primary);
+	border-radius: 0 0 2px 2px;
+}
+.gs-live-file-tabs img {
+	width: 16px;
+	height: 16px;
+	flex-shrink: 0;
 }
 .gs-live-file-tabs button span,
-.gs-live-breadcrumb > span {
+.gs-live-breadcrumb > span:first-child {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
-.gs-live-file-tabs button svg {
-	color: #8be9fd;
-	flex-shrink: 0;
+.gs-live-file-tabs .gs-live-deleted {
+	color: #ff899c;
+	font-size: 10px;
 }
 .gs-live-breadcrumb {
 	display: flex;
-	min-height: 36px;
+	min-height: 30px;
 	flex-shrink: 0;
 	align-items: center;
-	gap: 8px;
-	padding: 3px 10px;
-	border-bottom: 1px solid var(--border);
+	gap: 12px;
+	padding: 5px 15px;
+	border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
 	font-size: 10px;
 	color: var(--muted-foreground);
 }
-.gs-live-breadcrumb > span {
+.gs-live-breadcrumb > span:first-child {
 	flex: 1;
 	min-width: 0;
 }
-.gs-live-breadcrumb > div {
-	display: flex;
-	border: 1px solid var(--border);
-	border-radius: 6px;
-	padding: 2px;
-	flex-shrink: 0;
-}
-.gs-live-breadcrumb button {
-	padding: 2px 6px;
-	border-radius: 4px;
-}
-.gs-live-breadcrumb button[aria-pressed="true"] {
-	background: var(--accent);
+.gs-live-breadcrumb b {
+	font-weight: 400;
 	color: var(--foreground);
+}
+.gs-live-readonly {
+	flex-shrink: 0;
+	font-size: 9px;
+	opacity: 0.8;
 }
 .gs-live-code-views {
 	display: flex;
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
+}
+.gs-live-code-views[hidden] {
+	display: none;
 }
 .gs-live-code-views > section {
 	display: flex;
@@ -174,26 +238,17 @@
 	min-height: 0;
 	overflow: hidden;
 }
-.gs-live-code-views > section + section {
-	border-left: 1px solid var(--border);
-}
-.gs-live-code-views > section > span {
-	font-size: 10px;
-	padding: 6px 12px;
-	color: var(--muted-foreground);
-	background: var(--card);
-}
 .gs-live-code-surface {
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
 }
 .gs-live-code-surface .live-code-added {
-	background: #50fa7b06;
+	background: #50fa7b08;
 	box-shadow: inset 2px 0 #75c794;
 }
 .gs-live-code-surface .live-code-writing-line {
-	background: #ffffff04;
+	background: #ff79c60a;
 }
 .gs-live-code-surface .live-code-caret {
 	display: inline-block;
@@ -212,6 +267,25 @@
 	height: 100%;
 	background: var(--primary);
 	border-radius: 1px;
+	box-shadow: 0 0 7px #ff79c64d;
+}
+.gs-live-code-surface .live-patch-insert {
+	color: #b7ebc3;
+	background: #50fa7b0c;
+	box-shadow: inset 2px 0 #75c794;
+}
+.gs-live-code-surface .live-patch-remove {
+	color: #f4b1bc;
+	background: #ff557712;
+	box-shadow: inset 2px 0 #da8191;
+}
+.gs-live-code-surface .live-patch-hunk {
+	color: #acb3e0;
+	background: #bd93f90a;
+	padding-block: 6px;
+}
+.gs-live-code-surface .live-patch-context {
+	color: var(--muted-foreground);
 }
 .gs-live-empty {
 	display: flex;
@@ -226,20 +300,71 @@
 	text-align: center;
 }
 .gs-live-empty strong {
-	font-weight: 500;
+	font-size: 15px;
+	font-weight: 550;
 	color: var(--foreground);
 }
+.gs-live-empty > span {
+	max-width: 280px;
+	line-height: 1.7;
+}
+.gs-live-empty-icon {
+	display: grid;
+	place-items: center;
+	width: 54px;
+	height: 54px;
+	margin-bottom: 8px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	color: var(--primary);
+	background: color-mix(in srgb, var(--primary) 5%, transparent);
+}
+.gs-live-notice {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 9px 12px;
+	color: var(--foreground);
+	background: color-mix(in srgb, #e6c66b 8%, var(--background));
+	border-bottom: 1px solid #e6c66b30;
+	font-size: 11px;
+}
+.gs-live-notice > svg {
+	flex-shrink: 0;
+	color: #e6c66b;
+}
+.gs-live-notice > span {
+	flex: 1;
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.gs-live-notice button {
+	padding: 3px 8px;
+	border: 1px solid var(--border);
+	border-radius: 4px;
+}
 .gs-live-editor > footer {
-	height: 26px;
+	height: 27px;
 	flex-shrink: 0;
 	display: flex;
 	justify-content: space-between;
-	gap: 8px;
-	padding: 5px 10px;
+	gap: 10px;
+	padding: 0 12px;
 	border-top: 1px solid var(--border);
-	font-size: 9px;
+	font-size: 10px;
 	color: var(--muted-foreground);
 	white-space: nowrap;
+	background: var(--background);
+}
+.gs-live-editor > footer > span {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.gs-live-footer-divider {
+	height: 10px;
+	width: 1px;
+	background: var(--border);
 }
 .gs-live-code-layout button:focus-visible,
 .gs-live-code-divider:focus-visible,
@@ -247,39 +372,53 @@
 	outline: 2px solid var(--primary);
 	outline-offset: -2px;
 }
-@container live-code (max-width: 619px) {
-	.gs-live-code-main {
-		min-width: 0;
+@container live-editor (max-width: 450px) {
+	.gs-live-toolbar {
+		gap: 5px;
+		padding-inline: 8px;
 	}
-	.gs-live-editor > header {
-		padding-inline: 7px;
+	.gs-live-toolbar > strong {
+		display: none;
 	}
-	.gs-live-editor > header button {
+	.gs-live-toolbar-actions {
+		gap: 4px;
+	}
+	.gs-live-follow {
+		padding-inline: 5px;
+	}
+	.gs-live-editor > footer {
 		font-size: 9px;
+		padding-inline: 8px;
 	}
-	.gs-live-editor > header button svg {
+}
+@container live-editor (max-width: 290px) {
+	.gs-live-follow span,
+	.gs-live-readonly {
+		display: none;
+	}
+	.gs-live-toolbar-actions {
+		gap: 2px;
+	}
+}
+@container live-code (max-width: 619px) {
+	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-main {
+		grid-column: 1 / -1;
+		grid-row: 1;
+		min-height: 180px;
+		max-height: 45vh;
+	}
+	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-conversation {
+		grid-column: 1 / -1;
+		grid-row: 2;
+		min-height: 180px;
+	}
+	.gs-live-code-divider {
 		display: none;
 	}
 }
 @media (prefers-reduced-motion: reduce) {
 	.gs-live-code-layout * {
 		scroll-behavior: auto;
-	}
-}
-
-@container live-code (max-width: 619px) {
-	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-main {
-		grid-column: 1 / -1;
-		grid-row: 1;
-		min-height: 220px;
-		max-height: 42vh;
-	}
-	.gs-live-code-layout[data-enabled="true"] > .gs-live-code-conversation {
-		grid-column: 1 / -1;
-		grid-row: 2;
-		min-height: 260px;
-	}
-	.gs-live-code-divider {
-		display: none;
+		transition: none;
 	}
 }

@@ -15,6 +15,7 @@ import {
 	packagedNodeModuleCopies,
 	rendererBundledPackageExcludes,
 } from "./runtime-dependencies";
+import { verifyFlowBundle } from "./scripts/flow-bundle";
 
 const currentYear = new Date().getFullYear();
 const targetArch = process.env.TARGET_ARCH ?? process.arch;
@@ -74,6 +75,15 @@ const config: Configuration = {
 
 	// Extra resources placed outside asar archive (accessible via process.resourcesPath)
 	extraResources: [
+		...(process.platform === "win32"
+			? [
+					{
+						from: "dist/resources/flow-dictation",
+						to: "resources/flow-dictation",
+						filter: ["**/*"],
+					},
+				]
+			: []),
 		...(existsSync("dist/resources/git/cmd/git.exe")
 			? [{ from: "dist/resources/git", to: "resources/git", filter: ["**/*"] }]
 			: []),
@@ -97,6 +107,7 @@ const config: Configuration = {
 
 	files: [
 		"dist/**/*",
+		"!dist/resources/flow-dictation/**/*",
 		"package.json",
 		{
 			from: pkg.resources,
@@ -126,6 +137,18 @@ const config: Configuration = {
 	// Windows too and deletes everything in `locales/` that is not listed here.
 	electronLanguages: ["en-US"],
 
+	// A voice button must never ship without its matching offline engine and model.
+	beforePack: async () => {
+		if (process.platform === "win32")
+			verifyFlowBundle("dist/resources/flow-dictation", targetArch);
+	},
+	afterPack: async (context) => {
+		if (context.electronPlatformName === "win32")
+			verifyFlowBundle(
+				join(context.appOutDir, "resources/resources/flow-dictation"),
+				targetArch,
+			);
+	},
 	// Rebuild native modules for Electron's Node.js version — only when building
 	// for the host arch. Cross-arch node-gyp rebuilds can't run locally (winpty
 	// et al fail); CI's native runners produce those binaries.

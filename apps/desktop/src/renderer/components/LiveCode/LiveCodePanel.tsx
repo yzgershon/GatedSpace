@@ -1,4 +1,12 @@
-import { Code2, FileCode2, ListFilter, RefreshCw } from "lucide-react";
+import {
+	AlertCircle,
+	ArrowDownToLine,
+	Check,
+	Code2,
+	FileCode2,
+	RefreshCw,
+	WrapText,
+} from "lucide-react";
 import {
 	useEffect,
 	useMemo,
@@ -10,18 +18,22 @@ import {
 	getCodexSession,
 	subscribeCodexSession,
 } from "renderer/lib/codex-session/store";
-import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { FileIcon } from "renderer/lib/fileIcons/FileIcon";
 import {
 	getSessionCwd,
 	getSessionSnapshot,
 	subscribeSession,
 } from "renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/ClaudeSessionPane/sessionStore";
+import { detectLanguage } from "shared/detect-language";
 import { LiveCodeSurface } from "./LiveCodeSurface";
 import {
 	absoluteCodePath,
 	claudeLiveFiles,
+	codePathKey,
 	codexLiveFiles,
+	snapshotPatch,
 } from "./live-code-files";
+import { useLiveFile } from "./use-live-file";
 
 export default function LiveCodePanel({
 	paneId,
@@ -43,252 +55,269 @@ export default function LiveCodePanel({
 		(fn) => (provider === "claude" ? subscribeSession(paneId, fn) : () => {}),
 		() => (provider === "claude" ? getSessionSnapshot(paneId) : undefined),
 	);
-	const files = useMemo(
-		() =>
-			provider === "codex"
-				? codexLiveFiles(codex)
-				: claudeLiveFiles(claude?.timeline.items ?? []),
-		[provider, codex, claude],
-	);
 	const cwd =
 		codex?.cwd ||
 		(provider === "claude" && getSessionCwd(paneId)) ||
 		fallbackCwd ||
 		"";
-	const initialPaths = useRef(new Set(files.map((file) => file.path)));
+	const files = useMemo(
+		() =>
+			provider === "codex"
+				? codexLiveFiles(codex)
+				: claudeLiveFiles(claude?.timeline.items ?? [], cwd),
+		[provider, codex, claude, cwd],
+	);
+	const initialPaths = useRef(
+		new Set(files.map((file) => codePathKey(cwd, file.path))),
+	);
 	const [chosen, setChosen] = useState<string>();
 	const [follow, setFollow] = useState(true);
 	const [diff, setDiff] = useState(false);
+	const [wrap, setWrap] = useState(false);
 	const [refresh, setRefresh] = useState(0);
+	const tabs = useRef<HTMLDivElement>(null);
 	const selected =
-		(follow ? files.at(-1) : files.find((file) => file.path === chosen)) ??
+		(follow
+			? files.at(-1)
+			: files.find((file) => codePathKey(cwd, file.path) === chosen)) ??
 		files.at(-1);
-	const path = selected && cwd ? absoluteCodePath(cwd, selected.path) : "";
-	const [content, setContent] = useState<{
-		path: string;
-		text: string;
-		error?: string;
-		version?: string;
-	}>({ path: "", text: "" });
-	const baselines = useRef(new Map<string, string>());
-	const [baseline, setBaseline] = useState("");
-	const revision = selected?.revision;
-	const deleted = selected?.deleted;
-	const version = `${revision ?? ""}:${refresh}`;
+	const path = selected ? absoluteCodePath(cwd, selected.path) : "";
+	const content = useLiveFile({
+		paneId,
+		workspaceId,
+		provider,
+		path,
+		revision: selected?.revision,
+		deleted: selected?.deleted,
+		refresh,
+	});
+	const patch =
+		selected?.patch ||
+		(content.loaded ? snapshotPatch(content.baseline, content.text) : "");
+	const refreshFile = () => setRefresh((value) => value + 1);
 	useEffect(() => {
-		if (!path) return;
-		let disposed = false,
-			pending = false,
-			again = false;
-		let timer: ReturnType<typeof setTimeout> | undefined;
-		const load = async () => {
-			if (disposed || document.hidden) return;
-			if (pending) {
-				again = true;
-				return;
-			}
-			pending = true;
-			try {
-				if (deleted) throw new Error("This file was deleted by the session.");
-				const result = await electronTrpcClient.filesystem.readFile.query({
-					workspaceId,
-					absolutePath: path,
-					encoding: "utf-8",
-					maxBytes: 512 * 1024,
-				});
-				if (disposed) return;
-				if (result.exceededLimit)
-					throw new Error(
-						"This file exceeds the 512 KB live preview limit. Open it in the file editor instead.",
-					);
-				if (
-					result.kind !== "text" ||
-					typeof result.content !== "string" ||
-					result.content.includes("\0")
-				)
-					throw new Error(
-						"This file is not text and cannot be shown as live code.",
-					);
-				if (!baselines.current.has(path))
-					baselines.current.set(path, result.content);
-				setBaseline(baselines.current.get(path) ?? "");
-				setContent((old) =>
-					old.path === path &&
-					old.text === result.content &&
-					old.version === version &&
-					!old.error
-						? old
-						: { path, text: result.content, version },
-				);
-			} catch (error) {
-				if (!disposed)
-					setContent({
-						path,
-						text: "",
-						error:
-							error instanceof Error
-								? error.message
-								: "Could not read this file.",
-					});
-			} finally {
-				pending = false;
-				if (again && !disposed) {
-					again = false;
-					void load();
-				}
-			}
-		};
-		const schedule = () => {
-			clearTimeout(timer);
-			timer = setTimeout(() => void load(), 90);
-		};
-		void load();
-		// Watch only this file's directory, non-recursively, to survive atomic saves.
-		// No workspace scan, git command, polling loop, or agent request is involved.
-		const subscription = electronTrpcClient.filesystem.watchPath.subscribe(
-			{
-				workspaceId,
-				absolutePath: path.slice(0, path.lastIndexOf("/")),
-				recursive: false,
-			},
-			{
-				onData: (batch) => {
-					if (
-						batch.events.some((event) =>
-							[event.absolutePath, event.oldAbsolutePath].some(
-								(value) =>
-									value?.replaceAll("\\", "/").toLowerCase() ===
-									path.toLowerCase(),
-							),
-						)
-					)
-						schedule();
-				},
-				onError: () => {}, // Provider edit events and Refresh still update the view.
-			},
-		);
-		const visible = () => {
-			if (!document.hidden) schedule();
-		};
-		document.addEventListener("visibilitychange", visible);
-		return () => {
-			disposed = true;
-			clearTimeout(timer);
-			subscription.unsubscribe();
-			document.removeEventListener("visibilitychange", visible);
-		};
-	}, [workspaceId, path, deleted, version]);
-	const loaded = content.path === path;
+		if (path)
+			tabs.current
+				?.querySelector('[aria-selected="true"]')
+				?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [path]);
+	const basename = path.split("/").at(-1) ?? "";
 	return (
 		<section className="gs-live-editor" aria-label="Live code editor">
-			<header>
+			<header className="gs-live-toolbar">
 				<Code2 size={16} />
 				<strong>Live code</strong>
-				<button
-					type="button"
-					aria-pressed={follow}
-					onClick={() => setFollow(!follow)}
-				>
-					<ListFilter size={13} />
-					{follow ? "Following agent" : "Follow changes"}
-				</button>
+				<div className="gs-live-toolbar-actions">
+					<button
+						type="button"
+						className="gs-live-follow"
+						aria-pressed={follow}
+						onClick={() => setFollow(!follow)}
+						title="Automatically show the latest edited file and follow its changes"
+					>
+						<ArrowDownToLine size={13} />
+						<span>{follow ? "Following" : "Follow agent"}</span>
+					</button>
+					<div className="gs-live-mode">
+						<button
+							type="button"
+							aria-pressed={!diff}
+							onClick={() => setDiff(false)}
+						>
+							Code
+						</button>
+						<button
+							type="button"
+							aria-pressed={diff}
+							onClick={() => setDiff(true)}
+						>
+							Diff
+						</button>
+					</div>
+					<button
+						type="button"
+						className="gs-live-icon-button"
+						aria-label="Wrap lines"
+						title="Wrap lines"
+						aria-pressed={wrap}
+						onClick={() => setWrap(!wrap)}
+					>
+						<WrapText size={15} />
+					</button>
+					<button
+						type="button"
+						className="gs-live-icon-button"
+						aria-label="Refresh live file"
+						title="Refresh live file"
+						onClick={refreshFile}
+					>
+						<RefreshCw size={14} />
+					</button>
+				</div>
 			</header>
 			{files.length ? (
 				<>
-					<nav
+					<div
+						ref={tabs}
 						className="gs-live-file-tabs"
-						aria-label="Files edited this turn"
+						aria-label="Edited files"
+						role="tablist"
 					>
 						{files.map((file) => (
 							<button
 								type="button"
-								key={file.path}
-								aria-current={selected?.path === file.path ? "page" : undefined}
-								title={file.path}
+								role="tab"
+								key={codePathKey(cwd, file.path)}
+								aria-selected={selected === file}
+								tabIndex={selected === file ? 0 : -1}
+								onKeyDown={(event) => {
+									const buttons = Array.from(
+										tabs.current?.querySelectorAll<HTMLButtonElement>(
+											'[role="tab"]',
+										) ?? [],
+									);
+									const index = buttons.indexOf(event.currentTarget);
+									const next =
+										event.key === "Home"
+											? 0
+											: event.key === "End"
+												? buttons.length - 1
+												: event.key === "ArrowRight"
+													? (index + 1) % buttons.length
+													: event.key === "ArrowLeft"
+														? (index - 1 + buttons.length) % buttons.length
+														: -1;
+									if (next < 0) return;
+									event.preventDefault();
+									buttons[next]?.focus();
+									buttons[next]?.click();
+								}}
+								title={absoluteCodePath(cwd, file.path)}
 								onClick={() => {
-									setChosen(file.path);
+									setChosen(codePathKey(cwd, file.path));
 									setFollow(false);
 								}}
 							>
-								<FileCode2 size={14} />
+								<FileIcon
+									fileName={file.path.split(/[\\/]/).at(-1) ?? file.path}
+								/>
 								<span>{file.path.split(/[\\/]/).at(-1)}</span>
+								{file.deleted && <span className="gs-live-deleted">D</span>}
 							</button>
 						))}
-					</nav>
-					<div className="gs-live-breadcrumb">
-						<span title={path}>{selected?.path}</span>
-						<div>
-							<button
-								type="button"
-								aria-pressed={!diff}
-								onClick={() => setDiff(false)}
-							>
-								Code
-							</button>
-							<button
-								type="button"
-								aria-pressed={diff}
-								onClick={() => setDiff(true)}
-							>
-								Diff
-							</button>
-						</div>
-						<button
-							type="button"
-							aria-label="Refresh live file"
-							title="Refresh live file"
-							onClick={() => setRefresh((value) => value + 1)}
-						>
-							<RefreshCw size={13} />
-						</button>
 					</div>
-					{!loaded ? (
-						<p className="gs-live-empty">Reading file…</p>
-					) : content.error ? (
-						<output className="gs-live-empty select-text cursor-text">
-							{content.error}
+					<div className="gs-live-breadcrumb">
+						<span title={path}>
+							{path.slice(0, -basename.length)}
+							<b>{basename}</b>
+						</span>
+						<span className="gs-live-readonly">
+							{diff
+								? selected?.patch
+									? "Latest changes"
+									: "Since opening"
+								: "Read only"}
+						</span>
+					</div>
+					{(content.error || content.watchError) && (
+						<output className="gs-live-notice">
+							<AlertCircle size={14} />
+							<span className="select-text cursor-text">
+								{content.error ||
+									"Live updates disconnected. Showing the last saved snapshot."}
+							</span>
+							<button type="button" onClick={refreshFile}>
+								Retry
+							</button>
 						</output>
-					) : (
-						<div className="gs-live-code-views" data-diff={diff}>
-							{diff && (
-								<section>
-									<span>When first opened</span>
-									<LiveCodeSurface
-										path={path}
-										code={baseline}
-										animate={false}
-										follow={false}
-									/>
-								</section>
-							)}
+					)}
+					{content.loaded && !selected?.deleted && (
+						<div className="gs-live-code-views" hidden={diff}>
 							<section>
-								{diff && <span>Current file</span>}
 								<LiveCodeSurface
 									key={path}
 									path={path}
 									code={content.text}
-									animate
+									animate={!diff}
 									animateInitial={
-										follow && !initialPaths.current.has(selected?.path ?? "")
+										follow &&
+										!initialPaths.current.has(
+											codePathKey(cwd, selected?.path ?? ""),
+										)
 									}
-									follow={follow}
+									follow={follow && !diff}
+									wrap={wrap}
 								/>
 							</section>
 						</div>
 					)}
+					{diff && patch ? (
+						<div className="gs-live-code-views">
+							<section>
+								<LiveCodeSurface
+									key={`${path}:patch`}
+									path={path}
+									code={patch}
+									animate={false}
+									follow={false}
+									wrap={wrap}
+									diff
+								/>
+							</section>
+						</div>
+					) : diff ? (
+						<div className="gs-live-empty">
+							<Check size={26} />
+							<strong>No captured changes yet</strong>
+							<span>Changes will appear here after the next edit.</span>
+						</div>
+					) : selected?.deleted ? (
+						<div className="gs-live-empty">
+							<FileCode2 size={26} />
+							<strong>File deleted</strong>
+							<span>Switch to Diff to inspect its reported changes.</span>
+						</div>
+					) : !content.loaded ? (
+						<div className="gs-live-empty">
+							<FileCode2 size={26} />
+							<strong>
+								{content.error ? "File unavailable" : "Reading file…"}
+							</strong>
+							<span>
+								{content.error
+									? "Retry to reconnect, or choose another file above."
+									: "Opening the session’s saved file."}
+							</span>
+						</div>
+					) : null}
 				</>
 			) : (
 				<div className="gs-live-empty">
-					<FileCode2 size={28} />
+					<div className="gs-live-empty-icon">
+						<Code2 size={26} />
+					</div>
 					<strong>Ready for the next edit</strong>
-					<span>Files reported by this session appear here as it works.</span>
+					<span>
+						As {provider === "codex" ? "Codex" : "Claude"} changes files, watch
+						the code take shape here.
+					</span>
 				</div>
 			)}
 			<footer>
 				<span>
-					{files.length} {files.length === 1 ? "file" : "files"} this turn
+					{files.length} {files.length === 1 ? "file" : "files"}
+					<span className="gs-live-footer-divider" />
+					{content.loaded && !diff
+						? `${content.text.split("\n").length} lines`
+						: diff
+							? "Changes"
+							: "Live code"}
 				</span>
-				<span>Read only · Live file updates</span>
+				<span>
+					{path && detectLanguage(path)}
+					<span className="gs-live-footer-divider" />
+					{content.watchError ? "Updates paused" : "Read only"}
+				</span>
 			</footer>
 		</section>
 	);

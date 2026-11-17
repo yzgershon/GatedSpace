@@ -14,7 +14,13 @@ import {
 	Terminal,
 	Undo2,
 } from "lucide-react";
-import { type ReactNode, useCallback, useRef, useState } from "react";
+import {
+	type ComponentProps,
+	type ReactNode,
+	useCallback,
+	useRef,
+	useState,
+} from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
 import type { SessionNotificationState } from "shared/session-notifications";
 import { formatRelativeTime } from "../session-list-helpers";
@@ -38,7 +44,7 @@ export function SessionCollectionRow({
 	onRename,
 	onCopy,
 	onTerminal,
-	dragHandle,
+	dragProps,
 	organizationActions,
 	projectLabel,
 }: {
@@ -52,7 +58,7 @@ export function SessionCollectionRow({
 	onRename: (title: string) => Promise<void>;
 	onCopy?: () => void;
 	onTerminal?: () => void;
-	dragHandle?: ReactNode;
+	dragProps?: ComponentProps<"button">;
 	organizationActions?: ReactNode;
 	projectLabel?: string;
 }) {
@@ -108,14 +114,14 @@ export function SessionCollectionRow({
 				</form>
 			) : (
 				<>
-					{dragHandle}
 					<button
+						{...dragProps}
 						type="button"
 						className="collection-session-open"
 						onClick={onOpen}
 						title={
 							live
-								? `${session.title} · Already open or unverified; opens a forked copy`
+								? `${session.title} · Go to the open session`
 								: `${session.title}\n${session.cwd ?? ""}`
 						}
 					>
@@ -134,7 +140,7 @@ export function SessionCollectionRow({
 										: status === "completed"
 											? " · Complete"
 											: live
-												? " · fork"
+												? " · Open"
 												: ""}
 							</span>
 						</span>
@@ -165,7 +171,7 @@ export function SessionCollectionRow({
 							{organizationActions}
 							<DropdownMenuItem onSelect={onOpen}>
 								<Play size={14} />
-								{live ? "Open a forked copy" : "Resume session"}
+								{live ? "Go to session" : "Resume session"}
 							</DropdownMenuItem>
 							<DropdownMenuItem onSelect={onPin}>
 								<Pin size={14} />

@@ -1,18 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const HOVER_DELAY = 130;
-const LEAVE_DELAY = 200;
+const HOVER_DELAY = 240;
+const LEAVE_DELAY = 260;
 
-/** Only deliberate pointer movement changes the expanded tab, never layout. */
-export function useTabRailHover(onHoverIntent: () => void) {
+/** Only deliberate pointer movement reveals a name card, never changes tab geometry. */
+export function useTabRailHover() {
 	const [hoveredId, setHoveredId] = useState<string | null>(null);
 	const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const pending = useRef<string | null>(null);
 	const current = useRef<string | null>(null);
 	const origin = useRef<{ x: number; y: number } | null>(null);
 	const pointer = useRef<{ x: number; y: number } | null>(null);
-	const intent = useRef(onHoverIntent);
-	intent.current = onHoverIntent;
 	const cancel = useCallback(() => {
 		if (timer.current !== null) clearTimeout(timer.current);
 		timer.current = null;
@@ -47,7 +45,6 @@ export function useTabRailHover(onHoverIntent: () => void) {
 				pending.current = null;
 				current.current = id;
 				origin.current = pointer.current;
-				intent.current();
 				setHoveredId(id);
 			}, HOVER_DELAY);
 		},

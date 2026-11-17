@@ -1,14 +1,13 @@
 import type { RendererContext, Tab } from "@superset/panes";
+import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
-import { GlobeIcon } from "lucide-react";
-import { useCallback, useSyncExternalStore } from "react";
-import { TbDeviceDesktop } from "react-icons/tb";
+import { Chrome, GlobeIcon, Loader2 } from "lucide-react";
+import { useCallback, useState, useSyncExternalStore } from "react";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import type { BrowserPaneData, PaneViewerData } from "../../../../types";
-
+import { BrowserTabIcon } from "./BrowserTabIcon";
 import { browserRuntimeRegistry } from "./browserRuntimeRegistry";
 import { BrowserErrorOverlay } from "./components/BrowserErrorOverlay";
-import { BrowserOverflowMenu } from "./components/BrowserOverflowMenu";
 import { BrowserPreviewControls } from "./components/BrowserPreviewControls/BrowserPreviewControls";
 import { BrowserToolbar } from "./components/BrowserToolbar";
 import "./browser-preview.css";
@@ -26,10 +25,7 @@ function getSingleBrowserPane(
 
 export function renderBrowserTabIcon(tab: Tab<PaneViewerData>) {
 	const browser = getSingleBrowserPane(tab);
-	if (!browser?.data.faviconUrl) return null;
-	return (
-		<img src={browser.data.faviconUrl} alt="" className="size-3.5 shrink-0" />
-	);
+	return browser ? <BrowserTabIcon data={browser.data} /> : null;
 }
 
 interface BrowserPaneProps {
@@ -97,9 +93,22 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 	const paneId = ctx.pane.id;
 	const state = useBrowserState(paneId);
 
-	const handleOpenDevTools = useCallback(() => {
-		electronTrpcClient.browser.openDevTools.mutate({ paneId }).catch(() => {});
-	}, [paneId]);
+	const [openingChrome, setOpeningChrome] = useState(false);
+	const openChrome = async () => {
+		if (openingChrome) return;
+		setOpeningChrome(true);
+		try {
+			await electronTrpcClient.browser.openInChrome.mutate({
+				url: state.currentUrl,
+			});
+		} catch (error) {
+			toast.error(
+				error instanceof Error ? error.message : "Could not open Chrome",
+			);
+		} finally {
+			setOpeningChrome(false);
+		}
+	};
 
 	const handleGoBack = useCallback(() => {
 		browserRuntimeRegistry.goBack(paneId);
@@ -126,6 +135,7 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 		<div className="flex h-full w-full min-w-0 items-center justify-between">
 			<BrowserToolbar
 				currentUrl={state.currentUrl}
+				faviconUrl={state.faviconUrl}
 				pageTitle={state.pageTitle}
 				isLoading={state.isLoading}
 				canGoBack={state.canGoBack}
@@ -135,29 +145,27 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 				onReload={handleReload}
 				onNavigate={handleNavigate}
 			/>
-			<div className="flex shrink-0 items-center pr-1">
-				<div className="mx-1.5 h-3.5 w-px bg-muted-foreground/30" />
+			<div className="flex shrink-0 items-center gap-0.5 pr-1">
 				<Tooltip>
 					<TooltipTrigger asChild>
 						<button
 							type="button"
-							onClick={handleOpenDevTools}
-							className="flex size-5 items-center justify-center rounded text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+							aria-label="Open in Chrome"
+							disabled={isBlankPage || openingChrome}
+							onClick={() => void openChrome()}
+							className="gs-browser-nav-button"
 						>
-							<TbDeviceDesktop className="size-3.5" />
+							{openingChrome ? (
+								<Loader2 className="size-4 animate-spin" />
+							) : (
+								<Chrome className="size-4" />
+							)}
 						</button>
 					</TooltipTrigger>
 					<TooltipContent side="bottom" showArrow={false}>
-						Open DevTools
+						Open in Chrome
 					</TooltipContent>
 				</Tooltip>
-				{ctx.components.PaneHeaderActions("title")}
-				<BrowserOverflowMenu
-					paneId={paneId}
-					currentUrl={state.currentUrl}
-					hasPage={!isBlankPage}
-				/>
-				<div className="mx-1 h-3.5 w-px bg-muted-foreground/30" />
 
 				<BrowserPreviewControls
 					mode={mode}
@@ -167,7 +175,6 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 						ctx.actions.updateData({ ...data, previewMode, previewOrientation })
 					}
 				/>
-				{ctx.components.PaneHeaderActions()}
 			</div>
 		</div>
 	);

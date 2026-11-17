@@ -723,7 +723,7 @@ export class MobileBridge {
 			res.json({ ok: true, key });
 		});
 
-		app.get("/api/sessions/:key/events", (req, res) => {
+		app.get("/api/sessions/:key/events", async (req, res) => {
 			const key = req.params.key;
 			if (!claudeSessionManager.hasSession(key)) {
 				res.status(404).json({ error: "no such session" });
@@ -737,7 +737,7 @@ export class MobileBridge {
 			const sessionId = claudeSessionManager
 				.listSessions()
 				.find((session) => session.key === key)?.sessionId;
-			const stored = sessionId ? loadSessionTranscript(sessionId) : [];
+			const stored = sessionId ? await loadSessionTranscript(sessionId) : [];
 			const events = mergeTranscriptWithBuffer(
 				stored,
 				claudeSessionManager.getBufferedEvents(key),

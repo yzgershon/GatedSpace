@@ -177,6 +177,22 @@ describe("patchSearchIndexesForRoot", () => {
 });
 
 describe("searchFiles", () => {
+	it("finds a nested resume by filename words without its directory path", async () => {
+		const rootPath = await createTempRoot();
+		const target = path.join(
+			rootPath,
+			"college",
+			"drafts",
+			"resume",
+			"Resume_v7.pdf",
+		);
+		await fs.mkdir(path.dirname(target), { recursive: true });
+		await fs.writeFile(target, "test document");
+		for (const query of ["resume_v7", "resume v7", "RESUME"]) {
+			const results = await searchFiles({ rootPath, query });
+			expect(results.map((result) => result.absolutePath)).toContain(target);
+		}
+	});
 	it("prioritizes exact filename matches ahead of fuzzy path matches", async () => {
 		const rootPath = await createTempRoot();
 		const exactMatchPath = path.join(rootPath, "WorkspaceFiles.tsx");

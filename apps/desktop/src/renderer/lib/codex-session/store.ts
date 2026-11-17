@@ -3,6 +3,7 @@ import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { publishSessionProgress } from "renderer/stores/session-progress";
 import type { CodexSessionState } from "shared/codex-session/types";
 import { codexProgress } from "shared/session-progress";
+import { bindCodexDraftSession } from "./draft";
 
 const states = new Map<string, CodexSessionState>();
 const listeners = new Map<string, Set<() => void>>();
@@ -10,6 +11,7 @@ export function getCodexSession(key: string) {
 	return states.get(key);
 }
 export function publishCodexSession(state: CodexSessionState) {
+	if (state.threadId) bindCodexDraftSession(state.key, state.threadId);
 	states.set(state.key, state);
 	publishSessionProgress(state.key, codexProgress(state));
 	for (const listener of listeners.get(state.key) ?? []) listener();

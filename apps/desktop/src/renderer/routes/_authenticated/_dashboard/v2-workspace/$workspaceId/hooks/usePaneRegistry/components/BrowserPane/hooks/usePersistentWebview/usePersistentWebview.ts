@@ -28,6 +28,8 @@ interface DetachedOptions {
 	paneId: string;
 	/** Starting URL used only when the runtime entry is first created. */
 	initialUrl?: string;
+	pageTitle?: string;
+	faviconUrl?: string | null;
 	/** Persist URL/title/favicon changes (host decides where they're stored). */
 	onPersist?: (state: PersistableBrowserState) => void;
 	/** Runtime asked to close (Cmd+W inside the guest). */
@@ -57,6 +59,12 @@ export function usePersistentWebview(options: UsePersistentWebviewOptions) {
 		isPaneCtxOptions(options)
 			? (options.ctx.pane.data as BrowserPaneData).url || DEFAULT_BROWSER_URL
 			: options.initialUrl || DEFAULT_BROWSER_URL,
+	);
+
+	const initialStateRef = useRef(
+		isPaneCtxOptions(options)
+			? (options.ctx.pane.data as BrowserPaneData)
+			: options,
 	);
 
 	const persist = useCallback((state: PersistableBrowserState) => {
@@ -112,6 +120,7 @@ export function usePersistentWebview(options: UsePersistentWebviewOptions) {
 			placeholder,
 			initialUrlRef.current,
 			persist,
+			initialStateRef.current,
 		);
 
 		return () => {

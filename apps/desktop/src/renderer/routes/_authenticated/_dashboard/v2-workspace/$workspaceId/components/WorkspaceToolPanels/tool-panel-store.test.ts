@@ -23,6 +23,26 @@ function setup(saved?: string) {
 }
 
 describe("workspace tool panels", () => {
+	test("closing tabs in a long strip selects neighbors without jumping across panels", () => {
+		const { tools, disconnect } = setup();
+		const ids = Array.from({ length: 55 }, () =>
+			tools.add("right", { kind: "browser", data: { url: "about:blank" } }),
+		);
+		const bottom = tools.add("bottom", {
+			kind: "terminal",
+			data: { terminalId: "bottom" },
+		});
+		tools.select(ids[50]);
+		tools.store.getState().removeTab(ids[50]);
+		expect(tools.state.getState().right.activeTabId).toBe(ids[51]);
+		expect(tools.state.getState().bottom.activeTabId).toBe(bottom);
+		tools.select(ids[54]);
+		tools.store.getState().removeTab(ids[54]);
+		expect(tools.state.getState().right.activeTabId).toBe(ids[53]);
+		tools.store.getState().removeTab(ids[52]);
+		expect(tools.state.getState().right.activeTabId).toBe(ids[53]);
+		disconnect();
+	});
 	test("moving the final tab repairs its source panel even when global order stays the same", () => {
 		const { tools, disconnect } = setup();
 		const previous = tools.add("right", {

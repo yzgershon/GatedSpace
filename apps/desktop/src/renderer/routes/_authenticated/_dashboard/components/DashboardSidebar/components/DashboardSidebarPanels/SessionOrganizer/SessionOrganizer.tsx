@@ -58,7 +58,7 @@ import "./organizer.css";
 
 type RowExtras = Pick<
 	ComponentProps<typeof SessionCollectionRow>,
-	"dragHandle" | "organizationActions" | "projectLabel"
+	"dragProps" | "organizationActions" | "projectLabel"
 >;
 export function SessionOrganizer({
 	sessions,
@@ -103,6 +103,11 @@ export function SessionOrganizer({
 		useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
 		useSensor(KeyboardSensor, {
 			coordinateGetter: sortableKeyboardCoordinates,
+			keyboardCodes: {
+				start: ["Space"],
+				cancel: ["Escape"],
+				end: ["Space", "Enter"],
+			},
 		}),
 	);
 	const change = async (command: OrganizationCommand) => {
@@ -386,9 +391,9 @@ export function SessionOrganizer({
 												group={group.id}
 												disabled={busy || archived}
 											>
-												{(dragHandle) =>
+												{(dragProps) =>
 													renderSession(session, {
-														dragHandle,
+														dragProps,
 														projectLabel:
 															group.id === "@pinned"
 																? (owner?.name ??

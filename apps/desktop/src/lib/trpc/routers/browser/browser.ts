@@ -8,6 +8,8 @@ import {
 import { browserManager } from "main/lib/browser/browser-manager";
 import { applyBrowserPreview } from "main/lib/browser/browser-preview";
 import { localPreviews } from "main/lib/browser/local-previews";
+import { openInChrome } from "main/lib/browser/open-in-chrome";
+import { resolvePageFavicon } from "main/lib/browser/page-favicon";
 import { browserPanelResultSchema } from "shared/agent-browser";
 import { BROWSER_PREVIEW_MODES } from "shared/browser-preview";
 import { BROWSER_SCRIPT_NAMES, getBrowserScript } from "shared/browser-scripts";
@@ -17,6 +19,25 @@ import { publicProcedure, router } from "../..";
 export const createBrowserRouter = () => {
 	installAgentBrowserAdapter();
 	return router({
+		favicon: publicProcedure
+			.input(
+				z.object({
+					paneId: z.string(),
+					pageUrl: z.string().max(8000),
+					candidates: z.array(z.string().max(750000)).max(12).optional(),
+				}),
+			)
+			.mutation(async ({ input }) => {
+				const wc = browserManager.getWebContents(input.paneId);
+				return {
+					faviconUrl: wc
+						? await resolvePageFavicon(wc, input.pageUrl, input.candidates)
+						: null,
+				};
+			}),
+		openInChrome: publicProcedure
+			.input(z.object({ url: z.string().max(8000) }))
+			.mutation(({ input }) => openInChrome(input.url)),
 		resolveLocalPreview: publicProcedure
 			.input(z.object({ url: z.string().max(8000) }))
 			.mutation(async ({ input }) => ({

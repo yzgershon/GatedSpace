@@ -12,8 +12,6 @@ import {
 } from "@superset/ui/dropdown-menu";
 import { toast } from "@superset/ui/sonner";
 import {
-	ChevronLeft,
-	ChevronRight,
 	Folder,
 	GitCompareArrows,
 	Globe,
@@ -27,7 +25,7 @@ import {
 	SquareTerminal,
 	X,
 } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react";
 import type { PaneViewerData } from "../../../../types";
 import type {
 	ToolKind,
@@ -65,75 +63,47 @@ export function ToolPanel({
 	const { setNodeRef, isOver } = useDroppable({ id: `dock-${side}` });
 	const displayedTabs = useAnimatedTabs(tabs);
 	const strip = useRef<HTMLDivElement>(null);
-	const [edges, setEdges] = useState({ left: false, right: false });
-	useEffect(() => {
+	const lastRevealed = useRef<string | null>(null);
+	useLayoutEffect(() => {
 		const node = strip.current;
-		if (!node) return;
-		if (!displayedTabs.length) {
-			setEdges({ left: false, right: false });
-			return;
-		}
-		const update = () => {
-			const next = {
-				left: node.scrollLeft > 2,
-				right: node.scrollLeft + node.clientWidth < node.scrollWidth - 2,
-			};
-			setEdges((old) =>
-				old.left === next.left && old.right === next.right ? old : next,
-			);
-		};
-		const observer = new ResizeObserver(update);
-		observer.observe(node);
-		for (const child of node.children) observer.observe(child);
-		node.addEventListener("scroll", update, { passive: true });
-		update();
-		return () => {
-			observer.disconnect();
-			node.removeEventListener("scroll", update);
-		};
-	}, [displayedTabs]);
-	useEffect(() => {
-		const node = strip.current;
-		if (!node || !activeTabId) return;
 		if (!displayedTabs.some((tab) => tab.id === activeTabId)) return;
+		if (!node || !activeTabId || lastRevealed.current === activeTabId) return;
 		const active = node.querySelector<HTMLElement>(
 			`#${CSS.escape(`tool-tab-${activeTabId}`)}`,
 		)?.parentElement;
 		if (!active) return;
-		const reveal = () => {
-			const delta =
-				active.getBoundingClientRect().left - node.getBoundingClientRect().left;
-			if (delta < 0) node.scrollLeft += delta;
-			else if (delta + active.offsetWidth > node.clientWidth)
-				node.scrollLeft += delta + active.offsetWidth - node.clientWidth;
-		};
-		const observer = new ResizeObserver(reveal);
-		observer.observe(node);
-		observer.observe(active);
-		reveal();
-		return () => observer.disconnect();
+		lastRevealed.current = activeTabId;
+		const zoom = node.getBoundingClientRect().width / node.offsetWidth || 1;
+		const delta =
+			(active.getBoundingClientRect().left -
+				node.getBoundingClientRect().left) /
+			zoom;
+		if (delta < 0) node.scrollLeft += delta;
+		else if (delta + active.offsetWidth > node.clientWidth)
+			node.scrollLeft += delta + active.offsetWidth - node.clientWidth;
 	}, [activeTabId, displayedTabs]);
-	const scrollTabs = (direction: number) => {
+	useEffect(() => {
 		const node = strip.current;
 		if (!node) return;
-		const tabs = [...node.querySelectorAll<HTMLElement>(".gs-tool-tab")];
-		const origin = tabs[0]?.offsetLeft ?? 0;
-		const target =
-			node.scrollLeft + direction * Math.max(100, node.clientWidth * 0.7);
-		// Land on a whole title instead of leaving clipped tabs at both edges.
-		const left = tabs.reduce((closest, tab) => {
-			const offset = tab.offsetLeft - origin;
-			return Math.abs(offset - target) < Math.abs(closest - target)
-				? offset
-				: closest;
-		}, 0);
-		node.scrollTo({
-			left,
-			behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
-				? "instant"
-				: "smooth",
-		});
-	};
+		const wheel = (event: WheelEvent) => {
+			if (
+				event.ctrlKey ||
+				Math.abs(event.deltaX) >= Math.abs(event.deltaY) ||
+				node.scrollWidth <= node.clientWidth
+			)
+				return;
+			event.preventDefault();
+			node.scrollLeft +=
+				event.deltaY *
+				(event.deltaMode === 1
+					? 16
+					: event.deltaMode === 2
+						? node.clientWidth
+						: 1);
+		};
+		node.addEventListener("wheel", wheel, { passive: false });
+		return () => node.removeEventListener("wheel", wheel);
+	}, []);
 	const active = tabs.find((tab) => tab.id === activeTabId);
 	const maximized = !!active?.maximizedPaneId;
 	async function close(tab: Tab<PaneViewerData>) {
@@ -187,28 +157,6 @@ export function ToolPanel({
 						))}
 					</SortableContext>
 				</div>
-				{(edges.left || edges.right) && (
-					<div className="gs-tool-scroll-controls">
-						<button
-							type="button"
-							className="gs-tool-icon"
-							aria-label="Previous tool tabs"
-							disabled={!edges.left}
-							onClick={() => scrollTabs(-1)}
-						>
-							<ChevronLeft size={14} />
-						</button>
-						<button
-							type="button"
-							className="gs-tool-icon"
-							aria-label="Next tool tabs"
-							disabled={!edges.right}
-							onClick={() => scrollTabs(1)}
-						>
-							<ChevronRight size={14} />
-						</button>
-					</div>
-				)}
 				<DropdownMenu>
 					<DropdownMenuTrigger asChild>
 						<button

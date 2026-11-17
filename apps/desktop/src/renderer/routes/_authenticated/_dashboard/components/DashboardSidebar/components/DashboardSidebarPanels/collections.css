@@ -153,7 +153,7 @@
 	display: flex;
 	align-items: center;
 	gap: 9px;
-	padding: 9px 7px;
+	padding: 5px 7px;
 	flex: 1;
 	min-width: 0;
 	text-align: left;
@@ -176,11 +176,12 @@
 .collection-session-copy {
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 1px;
 	flex: 1;
 	min-width: 0;
 }
 .collection-session-title {
+	line-height: 17px;
 	font-size: 12px;
 	color: var(--foreground);
 	overflow: hidden;
@@ -188,6 +189,7 @@
 	text-overflow: ellipsis;
 }
 .collection-session-meta {
+	line-height: 13px;
 	color: var(--muted-foreground);
 	font-size: 10px;
 	opacity: 0.8;
@@ -308,4 +310,10 @@
 	.collection-session-row[data-status="working"] .collection-agent-icon {
 		animation: none;
 	}
+}
+
+.collection-search-status {
+	margin: 0 7px 5px;
+	font-size: 10px;
+	color: var(--muted-foreground);
 }

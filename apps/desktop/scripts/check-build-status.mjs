@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,7 @@ import { topBarPreviewMocks } from "./build-status/topbar-mocks.mjs";
 const desktop = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const output = resolve(desktop, "../../.tmp/build-status-preview");
 await mkdir(output, { recursive: true });
+await rm(resolve(output, "results.json"), { force: true });
 await build({
 	configFile: false,
 	envFile: false,
@@ -54,7 +55,9 @@ const server = createServer(async (request, response) => {
 				: "text/html",
 	);
 	if (file === "style.css" && process.env.BUILD_STATUS_PACKAGED) {
-		const assets = resolve(desktop, "dist/renderer/assets");
+		const assets =
+			process.env.BUILD_STATUS_STYLE_DIR ??
+			resolve(desktop, "dist/renderer/assets");
 		response.end(
 			(
 				await Promise.all(
@@ -136,7 +139,6 @@ if (!process.argv.includes("--serve")) {
 					return {
 						bar: rect(".workspace-topbar"),
 						pane: rect("[data-preview-pane]"),
-						launcher: rect("#workspace-topbar-presets-slot > div"),
 						tabs: rect("#workspace-topbar-tabs-slot > div"),
 						build: rect(".build-status-chip"),
 						search: rect('[aria-label="Search files"]'),
@@ -151,9 +153,7 @@ if (!process.argv.includes("--serve")) {
 				// the toolbar. Sample its visible lower surface, including controls.
 				const occluded = await page.evaluate(() => {
 					const selectors = [
-						"#workspace-topbar-presets-slot > div",
 						"#workspace-topbar-tabs-slot > div",
-						'[aria-label="Codex"]',
 						'[aria-label="New group"]',
 						'[aria-label="Search files"]',
 						'[aria-label="Close window"]',
@@ -175,15 +175,15 @@ if (!process.argv.includes("--serve")) {
 					`Header covered by workspace at ${zoom}x/inset${inset}`,
 				);
 				const middle = (geometry.bar.top + geometry.pane.top) / 2;
-				for (const key of ["launcher", "tabs", "build", "search", "close"]) {
+				for (const key of ["tabs", "build", "search", "close"]) {
 					assert.ok(
 						Math.abs(geometry[key].center - middle) < 1,
 						`${key} must center in header band at ${zoom}x/inset${inset}: ${geometry[key].center} vs ${middle}`,
 					);
 				}
-				for (const key of ["launcher", "tabs"]) {
+				for (const key of ["tabs"]) {
 					assert.ok(
-						Math.abs(geometry[key].height - 46 * zoom) < 1,
+						Math.abs(geometry[key].height - (inset ? 50 : 46) * zoom) < 1,
 						`${key} height changed`,
 					);
 					assert.ok(
@@ -228,6 +228,22 @@ if (!process.argv.includes("--serve")) {
 				}),
 			);
 		});
+		for (const width of [280, 360, 640, 1000]) {
+			const header = page.locator(`[data-context-header="${width}"]`);
+			const counter = header.locator("[data-context-value]");
+			assert.equal(
+				await counter.isVisible(),
+				true,
+				`context visible at ${width}`,
+			);
+			const bounds = await header.boundingBox();
+			const readout = await counter.boundingBox();
+			assert.ok(
+				readout.x >= bounds.x &&
+					readout.x + readout.width <= bounds.x + bounds.width,
+				`context fits ${width}`,
+			);
+		}
 		const layoutChecks = [];
 		for (const width of [2048, 1600, 1440, 1280, 1024, 900, 800]) {
 			await page.setViewportSize({ width, height: 800 });
@@ -245,7 +261,6 @@ if (!process.argv.includes("--serve")) {
 				return {
 					brand: box(".topbar-brand"),
 					chip: box(".build-status-chip"),
-					presets: box("#workspace-topbar-presets-slot"),
 					actions: box(".topbar-actions"),
 					tabs: box("#workspace-topbar-tabs-slot"),
 					close: box('[aria-label="Close window"]'),
@@ -256,20 +271,22 @@ if (!process.argv.includes("--serve")) {
 				layout.chip.left >= layout.brand.right,
 				`brand overlap at ${width}`,
 			);
+
 			assert.ok(
-				layout.chip.right <= layout.presets.left,
-				`launcher overlap at ${width}`,
+				layout.tabs.left >= layout.brand.right,
+				`tab rail overlaps brand ${width}`,
 			);
 			assert.ok(
-				Math.abs(
-					layout.chip.center -
-						(layout.brand.right + layout.presets.left - 12) / 2,
-				) < 1,
-				`left gap centering at ${width}`,
+				layout.tabs.right <= layout.actions.left,
+				`tab rail overlaps actions ${width}`,
 			);
 			assert.ok(
-				layout.presets.right <= layout.actions.left,
-				`actions overlap at ${width}`,
+				Math.abs(layout.tabs.center - width / 2) < 1,
+				`rail not centered ${width}`,
+			);
+			assert.ok(
+				layout.chip.width <= 33,
+				`build button must stay compact ${width}`,
 			);
 			assert.ok(
 				layout.close.right <= width,
@@ -280,15 +297,57 @@ if (!process.argv.includes("--serve")) {
 			await page.locator(".build-status-popover").waitFor();
 			await page.keyboard.press("Escape");
 			await page.locator(".build-status-popover").waitFor({ state: "hidden" });
-			if (width <= 1300) {
-				const fits = await page
-					.locator("#workspace-topbar-presets-slot > div")
-					.evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
-				assert.ok(fits, `all four agent icons fit at ${width}`);
-			}
+
 			layoutChecks.push({ width, ...layout });
 		}
 		await page.setViewportSize({ width: 2048, height: 800 });
+		assert.equal(await page.locator("[data-rail-tab]").count(), 10);
+		await page.mouse.move(10, 600);
+		await page.waitForTimeout(300);
+		const tabBoxes = () =>
+			page.locator("[data-rail-tab]").evaluateAll((nodes) =>
+				nodes.map((node) => {
+					const r = node.getBoundingClientRect();
+					return [r.x, r.width];
+				}),
+			);
+		const beforeHover = await tabBoxes();
+		for (const name of [
+			"Filtrsoft",
+			"Sortie",
+			"Research",
+			"Mobile",
+			"College",
+		]) {
+			await page.getByRole("button", { name, exact: true }).hover();
+			await page
+				.locator(".gs-tabrail-namecard")
+				.filter({ hasText: name })
+				.first()
+				.waitFor();
+			await page.waitForTimeout(250);
+			assert.deepEqual(
+				await tabBoxes(),
+				beforeHover,
+				"Hover must keep every tab target still",
+			);
+		}
+		// Long active labels retain fifteen characters rather than a narrow CSS ellipsis.
+		await page
+			.getByRole("button", { name: "Resume revision v7", exact: true })
+			.click();
+		const selectedLabel = page.locator(
+			'[data-rail-tab][data-active="true"] .gs-tabrail-label',
+		);
+		assert.equal(await selectedLabel.innerText(), "Resume revision...");
+		await page.waitForTimeout(300);
+		assert.equal(
+			await selectedLabel.evaluate(
+				(el) => el.scrollWidth <= el.clientWidth + 1,
+			),
+			true,
+		);
+		await page.getByRole("button", { name: "GS Edits", exact: true }).click();
 		await page.screenshot({ path: resolve(output, "topbar-wide.png") });
 		await page.setViewportSize({ width: 1280, height: 800 });
 		await page.screenshot({ path: resolve(output, "topbar-narrow.png") });
@@ -302,6 +361,35 @@ if (!process.argv.includes("--serve")) {
 		await page.screenshot({ path: resolve(output, "ready.png") });
 		await page.keyboard.press("Escape");
 		await page.getByRole("button", { name: "building", exact: true }).click();
+		await page.evaluate(() =>
+			window.dispatchEvent(
+				new CustomEvent("preview-builds", {
+					detail: [
+						{
+							id: "public-30",
+							version: "1.18.30",
+							channel: "public",
+							architectures: ["x64", "arm64"],
+							sourceCommit: "test",
+							stage: "building",
+							message: "Measured steps",
+							updatedAt: new Date().toISOString(),
+							verified: false,
+							published: false,
+							progress: { completed: 3, total: 4, basis: "steps" },
+						},
+					],
+				}),
+			),
+		);
+		await page.locator('[role="progressbar"][aria-valuenow="75"]').waitFor();
+		assert.equal(
+			await page
+				.locator('[role="progressbar"] circle')
+				.last()
+				.getAttribute("stroke-dasharray"),
+			"75 100",
+		);
 		await page
 			.getByRole("button", { name: "Installer builds: Building, 1.18.30" })
 			.click();
@@ -330,7 +418,7 @@ if (!process.argv.includes("--serve")) {
 		await page.emulateMedia({ reducedMotion: "reduce" });
 		assert.equal(
 			await page
-				.locator(".build-status-working")
+				.locator(".build-progress-indeterminate")
 				.evaluate((el) => getComputedStyle(el).animationName),
 			"none",
 		);
@@ -357,7 +445,11 @@ if (!process.argv.includes("--serve")) {
 				...updateChecks,
 				"header lower edges remain visible and hit-testable above positioned panes and high-z overlays",
 				"vertical center, unchanged heights and pane clearance at three zoom levels and two shell insets",
-				"real TopBar gap centering and non-overlap at seven widths",
+				"real TopBar rail centering and non-overlap at seven widths",
+				"ten-tab rail and fifteen-character active labels",
+				"stable hover reveals names below rail without moving any tab targets",
+				"context visible inside pane headers from 280 to 1000 CSS pixels",
+				"build progress ring follows measured step ratio",
 				"download action",
 				"active build cannot be dismissed",
 				"selectable failure",

@@ -56,7 +56,7 @@ const transcripts = new Map<
 	string,
 	{ at: number; events: ReturnType<typeof loadSessionTranscript> }
 >();
-function claudeTimeline(key: string) {
+async function claudeTimeline(key: string) {
 	const session = claude.listSessions().find((s) => s.key === key);
 	if (!session)
 		throw new Error("This session is no longer open. Reopen it from History.");
@@ -74,7 +74,7 @@ function claudeTimeline(key: string) {
 	}
 	return buildTimeline(
 		mergeTranscriptWithBuffer(
-			stored?.events ?? [],
+			(await stored?.events) ?? [],
 			claude.getBufferedEvents(key),
 		),
 	);
@@ -331,7 +331,7 @@ export function mobileSessionRouter() {
 				});
 				return;
 			}
-			const timeline = claudeTimeline(key);
+			const timeline = await claudeTimeline(key);
 			const messages: MobileMessage[] = timeline.items.flatMap(
 				(item): MobileMessage[] => {
 					if (item.kind === "user")
@@ -423,7 +423,13 @@ export function mobileSessionRouter() {
 							throw new Error(
 								"Resume this session from History before sending.",
 							);
-						if (claude.isBusy(key) || claudeTimeline(key).permissions?.length)
+						// Permissions are live buffer state, never stored history. Keep
+						// this check synchronous with send so a new turn cannot slip in
+						// while a transcript read is awaiting disk.
+						if (
+							claude.isBusy(key) ||
+							buildTimeline(claude.getBufferedEvents(key)).permissions?.length
+						)
 							throw new Error(
 								"Claude is busy or needs input. Queue this message in Flock or wait for the turn to finish.",
 							);
@@ -462,7 +468,11 @@ export function mobileSessionRouter() {
 					throw new Error("Answer every question first.");
 				await codex.answer(key, body.id, body.allow, body.answers);
 			} else {
-				if (!claudeTimeline(key).permissions?.some((p) => p.id === body.id))
+				if (
+					!buildTimeline(claude.getBufferedEvents(key)).permissions?.some(
+						(p) => p.id === body.id,
+					)
+				)
 					throw new Error("This permission request has already been answered.");
 				claude.answerPermission(key, body.id, body.allow);
 			}

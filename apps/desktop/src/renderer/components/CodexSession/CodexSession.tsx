@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { bindCodexDraftSession } from "renderer/lib/codex-session/draft";
 import {
 	getCodexSession,
 	publishCodexSession,
@@ -46,6 +47,8 @@ export function CodexSession(props: CodexSessionProps) {
 	// biome-ignore lint/correctness/useExhaustiveDependencies: retry deliberately reopens the connection after a transport failure.
 	useEffect(() => {
 		let disposed = false;
+		if (resumeSessionId && !forkSession)
+			bindCodexDraftSession(paneId, resumeSessionId);
 		const subscription = electronTrpcClient.codexSession.stream.subscribe(
 			{ key: paneId },
 			{

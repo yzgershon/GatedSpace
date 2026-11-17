@@ -12,6 +12,7 @@ import {
 import { createRequire } from "node:module";
 import { join, normalize, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { verifyFlowBundle } from "../../apps/desktop/scripts/flow-bundle";
 import { REQUIRED_MARKERS } from "./personal-bundle";
 
 const { values } = parseArgs({
@@ -48,6 +49,7 @@ for (const [label, args] of [
 			installer,
 			`-o${inspection}`,
 			"-ir!resources/app.asar",
+			"-ir!resources/resources/flow-dictation/*",
 			"-ir!GatedSpace.exe",
 			"-ir!resources/resources/git/cmd/git.exe",
 			"-ir!resources/resources/git/gatedspace-git.json",
@@ -75,6 +77,10 @@ const asar = dependencies("@electron/asar") as {
 	listPackage: (archive: string) => string[];
 };
 const archive = join(inspection, "resources/app.asar");
+const flow = verifyFlowBundle(
+	join(inspection, "resources/resources/flow-dictation"),
+	arch,
+);
 const read = (name: string) => asar.extractFile(archive, normalize(name));
 assert.equal(JSON.parse(read("package.json").toString()).version, version);
 const entries = asar
@@ -213,6 +219,7 @@ const report = {
 	publicBindings: true,
 	nativeArchitectures: true,
 	privateGit: gitPin.version,
+	bundledDictationFiles: Object.keys(flow.files).length,
 	manifestAndGitHubDigests: true,
 };
 writeFileSync(values.receipt, JSON.stringify(report, null, 2));

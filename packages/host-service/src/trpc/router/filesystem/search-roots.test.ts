@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
-import { resolveTypedPath } from "./search-roots";
+import { additionalSearchRoots, resolveTypedPath } from "./search-roots";
 
 let root: string;
 let projectDir: string;
@@ -22,6 +22,12 @@ afterEach(async () => {
 });
 
 describe("resolveTypedPath", () => {
+	it("keeps a configured parent root so names in sibling projects remain searchable", () => {
+		expect(additionalSearchRoots([root, projectDir], projectDir)).toEqual([
+			root,
+		]);
+		expect(additionalSearchRoots([root], undefined)).toEqual([root]);
+	});
 	it("ignores a query with no separator, so plain names still fuzzy-search", async () => {
 		expect(await resolveTypedPath("HANDOFF.md", undefined, [root])).toBeNull();
 		expect(await resolveTypedPath("handoff", undefined, [root])).toBeNull();

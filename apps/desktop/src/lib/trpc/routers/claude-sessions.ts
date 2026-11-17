@@ -12,6 +12,7 @@ import {
 	setSessionTitleOverride,
 } from "main/lib/claude-sessions";
 import { searchSessionContent } from "main/lib/claude-sessions/search-content";
+import { searchConversations } from "main/lib/claude-sessions/search-conversations";
 import {
 	mergePinnedCodexSessions,
 	PinnedCodexSessions,
@@ -233,17 +234,46 @@ export const createClaudeSessionsRouter = () => {
 			),
 
 		/**
-		 * Session ids whose TRANSCRIPT contains the query.
-		 *
-		 * The sidebar filters titles itself and instantly; this is the other half,
-		 * and it is the half that matters, because titles are generated from the
-		 * first prompt and repeat constantly. Returns ids rather than summaries so
-		 * the renderer merges them into the list it already has instead of
-		 * reconciling two differently-shaped result sets.
-		 *
-		 * Scanning is capped on both axes — how many files, and how much of each —
-		 * because this runs while the user types.
+		 * Search complete transcripts asynchronously. Return display rows so a
+		 * matching older session can appear outside the initial sidebar page.
+		 * The UI discloses the 400-conversation scope for each provider.
 		 */
+		searchConversations: publicProcedure
+			.input(
+				z.object({
+					provider: z.enum(["claude", "codex"]),
+					query: z.string().trim().min(3).max(200),
+				}),
+			)
+			.query(async ({ input }) => {
+				const hidden = new Set(
+					archived[input.provider].read().map((row) => row.sessionId),
+				);
+				const rows =
+					input.provider === "codex"
+						? await codexSessionManager.listThreads(400)
+						: listClaudeSessions(400);
+				const candidates = rows
+					.filter((row) => !hidden.has(row.sessionId))
+					.map((row) => ({
+						...row,
+						title:
+							sessionNames.get({
+								provider: input.provider,
+								id: row.sessionId,
+							}) ?? row.title,
+					}));
+				return (await searchConversations(candidates, input.query)).map(
+					(row) => ({
+						provider: input.provider,
+						sessionId: row.sessionId,
+						title: row.title,
+						cwd: row.cwd,
+						lastModified: row.lastModified,
+					}),
+				);
+			}),
+
 		searchContent: publicProcedure
 			.input(
 				z.object({
