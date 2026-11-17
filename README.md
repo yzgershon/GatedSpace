@@ -6,11 +6,12 @@
 
 ### An agentic development environment for Windows
 
-Run Claude Code, Codex, Gemini, Kimi K2, Copilot, and any other CLI coding
-agent in parallel, each in its own isolated git worktree, with built-in
-terminals, diff review, and workspace management.
+Bring Claude Code, Codex, your terminal, and a browser into one workspace.
+Follow edits in Live code, work with agents side by side, and keep each
+project's conversations and tools together. Other CLI agents, including
+Gemini and Copilot, can run in terminal panes.
 
-**Free. No account. No cloud. Everything runs on your machine.**
+**Free. No GatedSpace account required. Your workspace stays local.**
 
 [![Release](https://img.shields.io/github/v/release/yzgershon/GatedSpace?label=release&color=2b4fd7)](https://github.com/yzgershon/GatedSpace/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/yzgershon/GatedSpace/total?color=2b4fd7)](https://github.com/yzgershon/GatedSpace/releases)
@@ -25,9 +26,9 @@ terminals, diff review, and workspace management.
 
 <br />
 
-![GatedSpace with two Claude Code sessions and a built-in terminal open side by side in one workspace, agent tabs for Codex, Gemini and Copilot across the top, and git worktrees listed in the left sidebar](.github/assets/hero.png)
+![GatedSpace in Dracula with Codex Live code, Claude Code in a terminal, and the built-in browser](.github/assets/hero-dracula.png)
 
-<sub>Two Claude Code sessions and a live terminal in one workspace. Codex, Gemini, Copilot, Kimi K2 and any other CLI agent are a tab away, and shells keep running in the background after you close the app.</sub>
+<sub>One project, multiple perspectives. The Dracula theme brings conversations, tools, and previews into the same workspace.</sub>
 
 </div>
 
@@ -54,28 +55,31 @@ the [Actions tab](https://github.com/yzgershon/GatedSpace/actions).
 
 ## What it does
 
-- **Parallel agents.** Run several Claude Code / Codex / Gemini / Kimi K2 /
-  Copilot / any-CLI-agent sessions side by side, each in its own git worktree,
-  so agents never step on each other's changes. If it runs in a terminal, it
-  runs here — GatedSpace is not tied to any one model or vendor.
+- **Parallel agents.** Open native Claude Code and Codex conversations side
+  by side. Use separate git worktrees when agents need isolated changes.
+  Terminal panes support other CLI agents, including Gemini and Copilot.
+- **Live code.** Watch real file edits with syntax highlighting, line numbers,
+  file tabs, and diffs while keeping the conversation alongside the code.
+- **Built-in browser.** Preview your project beside the agents working on it.
+  Recognizable favicons, resizable previews, and Open in Chrome keep browsing
+  close to your work.
+- **Floating tabs.** Switch between arrangements of panes, with compact
+  thumbnails on hover and independent layouts for each tab.
 - **Workspaces.** One project, many worktrees. Create, switch, and tear down
   branches without touching your main checkout.
-- **Built-in terminals.** Persistent PTY sessions that survive app restarts,
-  and even PC reboots.
+- **Built-in terminals.** Run commands and inspect output beside your
+  conversations. Terminal history and workspace state can be restored.
 - **Review before you merge.** Built-in diff view for each workspace, then
   open in your editor of choice.
-- **Quick open across folders.** Ctrl+T searches the open workspace, and any
-  folders listed in `~/.superset/search-roots.json`
-  (`{"roots": ["C:/Dev"]}`), so a file in a sibling project is one keystroke
-  away. Type a path like `Dev/superset/HANDOFF.md` and it resolves directly
-  instead of fuzzy-matching.
-- **Claude account profiles.** Optionally declare multiple Claude accounts
-  (`~/.superset/claude-profile.json`) and GatedSpace routes new agents to
-  whichever one has usage left.
-- **Usage dashboard.** Real token usage and quota tracking for Claude Code and
-  Codex, read from their local session files. Nothing is polled or uploaded.
-- **Local-only by design.** No account, no analytics keys baked into public
-  builds, all data in local SQLite. Your code never leaves your machine.
+- **Find your work.** Search files by name or words, and search recent sessions
+  by their title, project, or conversation content. Opening a session that is
+  already running takes you to its existing pane.
+- **Named accounts.** Add Claude and Codex accounts with recognizable
+  nicknames, inspect their available usage, and switch accounts from a session.
+- **Built-in voice typing.** Offline Flow dictation is included in both Windows
+  installers. No separate Flow app, account, or speech-model download is needed.
+- **Local workspace storage.** Public builds do not require a GatedSpace cloud
+  account. Agent requests still use your selected provider and its account.
 
 ## How it relates to Superset
 
@@ -132,12 +136,32 @@ Requires [Bun](https://bun.sh) (see `.bun-version`), Node.js, and on Windows
 the Visual Studio 2022 C++ build tools for native modules. Public builds set
 `NEXT_PUBLIC_LOCAL_ONLY=1` at compile time to bake in local-only mode.
 
-## Themes
+## Inside the workspace
 
-The whole app follows the theme, agent panes and terminals included. Here is
-the same workspace in Dracula:
+These screenshots use Orbit, a fictional example project, in the actual desktop
+app. Conversations, code, the browser, and terminals share the Dracula theme.
+Codex's edit and test results are real; Claude Code is shown ready for input.
 
-![The same GatedSpace workspace rendered in the Dracula theme](.github/assets/hero-dracula.png)
+### Follow the code
+
+Live code keeps the edited file and its conversation together. Switch files,
+inspect a diff, or follow the agent's next edit.
+
+![Live code with syntax highlighting and the agent conversation alongside it](.github/assets/live-code.png)
+
+### Keep the browser close
+
+Inspect the project where you are working. The sidebar browser has its own tabs,
+favicons, navigation controls, and preview sizing.
+
+![The Orbit example project running in GatedSpace's built-in browser](.github/assets/browser.png)
+
+### Work across agents and tools
+
+Give Claude Code and Codex their own panes, and keep a terminal nearby for tests
+and commands. Resize the arrangement to suit the task.
+
+![Codex's completed change, Claude Code ready for input, and six passing tests in a terminal](.github/assets/agents-terminal.png)
 
 ## Contributing
 
