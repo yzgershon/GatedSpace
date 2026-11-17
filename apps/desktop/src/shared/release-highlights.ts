@@ -90,6 +90,53 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.61",
+		title: "A calmer workspace, easier to write in",
+		changes: [
+			{
+				title: "Focus is easier to see",
+				detail:
+					"Codex panes use the blue from their icon. Only the focused pane highlights its composer, keeping the rest of your workspace quiet.",
+			},
+			{
+				title: "Tab names fit properly",
+				detail:
+					"Selected names show up to 15 characters before an ellipsis, including at larger display scales. Tighter spacing and a subtle hover keep tab targets steady.",
+			},
+			{
+				title: "Attachments stay within reach",
+				detail:
+					"Shorter image cards stay inside your composer. Scroll across all your attachments with a mouse wheel or trackpad, even in narrow panes.",
+			},
+			{
+				title: "Autocorrect, without another service",
+				detail:
+					"Common English typos are corrected locally while you type. Press Backspace immediately or Ctrl+Z to undo. Turn autocorrect off in Settings, General.",
+			},
+		],
+	},
+	{
+		version: "1.18.62",
+		title: "Better together, at any size",
+		changes: [
+			{
+				title: "Bring sessions into one tab",
+				detail:
+					"Drag a floating tab into another session to combine their panes. Dropping into an expanded pane now reveals the whole group instead of hiding the incoming sessions.",
+			},
+			{
+				title: "Rounded panes, even at their smallest",
+				detail:
+					"Pane frames keep their rounded corners when resized to the minimum width or height, including at larger display scales.",
+			},
+			{
+				title: "A quieter rail and closer previews",
+				detail:
+					"The floating rail has a subtle gray border. Hover previews fit their thumbnail without empty side gutters, with the agent icon and tab name centered above it.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

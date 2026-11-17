@@ -3,6 +3,8 @@ import { create } from "zustand";
 import { devtools, persist } from "zustand/middleware";
 
 interface ChatPreferencesState {
+	autocorrect: boolean;
+	setAutocorrect: (enabled: boolean) => void;
 	selectedModelId: string | null;
 	setSelectedModelId: (modelId: string | null) => void;
 	thinkingLevel: ThinkingLevel;
@@ -13,6 +15,8 @@ export const useChatPreferencesStore = create<ChatPreferencesState>()(
 	devtools(
 		persist(
 			(set) => ({
+				autocorrect: true,
+				setAutocorrect: (autocorrect) => set({ autocorrect }),
 				selectedModelId: null,
 				thinkingLevel: "off" as ThinkingLevel,
 

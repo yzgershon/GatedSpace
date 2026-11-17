@@ -14,13 +14,7 @@ import {
 } from "@superset/ui/hover-card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
 import { cn } from "@superset/ui/utils";
-import {
-	useCallback,
-	useEffect,
-	useLayoutEffect,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDrop } from "react-dnd";
 import { createPortal } from "react-dom";
 import { LuChevronLeft, LuChevronRight, LuPlus, LuX } from "react-icons/lu";
@@ -162,34 +156,6 @@ function TabRailItem({
 			: undefined;
 
 	const nodeRef = useRef<HTMLDivElement | null>(null);
-	const labelRef = useRef<HTMLSpanElement>(null);
-	const [labelWidth, setLabelWidth] = useState(0);
-	// biome-ignore lint/correctness/useExhaustiveDependencies: Text changes can keep collapsed child boxes at zero width, so they must remeasure explicitly.
-	useLayoutEffect(() => {
-		const label = labelRef.current;
-		if (!label) return;
-		const measure = () => {
-			const children = [...label.children] as HTMLElement[];
-			const gap = Number.parseFloat(getComputedStyle(label).columnGap) || 0;
-			setLabelWidth(
-				Math.min(
-					320,
-					Math.ceil(
-						children.reduce((sum, child) => {
-							const range = document.createRange();
-							range.selectNodeContents(child);
-							return sum + range.getBoundingClientRect().width;
-						}, 0) +
-							gap * Math.max(0, children.length - 1),
-					),
-				),
-			);
-		};
-		measure();
-		const observer = new ResizeObserver(measure);
-		for (const child of label.children) observer.observe(child);
-		return () => observer.disconnect();
-	}, [title, paneCount]);
 
 	return (
 		<HoverCard open={showName && !drag.state}>
@@ -247,16 +213,6 @@ function TabRailItem({
 						type="button"
 						aria-label={label}
 						aria-current={isActive ? "true" : undefined}
-						/*
-						 * 14px and an 18px glyph: the one label size and the one icon
-						 * size the whole top bar uses now.
-						 *
-						 * NO `gap` here. The label is collapsed with `max-width: 0`, not
-						 * `display: none`, so it stays a flex item â€” a gap would pad every
-						 * icon-only tab with dead space it never had. The spacing is the
-						 * label's own `margin-left`, which animates 0 -> 7px with the
-						 * reveal (globals.css).
-						 */
 						className="flex min-w-0 items-center text-[15px] focus-visible:outline-none"
 						onClick={() => onSelect(tab.id)}
 						onAuxClick={(event) => {
@@ -273,11 +229,7 @@ function TabRailItem({
 						}}
 					>
 						<AgentStatusRing status={status}>{icon}</AgentStatusRing>
-						<span
-							ref={labelRef}
-							style={{ maxWidth: isExpanded ? labelWidth : 0 }}
-							className="gs-tabrail-label flex items-center gap-1.5"
-						>
+						<span className="gs-tabrail-label flex items-center gap-1.5">
 							<span className="whitespace-nowrap">
 								{Array.from(title).length > 15
 									? `${Array.from(title).slice(0, 15).join("")}...`
@@ -339,8 +291,10 @@ function TabRailItem({
 				onEscapeKeyDown={onDismissPreview}
 			>
 				<div className="gs-tabrail-preview-heading">
-					<span className="gs-tabrail-preview-icon">{icon}</span>
-					<span className="gs-tabrail-namecard-title">{title}</span>
+					<div className="gs-tabrail-preview-identity">
+						<span className="gs-tabrail-preview-icon">{icon}</span>
+						<span className="gs-tabrail-namecard-title">{title}</span>
+					</div>
 					<button
 						type="button"
 						aria-label={`Close ${title} from preview`}

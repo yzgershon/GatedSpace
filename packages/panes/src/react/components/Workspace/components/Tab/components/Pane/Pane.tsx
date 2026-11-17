@@ -18,7 +18,6 @@ import { PaneHeaderActions } from "../../../../../PaneHeaderActions";
 import { usePaneTitle } from "../../../../utils/useTabTitle";
 import { WorkspaceFocusContext } from "../../../../WorkspaceFocusContext";
 import { TAB_DRAG_TYPE } from "../../../TabBar/components/TabItem";
-import { PANE_MIN_SIZE_CLASS_NAME } from "../../constants";
 import { DropZoneOverlay } from "./components/DropZoneOverlay";
 import { PaneContent } from "./components/PaneContent";
 import { PaneContextMenu } from "./components/PaneContextMenu";
@@ -402,6 +401,7 @@ export function Pane<TData>({
 				 * tab rail is that drag; see `tabRailDrag.ts`.
 				 */
 				data-pane-id={pane.id}
+				data-pane-active={isActive}
 				/*
 				 * Radius, border, surface and shadow come from CSS variables the host
 				 * app sets, not from a prop. This package has no idea what a "skin" is
@@ -433,8 +433,10 @@ export function Pane<TData>({
 					} as React.CSSProperties
 				}
 				className={cn(
-					"relative flex h-full w-full flex-col overflow-hidden border-border",
-					PANE_MIN_SIZE_CLASS_NAME,
+					// The resize container enforces the minimum. This inner frame must
+					// fit the space left after the gutter, including at the resize limit.
+					// Repeating that minimum here clips the right/bottom rounded edges.
+					"relative flex h-full w-full min-h-0 min-w-0 flex-col overflow-hidden border-border",
 					// The active-pane ring is painted by an overlay further down,
 					// NOT by a class here. `ring-inset` renders as an inset
 					// box-shadow, which paints above this element's own background

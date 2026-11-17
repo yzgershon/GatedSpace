@@ -2,10 +2,8 @@
 	width: max-content;
 	height: calc(46px + min(var(--gs-pane-inset, 0px), 4px));
 	max-width: min(100%, 792px);
-	border: 2px solid color-mix(in srgb, var(--primary) 68%, var(--border));
-	box-shadow:
-		0 0 14px color-mix(in srgb, var(--primary) 9%, transparent),
-		0 6px 20px #0003;
+	border: 1px solid color-mix(in oklab, var(--border), white 14%);
+	box-shadow: 0 6px 20px #0003;
 }
 .gs-tabrail-window {
 	position: relative;
@@ -48,8 +46,7 @@
 .gs-tabrail .gs-tabrail-tab {
 	width: max-content;
 	min-width: 44px;
-	max-width: 100%;
-	padding-inline: 12px;
+	padding-inline: 10px;
 }
 .gs-tabrail .gs-agent-status-ring {
 	width: 28px;
@@ -64,14 +61,13 @@
 	transition: transform 170ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .gs-tabrail .gs-tabrail-tab:hover > button:first-of-type {
-	transform: translateY(-1px) scale(1.025);
+	transform: translateY(-1px);
 }
 .gs-tabrail-arrows[hidden] {
 	display: none;
 }
 .gs-tabrail .gs-tabrail-tab > button:first-of-type {
-	flex: 1;
-	min-width: 0;
+	flex: 0 0 auto;
 }
 .gs-tabrail .gs-tabrail-tab[data-expanded="false"] > button:first-of-type {
 	justify-content: center;
@@ -85,39 +81,23 @@
 	outline: 1px solid var(--ring);
 	outline-offset: -2px;
 }
-/* Exactly one inline label: the selected tab. Hover cards never resize it. */
-.gs-tabrail .gs-tabrail-scroll .gs-tabrail-tab .gs-tabrail-label {
-	max-width: 0;
-	opacity: 0;
-	margin-left: 0;
-	transition:
-		max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-		opacity 140ms ease,
-		margin-left 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+/* Use intrinsic text width: transformed DOM measurements clipped the last
+ * letters at Windows display scales. Only selection changes the inline label. */
+.gs-tabrail .gs-tabrail-label {
+	display: none;
+	flex: 0 0 auto;
+	white-space: nowrap;
 }
-.gs-tabrail
-	.gs-tabrail-scroll
-	.gs-tabrail-tab[data-expanded="true"]
-	.gs-tabrail-label {
-	opacity: 1;
+.gs-tabrail .gs-tabrail-tab[data-expanded="true"] .gs-tabrail-label {
+	display: flex;
 	margin-left: 8px;
 }
 .gs-tabrail-close {
-	max-width: 0;
-	margin-left: 0;
-	opacity: 0;
-	overflow: hidden;
-	pointer-events: none;
-	transition:
-		max-width 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-		margin-left 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
-		opacity 140ms ease;
+	display: none;
 }
 [data-expanded="true"][data-active="true"] > .gs-tabrail-close {
-	max-width: 17px;
+	display: flex;
 	margin-left: 4px;
-	opacity: 1;
-	pointer-events: auto;
 }
 .gs-tabrail-fixed,
 .gs-tabrail-arrows {
@@ -246,7 +226,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
-	width: 344px;
+	width: max-content;
 	max-width: calc(100vw - 24px);
 	border: 1px solid color-mix(in oklab, var(--border), white 10%);
 	border-radius: 12px;
@@ -266,19 +246,33 @@
 	text-overflow: ellipsis;
 }
 .gs-tabrail-preview-heading {
+	position: relative;
+	/* Let the thumbnail set the card width, even for a long tab title. */
+	contain: inline-size;
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	justify-content: center;
 	height: 26px;
+}
+.gs-tabrail-preview-identity {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	min-width: 0;
+	max-width: calc(100% - 56px);
 }
 .gs-tabrail-preview-icon {
 	display: flex;
+	flex-shrink: 0;
 }
 .gs-tabrail-preview-icon > :is(img, svg) {
 	width: 20px;
 	height: 20px;
 }
 .gs-tabrail-preview-heading > button {
+	position: absolute;
+	right: 0;
 	padding: 4px;
 	border-radius: 6px;
 	color: var(--muted-foreground);
@@ -289,17 +283,24 @@
 }
 .gs-tabrail-thumbnail {
 	display: flex;
-	width: 100%;
-	height: 160px;
+	width: max-content;
+	max-width: 100%;
 	border-radius: 7px;
 	overflow: hidden;
 	background: var(--background);
 	border: 1px solid var(--border);
 }
 .gs-tabrail-thumbnail > img {
-	width: 100%;
-	height: 100%;
-	object-fit: contain;
+	display: block;
+	width: auto;
+	height: auto;
+	max-width: min(322px, calc(100vw - 48px));
+	max-height: 160px;
+}
+.gs-tabrail-thumbnail:not(:has(> img)) {
+	/* No last-seen pixels yet: retain a compact, usable layout preview. */
+	width: min(280px, calc(100vw - 48px));
+	height: 160px;
 }
 .gs-tabrail-thumbnail:focus-visible,
 .gs-tabrail-preview-heading > button:focus-visible {

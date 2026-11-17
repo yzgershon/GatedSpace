@@ -29,6 +29,7 @@ export const SETTING_ITEM_ID = {
 
 	KEYBOARD_SHORTCUTS: "keyboard-shortcuts",
 	BEHAVIOR_CONFIRM_QUIT: "behavior-confirm-quit",
+	BEHAVIOR_AUTOCORRECT: "behavior-autocorrect",
 	BEHAVIOR_FILE_OPEN_MODE: "behavior-file-open-mode",
 	BEHAVIOR_RESOURCE_MONITOR: "behavior-resource-monitor",
 	BEHAVIOR_OPEN_LINKS_IN_APP: "behavior-open-links-in-app",
@@ -144,6 +145,7 @@ export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.KEYBOARD_SHORTCUTS]: "shared",
 
 	[SETTING_ITEM_ID.BEHAVIOR_CONFIRM_QUIT]: "shared",
+	[SETTING_ITEM_ID.BEHAVIOR_AUTOCORRECT]: "shared",
 	[SETTING_ITEM_ID.BEHAVIOR_FILE_OPEN_MODE]: "v1",
 	[SETTING_ITEM_ID.BEHAVIOR_RESOURCE_MONITOR]: "shared",
 	[SETTING_ITEM_ID.BEHAVIOR_OPEN_LINKS_IN_APP]: "v1",
@@ -589,6 +591,21 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"warning",
 			"prompt",
 			"unsaved",
+		],
+	},
+	{
+		id: SETTING_ITEM_ID.BEHAVIOR_AUTOCORRECT,
+		section: "behavior",
+		title: "Autocorrect messages",
+		description: "Correct common English typos while typing in agent composers",
+		keywords: [
+			"spelling",
+			"spellcheck",
+			"autocorrect",
+			"typing",
+			"typo",
+			"composer",
+			"correction",
 		],
 	},
 	{

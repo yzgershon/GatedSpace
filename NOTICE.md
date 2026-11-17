@@ -22,3 +22,8 @@ Modifications include (non-exhaustive):
 
 For issues with GatedSpace, use https://github.com/yzgershon/GatedSpace/issues —
 do not contact Superset, Inc. about this fork.
+
+Offline autocorrect uses [nspell](https://github.com/wooorm/nspell) and the
+[dictionary-en](https://github.com/wooorm/dictionaries) English dictionary.
+Their notices are included in [autocorrect.txt](apps/desktop/src/resources/notices/autocorrect.txt)
+and packaged with the desktop application.

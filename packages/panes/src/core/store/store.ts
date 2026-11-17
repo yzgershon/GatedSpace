@@ -973,6 +973,9 @@ export function createWorkspaceStore<TData>(
 									layout: nextTargetLayout,
 									panes: { ...t.panes, ...sourceTab.panes },
 									activePaneId: sourceTab.activePaneId ?? t.activePaneId,
+									// A successful drop must reveal the new panes, even if the
+									// destination was showing one expanded pane beforehand.
+									maximizedPaneId: null,
 								}
 							: t,
 					);

@@ -9,6 +9,7 @@ import {
 } from "@superset/ui/select";
 import { Switch } from "@superset/ui/switch";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { useChatPreferencesStore } from "renderer/stores/chat-preferences";
 import {
 	isItemVisible,
 	SETTING_ITEM_ID,
@@ -20,6 +21,10 @@ interface BehaviorSettingsProps {
 }
 
 export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
+	const autocorrect = useChatPreferencesStore((state) => state.autocorrect);
+	const setAutocorrect = useChatPreferencesStore(
+		(state) => state.setAutocorrect,
+	);
 	const showConfirmQuit = isItemVisible(
 		SETTING_ITEM_ID.BEHAVIOR_CONFIRM_QUIT,
 		visibleItems,
@@ -135,6 +140,23 @@ export function BehaviorSettings({ visibleItems }: BehaviorSettingsProps) {
 			</div>
 
 			<div className="space-y-6">
+				{isItemVisible(SETTING_ITEM_ID.BEHAVIOR_AUTOCORRECT, visibleItems) && (
+					<div className="flex items-center justify-between gap-6">
+						<div className="space-y-0.5">
+							<Label htmlFor="composer-autocorrect">Autocorrect messages</Label>
+							<p className="text-sm text-muted-foreground">
+								Correct common English typos while typing. Press Backspace
+								immediately or Ctrl+Z to undo. Pasted text, code, and file paths
+								stay as written.
+							</p>
+						</div>
+						<Switch
+							id="composer-autocorrect"
+							checked={autocorrect}
+							onCheckedChange={setAutocorrect}
+						/>
+					</div>
+				)}
 				{showConfirmQuit && (
 					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">

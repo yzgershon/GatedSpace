@@ -641,6 +641,27 @@ describe("movePaneToNewTab", () => {
 });
 
 describe("moveTabToSplit", () => {
+	it("reveals the merged layout when the destination pane is maximized", () => {
+		const store = makeStore();
+		store.getState().addTab({ id: "target", panes: [tp("p1"), tp("p2")] });
+		store.getState().addTab({ id: "source", panes: [tp("p3")] });
+		store.getState().toggleMaximizePane({ tabId: "target", paneId: "p1" });
+		const sourcePane = store.getState().getPane("p3")?.pane;
+
+		store.getState().moveTabToSplit({
+			sourceTabId: "source",
+			targetPaneId: "p1",
+			position: "right",
+		});
+
+		const target = store.getState().getTab("target");
+		expect(target?.maximizedPaneId).toBeNull();
+		expect(Object.keys(target?.panes ?? {})).toEqual(["p1", "p2", "p3"]);
+		expect(store.getState().getPane("p3")?.pane).toBe(sourcePane);
+		expect(target?.activePaneId).toBe("p3");
+		expect(store.getState().activeTabId).toBe("target");
+	});
+
 	it("grafts all panes from the source tab next to the target pane and removes the source tab", () => {
 		const store = makeStore();
 		store.getState().addTab({ id: "t1", panes: [tp("p1")] });

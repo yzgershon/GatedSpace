@@ -13,6 +13,7 @@ import {
 	type ClaudeAccount,
 	useClaudeAccounts,
 } from "renderer/components/ClaudeAccountSwap";
+import { AttachmentStrip } from "renderer/components/SessionComposerControls/AttachmentStrip";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { FlowMicrophone } from "renderer/components/SessionComposerControls/FlowMicrophone/FlowMicrophone";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
@@ -510,7 +511,7 @@ export function SessionComposer({
 				) : null}
 
 				{images.length > 0 && (
-					<fieldset className="session-images" aria-label="Attached images">
+					<AttachmentStrip>
 						{images.map((image, index) => (
 							<ComposerImage
 								key={`${image.name}:${index}`}
@@ -521,7 +522,7 @@ export function SessionComposer({
 								}
 							/>
 						))}
-					</fieldset>
+					</AttachmentStrip>
 				)}
 				{(fileDrop.dragging || preparing > 0) && (
 					<output className="session-attachment-status">

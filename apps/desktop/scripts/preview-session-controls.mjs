@@ -244,8 +244,8 @@ if (!process.argv.includes("--serve")) {
 				return (
 					tab?.textContent === name &&
 					tab.dataset.expanded === "true" &&
-					getComputedStyle(tab.querySelector(".gs-tabrail-label")).maxWidth ===
-						tab.querySelector(".gs-tabrail-label").style.maxWidth
+					tab.querySelector(".gs-tabrail-label").clientWidth >=
+						tab.querySelector(".gs-tabrail-label").scrollWidth
 				);
 			}, name);
 		};
@@ -259,8 +259,8 @@ if (!process.argv.includes("--serve")) {
 				active?.textContent === "GS Edits 1" &&
 				active.getBoundingClientRect().width > 100 &&
 				active.getBoundingClientRect().width < 185 &&
-				getComputedStyle(active.querySelector(".gs-tabrail-label")).maxWidth ===
-					active.querySelector(".gs-tabrail-label").style.maxWidth
+				active.querySelector(".gs-tabrail-label").clientWidth >=
+					active.querySelector(".gs-tabrail-label").scrollWidth
 			);
 		});
 		const tabTargets = () =>
@@ -299,7 +299,7 @@ if (!process.argv.includes("--serve")) {
 			await production
 				.locator(".gs-tabrail")
 				.evaluate((e) => getComputedStyle(e).borderTopWidth),
-			"2px",
+			"1px",
 		);
 		await page.waitForTimeout(250);
 		assert.deepEqual(
@@ -436,6 +436,70 @@ if (!process.argv.includes("--serve")) {
 			await card.isVisible(),
 			"Crossing the gap keeps the preview available",
 		);
+		// Different capture proportions must size the card, not leave empty
+		// columns inside a fixed-width image frame. Only the IPC pixels are mocked.
+		const capturedImage = card.locator(".gs-tabrail-thumbnail > img");
+		const originalCapture = await capturedImage.getAttribute("src");
+		for (const width of [688, 480, 320]) {
+			await capturedImage.evaluate(async (img, width) => {
+				const canvas = document.createElement("canvas");
+				canvas.width = width;
+				canvas.height = 320;
+				const ctx = canvas.getContext("2d");
+				ctx.fillStyle = "#282a36";
+				ctx.fillRect(0, 0, width, 320);
+				ctx.fillStyle = "#8095ff";
+				ctx.fillRect(0, 0, 4, 320);
+				ctx.fillRect(width - 4, 0, 4, 320);
+				ctx.fillStyle = "#f8f8f2";
+				ctx.font = "20px sans-serif";
+				ctx.fillText("Session preview", 20, 42);
+				img.src = canvas.toDataURL("image/png");
+				await img.decode();
+			}, width);
+			const geometry = await card.evaluate((el) => {
+				const r = (selector) =>
+					el.querySelector(selector).getBoundingClientRect();
+				const image = r(".gs-tabrail-thumbnail > img");
+				const frame = r(".gs-tabrail-thumbnail");
+				const heading = r(".gs-tabrail-preview-heading");
+				const identity = r(".gs-tabrail-preview-identity");
+				return {
+					cardWidth: el.getBoundingClientRect().width,
+					imageWidth: image.width,
+					imageHeight: image.height,
+					gutter: frame.width - image.width,
+					centerOffset:
+						identity.x + identity.width / 2 - heading.x - heading.width / 2,
+				};
+			});
+			assert.ok(
+				Math.abs(geometry.gutter - 2) < 1,
+				"Only the thumbnail border surrounds the image",
+			);
+			assert.ok(
+				Math.abs(geometry.centerOffset) < 1,
+				"Icon and title are centered independently of Close",
+			);
+			assert.ok(
+				Math.abs(geometry.imageWidth / geometry.imageHeight - width / 320) <
+					0.01,
+				"Capture is neither stretched nor cropped",
+			);
+			if (width === 480) {
+				assert.ok(
+					geometry.cardWidth < 270,
+					"Typical session preview shrinks around its pixels",
+				);
+				await card.screenshot({
+					path: resolve(output, "fitted-thumbnail.png"),
+				});
+			}
+		}
+		await capturedImage.evaluate(async (img, src) => {
+			img.src = src;
+			await img.decode();
+		}, originalCapture);
 		await card.screenshot({ path: resolve(output, "compact-thumbnail.png") });
 		await card
 			.getByRole("button", { name: "Open GS Edits 1", exact: true })
@@ -455,7 +519,7 @@ if (!process.argv.includes("--serve")) {
 			"No idle thumbnail polling",
 		);
 		checks.push(
-			"Compact captured thumbnail (simulated IPC), gap crossing, click to open, no footer, 28px icons, matching 2px edge, no idle capture polling",
+			"Image-fitted thumbnail (simulated IPC), centered identity, neutral 1px rail edge, gap crossing, click to open, no footer or idle capture polling",
 		);
 		await page.locator(".production-rail").waitFor({ state: "visible" });
 		await page.getByLabel("Question scenario").selectOption("single");

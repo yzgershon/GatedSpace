@@ -8,6 +8,7 @@ import {
 	useState,
 	useSyncExternalStore,
 } from "react";
+import { AttachmentStrip } from "renderer/components/SessionComposerControls/AttachmentStrip";
 import { ComposerImage } from "renderer/components/SessionComposerControls/ComposerImage";
 import { FlowMicrophone } from "renderer/components/SessionComposerControls/FlowMicrophone/FlowMicrophone";
 import { GrowingTextarea } from "renderer/components/SessionComposerControls/GrowingTextarea";
@@ -453,7 +454,7 @@ export function CodexComposer({
 					</output>
 				)}
 				{images.length > 0 && (
-					<fieldset className="session-images" aria-label="Attached images">
+					<AttachmentStrip>
 						{images.map((image, index) => (
 							<ComposerImage
 								key={`${image.name}:${index}`}
@@ -464,7 +465,7 @@ export function CodexComposer({
 								}
 							/>
 						))}
-					</fieldset>
+					</AttachmentStrip>
 				)}
 				<div className="session-input">
 					<GrowingTextarea

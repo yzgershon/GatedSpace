@@ -19,7 +19,8 @@
 
 const AGENT_ACCENTS: Record<string, string> = {
 	claude: "#d97757",
-	codex: "#10a37f",
+	// Middle stop of the Codex icon's blue gradient.
+	codex: "#8095ff",
 	copilot: "#8b5cf6",
 	gemini: "#4285f4",
 	"cursor-agent": "#06b6d4",

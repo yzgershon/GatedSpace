@@ -113,9 +113,6 @@
 	flex-wrap: wrap;
 	margin-bottom: 10px;
 }
-.codex-message-images .session-image-preview img {
-	height: 76px;
-}
 .codex-image-unavailable {
 	font-size: 12px;
 	color: var(--muted-foreground);
@@ -433,6 +430,9 @@
 }
 .codex-pinned-images .session-image-preview img {
 	object-fit: cover;
+}
+.codex-pinned-images .session-image-tile {
+	flex-basis: 28px;
 }
 .codex-pinned-images .session-image-preview > span {
 	display: none;
