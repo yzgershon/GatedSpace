@@ -24,7 +24,7 @@ interface SessionViewProps {
 	timeline: SessionTimeline;
 	mode: SessionMode;
 	effort: EffortLevel;
-	onSend: (text: string, images?: UserImagePayload[]) => void;
+	onSend: (text: string, images?: UserImagePayload[]) => void | Promise<void>;
 	onInterrupt: () => void;
 	onModeChange: (mode: SessionMode) => void;
 	onEffortChange: (effort: EffortLevel) => void;
@@ -254,6 +254,9 @@ export function SessionView({
 				</div>
 			</section>
 			<SessionComposer
+				hasPendingQuestion={timeline.permissions?.some(
+					(request) => request.tool === "AskUserQuestion",
+				)}
 				changes={changes}
 				model={timeline.header?.model}
 				fast={fast}

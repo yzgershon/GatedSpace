@@ -58,7 +58,8 @@ function getQueue() {
 		},
 		async (key, prompt, steer) => {
 			if (prompt.provider === "codex") {
-				if (steer) await codexSessionManager.steer({ key, ...prompt });
+				if (steer && codexSessionManager.get(key)?.status === "working")
+					await codexSessionManager.steer({ key, ...prompt });
 				else await codexSessionManager.send({ key, ...prompt });
 			} else claudeSessionManager.send(key, prompt.text, false, prompt.images);
 		},

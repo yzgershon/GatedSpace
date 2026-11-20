@@ -295,7 +295,11 @@ export class ClaudeSessionTransport extends EventEmitter {
 	 * base64 image block in a stream-json user message is genuinely seen, not
 	 * just accepted (probe sent a solid red PNG and got "Red" back).
 	 */
-	sendUserMessage(text: string, images: UserImagePayload[] = []): void {
+	sendUserMessage(
+		text: string,
+		images: UserImagePayload[] = [],
+		dismissQuestions = false,
+	): void {
 		if (
 			this.disposed ||
 			this.child?.stdin.destroyed ||
@@ -320,6 +324,9 @@ export class ClaudeSessionTransport extends EventEmitter {
 			type: "user",
 			message: { role: "user", content },
 		});
+		// Put the new direction on stdin before releasing a blocked question.
+		// Ordinary tool permissions remain pending and are never auto-approved.
+		if (dismissQuestions) this.permissions.dismissQuestions();
 	}
 
 	/**
@@ -337,8 +344,12 @@ export class ClaudeSessionTransport extends EventEmitter {
 		});
 	}
 
-	answerPermission(id: string, allow: boolean) {
-		this.permissions.answer(id, allow);
+	answerPermission(
+		id: string,
+		allow: boolean,
+		answers?: Record<string, string>,
+	) {
+		this.permissions.answer(id, allow, answers);
 	}
 
 	getModels() {

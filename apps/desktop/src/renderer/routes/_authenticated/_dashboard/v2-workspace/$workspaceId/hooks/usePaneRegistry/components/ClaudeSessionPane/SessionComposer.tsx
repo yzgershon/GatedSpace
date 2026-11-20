@@ -114,7 +114,8 @@ interface SessionComposerProps {
 	slashCommands: string[];
 	mode: SessionMode;
 	effort: EffortLevel;
-	onSend: (text: string, images?: UserImagePayload[]) => void;
+	onSend: (text: string, images?: UserImagePayload[]) => void | Promise<void>;
+	hasPendingQuestion?: boolean;
 	onInterrupt: () => void;
 	onModeChange: (mode: SessionMode) => void;
 	onEffortChange: (effort: EffortLevel) => void;
@@ -176,6 +177,7 @@ export function SessionComposer({
 	mode,
 	effort,
 	onSend,
+	hasPendingQuestion = false,
 	onInterrupt,
 	onModeChange,
 	onEffortChange,
@@ -419,17 +421,21 @@ export function SessionComposer({
 		// An image on its own is a complete prompt ("look at this"), so having
 		// something attached is enough to send even with the box empty.
 		if (!value && images.length === 0) return;
-		if (draftKey && (isRunning || queue.state.entries.length)) {
-			setQueueSending(true);
-			try {
+		setQueueSending(true);
+		try {
+			if (
+				draftKey &&
+				!hasPendingQuestion &&
+				(isRunning || queue.state.entries.length)
+			) {
 				await queue.enqueue({ provider: "claude", text: value, images });
-			} catch (error) {
-				setImageError(error instanceof Error ? error.message : String(error));
-				return;
-			} finally {
-				setQueueSending(false);
-			}
-		} else onSend(value, images.length > 0 ? images : undefined);
+			} else await onSend(value, images.length > 0 ? images : undefined);
+		} catch (error) {
+			setImageError(error instanceof Error ? error.message : String(error));
+			return;
+		} finally {
+			setQueueSending(false);
+		}
 		setText((current) => (current === text ? "" : current));
 		setMentions([]);
 		setImages((current) => current.filter((image) => !images.includes(image)));
@@ -701,7 +707,11 @@ export function SessionComposer({
 									onClick={submit}
 									disabled={preparing > 0 || queueSending || editor.busy}
 									aria-label={
-										editor.id ? "Save queued message" : "Queue message"
+										editor.id
+											? "Save queued message"
+											: hasPendingQuestion
+												? "Send"
+												: "Queue message"
 									}
 									className="session-send"
 								>

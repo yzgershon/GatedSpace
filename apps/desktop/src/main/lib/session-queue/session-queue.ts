@@ -205,11 +205,13 @@ export class SessionQueue extends EventEmitter {
 	}
 	async steer(key: string, id: string) {
 		const state = this.events.get(key);
-		if (state?.status === "attention")
-			throw new Error("Answer the pending question first.");
 		if (this.busy.has(key))
 			throw new Error("A queued message is still being sent.");
-		await this.deliver(key, id, state?.status === "working");
+		await this.deliver(
+			key,
+			id,
+			state?.status === "working" || state?.status === "attention",
+		);
 	}
 	private async pump(key: string) {
 		if (!this.ready(key) || this.busy.has(key)) return;

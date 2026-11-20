@@ -155,9 +155,21 @@ export const createClaudeSessionRouter = () => {
 			),
 
 		answerPermission: publicProcedure
-			.input(z.object({ key: z.string(), id: z.string(), allow: z.boolean() }))
+			.input(
+				z.object({
+					key: z.string(),
+					id: z.string(),
+					allow: z.boolean(),
+					answers: z.record(z.string(), z.string()).optional(),
+				}),
+			)
 			.mutation(({ input }) => {
-				claudeSessionManager.answerPermission(input.key, input.id, input.allow);
+				claudeSessionManager.answerPermission(
+					input.key,
+					input.id,
+					input.allow,
+					input.answers,
+				);
 				return { ok: true };
 			}),
 

@@ -2,6 +2,7 @@ import type {
 	ClaudePermissionRequest,
 	LocalPermissionsEvent,
 } from "shared/claude-session/events";
+import { validateClaudeQuestionAnswers } from "shared/claude-session/questions";
 
 /** Stdio approvals stay bound to the original tool input and this process. */
 export class PermissionRequests {
@@ -51,21 +52,43 @@ export class PermissionRequests {
 		return true;
 	}
 
-	answer(id: string, allow: boolean) {
+	answer(id: string, allow: boolean, answers?: Record<string, string>) {
 		const request = this.pending.get(id);
 		if (!request) throw new Error("This permission request has expired.");
+		const isQuestion = request.tool === "AskUserQuestion";
+		if (!isQuestion && answers !== undefined)
+			throw new Error("This tool request does not accept question answers.");
+		// Keep the original questions/metadata. A plain Allow must never consume a
+		// question: Claude needs actual answers in updatedInput to continue.
+		const updatedInput =
+			allow && isQuestion
+				? {
+						...request.input,
+						answers: validateClaudeQuestionAnswers(request.input, answers),
+					}
+				: request.input;
 		this.write({
 			type: "control_response",
 			response: {
 				subtype: "success",
 				request_id: id,
 				response: allow
-					? { behavior: "allow", updatedInput: request.input }
-					: { behavior: "deny", message: "The user declined this request." },
+					? { behavior: "allow", updatedInput }
+					: {
+							behavior: "deny",
+							message: isQuestion
+								? "The user skipped these questions. Do not assume an answer."
+								: "The user declined this request.",
+						},
 			},
 		});
 		this.pending.delete(id);
 		this.emit();
+	}
+
+	dismissQuestions() {
+		for (const request of [...this.pending.values()])
+			if (request.tool === "AskUserQuestion") this.answer(request.id, false);
 	}
 
 	clear() {

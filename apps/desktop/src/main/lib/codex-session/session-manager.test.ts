@@ -449,6 +449,142 @@ describe("native Codex session lifecycle", () => {
 			manager.answer("fallback", replaced, true, { "0": "Wide" }),
 		).toThrow("no longer pending");
 	});
+	test("native questions can be dismissed without an answer or permission grant", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({ key: "dismiss", cwd: "/workspace" });
+		transport.emit("request", {
+			id: 71,
+			method: "item/tool/requestUserInput",
+			params: {
+				threadId: state.threadId,
+				questions: [{ id: "choice", question: "Which?", options: [] }],
+			},
+		});
+		transport.emit("request", {
+			id: 72,
+			method: "item/commandExecution/requestApproval",
+			params: { threadId: state.threadId },
+		});
+		await manager.answer("dismiss", "number:71", false, {
+			choice: "Do not send this draft",
+		});
+		expect(transport.replies).toEqual([{ id: 71, result: { answers: {} } }]);
+		expect(state.approvals.map((a) => a.id)).toEqual(["number:72"]);
+		expect(() => manager.answer("dismiss", "number:71", false)).toThrow(
+			"no longer pending",
+		);
+	});
+	test("async dismissal notifies the agent without fabricating an answer", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({
+			key: "dismiss-async",
+			cwd: "/workspace",
+		});
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "t", status: "inProgress" },
+			},
+		});
+		transport.askUser?.({
+			session: "codex:dismiss-async",
+			questions: [{ title: "Which color?", options: ["Blue"] }],
+		});
+		const id = state.approvals[0].id;
+		await manager.answer(state.key, id, false);
+		expect(state.approvals).toHaveLength(0);
+		const payload = JSON.stringify(
+			transport.calls.find((c) => c.method === "turn/steer")?.params.input,
+		);
+		expect(payload).toContain("dismissed");
+		expect(payload).toContain("not approval");
+		expect(payload).not.toContain("Answer: Blue");
+	});
+	test("main composer steers through a pending question; failures preserve it and permissions stay pending", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({ key: "compose", cwd: "/workspace" });
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "t", status: "inProgress" },
+			},
+		});
+		transport.emit("request", {
+			id: 71,
+			method: "item/tool/requestUserInput",
+			params: {
+				threadId: state.threadId,
+				questions: [{ id: "choice", question: "Which?" }],
+			},
+		});
+		transport.emit("request", {
+			id: 72,
+			method: "item/commandExecution/requestApproval",
+			params: { threadId: state.threadId },
+		});
+		const prompt = {
+			key: state.key,
+			text: "Work on the other file first",
+			model: "gpt-6-astra",
+			effort: "high",
+			permission: "default" as const,
+		};
+		transport.steerFailure = () => {
+			throw new Error("Connection interrupted");
+		};
+		await expect(manager.send(prompt)).rejects.toThrow(
+			"Connection interrupted",
+		);
+		expect(state.approvals).toHaveLength(2);
+		expect(transport.replies).toHaveLength(0);
+		transport.steerFailure = undefined;
+		await manager.send(prompt);
+		expect(state.approvals.map((a) => a.id)).toEqual(["number:72"]);
+		expect(transport.replies).toEqual([{ id: 71, result: { answers: {} } }]);
+		expect(state.items.filter((i) => i.text === prompt.text)).toHaveLength(1);
+	});
+	test("completed async questions survive a failed new prompt and clear on a successful send", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({
+			key: "idle-question",
+			cwd: "/workspace",
+		});
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "t", status: "inProgress" },
+			},
+		});
+		transport.askUser?.({
+			session: "codex:idle-question",
+			questions: [{ title: "Which color?" }],
+		});
+		const id = state.approvals[0].id;
+		transport.emit("notification", {
+			method: "turn/completed",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "t", status: "completed" },
+			},
+		});
+		const prompt = {
+			key: state.key,
+			text: "Use the existing colors",
+			model: "gpt-6-astra",
+			effort: "high",
+			permission: "default" as const,
+		};
+		transport.failSend = true;
+		await expect(manager.send(prompt)).rejects.toThrow("Model unavailable");
+		expect(state.approvals.map((a) => a.id)).toEqual([id]);
+		transport.failSend = false;
+		await manager.send(prompt);
+		expect(state.approvals).toHaveLength(0);
+		expect(transport.replies).toHaveLength(0);
+	});
 	test("async questions survive completion, validate answers and resolve exactly once", async () => {
 		const { manager, transport } = fixture();
 		const state = await manager.start({ key: "question", cwd: "/workspace" });

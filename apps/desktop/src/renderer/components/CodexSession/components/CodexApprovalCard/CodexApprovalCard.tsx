@@ -8,7 +8,10 @@ import {
 } from "lucide-react";
 import { useRef, useState } from "react";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
-import type { CodexApproval } from "shared/codex-session/types";
+import {
+	type CodexApproval,
+	isCodexUserQuestion,
+} from "shared/codex-session/types";
 import "./questions.css";
 
 export function CodexApprovalCard({
@@ -80,18 +83,20 @@ export function CodexApprovalCard({
 									? `${completed} of ${approval.questions.length} answered`
 									: "Choose a reply"}
 				</output>
-				{approval.sourceItemId && !sent && (
-					<button
-						type="button"
-						className="codex-question-dismiss"
-						aria-label="Dismiss quick replies"
-						title="Dismiss quick replies"
-						disabled={busy}
-						onClick={() => void answer(false)}
-					>
-						<X size={15} />
-					</button>
-				)}
+				{(isCodexUserQuestion(approval) || approval.questions.length > 0) &&
+					!sent && (
+						<button
+							type="button"
+							className="codex-question-dismiss"
+							aria-label="Dismiss question"
+							title="Dismiss without answering"
+							disabled={busy}
+							onClick={() => void answer(false)}
+						>
+							<X size={15} />
+							<span>Dismiss</span>
+						</button>
+					)}
 			</header>
 			{approval.detail && <p>{approval.detail}</p>}
 			{approval.questions.map((question, questionIndex) => (
@@ -181,7 +186,6 @@ export function CodexApprovalCard({
 								/>
 							) : (
 								<textarea
-									ref={(node) => node?.focus()}
 									aria-label={`Your answer: ${question.question}`}
 									placeholder="Write your answer"
 									value={drafts[question.id] ?? ""}

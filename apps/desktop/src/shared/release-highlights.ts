@@ -163,6 +163,27 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.64",
+		title: "Answer questions without interrupting your work",
+		changes: [
+			{
+				title: "Answer Claude's clarifying questions",
+				detail:
+					"Choose an option, select multiple answers, or type your own response. Send answer delivers your answers to Claude instead of treating the question as a tool permission.",
+			},
+			{
+				title: "Dismiss a question or send a new direction",
+				detail:
+					"Claude and Codex questions have a Dismiss question action. You can also send a new direction from the main composer while a question is waiting. Dismissing never grants tool permission.",
+			},
+			{
+				title: "Keep working across panes",
+				detail:
+					"Questions no longer pull focus away while you type or paste in another pane. Queued messages can be sent during a pending question, and failed Claude sends preserve your draft and attachments.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

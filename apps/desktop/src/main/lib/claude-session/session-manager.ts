@@ -447,7 +447,7 @@ class ClaudeSessionManager extends EventEmitter {
 
 		const usable = z.array(chatImageSchema).max(MAX_CHAT_IMAGES).parse(images);
 
-		transport.sendUserMessage(text, usable);
+		transport.sendUserMessage(text, usable, !silent);
 		if (!silent) {
 			sessionNames.firstPrompt({ provider: "claude", key }, text);
 			const event: ClaudeStreamEvent = {
@@ -518,10 +518,15 @@ class ClaudeSessionManager extends EventEmitter {
 		this.sessions.get(key)?.interrupt();
 	}
 
-	answerPermission(key: string, id: string, allow: boolean): void {
+	answerPermission(
+		key: string,
+		id: string,
+		allow: boolean,
+		answers?: Record<string, string>,
+	): void {
 		const session = this.sessions.get(key);
 		if (!session) throw new Error("This session is no longer running.");
-		session.answerPermission(id, allow);
+		session.answerPermission(id, allow, answers);
 	}
 
 	/** Terminate and forget the session for `key`, transcript included. */

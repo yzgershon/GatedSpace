@@ -61,6 +61,19 @@ function setup(
 	return { events, queue, sent, notices, storage, saved: () => saved };
 }
 describe("session outbox", () => {
+	test("explicit Send now works during a question, while automatic delivery stays paused", async () => {
+		const calls: boolean[] = [];
+		const { queue, events } = setup({}, async (_key, _prompt, steer) => {
+			calls.push(steer);
+		});
+		events.status("pane", "attention");
+		const id = queue.enqueue("pane", prompt("New direction"));
+		await tick();
+		expect(calls).toEqual([]);
+		await queue.steer("pane", id);
+		expect(calls).toEqual([true]);
+		expect(queue.get("pane").entries).toHaveLength(0);
+	});
 	for (const provider of ["claude", "codex"] as const) {
 		test(`${provider}: queue before first init binds and dispatches all follow-ups once`, async () => {
 			const events = new SessionEvents();

@@ -33,10 +33,11 @@ import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { codexTaskChanges } from "shared/codex-session/changes";
 import { defaultCodexEffort } from "shared/codex-session/controls";
 import { defaultCodexPermission } from "shared/codex-session/permissions";
-import type {
-	CodexModel,
-	CodexPermission,
-	CodexSessionState,
+import {
+	type CodexModel,
+	type CodexPermission,
+	type CodexSessionState,
+	isCodexUserQuestion,
 } from "shared/codex-session/types";
 import { IMAGE_LIMIT_MESSAGE, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { ComputerControl } from "../ComputerControl/ComputerControl";
@@ -116,6 +117,7 @@ export function CodexComposer({
 	const selected = models.find((m) => m.id === model);
 	const effort = chosenEffort || state?.effort || defaultCodexEffort(selected);
 	const working = state?.status === "working";
+	const answeringQuestion = state?.approvals.some(isCodexUserQuestion) ?? false;
 	const queue = useMessageQueue(paneId);
 	const editor = useQueuedMessageEdit({
 		key: paneId,
@@ -373,7 +375,8 @@ export function CodexComposer({
 			// Save resolved defaults too, so a later provider default cannot change
 			// the choices this conversation actually used.
 			updateCodexDraft(paneId, { model, effort, fast });
-			if (working || queue.state.entries.length) await queue.enqueue(prompt);
+			if (!answeringQuestion && (working || queue.state.entries.length))
+				await queue.enqueue(prompt);
 			else
 				await electronTrpcClient.codexSession.send.mutate({
 					key: paneId,
@@ -389,7 +392,6 @@ export function CodexComposer({
 			onError(e instanceof Error ? e.message : String(e));
 		} finally {
 			setSending(false);
-			textarea.current?.focus();
 		}
 	};
 	return (
@@ -625,16 +627,30 @@ export function CodexComposer({
 						<button
 							type="button"
 							className="session-send"
-							aria-label={editor.id ? "Save queued message" : "Queue message"}
+							aria-label={
+								editor.id
+									? "Save queued message"
+									: answeringQuestion
+										? "Send message"
+										: "Queue message"
+							}
 							title={
 								editor.id
 									? "Save queued message"
-									: "Send after the current turn"
+									: answeringQuestion
+										? "Send a message instead of answering the question"
+										: "Send after the current turn"
 							}
 							disabled={preparing > 0 || sending || editor.busy}
 							onClick={() => void send()}
 						>
-							{editor.id ? <Check size={17} /> : <ListPlus size={17} />}
+							{editor.id ? (
+								<Check size={17} />
+							) : answeringQuestion ? (
+								<ArrowUp size={17} />
+							) : (
+								<ListPlus size={17} />
+							)}
 						</button>
 					)}
 					<button

@@ -12,6 +12,7 @@
 }
 .codex-approval > header {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	gap: 9px;
 	font-size: 12px;
@@ -33,6 +34,10 @@
 	color: var(--muted-foreground);
 }
 .codex-question-dismiss {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	flex-shrink: 0;
 	padding: 6px;
 	color: var(--muted-foreground);
 	border-radius: 6px;

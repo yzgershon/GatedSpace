@@ -17,6 +17,7 @@ import {
 	type CodexPermission,
 	type CodexSessionState,
 	finiteNumber,
+	isCodexUserQuestion,
 	list,
 	normalizeCodexItem,
 	record,
@@ -742,6 +743,11 @@ export class CodexSessionManager extends EventEmitter {
 		z.array(chatImageUrlSchema)
 			.max(MAX_CHAT_IMAGES)
 			.parse(input.images ?? []);
+		const questions = state.approvals
+			.filter(isCodexUserQuestion)
+			.map((a) => a.id);
+		if (state.status === "working" && questions.length)
+			return this.steer(input);
 		if (state.status !== "idle")
 			throw new Error(
 				"Wait for this turn to finish or stop it before sending another message.",
@@ -755,7 +761,6 @@ export class CodexSessionManager extends EventEmitter {
 		state.diff = "";
 		// The app-server can acknowledge a turn long before echoing its user item.
 		// Keep the submitted prompt in the main-process snapshot across tab switches.
-		this.clearRecoveredQuestions(state);
 		const optimistic: CodexItem = {
 			id: `local-user-${randomUUID()}`,
 			turnId: "",
@@ -814,6 +819,7 @@ export class CodexSessionManager extends EventEmitter {
 			});
 			this.turnStarts.set(input.key, started);
 			const result = record(await started);
+			this.dismissQuestions(state, questions);
 			this.names.firstPrompt({ provider: "codex", key: input.key }, input.text);
 			const startedId = text(record(result.turn).id);
 			if (state.status === "working") {
@@ -854,6 +860,9 @@ export class CodexSessionManager extends EventEmitter {
 				"This turn has finished. Resume the queue to send a new turn.",
 			);
 		const turnId = state.turnId;
+		const questions = state.approvals
+			.filter(isCodexUserQuestion)
+			.map((a) => a.id);
 		const optimistic: CodexItem = {
 			id: `local-user-${randomUUID()}`,
 			turnId,
@@ -874,6 +883,9 @@ export class CodexSessionManager extends EventEmitter {
 					...(input.images ?? []).map((url) => ({ type: "image", url })),
 				],
 			});
+			// Only clear questions after the user's message was accepted. Never
+			// decide a permission request or discard a question on a failed send.
+			this.dismissQuestions(state, questions);
 		} catch (error) {
 			state.items = state.items.filter((item) => item.id !== optimistic.id);
 			this.publish(state);
@@ -1420,6 +1432,19 @@ export class CodexSessionManager extends EventEmitter {
 			this.publish(state);
 		}
 	}
+	private dismissQuestions(state: CodexSessionState, ids: string[]) {
+		for (const id of ids) {
+			if (this.answering.has(id)) continue;
+			const approval = state.approvals.find((a) => a.id === id);
+			const pending = this.requests.get(id);
+			if (!approval || !pending || !isCodexUserQuestion(approval)) continue;
+			if (pending.method !== "gatedspace/requestUserInput")
+				this.connection(state.threadId).respond(pending.id, { answers: {} });
+			this.requests.delete(id);
+			state.approvals = state.approvals.filter((a) => a.id !== id);
+		}
+		this.publish(state);
+	}
 	answer(
 		key: string,
 		id: string,
@@ -1470,10 +1495,18 @@ export class CodexSessionManager extends EventEmitter {
 			this.publish(state);
 			return;
 		}
-		if (approval?.sourceItemId && !allow) {
-			this.requests.delete(id);
-			state.approvals = state.approvals.filter((a) => a.id !== id);
-			this.publish(state);
+		if (pending.method.endsWith("requestUserInput") && !allow) {
+			if (
+				pending.method === "gatedspace/requestUserInput" &&
+				!approval?.sourceItemId
+			)
+				return this.deliverQuestionAnswer(
+					state,
+					id,
+					{},
+					`The user dismissed these questions without answering. This is not approval; do not assume an answer.\n${approval?.questions.map((q) => q.question).join("\n") ?? ""}`,
+				);
+			this.dismissQuestions(state, [id]);
 			return;
 		}
 		if (

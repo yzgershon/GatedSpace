@@ -49,6 +49,11 @@ export interface CodexApproval {
 	/** Plain-text choice recovery. Can be dismissed without deciding anything. */
 	sourceItemId?: string;
 }
+
+/** Clarifying questions are distinct from command and MCP permissions. */
+export function isCodexUserQuestion(approval: CodexApproval): boolean {
+	return approval.method.endsWith("requestUserInput");
+}
 export interface CodexModel {
 	id: string;
 	name: string;

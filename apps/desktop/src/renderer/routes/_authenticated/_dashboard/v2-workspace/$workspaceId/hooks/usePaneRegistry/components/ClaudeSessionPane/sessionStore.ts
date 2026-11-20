@@ -442,14 +442,16 @@ export function sendSessionMessage(
 	key: string,
 	text: string,
 	images?: UserImagePayload[],
-): void {
+): Promise<void> {
 	// Main echoes the prompt back as a `local_user_message` event, which is what
 	// puts it on the timeline — no optimistic local copy to reconcile.
-	void electronTrpcClient.claudeSession.send.mutate({
-		key,
-		text,
-		...(images?.length ? { images } : {}),
-	});
+	return electronTrpcClient.claudeSession.send
+		.mutate({
+			key,
+			text,
+			...(images?.length ? { images } : {}),
+		})
+		.then(() => {});
 }
 
 export function interruptSession(key: string): void {
