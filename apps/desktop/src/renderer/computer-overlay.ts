@@ -30,7 +30,7 @@ function render(state: ComputerUseState) {
 	if (status)
 		status.textContent =
 			state.phase === "connecting"
-				? "Connecting to Windows…"
+				? (state.setupMessage ?? "Connecting to Windows…")
 				: state.phase === "stopping"
 					? "Stopping computer control…"
 					: state.activity

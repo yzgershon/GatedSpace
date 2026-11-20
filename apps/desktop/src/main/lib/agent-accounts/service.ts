@@ -1,4 +1,3 @@
-import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -8,9 +7,9 @@ import {
 	getClaudeProfile,
 	renameClaudeProfile,
 } from "../claude-profile";
-import { resolveNativeClaude } from "../claude-session/resolve-native";
 import { CodexTransport } from "../codex-session/transport";
 import { ensureSecureDir, secureExistingFile } from "../secure-file";
+import { ClaudeBrowserLogin } from "./claude-login";
 import { accountNickname, codexProfiles } from "./codex-profiles";
 
 export type AccountProvider = "claude" | "codex";
@@ -20,6 +19,9 @@ export interface AccountLogin {
 	accountId: string;
 	status: "starting" | "waiting" | "connected" | "error" | "cancelled";
 	error?: string;
+	authUrl?: string;
+	acceptsCode?: boolean;
+	browserError?: string;
 }
 
 /** Credentials stay in main. Each browser login writes only its own profile. */
@@ -27,6 +29,7 @@ export class AgentAccounts {
 	private job?: AccountLogin;
 	private cancelLogin?: () => void;
 	private expiry?: ReturnType<typeof setTimeout>;
+	private claudeLogin?: ClaudeBrowserLogin;
 	constructor(
 		private readonly openBrowser: (url: string) => Promise<unknown>,
 		private readonly profiles = codexProfiles,
@@ -43,6 +46,23 @@ export class AgentAccounts {
 	status(id: string) {
 		if (this.job?.id !== id) throw new Error("Sign-in has expired. Try again.");
 		return { ...this.job };
+	}
+	async reopenBrowser(id: string) {
+		const job = this.job;
+		if (!job || job.id !== id || job.status !== "waiting" || !job.authUrl)
+			throw new Error("Start a new sign-in to open its browser page.");
+		await this.openBrowser(job.authUrl);
+		delete job.browserError;
+	}
+	submitCode(id: string, code: string) {
+		if (
+			this.job?.id !== id ||
+			this.job.provider !== "claude" ||
+			this.job.status !== "waiting" ||
+			!this.claudeLogin
+		)
+			throw new Error("This sign-in has ended. Start a new sign-in.");
+		this.claudeLogin.submitCode(code);
 	}
 	async begin(provider: AccountProvider, nickname: string, accountId?: string) {
 		if (this.job && ["starting", "waiting"].includes(this.job.status))
@@ -118,9 +138,13 @@ export class AgentAccounts {
 			return;
 		job.status = status;
 		job.error = error;
+		delete job.authUrl;
+		delete job.acceptsCode;
+		delete job.browserError;
 		clearTimeout(this.expiry);
 		this.cancelLogin?.();
 		this.cancelLogin = undefined;
+		this.claudeLogin = undefined;
 	}
 	private async loginCodex(job: AccountLogin, home: string) {
 		const transport = this.loginTransport(home);
@@ -171,55 +195,33 @@ export class AgentAccounts {
 		const url = new URL(text(result.authUrl));
 		if (
 			url.protocol !== "https:" ||
+			url.username ||
+			url.password ||
+			url.port ||
 			!["auth.openai.com", "auth0.openai.com", "chatgpt.com"].includes(
 				url.hostname,
 			)
 		)
 			throw new Error("Unexpected sign-in URL");
 		job.status = "waiting";
-		await this.openBrowser(url.href);
+		job.authUrl = url.href;
+		try {
+			await this.openBrowser(url.href);
+		} catch {
+			job.browserError =
+				"The browser did not open. Use Open sign-in page to try again.";
+		}
 	}
 	private async loginClaude(job: AccountLogin, home: string) {
-		const executable = resolveNativeClaude();
-		const env: NodeJS.ProcessEnv = {
-			...process.env,
-			...executable.env,
-			CLAUDE_CONFIG_DIR: home,
-		};
-		delete env.ANTHROPIC_API_KEY;
-		delete env.CLAUDE_CODE_OAUTH_TOKEN;
-		const launch = (args: string[]) =>
-			spawn(executable.command, [...executable.args, "auth", ...args], {
-				env,
-				stdio: "pipe",
-				windowsHide: true,
-				shell: false,
-			});
-		let child: ChildProcessWithoutNullStreams = launch(["login", "--claudeai"]);
-		this.cancelLogin = () => child.kill();
-		child.stdout.resume();
-		child.stderr.resume();
+		const login = new ClaudeBrowserLogin(home, (progress) => {
+			if (this.job === job && job.status === "waiting")
+				Object.assign(job, progress);
+		});
+		this.claudeLogin = login;
+		this.cancelLogin = () => login.cancel();
 		job.status = "waiting";
-		await new Promise<void>((resolve, reject) => {
-			child.once("error", reject);
-			child.once("exit", (code) =>
-				code === 0 ? resolve() : reject(new Error("Login failed")),
-			);
-		});
+		await login.run();
 		if (this.job !== job || job.status !== "waiting") return;
-		child = launch(["status", "--json"]);
-		let output = "";
-		child.stdout.on("data", (chunk) => {
-			if (output.length < 64_000) output += chunk.toString();
-		});
-		child.stderr.resume();
-		await new Promise<void>((resolve, reject) => {
-			child.once("error", reject);
-			child.once("exit", (code) =>
-				code === 0 ? resolve() : reject(new Error("Not signed in")),
-			);
-		});
-		if (!record(JSON.parse(output)).loggedIn) throw new Error("Not signed in");
 		secureExistingFile(join(home, ".credentials.json"));
 		this.finish(job, "connected");
 	}

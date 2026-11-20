@@ -11,6 +11,7 @@ import {
 import { useEffect, useRef } from "react";
 import { DndProvider } from "react-dnd";
 import { HiOutlineWifi } from "react-icons/hi2";
+import { FirstRunSetup } from "renderer/components/FirstRunSetup/FirstRunSetup";
 import { NewWorkspaceModal } from "renderer/components/NewWorkspaceModal";
 import { Paywall } from "renderer/components/Paywall";
 import { WhatsNew } from "renderer/components/WhatsNew";
@@ -234,7 +235,9 @@ function AuthenticatedLayout() {
 								<DockBadgeController />
 								<DaemonAutoUpdateFailureDialog />
 								<Outlet />
-								<WhatsNew />
+								<FirstRunSetup>
+									<WhatsNew />
+								</FirstRunSetup>
 								<V1ImportModal />
 								<WorkspaceInitEffects />
 								{isV2CloudEnabled ? (

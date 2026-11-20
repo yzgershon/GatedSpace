@@ -10,7 +10,13 @@ import {
 
 export type EnsureMainWorkspaceContext = Pick<
 	HostServiceContext,
-	"api" | "db" | "git" | "organizationId" | "clientMachineId" | "eventBus"
+	| "api"
+	| "db"
+	| "git"
+	| "organizationId"
+	| "clientMachineId"
+	| "eventBus"
+	| "localOnly"
 >;
 
 async function getCurrentBranchName(
@@ -77,6 +83,7 @@ export async function ensureMainWorkspaceStrict(
 
 	const store = { db: ctx.db, eventBus: ctx.eventBus };
 	const syncCtx = {
+		localOnly: ctx.localOnly,
 		api: ctx.api,
 		db: ctx.db,
 		eventBus: ctx.eventBus,
@@ -101,8 +108,9 @@ export async function ensureMainWorkspaceStrict(
 				worktreePath: repoPath,
 				...(existing.name === existing.branch ? { name: branch } : {}),
 			});
-			if (updated) void pushWorkspaceCreateToCloud(syncCtx, updated);
-		} else if (existing.cloudSyncedAt === null) {
+			if (updated && !ctx.localOnly)
+				void pushWorkspaceCreateToCloud(syncCtx, updated);
+		} else if (!ctx.localOnly && existing.cloudSyncedAt === null) {
 			void pushWorkspaceCreateToCloud(syncCtx, existing);
 		}
 		return { id: existing.id };
@@ -136,6 +144,8 @@ export async function ensureMainWorkspaceStrict(
 	// Cloud may already hold a main for this (project, host) under another
 	// id (created by an older build); the push re-keys the local row onto
 	// the surviving cloud id in that case.
-	const cloudRow = await pushWorkspaceCreateToCloud(syncCtx, inserted);
+	const cloudRow = ctx.localOnly
+		? null
+		: await pushWorkspaceCreateToCloud(syncCtx, inserted);
 	return { id: cloudRow?.id ?? inserted.id };
 }

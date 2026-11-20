@@ -174,6 +174,35 @@ try {
 	console.log(
 		"PASS clean profile reaches setup with no GatedSpace/cloud sign-in",
 	);
+	// Exercise the fresh public onboarding overlay before checking the rest of
+	// the app. No provider sign-in or inference is performed by this smoke test.
+	const waitForSetup = async (label: string) => {
+		for (let attempt = 0; attempt < 60; attempt++) {
+			if (
+				await evaluate(
+					`document.querySelector('[role="dialog"]')?.textContent.includes(${JSON.stringify(label)})`,
+				)
+			)
+				return;
+			await Bun.sleep(500);
+		}
+		throw new Error(`First-run setup did not show ${label}`);
+	};
+	const clickButton = async (label: string) => {
+		const clicked = await evaluate(`(() => {
+			const button = [...document.querySelectorAll('button')].find(button => button.textContent.trim() === ${JSON.stringify(label)});
+			if (!button || button.disabled) return false;
+			button.click(); return true;
+		})()`);
+		if (!clicked) throw new Error(`Setup button unavailable: ${label}`);
+	};
+	await waitForSetup("Make yourself at home");
+	await clickButton("Use this PC without an account");
+	await waitForSetup("Connect your first agent");
+	await clickButton("Finish setup later · your progress is saved");
+	console.log(
+		"PASS first-run tour reaches agent setup without a cloud account",
+	);
 	const manifestFile = join(
 		home,
 		"host/00000000-0000-4000-8000-000000000002/manifest.json",
@@ -211,6 +240,63 @@ try {
 	console.log(
 		"PASS packaged backend opens a plain folder and creates its workspace",
 	);
+	const imported = result.result.data.json;
+	const reopen = await fetch(`${manifest.endpoint}/trpc/project.setup`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${manifest.authToken}`,
+		},
+		body: JSON.stringify({
+			json: {
+				projectId: imported.projectId,
+				mode: { kind: "import", repoPath: plain },
+			},
+		}),
+	});
+	const reopened = await reopen.json();
+	if (
+		!reopen.ok ||
+		reopened.result?.data?.json?.mainWorkspaceId !== imported.mainWorkspaceId
+	)
+		throw new Error(`Local folder reopen failed: ${JSON.stringify(reopened)}`);
+	console.log("PASS reopening a local folder keeps its existing workspace");
+	const remoteAdded = spawnSync(
+		git,
+		[
+			"-C",
+			plain,
+			"remote",
+			"add",
+			"origin",
+			"https://github.com/example/local-project.git",
+		],
+		{ env, encoding: "utf8", windowsHide: true },
+	);
+	if (remoteAdded.status !== 0)
+		throw new Error("Could not prepare remote discovery check");
+	const discoveryInput = encodeURIComponent(
+		JSON.stringify({
+			json: { repoPath: plain, walkAllRemotes: true },
+		}),
+	);
+	const discovery = await fetch(
+		`${manifest.endpoint}/trpc/project.findByPath?input=${discoveryInput}`,
+		{ headers: { Authorization: `Bearer ${manifest.authToken}` } },
+	);
+	const discovered = await discovery.json();
+	const candidates = discovered.result?.data?.json?.candidates;
+	if (
+		!discovery.ok ||
+		candidates?.length !== 1 ||
+		candidates[0].id !== imported.projectId
+	)
+		throw new Error(
+			`Local remote discovery failed: ${JSON.stringify(discovered)}`,
+		);
+	console.log(
+		"PASS GitHub remote discovery stays local and reuses the project",
+	);
 	await evaluate(
 		"localStorage.setItem('gatedspace:auth-mode','cloud'); location.hash='/workspaces'; true",
 	);
@@ -244,6 +330,23 @@ try {
 	};
 	const selectedLayout = (label: string) =>
 		`document.querySelector('button[aria-label="${label}"][aria-pressed="true"]') !== null`;
+	await navigate("/settings/account");
+	await waitFor(
+		`document.body.innerText.includes('GatedSpace account') && document.body.innerText.includes('Agent accounts') && document.body.innerText.includes('Claude Code on this PC') && document.body.innerText.includes('Codex on this PC')`,
+		"Public Account settings must offer real GatedSpace and agent connections",
+	);
+	if (
+		await evaluate(
+			`document.body.innerText.includes('local@gatedspace.local') || !!document.querySelector('[aria-label="Change avatar"]') || [...document.querySelectorAll('input')].some(input => input.value === 'local@gatedspace.local')`,
+		)
+	) {
+		throw new Error(
+			"Public Account settings exposed the internal local profile",
+		);
+	}
+	console.log(
+		"PASS public Account settings excludes the placeholder cloud profile",
+	);
 	await navigate("/settings/appearance");
 	await waitFor(
 		selectedLayout("Liquid Glass"),
@@ -288,6 +391,8 @@ try {
 				checks: [
 					"private-git",
 					"clean-profile",
+					"guided-first-run-without-cloud-account",
+					"public-account-and-agent-settings",
 					"local-backend",
 					"plain-folder",
 					"legacy-cloud-preference",

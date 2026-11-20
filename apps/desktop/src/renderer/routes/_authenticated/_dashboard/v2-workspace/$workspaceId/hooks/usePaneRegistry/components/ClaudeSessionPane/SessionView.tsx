@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
+import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
 import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
 import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import { claudeTaskChanges } from "shared/claude-session/changes";
@@ -55,28 +56,60 @@ interface SessionViewProps {
 /** Within this many px of the bottom still counts as following along. */
 const STICK_THRESHOLD = 80;
 
-function useStickToBottom(timeline: SessionTimeline, restoring: boolean) {
-	const ref = useRef<HTMLDivElement>(null);
+function useStickToBottom(
+	timeline: SessionTimeline,
+	restoring: boolean,
+	sessionKey?: string,
+) {
+	const ref = useRef<HTMLElement>(null);
 	const stickRef = useRef(true);
+	const followedTop = useRef<number | null>(null);
+
+	useLayoutEffect(() => {
+		void sessionKey;
+		stickRef.current = true;
+		followedTop.current = null;
+	}, [sessionKey]);
 
 	// Pane focus also re-renders this view. Only new conversation content should
 	// move it: scrolling between pointer-down and click can move a tool approval.
-	useEffect(() => {
+	useLayoutEffect(() => {
 		void timeline;
 		void restoring;
+		void sessionKey;
 		const el = ref.current;
 		if (!el || !stickRef.current) return;
 		el.scrollTop = el.scrollHeight;
-	}, [timeline, restoring]);
+		followedTop.current = el.scrollTop;
+	}, [timeline, restoring, sessionKey]);
+
+	useLayoutEffect(() => {
+		const scroll = ref.current;
+		const content = scroll?.firstElementChild;
+		if (!scroll || !content) return;
+		const observer = new ResizeObserver(() => {
+			if (stickRef.current) {
+				scroll.scrollTop = scroll.scrollHeight;
+				followedTop.current = scroll.scrollTop;
+			}
+		});
+		observer.observe(content);
+		observer.observe(scroll);
+		return () => observer.disconnect();
+	}, []);
 
 	const onScroll = () => {
 		const el = ref.current;
 		if (!el) return;
+		// A scroll event from our last follow can arrive after the next resize.
+		// Its old offset is no longer at the bottom, but it isn't a user scroll.
+		if (stickRef.current && followedTop.current === el.scrollTop) return;
+		followedTop.current = null;
 		const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
 		stickRef.current = distance <= STICK_THRESHOLD;
 	};
 
-	return { ref, onScroll };
+	return { ref, onScroll, stickRef };
 }
 
 export function SessionView({
@@ -111,98 +144,115 @@ export function SessionView({
 		timeline.items.length === 0 &&
 		!timeline.permissions?.length &&
 		timeline.status !== "streaming";
-	const { ref: scrollRef, onScroll } = useStickToBottom(timeline, restoring);
+	const {
+		ref: scrollRef,
+		onScroll,
+		stickRef,
+	} = useStickToBottom(timeline, restoring, draftKey);
 
 	return (
 		// The dock reserves the real composer height, including long prompts.
 		<div className="relative flex h-full min-h-0 w-full flex-col bg-background">
 			{draftKey && <SessionAccountChip paneId={draftKey} compact />}
-			<div
+			<section
 				ref={scrollRef}
 				onScroll={onScroll}
+				aria-label="Claude transcript"
 				className="min-h-0 flex-1 overflow-y-auto"
-				style={{ scrollBehavior: "auto" }}
+				style={{ scrollBehavior: "auto", overflowAnchor: "none" }}
 			>
-				{isEmpty ? (
-					<div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-6 py-6 text-center">
-						{claudeIcon && (
-							<img
-								src={claudeIcon}
-								alt="Claude"
-								className="size-10 opacity-90"
-							/>
-						)}
-						<p className="text-sm text-muted-foreground">
-							Start a Claude Code session
-						</p>
-						<p className="text-xs text-muted-foreground/60">
-							Ask to make changes, @mention files, or run /commands.
-						</p>
-						<div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-							{[
-								"Explain this codebase",
-								"What changed on this branch?",
-								"Run /review on my current changes",
-							].map((prompt) => (
-								<button
-									key={prompt}
-									type="button"
-									onClick={() => onSend(prompt)}
-									className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-								>
-									{prompt}
-								</button>
-							))}
+				<div className={isEmpty ? "h-full" : undefined}>
+					{isEmpty ? (
+						<div className="flex h-full min-h-48 flex-col items-center justify-center gap-2 px-6 py-6 text-center">
+							{claudeIcon && (
+								<img
+									src={claudeIcon}
+									alt="Claude"
+									className="size-10 opacity-90"
+								/>
+							)}
+							<p className="text-sm text-muted-foreground">
+								Start a Claude Code session
+							</p>
+							<p className="text-xs text-muted-foreground/60">
+								Ask to make changes, @mention files, or run /commands.
+							</p>
+							<div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
+								{[
+									"Explain this codebase",
+									"What changed on this branch?",
+									"Run /review on my current changes",
+								].map((prompt) => (
+									<button
+										key={prompt}
+										type="button"
+										onClick={() => onSend(prompt)}
+										className="rounded-full border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+									>
+										{prompt}
+									</button>
+								))}
+							</div>
 						</div>
-					</div>
-				) : restoring && timeline.items.length === 0 ? (
-					// Nothing painted yet, but there IS something coming. Once the first
-					// rows land this falls through to the real timeline, so the skeleton
-					// is never shown over partial content.
-					<SessionTranscriptSkeleton />
-				) : (
-					<SessionTimelineView timeline={timeline} onInterrupt={onInterrupt} />
-				)}
-				{draftKey && (
-					<SessionPermissionRequests
-						sessionKey={draftKey}
-						requests={timeline.permissions ?? []}
-					/>
-				)}
-				{timeline.status === "error" && onRestart ? (
-					// A dead session isn't a dead pane: the conversation is still on disk,
-					// so offer the way back rather than making the user close the tab.
-					// It sits at the END of the conversation, where the session stopped,
-					// instead of in chrome that would compete with the composer.
-					//
-					// TWO WAYS BACK, because stopping has two reasons. Usually the
-					// session died and you want it again; often — the whole reason
-					// `/swap` exists — you stopped it BECAUSE the account ran low, and
-					// what you want is the same conversation on a different one. That
-					// second case used to mean closing the tab and finding the session
-					// again in the recent list, so it is offered here rather than left
-					// as a slash command you have to know about.
-					<div className="flex flex-wrap items-center gap-2 px-4 pb-2">
-						<button
-							type="button"
-							onClick={onRestart}
-							className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors duration-100 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-						>
-							Restart session
-						</button>
-						{onSwapAccount ? (
-							<ResumeWithAccount
-								pinnedAccountId={pinnedAccountId}
-								runningConfigDir={accountConfigDir}
-								onPick={onSwapAccount}
-							/>
-						) : null}
-						<span className="text-xs text-muted-foreground/70">
-							Picks the conversation back up where it stopped.
-						</span>
-					</div>
-				) : null}
-			</div>
+					) : restoring && timeline.items.length === 0 ? (
+						// Nothing painted yet, but there IS something coming. Once the first
+						// rows land this falls through to the real timeline, so the skeleton
+						// is never shown over partial content.
+						<SessionTranscriptSkeleton />
+					) : (
+						<SessionTimelineView
+							timeline={timeline}
+							onInterrupt={onInterrupt}
+							sessionKey={draftKey}
+							scrollRef={scrollRef}
+							followingRef={stickRef}
+							onBeforeRevealHistory={() => {
+								stickRef.current = false;
+							}}
+						/>
+					)}
+					{draftKey && (
+						<SessionPermissionRequests
+							sessionKey={draftKey}
+							requests={timeline.permissions ?? []}
+						/>
+					)}
+					{timeline.status === "error" && onRestart ? (
+						// A dead session isn't a dead pane: the conversation is still on disk,
+						// so offer the way back rather than making the user close the tab.
+						// It sits at the END of the conversation, where the session stopped,
+						// instead of in chrome that would compete with the composer.
+						//
+						// TWO WAYS BACK, because stopping has two reasons. Usually the
+						// session died and you want it again; often — the whole reason
+						// `/swap` exists — you stopped it BECAUSE the account ran low, and
+						// what you want is the same conversation on a different one. That
+						// second case used to mean closing the tab and finding the session
+						// again in the recent list, so it is offered here rather than left
+						// as a slash command you have to know about.
+						<div className="flex flex-wrap items-center gap-2 px-4 pb-2">
+							<AgentSetup agent="claude" compact onReady={onRestart} />
+							<button
+								type="button"
+								onClick={onRestart}
+								className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors duration-100 hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+							>
+								Restart session
+							</button>
+							{onSwapAccount ? (
+								<ResumeWithAccount
+									pinnedAccountId={pinnedAccountId}
+									runningConfigDir={accountConfigDir}
+									onPick={onSwapAccount}
+								/>
+							) : null}
+							<span className="text-xs text-muted-foreground/70">
+								Picks the conversation back up where it stopped.
+							</span>
+						</div>
+					) : null}
+				</div>
+			</section>
 			<SessionComposer
 				changes={changes}
 				model={timeline.header?.model}

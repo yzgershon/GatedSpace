@@ -93,7 +93,12 @@ function AgentButton({
 	onClick: () => void;
 }) {
 	return (
-		<button type="button" onClick={onClick} className={AGENT_BUTTON_CLASS}>
+		<button
+			data-first-run-agent={preset.name.toLowerCase()}
+			type="button"
+			onClick={onClick}
+			className={AGENT_BUTTON_CLASS}
+		>
 			<AgentFace preset={preset} />
 		</button>
 	);
@@ -117,14 +122,18 @@ function AgentChoiceButton({
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<button type="button" className={AGENT_BUTTON_CLASS}>
+				<button
+					data-first-run-agent={preset.name.toLowerCase()}
+					type="button"
+					className={AGENT_BUTTON_CLASS}
+				>
 					<AgentFace preset={preset} />
 					{/* Says the tile asks a question, before you find out by clicking. */}
 					<LuChevronDown className="size-3.5 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-muted-foreground" />
 				</button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent align="start" className="w-56">
-				<DropdownMenuItem onSelect={() => onChoose("pane")}>
+				<DropdownMenuItem data-first-run-pane onSelect={() => onChoose("pane")}>
 					<LuLayoutPanelTop className="size-4 shrink-0 opacity-70" />
 					<span className="flex-1">Session pane</span>
 				</DropdownMenuItem>

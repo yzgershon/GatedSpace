@@ -128,6 +128,7 @@ export function WorkspaceEmptyState({
 								if (!onLaunchAgentAs || !canOpenAsPane?.(preset)) {
 									return (
 										<button
+											data-first-run-agent={preset.name.toLowerCase()}
 											className={className}
 											key={preset.id}
 											onClick={() => onLaunchAgent(preset)}
@@ -141,12 +142,17 @@ export function WorkspaceEmptyState({
 								return (
 									<DropdownMenu key={preset.id}>
 										<DropdownMenuTrigger asChild>
-											<button className={className} type="button">
+											<button
+												data-first-run-agent={preset.name.toLowerCase()}
+												className={className}
+												type="button"
+											>
 												{face}
 											</button>
 										</DropdownMenuTrigger>
 										<DropdownMenuContent align="start" className="w-56">
 											<DropdownMenuItem
+												data-first-run-pane
 												onSelect={() => onLaunchAgentAs(preset, "pane")}
 											>
 												<LuLayoutPanelTop className="size-4 shrink-0 opacity-70" />

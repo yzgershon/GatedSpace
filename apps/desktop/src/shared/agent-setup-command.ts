@@ -10,6 +10,7 @@ export function agentSetupCommand(agent: SetupAgent, install: boolean): string {
 	const script = `
 $ErrorActionPreference = 'Stop'
 try {
+ ${agent === "codex" && install ? "$env:CODEX_NON_INTERACTIVE = '1'" : ""}
  ${install ? `Invoke-RestMethod '${url}' | Invoke-Expression` : ""}
  $setupPath = @([Environment]::GetEnvironmentVariable('Path','User'), [Environment]::GetEnvironmentVariable('Path','Machine'), $env:PATH) -join ';'
  $env:PATH = ((@((Join-Path $env:USERPROFILE '.local\\bin')) + ($setupPath -split ';')) | Where-Object { $_ -and $_ -notmatch '[\\\\/]\\.superset[\\\\/]bin[\\\\/]?$' } | Select-Object -Unique) -join ';'

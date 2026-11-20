@@ -6,6 +6,7 @@ import { toast } from "@superset/ui/sonner";
 import { useMutation } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
 import {
 	getAgentCommandText,
 	isAgentCommandPatchChanged,
@@ -157,6 +158,9 @@ export function AgentDetail({
 			/>
 
 			<div className="space-y-6">
+				{(config.presetId === "claude" || config.presetId === "codex") && (
+					<AgentSetup agent={config.presetId} />
+				)}
 				{config.presetId === "claude" && <ClaudeCompactionSettings />}
 				<Section title="Label">
 					<Input

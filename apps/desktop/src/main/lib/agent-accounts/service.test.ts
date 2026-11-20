@@ -29,7 +29,7 @@ class LoginTransport extends CodexTransport {
 		this.disposed = true;
 	}
 }
-function fixture() {
+function fixture(openBrowser?: (url: string) => Promise<void>) {
 	const root = mkdtempSync(join(tmpdir(), "gs-login-test-"));
 	const profiles = new CodexProfiles(root, join(root, "original"));
 	const transport = new LoginTransport();
@@ -37,6 +37,7 @@ function fixture() {
 	const service = new AgentAccounts(
 		async (url) => {
 			opened.push(url);
+			await openBrowser?.(url);
 		},
 		profiles,
 		(home) => {
@@ -51,6 +52,26 @@ function fixture() {
 	return { service, transport, profiles, opened };
 }
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+test("a failed browser launch keeps the same sign-in alive for reopening", async () => {
+	let fail = true;
+	const { service, transport, opened } = fixture(async () => {
+		if (fail) throw new Error("No browser handler");
+	});
+	const job = await service.begin("codex", "Work");
+	await tick();
+	expect(service.status(job.id).status).toBe("waiting");
+	expect(service.status(job.id).browserError).toContain("Open sign-in page");
+	expect(transport.disposed).toBe(false);
+	fail = false;
+	await service.reopenBrowser(job.id);
+	expect(opened).toHaveLength(2);
+	expect(opened[0]).toBe(opened[1]);
+	expect(service.status(job.id).browserError).toBeUndefined();
+	service.cancel(job.id);
+	expect(service.status(job.id).authUrl).toBeUndefined();
+	await expect(service.reopenBrowser(job.id)).rejects.toThrow("new sign-in");
+	expect(() => service.submitCode(job.id, "unused")).toThrow("ended");
+});
 test("browser completion is verified before marking an account connected", async () => {
 	const { service, transport, profiles, opened } = fixture();
 	const job = await service.begin("codex", "Work");

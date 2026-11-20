@@ -24,6 +24,9 @@ describe("native provider setup", () => {
 					? "https://chatgpt.com/codex/install.ps1"
 					: "https://claude.ai/install.ps1",
 			);
+			if (agent === "codex") {
+				expect(script).toContain("$env:CODEX_NON_INTERACTIVE = '1'");
+			}
 		});
 	}
 });

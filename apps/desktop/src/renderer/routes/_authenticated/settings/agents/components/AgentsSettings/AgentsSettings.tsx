@@ -1,3 +1,4 @@
+import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
 import { useIsV2CloudEnabled } from "renderer/hooks/useIsV2CloudEnabled";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import {
@@ -52,6 +53,12 @@ function V1AgentsSettings({ visibleItems }: AgentsSettingsProps) {
 				</p>
 			</div>
 
+			{showEnabled && (
+				<div className="mb-6 space-y-3">
+					<AgentSetup agent="codex" />
+					<AgentSetup agent="claude" />
+				</div>
+			)}
 			{isLoading ? (
 				<p className="text-sm text-muted-foreground">
 					Loading agent settings...

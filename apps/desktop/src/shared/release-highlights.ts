@@ -137,6 +137,32 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.63",
+		title: "An easier start, smoother long conversations",
+		changes: [
+			{
+				title: "A guide through your first workspace",
+				detail:
+					"Getting started walks you through your GatedSpace account, agent sign-in, project folder, and first session. Install missing agents from the app and return to the guide whenever you need it.",
+			},
+			{
+				title: "Reliable local projects and account setup",
+				detail:
+					"Local projects open without requiring cloud services. Account settings clearly separate your GatedSpace connection from Claude and Codex sign-ins, and newly installed agents become available without restarting.",
+			},
+			{
+				title: "Computer control prepares its own tools",
+				detail:
+					"When you enable computer control, GatedSpace can prepare its required runtime automatically. Progress, cancellation, and retry stay in the app, with no manual terminal setup.",
+			},
+			{
+				title: "Long Claude sessions resize more smoothly",
+				detail:
+					"Recent messages display first, with Load earlier messages at the top for older history. Claude keeps its full session context and saved conversation; this does not compact or delete anything.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

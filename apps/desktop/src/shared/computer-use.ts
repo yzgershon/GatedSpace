@@ -2,6 +2,7 @@ export interface ComputerUseState {
 	phase: "off" | "connecting" | "ready" | "paused" | "stopping" | "error";
 	owner?: string;
 	activity?: string;
+	setupMessage?: string;
 	error?: string;
 	request?: { owner: string; reason: string };
 }

@@ -98,8 +98,9 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 				>
 					<strong>Computer control</strong>
 					<p>
-						Let this Codex pane see your desktop and use the mouse and keyboard
-						through Windows-MCP.
+						Let this Codex pane see your desktop and use the mouse and keyboard.
+						GatedSpace downloads any missing components on first use. No
+						terminal commands or restart needed.
 					</p>
 					<p className="computer-control-hint">
 						The controller pauses after 60 idle seconds or a completed task and
@@ -118,7 +119,8 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 						<>
 							<output>
 								{state.phase === "connecting"
-									? "Preparing the Windows controller… First setup may take a few minutes."
+									? (state.setupMessage ??
+										"Preparing the Windows controller… First setup may take a few minutes.")
 									: state.phase === "stopping"
 										? "Stopping computer control…"
 										: mine
@@ -127,6 +129,15 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 												: "Enabled for this pane"
 											: "Enabled in another pane"}
 							</output>
+							{mine && state.phase === "paused" && state.error && (
+								<button
+									type="button"
+									className="computer-control-action"
+									onClick={() => void enable()}
+								>
+									Retry setup
+								</button>
+							)}
 							<button
 								type="button"
 								className="computer-control-action"
@@ -154,7 +165,7 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 				<output className="computer-control-live">
 					<span>
 						{state.phase === "connecting"
-							? "Connecting…"
+							? (state.setupMessage ?? "Connecting…")
 							: state.phase === "stopping"
 								? "Stopping…"
 								: mine

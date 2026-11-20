@@ -8,6 +8,7 @@ import { useSignOut } from "renderer/hooks/useSignOut";
 import { apiTrpcClient } from "renderer/lib/api-trpc-client";
 import { authClient } from "renderer/lib/auth-client";
 import { electronTrpc } from "renderer/lib/electron-trpc";
+import { isLocalMode } from "renderer/lib/local-mode";
 import { useCollections } from "renderer/routes/_authenticated/providers/CollectionsProvider";
 import {
 	getImageExtensionFromMimeType,
@@ -19,6 +20,7 @@ import {
 	type SettingItemId,
 } from "../../../utils/settings-search";
 import { ProfileSkeleton } from "./components/ProfileSkeleton";
+import { PublicAccountSettings } from "./components/PublicAccountSettings/PublicAccountSettings";
 import { SyncSettings } from "./components/SyncSettings";
 
 interface AccountSettingsProps {
@@ -26,6 +28,16 @@ interface AccountSettingsProps {
 }
 
 export function AccountSettings({ visibleItems }: AccountSettingsProps) {
+	// The public app's local identity owns on-device records. It is not a
+	// Superset cloud profile and must never offer cloud profile mutations.
+	return isLocalMode() ? (
+		<PublicAccountSettings visibleItems={visibleItems} />
+	) : (
+		<CloudAccountSettings visibleItems={visibleItems} />
+	);
+}
+
+function CloudAccountSettings({ visibleItems }: AccountSettingsProps) {
 	const showProfile = isItemVisible(
 		SETTING_ITEM_ID.ACCOUNT_PROFILE,
 		visibleItems,

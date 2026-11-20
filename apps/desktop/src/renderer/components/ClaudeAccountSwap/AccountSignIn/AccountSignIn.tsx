@@ -2,6 +2,7 @@ import { Button } from "@superset/ui/button";
 import { Input } from "@superset/ui/input";
 import { useEffect, useRef, useState } from "react";
 import { LuArrowUpRight, LuCheck, LuLoaderCircle } from "react-icons/lu";
+import { AgentInstallDialog } from "renderer/components/AgentSetup/components/AgentInstallDialog/AgentInstallDialog";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 
 export function AccountSignIn({
@@ -12,12 +13,17 @@ export function AccountSignIn({
 }: {
 	provider: "claude" | "codex";
 	account?: { id: string; label: string };
-	onDone: () => void;
+	onDone: (accountId: string) => void;
 	onBack: () => void;
 }) {
 	const [nickname, setNickname] = useState(account?.label ?? "");
 	const [status, setStatus] = useState("idle");
 	const [error, setError] = useState("");
+	const [needsInstall, setNeedsInstall] = useState(false);
+	const [canOpenBrowser, setCanOpenBrowser] = useState(false);
+	const [acceptsCode, setAcceptsCode] = useState(false);
+	const [code, setCode] = useState("");
+	const [submittingCode, setSubmittingCode] = useState(false);
 	const job = useRef<string | undefined>(undefined);
 	const profileId = useRef(account?.id);
 	const active = useRef(true);
@@ -43,10 +49,14 @@ export function AccountSignIn({
 					id: job.current ?? "",
 				});
 				if (stopped) return;
+				setCanOpenBrowser(!!state.authUrl);
+				setAcceptsCode(!!state.acceptsCode);
+				if (state.browserError) setError(state.browserError);
 				if (state.status === "connected") {
 					job.current = undefined;
 					setStatus("connected");
-					done.current();
+					setCode("");
+					done.current(state.accountId);
 					return;
 				}
 				if (state.status === "error" || state.status === "cancelled") {
@@ -80,7 +90,17 @@ export function AccountSignIn({
 	const start = async () => {
 		setStatus("starting");
 		setError("");
+		setCode("");
+		setCanOpenBrowser(false);
+		setAcceptsCode(false);
 		try {
+			const setup = await electronTrpcClient.system.agentSetupStatus.query();
+			if (!active.current) return;
+			if (!setup[provider]) {
+				setNeedsInstall(true);
+				setStatus("idle");
+				return;
+			}
 			const result = await electronTrpcClient.agentAccounts.login.mutate({
 				provider,
 				nickname: nickname.trim(),
@@ -103,14 +123,44 @@ export function AccountSignIn({
 		}
 	};
 	const busy = status === "waiting" || status === "starting";
+	const submitCode = async () => {
+		if (!job.current || !code.trim() || submittingCode) return;
+		setSubmittingCode(true);
+		setError("");
+		const value = code.trim();
+		setCode("");
+		try {
+			await electronTrpcClient.agentAccounts.submitLoginCode.mutate({
+				id: job.current,
+				code: value,
+			});
+			setAcceptsCode(false);
+		} catch (e) {
+			setError(e instanceof Error ? e.message : "Could not submit the code.");
+		} finally {
+			setSubmittingCode(false);
+		}
+	};
 	return (
 		<form
 			className="space-y-4"
 			onSubmit={(e) => {
 				e.preventDefault();
-				if (!busy && status !== "connected" && nickname.trim()) void start();
+				if (busy && acceptsCode) void submitCode();
+				else if (!busy && status !== "connected" && nickname.trim())
+					void start();
 			}}
 		>
+			{needsInstall && (
+				<AgentInstallDialog
+					agent={provider}
+					onClose={() => setNeedsInstall(false)}
+					onInstalled={() => {
+						setNeedsInstall(false);
+						void start();
+					}}
+				/>
+			)}
 			<div className="space-y-1.5">
 				<label htmlFor="account-nickname" className="text-xs font-medium">
 					Account nickname
@@ -137,6 +187,57 @@ export function AccountSignIn({
 						This window will update when it’s connected.
 					</span>
 				</output>
+			)}
+			{busy && canOpenBrowser && (
+				<Button
+					type="button"
+					variant="outline"
+					onClick={async () => {
+						if (!job.current) return;
+						try {
+							await electronTrpcClient.agentAccounts.reopenLoginBrowser.mutate({
+								id: job.current,
+							});
+							setError("");
+						} catch {
+							setError(
+								"Could not open your browser. Check your default browser, then try again.",
+							);
+						}
+					}}
+				>
+					<LuArrowUpRight className="size-4" />
+					Open sign-in page
+				</Button>
+			)}
+			{busy && acceptsCode && (
+				<div className="space-y-2 rounded-lg border border-border p-3">
+					<label htmlFor="account-login-code" className="text-sm font-medium">
+						Finish with a browser code
+					</label>
+					<p className="text-xs text-muted-foreground">
+						If the browser shows a Copy code button, paste that code here. Keep
+						this window open until sign-in is confirmed.
+					</p>
+					<Input
+						id="account-login-code"
+						type="password"
+						autoComplete="off"
+						spellCheck={false}
+						value={code}
+						onChange={(e) => setCode(e.target.value)}
+						placeholder="Paste the current sign-in code"
+						maxLength={8_000}
+						disabled={submittingCode}
+					/>
+					<Button
+						type="button"
+						disabled={!code.trim() || submittingCode}
+						onClick={() => void submitCode()}
+					>
+						{submittingCode ? "Checking…" : "Complete sign-in"}
+					</Button>
+				</div>
 			)}
 			{status === "connected" && (
 				<output className="flex items-center gap-2 text-sm">

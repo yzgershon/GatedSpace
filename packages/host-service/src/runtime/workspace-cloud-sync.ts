@@ -13,6 +13,7 @@ import {
 } from "../workspaces/local-workspace-store";
 
 export interface WorkspaceCloudSyncContext {
+	localOnly?: boolean;
 	api: ApiClient;
 	db: HostDb;
 	eventBus: EventBus;
@@ -40,8 +41,9 @@ const hostEnsureCache = new WeakMap<ApiClient, HostEnsureCacheEntry>();
  * in-flight/recent promise; failures evict so retries re-register.
  */
 export function ensureHostRegistered(
-	ctx: Pick<WorkspaceCloudSyncContext, "api" | "organizationId">,
+	ctx: Pick<WorkspaceCloudSyncContext, "api" | "organizationId" | "localOnly">,
 ): Promise<{ machineId: string }> {
+	if (ctx.localOnly) return Promise.resolve({ machineId: getHostId() });
 	const now = Date.now();
 	const cached = hostEnsureCache.get(ctx.api);
 	if (cached && now - cached.at < HOST_ENSURE_TTL_MS) {
@@ -76,6 +78,7 @@ export async function pushWorkspaceCreateToCloud(
 	ctx: WorkspaceCloudSyncContext,
 	row: HostWorkspaceRow,
 ): Promise<CloudCreateResult | null> {
+	if (ctx.localOnly) return null;
 	try {
 		const host = await ensureHostRegistered(ctx);
 		const cloudRow = await ctx.api.v2Workspace.create.mutate({
@@ -164,9 +167,10 @@ const RECONCILE_INTERVAL_MS = 60_000;
  * writes made while the cloud was unreachable.
  */
 export function startWorkspaceCloudSync(ctx: WorkspaceCloudSyncContext): {
-	stop: () => void;
+	stop: () => Promise<void>;
 	runNow: () => Promise<void>;
 } {
+	if (ctx.localOnly) return { stop: async () => {}, runNow: async () => {} };
 	let current: Promise<void> | null = null;
 
 	// Concurrent callers share the in-flight pass rather than skipping —
@@ -204,7 +208,10 @@ export function startWorkspaceCloudSync(ctx: WorkspaceCloudSyncContext): {
 	});
 
 	return {
-		stop: () => clearInterval(timer),
+		stop: async () => {
+			clearInterval(timer);
+			await current;
+		},
 		runNow: run,
 	};
 }

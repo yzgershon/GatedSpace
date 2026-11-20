@@ -16,7 +16,17 @@ export function augmentWindowsRuntimePath(
 	const exists = options.exists ?? existsSync;
 	const home = options.home ?? homedir();
 	const resources = options.resourcesPath ?? process.resourcesPath;
-	const additions = [join(home, ".local", "bin")];
+	const additions = [
+		join(home, ".local", "bin"),
+		join(
+			env.LOCALAPPDATA ?? join(home, "AppData", "Local"),
+			"Programs",
+			"OpenAI",
+			"Codex",
+			"bin",
+		),
+		join(env.APPDATA ?? join(home, "AppData", "Roaming"), "npm"),
+	];
 	if (resources) additions.push(join(resources, "resources", "git", "cmd"));
 	const entries = (env.PATH ?? env.Path ?? "").split(";").filter(Boolean);
 	const known = new Set(entries.map((entry) => entry.toLowerCase()));

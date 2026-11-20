@@ -1,7 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import {
@@ -9,6 +7,7 @@ import {
 	CallToolResultSchema,
 	type Tool,
 } from "@modelcontextprotocol/sdk/types.js";
+import { ensureComputerRunner } from "./runtime";
 
 // Keep the integration scoped to UI operations. Shell, registry, process and
 // filesystem tools already have their own permission paths in Codex.
@@ -35,24 +34,7 @@ export interface ComputerBackend {
 	): Promise<CallToolResult>;
 	close(): Promise<void>;
 	onDisconnect?: () => void;
-}
-
-export function resolveComputerRunner() {
-	if (process.platform !== "win32")
-		throw new Error("Computer control is currently available on Windows.");
-	const dirs = [
-		(process.env.PATH ?? "").split(delimiter),
-		[join(homedir(), ".local", "bin")],
-	].flat();
-	const command = dirs
-		.filter(Boolean)
-		.map((dir) => join(dir, "uvx.exe"))
-		.find(existsSync);
-	if (!command)
-		throw new Error(
-			"Install uv from astral.sh/uv, then reopen GatedSpace to enable computer control.",
-		);
-	return command;
+	onSetupProgress?: (message: string) => void;
 }
 
 export class WindowsComputerBackend implements ComputerBackend {
@@ -63,14 +45,20 @@ export class WindowsComputerBackend implements ComputerBackend {
 	private transport?: StdioClientTransport;
 	private closing?: Promise<void>;
 	onDisconnect?: () => void;
+	onSetupProgress?: (message: string) => void;
 	get processId() {
 		return this.transport?.pid ?? null;
 	}
 	async start(signal: AbortSignal) {
 		if (signal.aborted) throw new Error("Computer connection cancelled.");
+		const command = await ensureComputerRunner(signal, this.onSetupProgress);
+		signal.throwIfAborted();
+		this.onSetupProgress?.("Preparing the Windows controller…");
 		this.transport = new StdioClientTransport({
-			command: resolveComputerRunner(),
+			command,
 			args: [
+				"--python",
+				"3.13",
 				"--from",
 				`windows-mcp==${WINDOWS_MCP_VERSION}`,
 				"windows-mcp",

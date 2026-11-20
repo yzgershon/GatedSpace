@@ -1,3 +1,5 @@
+import { app } from "electron";
+import { AgentInstaller } from "main/lib/agent-install";
 import { agentSetupStatus } from "main/lib/agent-setup-status";
 import { openElevatedTerminal } from "main/lib/elevated-terminal";
 import { FOCUS_SURFACES, writeFocusSurface } from "main/lib/focus-surface-file";
@@ -11,6 +13,12 @@ interface GhDetectResult {
 	version: string | null;
 	path: string | null;
 }
+
+const agentInstaller = new AgentInstaller();
+app.once("before-quit", () => {
+	void agentInstaller.close();
+});
+const setupAgent = z.enum(["codex", "claude"]);
 
 async function detectGhCli(): Promise<GhDetectResult> {
 	// Resolve `gh` via the user's login-shell PATH (execWithShellEnv retries with
@@ -51,6 +59,15 @@ export const createSystemRouter = () => {
 	return router({
 		detectGhCli: publicProcedure.query(detectGhCli),
 		agentSetupStatus: publicProcedure.query(agentSetupStatus),
+		installAgent: publicProcedure
+			.input(z.object({ agent: setupAgent }))
+			.mutation(({ input }) => agentInstaller.start(input.agent)),
+		agentInstallStatus: publicProcedure
+			.input(z.object({ agent: setupAgent }))
+			.query(({ input }) => agentInstaller.get(input.agent)),
+		cancelAgentInstall: publicProcedure
+			.input(z.object({ agent: setupAgent, id: z.string() }))
+			.mutation(({ input }) => agentInstaller.cancel(input.agent, input.id)),
 		/**
 		 * Opens an admin shell in its OWN window — see `elevated-terminal.ts` for
 		 * why it cannot be a pane. Reports failure in the result rather than

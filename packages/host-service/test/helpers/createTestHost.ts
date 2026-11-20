@@ -26,6 +26,7 @@ import {
 const MIGRATIONS_FOLDER = resolve(import.meta.dir, "../../drizzle");
 
 export interface TestHostOptions {
+	localOnly?: boolean;
 	organizationId?: string;
 	cloudApiUrl?: string;
 	allowedOrigins?: string[];
@@ -93,6 +94,7 @@ export async function createTestHost(
 
 	const createOptions: CreateAppOptions = {
 		config: {
+			localOnly: options.localOnly,
 			organizationId:
 				options.organizationId ?? "00000000-0000-0000-0000-000000000001",
 			dbPath,

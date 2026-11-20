@@ -13,6 +13,7 @@ import { projects, workspaceCloudDeletes, workspaces } from "../src/db/schema";
 import type { EventBus } from "../src/events";
 import { runWorkspaceBackfill } from "../src/runtime/workspace-backfill";
 import {
+	ensureHostRegistered,
 	pushWorkspaceCreateToCloud,
 	startWorkspaceCloudSync,
 } from "../src/runtime/workspace-cloud-sync";
@@ -109,7 +110,7 @@ function makeApi(spec: FakeApiSpec = {}) {
 			getFromHost: { query: getFromHost },
 		},
 	} as unknown as ApiClient;
-	return { client, create, updateNameFromHost, del, getFromHost };
+	return { client, hostEnsure, create, updateNameFromHost, del, getFromHost };
 }
 
 function makeSyncCtx(apiSpec: FakeApiSpec = {}) {
@@ -164,6 +165,28 @@ describe("local-workspace-store", () => {
 });
 
 describe("pushWorkspaceCreateToCloud", () => {
+	test("local-only work never registers a host, mirrors rows, or starts reconciliation", async () => {
+		const { ctx, db, api } = makeSyncCtx();
+		const localCtx = { ...ctx, localOnly: true };
+		const row = insertLocalWorkspace(localCtx, {
+			projectId: "p-1",
+			worktreePath: "/repo/.worktrees/local",
+			branch: "local-task",
+			name: "Local task",
+		});
+		await ensureHostRegistered(localCtx);
+		expect(await pushWorkspaceCreateToCloud(localCtx, row)).toBeNull();
+		const sync = startWorkspaceCloudSync(localCtx);
+		await sync.runNow();
+		await sync.stop();
+		expect(api.hostEnsure).not.toHaveBeenCalled();
+		expect(api.create).not.toHaveBeenCalled();
+		expect(
+			db.query.workspaces.findFirst({ where: eq(workspaces.id, row.id) }).sync()
+				?.name,
+		).toBe("Local task");
+	});
+
 	test("marks the row cloud-synced on success", async () => {
 		const { ctx, db } = makeSyncCtx();
 		const row = insertLocalWorkspace(
@@ -368,6 +391,37 @@ describe("startWorkspaceCloudSync", () => {
 		expect(api.del).toHaveBeenCalledWith({ id: tombstoneId });
 		expect(db.select().from(workspaceCloudDeletes).all()).toHaveLength(1);
 	});
+});
+
+test("stopping sync waits for an in-flight database update before the host can close", async () => {
+	const { ctx, db } = makeSyncCtx();
+	const id = randomUUID();
+	db.insert(workspaceCloudDeletes).values({ id, queuedAt: Date.now() }).run();
+	let finish!: () => void;
+	let began!: () => void;
+	const started = new Promise<void>((resolve) => {
+		began = resolve;
+	});
+	const pending = new Promise<void>((resolve) => {
+		finish = resolve;
+	});
+	ctx.api.v2Workspace.delete.mutate = async () => {
+		began();
+		await pending;
+		return { txid: 1 };
+	};
+	const sync = startWorkspaceCloudSync(ctx);
+	await started;
+	let stopped = false;
+	const stopping = sync.stop().then(() => {
+		stopped = true;
+	});
+	await Promise.resolve();
+	expect(stopped).toBe(false);
+	finish();
+	await stopping;
+	expect(stopped).toBe(true);
+	expect(db.select().from(workspaceCloudDeletes).all()).toHaveLength(0);
 });
 
 describe("runWorkspaceBackfill", () => {

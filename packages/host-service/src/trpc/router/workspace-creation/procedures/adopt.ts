@@ -1,5 +1,5 @@
-import { getHostId, getHostName } from "@superset/shared/host-info";
 import { TRPCError } from "@trpc/server";
+import { ensureHostRegistered } from "../../../../runtime/workspace-cloud-sync";
 import { protectedProcedure } from "../../../index";
 import { ensureMainWorkspace } from "../../project/utils/ensure-main-workspace";
 import { adoptInputSchema } from "../schemas";
@@ -63,11 +63,7 @@ export const adopt = protectedProcedure
 			worktreePath = found;
 		}
 
-		const hostPromise = ctx.api.host.ensure.mutate({
-			organizationId: ctx.organizationId,
-			machineId: getHostId(),
-			name: getHostName(),
-		});
+		const hostPromise = ensureHostRegistered(ctx);
 		hostPromise.catch(() => {});
 
 		const { workspace } = await adoptExistingWorktree({

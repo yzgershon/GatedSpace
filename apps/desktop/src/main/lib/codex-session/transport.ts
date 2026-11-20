@@ -10,6 +10,7 @@ import { record, text } from "../../../shared/codex-session/types";
 import { agentBrowserMcp } from "../browser/agent-browser-mcp";
 import { resolveExecutable } from "../claude-session/resolve-executable";
 import { computerUseTools } from "../computer-use/tools";
+import { augmentWindowsRuntimePath } from "../windows-runtime-path";
 import {
 	type AsyncQuestionInput,
 	asyncQuestionDescription,
@@ -29,6 +30,8 @@ export class CodexRpcError extends Error {
 
 /** Skip our interactive shell wrappers; app-server requires clean JSONL stdio. */
 export function resolveCodexExecutable() {
+	// Installers can finish while Electron is open; its inherited PATH is stale.
+	augmentWindowsRuntimePath(process.env);
 	const pathDirs = (process.env.PATH ?? "")
 		.split(delimiter)
 		.filter((dir) => !/[\\/]\.superset[\\/]bin[\\/]?$/i.test(dir));
@@ -50,6 +53,11 @@ export function resolveCodexExecutable() {
 		}
 	}
 	const resolved = resolveExecutable("codex", { pathDirs });
+	if (process.platform === "win32" && resolved.command === "codex") {
+		throw new Error(
+			"Codex is not installed on this PC. Open agent setup to install Codex and connect your account.",
+		);
+	}
 	if (!resolved.needsShell)
 		return { command: resolved.command, args: [] as string[], env: {} };
 	// npm's .cmd shim cannot be spawned safely with arbitrary arguments. Run

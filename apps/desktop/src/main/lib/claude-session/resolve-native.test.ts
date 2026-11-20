@@ -3,6 +3,16 @@ import { join } from "node:path";
 import { resolveNativeClaude } from "./resolve-native";
 
 describe("native Claude launch", () => {
+	test("a wrapper alone directs the user to setup instead of spawning a missing CLI", () => {
+		expect(() =>
+			resolveNativeClaude("claude", {
+				isWindows: true,
+				home: "C:/Users/test",
+				pathDirs: ["C:/Users/test/.superset/bin"],
+				exists: () => false,
+			}),
+		).toThrow("not installed on this PC");
+	});
 	test.each([
 		"claude-acct",
 		"claude-acct.cmd",

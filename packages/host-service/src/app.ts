@@ -207,11 +207,13 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 	// or reconciler touch them (the reconciler skips unbackfilled rows).
 	let workspaceCloudSync: ReturnType<typeof startWorkspaceCloudSync> | null =
 		null;
+	let disposing = false;
+	let workspaceStartup: Promise<void> = Promise.resolve();
 	// Local-only mode: host.db is the only data plane — nothing to backfill
 	// from or reconcile with the cloud, so the sweeps would just burn retries
 	// against the stubbed api client.
 	if (!config.localOnly) {
-		void (async () => {
+		workspaceStartup = (async () => {
 			await runWorkspaceBackfill({
 				api,
 				db,
@@ -220,6 +222,7 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			}).catch((err) => {
 				console.warn("[host-service] workspace backfill failed:", err);
 			});
+			if (disposing) return;
 			// Backfill `kind='main'` workspaces for projects already set up before
 			// this column shipped. Idempotent — only does real work the first
 			// time after upgrade.
@@ -232,6 +235,7 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 			}).catch((err) => {
 				console.warn("[host-service] main-workspace sweep failed:", err);
 			});
+			if (disposing) return;
 			workspaceCloudSync = startWorkspaceCloudSync({
 				api,
 				db,
@@ -297,11 +301,15 @@ export function createApp(options: CreateAppOptions): CreateAppResult {
 
 	const ownsDb = options.db === undefined;
 	const dispose = async (): Promise<void> => {
+		disposing = true;
+		// Startup may still be using Git and SQLite when a host is closed.
+		// Drain it before releasing those resources, and never start sync after close.
+		await workspaceStartup;
 		// Each step is best-effort and isolated: a throw in one cleanup must
 		// not skip the others, otherwise a flaky `.stop()` could leak the
 		// open SQLite handle for the rest of the process lifetime.
 		try {
-			workspaceCloudSync?.stop();
+			await workspaceCloudSync?.stop();
 		} catch (err) {
 			console.warn("[host-service] workspaceCloudSync.stop failed:", err);
 		}

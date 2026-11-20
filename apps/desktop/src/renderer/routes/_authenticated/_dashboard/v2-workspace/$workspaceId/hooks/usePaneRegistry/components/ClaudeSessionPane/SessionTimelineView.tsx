@@ -26,7 +26,14 @@
  */
 import { cn } from "@superset/ui/utils";
 import { ChevronRight } from "lucide-react";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+	memo,
+	type RefObject,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { MarkdownRenderer } from "renderer/components/MarkdownRenderer";
 import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useResolvedTheme } from "renderer/stores/theme";
@@ -42,6 +49,7 @@ import { getEditorTheme } from "shared/themes";
 import { ImageChip } from "./ImageChip";
 import { DIFF_MAX_CHARS, SessionDiff } from "./SessionDiff";
 import { foldRuns, foldSummary } from "./tool-folding";
+import { useTranscriptWindow } from "./useTranscriptWindow";
 import { WorkingIndicator } from "./WorkingIndicator";
 import { formatThought } from "./working-indicator";
 
@@ -734,19 +742,21 @@ function SubagentGroup({
 				/>
 				{label ?? "Subagent"} · {steps} step{steps === 1 ? "" : "s"}
 			</button>
-			<Collapse open={open}>
-				<div className="flex flex-col gap-2 border-border/60 border-t py-2">
-					{items.map((child) => (
-						<TimelineItemRow
-							key={child.id}
-							item={child}
-							subagentChildren={undefined}
-							subagentDrafts={undefined}
-							streaming={drafts?.has(child.id) ?? false}
-						/>
-					))}
-				</div>
-			</Collapse>
+			{open && (
+				<Collapse open={open}>
+					<div className="flex flex-col gap-2 border-border/60 border-t py-2">
+						{items.map((child) => (
+							<TimelineItemRow
+								key={child.id}
+								item={child}
+								subagentChildren={undefined}
+								subagentDrafts={undefined}
+								streaming={drafts?.has(child.id) ?? false}
+							/>
+						))}
+					</div>
+				</Collapse>
+			)}
 		</div>
 	);
 }
@@ -1051,8 +1061,16 @@ function splitTurns(items: TimelineItem[]): Turn[] {
 export function SessionTimelineView({
 	timeline,
 	onInterrupt,
+	sessionKey,
+	scrollRef,
+	followingRef,
+	onBeforeRevealHistory,
 }: {
 	timeline: SessionTimeline;
+	sessionKey?: string;
+	scrollRef?: RefObject<HTMLElement | null>;
+	followingRef?: RefObject<boolean>;
+	onBeforeRevealHistory?: () => void;
 	/**
 	 * Stop the running turn from the status line, the way the reference does.
 	 *
@@ -1077,7 +1095,14 @@ export function SessionTimelineView({
 		() => groupSubagents(timeline.items),
 		[timeline.items],
 	);
-	const turns = useMemo(() => splitTurns(topLevel), [topLevel]);
+	const history = useTranscriptWindow({
+		items: topLevel,
+		sessionKey: sessionKey ?? timeline.header?.sessionId,
+		scrollRef,
+		followingRef,
+		onBeforeReveal: onBeforeRevealHistory,
+	});
+	const turns = useMemo(() => splitTurns(history.items), [history.items]);
 	// NOT memoized on items: the drafts list is what changes while a reply
 	// streams, and it is a handful of ids rather than a walk of the transcript.
 	const drafts = useMemo(
@@ -1097,6 +1122,15 @@ export function SessionTimelineView({
 
 	return (
 		<div className="flex w-full flex-col px-4 py-4">
+			{history.hasEarlier && (
+				<button
+					type="button"
+					onClick={history.loadEarlier}
+					className="mb-4 w-full rounded-md py-2 text-center text-xs text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+				>
+					Load earlier messages
+				</button>
+			)}
 			{turns.map((turn, index) => (
 				<div key={turn.id} className={cn(index > 0 && "mt-6")}>
 					{turn.prompt ? (

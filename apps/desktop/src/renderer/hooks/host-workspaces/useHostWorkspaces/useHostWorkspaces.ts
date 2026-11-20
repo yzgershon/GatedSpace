@@ -47,6 +47,8 @@ export interface UseHostWorkspacesResult {
 	 * See `isHostWorkspacesReady` for why discovery is half of this.
 	 */
 	isReady: boolean;
+	/** Successful local read, unlike isReady which also includes failed queries. */
+	localWorkspacesLoaded: boolean;
 	cache: HostWorkspacesCacheOps;
 }
 
@@ -276,5 +278,9 @@ export function useHostWorkspacesSource(): UseHostWorkspacesResult {
 		};
 	}, [targets, queryClient]);
 
-	return { workspaces, isReady, cache };
+	const localWorkspacesLoaded = targets.some(
+		(target, index) =>
+			target.machineId === machineId && queries[index]?.isSuccess,
+	);
+	return { workspaces, isReady, localWorkspacesLoaded, cache };
 }

@@ -77,6 +77,7 @@ export async function adoptExistingWorktree(
 	} = args;
 	const store: WorkspaceStoreContext = { db: ctx.db, eventBus: ctx.eventBus };
 	const syncCtx = {
+		localOnly: ctx.localOnly,
 		api: ctx.api,
 		db: ctx.db,
 		eventBus: ctx.eventBus,

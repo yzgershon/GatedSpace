@@ -17,6 +17,7 @@ class FakeBackend implements ComputerBackend {
 	fail?: string;
 	signal?: AbortSignal;
 	onDisconnect?: () => void;
+	onSetupProgress?: (message: string) => void;
 	async start(signal: AbortSignal) {
 		this.signal = signal;
 		await this.startGate;
@@ -47,6 +48,25 @@ function gate() {
 	});
 	return { promise, release };
 }
+
+test("setup progress is visible only while the approved startup is active", async () => {
+	const { backend, service } = fixture();
+	const pending = gate();
+	backend.startGate = pending.promise;
+	const enabling = service.enable("codex:a");
+	backend.onSetupProgress?.("Downloading runtime");
+	expect(service.get()).toEqual({
+		phase: "connecting",
+		owner: "codex:a",
+		setupMessage: "Downloading runtime",
+	});
+	await service.stop();
+	backend.onSetupProgress?.("Installing runtime");
+	expect(service.get()).toEqual({ phase: "off" });
+	pending.release();
+	await enabling;
+	expect(service.get()).toEqual({ phase: "off" });
+});
 
 test("Stop during idle shutdown cancels a pending automatic resume", async () => {
 	const { backend, service } = fixture();

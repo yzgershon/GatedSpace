@@ -115,6 +115,12 @@ export const createAgentAccountsRouter = () =>
 		loginStatus: publicProcedure
 			.input(z.object({ id: z.string() }))
 			.query(({ input }) => accounts.status(input.id)),
+		reopenLoginBrowser: publicProcedure
+			.input(z.object({ id: z.string() }))
+			.mutation(({ input }) => accounts.reopenBrowser(input.id)),
+		submitLoginCode: publicProcedure
+			.input(z.object({ id: z.string(), code: z.string().min(1).max(8_000) }))
+			.mutation(({ input }) => accounts.submitCode(input.id, input.code)),
 		cancelLogin: publicProcedure
 			.input(z.object({ id: z.string() }))
 			.mutation(({ input }) => accounts.cancel(input.id)),

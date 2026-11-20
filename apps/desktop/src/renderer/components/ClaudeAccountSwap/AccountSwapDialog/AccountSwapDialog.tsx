@@ -29,11 +29,15 @@ export function AccountSwapDialog({
 	initialProvider,
 	paneKey,
 	usageLimit = false,
+	startAdding = false,
+	connectOnSignIn = false,
 }: {
 	onClose: () => void;
 	initialProvider?: Provider;
 	paneKey?: string;
 	usageLimit?: boolean;
+	startAdding?: boolean;
+	connectOnSignIn?: boolean;
 }) {
 	const icons = {
 		claude: usePresetIcon("claude"),
@@ -43,7 +47,7 @@ export function AccountSwapDialog({
 		initialProvider,
 	);
 	const [scope, setScope] = useState(paneKey || "new");
-	const [adding, setAdding] = useState(false);
+	const [adding, setAdding] = useState(startAdding);
 	const [account, setAccount] = useState<{ id: string; label: string }>();
 	const [error, setError] = useState("");
 	const [pending, setPending] = useState(false);
@@ -137,8 +141,11 @@ export function AccountSwapDialog({
 						key={`${provider}:${account?.id ?? "new"}`}
 						provider={provider}
 						account={account}
-						onDone={() => {
+						onDone={(id) => {
+							setAdding(false);
+							setAccount(undefined);
 							void query.refetch();
+							if (connectOnSignIn) void pick(id);
 						}}
 						onBack={() => {
 							setAdding(false);

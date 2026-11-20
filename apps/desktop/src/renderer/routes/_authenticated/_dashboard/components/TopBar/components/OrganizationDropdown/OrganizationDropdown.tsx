@@ -23,11 +23,13 @@ import {
 	HiOutlineSparkles,
 } from "react-icons/hi2";
 import { LuClock } from "react-icons/lu";
+import { openFirstRunSetup } from "renderer/components/FirstRunSetup/FirstRunSetup";
 import { HotkeyMenuShortcut } from "renderer/components/HotkeyMenuShortcut";
 import { GATED_FEATURES, usePaywall } from "renderer/components/Paywall";
 import { useCurrentPlan } from "renderer/hooks/useCurrentPlan";
 import { useSignOut } from "renderer/hooks/useSignOut";
 import { authClient } from "renderer/lib/auth-client";
+import { electronTrpc } from "renderer/lib/electron-trpc";
 import { isLocalMode } from "renderer/lib/local-mode";
 import {
 	tasksSearchFromFilters,
@@ -120,9 +122,17 @@ export function OrganizationDropdown({
 	}
 
 	const localMode = isLocalMode();
+	const accountStatus = electronTrpc.continuity.status.useQuery(undefined, {
+		enabled: localMode,
+		staleTime: 30_000,
+		retry: false,
+	});
+	const connectedAccount = accountStatus.data?.account;
 	const userName = session?.user?.name;
 	const displayName = localMode
-		? "This PC"
+		? connectedAccount?.connected
+			? connectedAccount.email
+			: "This PC"
 		: (activeOrganization?.name ?? userName ?? "Organization");
 
 	// Tasks reopens where you left it, and is paywalled — same behaviour the
@@ -179,12 +189,13 @@ export function OrganizationDropdown({
 			<button
 				type="button"
 				className="flex size-8 items-center justify-center rounded-md transition-colors text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-				aria-label="Organization menu"
+				aria-label={localMode ? "Account menu" : "Organization menu"}
+				title={displayName}
 			>
 				<Avatar
 					size="xs"
-					fullName={activeOrganization?.name}
-					image={activeOrganization?.logo}
+					fullName={displayName}
+					image={localMode ? undefined : activeOrganization?.logo}
 					className="rounded size-4"
 				/>
 			</button>
@@ -203,12 +214,13 @@ export function OrganizationDropdown({
 			<button
 				type="button"
 				className="group flex min-w-0 shrink items-center gap-2.5 rounded-[8px] px-2 py-1.5 text-left transition-colors hover:bg-accent/50"
-				aria-label="Organization menu"
+				aria-label={localMode ? "Account menu" : "Organization menu"}
+				title={displayName}
 			>
 				<Avatar
 					size="xs"
-					fullName={activeOrganization?.name}
-					image={activeOrganization?.logo}
+					fullName={displayName}
+					image={localMode ? undefined : activeOrganization?.logo}
 					className="size-6 shrink-0 rounded-[7px]"
 				/>
 				<span className="flex min-w-0 flex-col leading-[1.15]">
@@ -226,12 +238,13 @@ export function OrganizationDropdown({
 			<button
 				type="button"
 				className="group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground min-w-0"
-				aria-label="Organization menu"
+				aria-label={localMode ? "Account menu" : "Organization menu"}
+				title={displayName}
 			>
 				<Avatar
 					size="xs"
-					fullName={activeOrganization?.name}
-					image={activeOrganization?.logo}
+					fullName={displayName}
+					image={localMode ? undefined : activeOrganization?.logo}
 					className="rounded size-4 shrink-0"
 				/>
 				<span className="truncate">{displayName}</span>
@@ -242,12 +255,13 @@ export function OrganizationDropdown({
 			<button
 				type="button"
 				className="group no-drag flex items-center gap-1.5 h-6 px-1.5 rounded border border-border/60 bg-secondary/50 hover:bg-secondary hover:border-border transition-[background-color,border-color,color] duration-100 ease-out focus:outline-none focus:ring-1 focus:ring-ring"
-				aria-label="Organization menu"
+				aria-label={localMode ? "Account menu" : "Organization menu"}
+				title={displayName}
 			>
 				<Avatar
 					size="xs"
-					fullName={activeOrganization?.name}
-					image={activeOrganization?.logo}
+					fullName={displayName}
+					image={localMode ? undefined : activeOrganization?.logo}
 					className="rounded size-4"
 				/>
 				<span className="text-xs font-medium truncate max-w-32">
@@ -261,7 +275,11 @@ export function OrganizationDropdown({
 	const contentAlign = variant === "topbar" ? "end" : "start";
 
 	return (
-		<DropdownMenu>
+		<DropdownMenu
+			onOpenChange={(open) => {
+				if (open && localMode) void accountStatus.refetch();
+			}}
+		>
 			<DropdownMenuTrigger asChild>{triggerButton}</DropdownMenuTrigger>
 			<DropdownMenuContent
 				align={contentAlign}
@@ -366,15 +384,27 @@ export function OrganizationDropdown({
 
 				<DropdownMenuSeparator />
 
+				<DropdownMenuItem onSelect={() => setTimeout(openFirstRunSetup, 0)}>
+					<HiOutlineSparkles className="size-4" />
+					<span>Getting started</span>
+				</DropdownMenuItem>
 				{/* Account */}
 				{localMode ? (
-					<DropdownMenuItem
-						onSelect={() => navigate({ to: "/workspaces" })}
-						className="gap-2"
-					>
-						<HiOutlineArrowRightOnRectangle className="size-4" />
-						<span>Set up agents</span>
-					</DropdownMenuItem>
+					<>
+						<DropdownMenuItem
+							onSelect={() => navigate({ to: "/settings/account" })}
+						>
+							<HiOutlineArrowRightOnRectangle className="size-4" />
+							<span>GatedSpace account</span>
+						</DropdownMenuItem>
+						<DropdownMenuItem
+							onSelect={() => navigate({ to: "/settings/agents" })}
+							className="gap-2"
+						>
+							<HiOutlineArrowRightOnRectangle className="size-4" />
+							<span>Set up agents</span>
+						</DropdownMenuItem>
+					</>
 				) : (
 					<DropdownMenuItem onSelect={handleSignOut} className="gap-2">
 						<HiOutlineArrowRightOnRectangle className="size-4" />

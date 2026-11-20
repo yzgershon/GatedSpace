@@ -240,13 +240,16 @@ export const projectRouter = router({
 			// Default behavior (folder-first import): local-DB hit wins,
 			// otherwise one cloud query against origin/first. Preserves the
 			// pre-importer-rewrite contract.
-			if (!input.walkAllRemotes) {
+			if (ctx.localOnly || !input.walkAllRemotes) {
 				if (localProject) {
 					return {
 						candidates: [
 							{
 								id: localProject.id,
-								name: localProject.repoName ?? basename(gitRoot),
+								name:
+									localProject.name ??
+									localProject.repoName ??
+									basename(gitRoot),
 								repoCloneUrl: localProject.repoUrl ?? null,
 								source: "local-path" as const,
 								matchesExpected: false,
@@ -256,6 +259,9 @@ export const projectRouter = router({
 						cloudErrors: [] as { url: string; message: string }[],
 					};
 				}
+				// A GitHub remote is metadata, not a requirement to contact the
+				// cloud. Local installations discover projects only in this DB.
+				if (ctx.localOnly) return { candidates: [], cloudErrors: [] };
 				const { parsed } = resolved;
 				if (!parsed) return { candidates: [], cloudErrors: [] };
 				try {
@@ -498,15 +504,28 @@ export const projectRouter = router({
 		)
 		.mutation(async ({ ctx, input }) => {
 			const existing = ctx.db
-				.select({ id: projects.id, repoPath: projects.repoPath })
+				.select({
+					id: projects.id,
+					repoPath: projects.repoPath,
+					repoUrl: projects.repoUrl,
+				})
 				.from(projects)
 				.where(eq(projects.id, input.projectId))
 				.get();
 
-			const cloudProject = await ctx.api.v2Project.get.query({
-				organizationId: ctx.organizationId,
-				id: input.projectId,
-			});
+			if (ctx.localOnly && !existing) {
+				throw new TRPCError({
+					code: "NOT_FOUND",
+					message:
+						"Project is not set up on this PC. Open its folder to add it.",
+				});
+			}
+			const cloudProject = ctx.localOnly
+				? { repoCloneUrl: existing?.repoUrl ?? null }
+				: await ctx.api.v2Project.get.query({
+						organizationId: ctx.organizationId,
+						id: input.projectId,
+					});
 
 			const allowRelocate =
 				input.mode.kind === "import" && input.mode.allowRelocate;
@@ -618,7 +637,7 @@ export const projectRouter = router({
 						};
 					}
 
-					if (!cloudProject.repoCloneUrl && resolved.parsed) {
+					if (!ctx.localOnly && !cloudProject.repoCloneUrl && resolved.parsed) {
 						await ctx.api.v2Project.linkRepoCloneUrl.mutate({
 							organizationId: ctx.organizationId,
 							id: input.projectId,
@@ -659,10 +678,12 @@ export const projectRouter = router({
 	remove: protectedProcedure
 		.input(z.object({ projectId: z.string().uuid() }))
 		.mutation(async ({ ctx, input }) => {
-			await ctx.api.v2Project.delete.mutate({
-				organizationId: ctx.organizationId,
-				id: input.projectId,
-			});
+			if (!ctx.localOnly) {
+				await ctx.api.v2Project.delete.mutate({
+					organizationId: ctx.organizationId,
+					id: input.projectId,
+				});
+			}
 
 			const localProject = ctx.db.query.projects
 				.findFirst({ where: eq(projects.id, input.projectId) })

@@ -42,6 +42,11 @@ export function resolveNativeClaude(
 		...options,
 		pathDirs,
 	});
+	if (isWindows && bare && resolved.command === "claude") {
+		throw new Error(
+			"Claude Code is not installed on this PC. Open agent setup to install Claude Code and connect your account.",
+		);
+	}
 	if (!resolved.needsShell)
 		return { command: resolved.command, args: [] as string[], env: {} };
 	const entry = join(

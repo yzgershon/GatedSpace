@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
 import { bindCodexDraftSession } from "renderer/lib/codex-session/draft";
 import {
 	getCodexSession,
@@ -121,6 +122,14 @@ export function CodexSession(props: CodexSessionProps) {
 			{!state?.usageLimit && (error || state?.error) && (
 				<div className="codex-error select-text cursor-text" role="alert">
 					<span>{error || state?.error}</span>
+					<AgentSetup
+						agent="codex"
+						compact
+						onReady={() => {
+							setError(null);
+							setRetry((n) => n + 1);
+						}}
+					/>
 					{state?.status === "error" && (
 						<button
 							type="button"

@@ -94,6 +94,10 @@ export class ComputerUseService extends EventEmitter {
 		this.backend = backend;
 		this.controller = controller;
 		this.publish({ phase: "connecting", owner });
+		backend.onSetupProgress = (setupMessage) => {
+			if (!controller.signal.aborted && this.backend === backend)
+				this.publish({ phase: "connecting", owner, setupMessage });
+		};
 		backend.onDisconnect = () => {
 			if (this.backend === backend)
 				void this.pause(

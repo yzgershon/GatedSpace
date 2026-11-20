@@ -4,7 +4,11 @@ import { useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { SyncTransfersSettings } from "../SyncTransfersSettings";
 
-export function SyncSettings() {
+export function SyncSettings({
+	title = "GatedSpace Sync",
+}: {
+	title?: string;
+}) {
 	const utils = electronTrpc.useUtils();
 	const status = electronTrpc.continuity.status.useQuery(undefined, {
 		refetchInterval: 2000,
@@ -49,7 +53,7 @@ export function SyncSettings() {
 						id="sync-settings-title"
 						className="text-base font-semibold tracking-tight"
 					>
-						GatedSpace Sync
+						{title}
 					</h3>
 					<p className="mt-1 max-w-lg text-sm leading-relaxed text-muted-foreground">
 						Connect your PCs with a private account. Each PC keeps its own

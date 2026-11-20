@@ -99,6 +99,7 @@ export const workspaceRouter = router({
 			}
 			void pushWorkspaceCreateToCloud(
 				{
+					localOnly: ctx.localOnly,
 					api: ctx.api,
 					db: ctx.db,
 					eventBus: ctx.eventBus,

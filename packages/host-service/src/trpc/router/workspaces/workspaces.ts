@@ -485,6 +485,7 @@ async function registerCloudAndLocal(args: {
 
 	const cloudRow = await pushWorkspaceCreateToCloud(
 		{
+			localOnly: ctx.localOnly,
 			api: ctx.api,
 			db: ctx.db,
 			eventBus: ctx.eventBus,
