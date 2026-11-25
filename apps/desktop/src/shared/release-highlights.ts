@@ -184,6 +184,32 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.65",
+		title: "A clearer, faster GatedSpace on your phone",
+		changes: [
+			{
+				title: "Readable conversations and accurate progress",
+				detail:
+					"Mobile replies display formatted text, with command code behind expandable details. Recent messages load first, earlier history stays available, and finished Claude turns stop showing as working.",
+			},
+			{
+				title: "Photos that attach and preview",
+				detail:
+					"Attach up to 20 images, 5 MB each, with visible preparation and previews. Large-image validation, retry feedback, and the phone keyboard layout are repaired. The Home Screen app uses the GatedSpace logo.",
+			},
+			{
+				title: "Answer questions from your phone",
+				detail:
+					"Claude and Codex question controls support answers and dismissal. Background updates preserve your selected choices, typed answers, and focus.",
+			},
+			{
+				title: "Recover model selections and close split previews",
+				detail:
+					"Refresh available Codex models and recover from an unavailable selection while keeping your reasoning preference. Each split browser pane now has its own close button, so the other pane stays open.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

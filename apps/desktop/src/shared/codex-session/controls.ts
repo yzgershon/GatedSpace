@@ -2,7 +2,28 @@ import { type CodexModel, list, record, text } from "./types";
 
 export function defaultCodexEffort(model?: CodexModel) {
 	if (!model || model.efforts.includes("xhigh")) return "xhigh";
-	return model.defaultEffort || model.efforts.at(-1) || "medium";
+	return model.efforts.includes(model.defaultEffort)
+		? model.defaultEffort
+		: model.efforts.at(-1) || "medium";
+}
+
+/** Retain a user's choice across models, reconnects and catalog refreshes. */
+export function resolveCodexEffort(
+	model: CodexModel | undefined,
+	preferred?: string,
+) {
+	if (preferred && (!model || model.efforts.includes(preferred)))
+		return preferred;
+	return defaultCodexEffort(model);
+}
+
+export function isCodexModelError(error?: string | null) {
+	return (
+		!!error &&
+		/model_not_found|model[^\n]*(?:not supported|unavailable|does not exist)/i.test(
+			error,
+		)
+	);
 }
 
 export function normalizeCodexLimits(value: unknown, model?: string) {

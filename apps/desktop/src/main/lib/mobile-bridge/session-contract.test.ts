@@ -1,4 +1,5 @@
 import { describe, expect, it } from "bun:test";
+import { MAX_MOBILE_IMAGE_BASE64 } from "./limits";
 import { messagePage, promptSchema, RequestLedger } from "./session-contract";
 
 describe("mobile session safety and pagination", () => {
@@ -59,7 +60,12 @@ describe("mobile session safety and pagination", () => {
 		for (const images of [
 			[{ mediaType: "image/svg+xml", data: "YQ==" }],
 			[{ mediaType: "image/png", data: "file:///secret" }],
-			[{ mediaType: "image/png", data: "a".repeat(5_000_004) }],
+			[
+				{
+					mediaType: "image/png",
+					data: "a".repeat(MAX_MOBILE_IMAGE_BASE64 + 4),
+				},
+			],
 		]) {
 			expect(promptSchema.safeParse({ requestId, images }).success).toBe(false);
 		}

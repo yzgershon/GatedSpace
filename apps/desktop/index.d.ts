@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="electron-vite/node" />
 
 import type { DetailedHTMLProps, HTMLAttributes, Ref } from "react";
 import type { WebviewTag } from "electron";

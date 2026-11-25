@@ -1,6 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import { z } from "zod";
+import {
+	parseClaudeQuestions,
+	validateClaudeQuestionAnswers,
+} from "../../../shared/claude-session/questions";
 import { buildTimeline } from "../../../shared/claude-session/timeline";
 import { defaultCodexPermission } from "../../../shared/codex-session/permissions";
 import { claudeSessionManager as claude } from "../claude-session/session-manager";
@@ -8,6 +12,7 @@ import { loadSessionTranscript } from "../claude-session/transcript";
 import { listClaudeSessions } from "../claude-sessions/claude-sessions";
 import { codexSessionManager as codex } from "../codex-session/session-manager";
 import { sessionNames } from "../session-names";
+import { mobileActivityTitle, mobileMarkdown } from "./message-format";
 import {
 	type MobileMessage,
 	type MobileProvider,
@@ -56,6 +61,40 @@ const transcripts = new Map<
 	string,
 	{ at: number; events: ReturnType<typeof loadSessionTranscript> }
 >();
+const timelines = new Map<
+	string,
+	{
+		stored: unknown;
+		last: unknown;
+		length: number;
+		value: ReturnType<typeof buildTimeline>;
+	}
+>();
+function claudeWorking(key: string) {
+	if (!claude.isRunning(key) || !claude.isBusy(key)) return false;
+	// A late stream frame can arrive after the completed result. Process liveness
+	// and those trailing frames must not keep a finished turn spinning on mobile.
+	for (const event of [...claude.getBufferedEvents(key)].reverse()) {
+		if (event.type === "local_user_message") return true;
+		if (
+			event.type === "result" ||
+			(event.type === "local_notice" && event.fatal)
+		)
+			return false;
+	}
+	return true;
+}
+function presentedPage(messages: MobileMessage[], before?: string) {
+	const page = messagePage(messages, before);
+	return {
+		...page,
+		messages: page.messages.map((item) =>
+			item.kind === "assistant"
+				? { ...item, html: mobileMarkdown(item.text) }
+				: item,
+		),
+	};
+}
 async function claudeTimeline(key: string) {
 	const session = claude.listSessions().find((s) => s.key === key);
 	if (!session)
@@ -63,7 +102,7 @@ async function claudeTimeline(key: string) {
 	let stored = session.sessionId
 		? transcripts.get(session.sessionId)
 		: undefined;
-	if (session.sessionId && (!stored || Date.now() - stored.at > 5_000)) {
+	if (session.sessionId && (!stored || Date.now() - stored.at > 15_000)) {
 		stored = {
 			at: Date.now(),
 			events: loadSessionTranscript(session.sessionId),
@@ -72,12 +111,26 @@ async function claudeTimeline(key: string) {
 			transcripts.delete(transcripts.keys().next().value ?? "");
 		transcripts.set(session.sessionId, stored);
 	}
-	return buildTimeline(
-		mergeTranscriptWithBuffer(
-			(await stored?.events) ?? [],
-			claude.getBufferedEvents(key),
-		),
-	);
+	const events = (await stored?.events) ?? [];
+	const buffer = claude.getBufferedEvents(key);
+	const cached = timelines.get(key);
+	if (
+		cached &&
+		cached.stored === stored?.events &&
+		cached.last === buffer.at(-1) &&
+		cached.length === buffer.length
+	)
+		return cached.value;
+	const value = buildTimeline(mergeTranscriptWithBuffer(events, buffer));
+	if (timelines.size >= 12)
+		timelines.delete(timelines.keys().next().value ?? "");
+	timelines.set(key, {
+		stored: stored?.events,
+		last: buffer.at(-1),
+		length: buffer.length,
+		value,
+	});
+	return value;
 }
 
 function codexState(key: string) {
@@ -89,6 +142,10 @@ function codexState(key: string) {
 
 export function mobileSessionRouter() {
 	const router = express.Router();
+	router.use((_req, res, next) => {
+		res.setHeader("Cache-Control", "no-store");
+		next();
+	});
 	const handle =
 		(fn: (req: express.Request, res: express.Response) => Promise<unknown>) =>
 		(req: express.Request, res: express.Response) => {
@@ -107,13 +164,17 @@ export function mobileSessionRouter() {
 		provider: providerSchema.parse(req.params.provider),
 		key: String(req.params.key),
 	});
-	const once = <T>(req: express.Request, action: () => Promise<T>) => {
+	const once = <T>(
+		req: express.Request,
+		action: () => Promise<T>,
+		validate?: () => void,
+	) => {
 		const id = z.string().uuid().parse(req.body?.requestId);
 		const signature = createHash("sha256")
 			.update(req.path)
 			.update(JSON.stringify(req.body))
 			.digest("hex");
-		return ledger.run(id, signature, action);
+		return ledger.run(id, signature, action, validate);
 	};
 
 	router.get(
@@ -134,6 +195,7 @@ export function mobileSessionRouter() {
 					.filter((s) => s.running)
 					.map((s) => ({
 						...s,
+						running: claudeWorking(s.key),
 						provider: "claude",
 						title:
 							sessionNames.get({
@@ -284,26 +346,26 @@ export function mobileSessionRouter() {
 				if (
 					before &&
 					state.historyCursor &&
-					state.items.findIndex((i) => i.id === before) < 300
+					state.items.findIndex((i) => i.id === before) < 60
 				)
 					await codex.earlier(key);
 				const current = codexState(key);
-				const page = messagePage(
+				const page = presentedPage(
 					current.items.map((item) => ({
 						id: item.id,
 						kind: item.kind,
-						title: item.command || item.title,
-						text:
-							item.kind === "activity" ? item.text.slice(-16_000) : item.text,
+						title: mobileActivityTitle(item),
+						text: item.kind === "activity" ? "" : item.text,
+						detailAvailable: item.kind === "activity",
 						status: item.status,
 						images: [
-							...(item.images ?? []).map((source) => ({
+							...(item.images ?? []).map((_source, index) => ({
 								name: "Attached image",
-								source,
+								index,
 							})),
 							...(item.imagePaths ?? []).map((_path, index) => ({
 								name: "Attached image",
-								index,
+								index: (item.images?.length ?? 0) + index,
 							})),
 						],
 					})),
@@ -321,7 +383,8 @@ export function mobileSessionRouter() {
 						}) ??
 						current.title ??
 						"Codex",
-					working: current.status === "working" || current.status === "loading",
+					working: current.status === "working",
+					loading: current.status === "loading",
 					error: current.error,
 					questions: current.approvals,
 					context: {
@@ -334,15 +397,16 @@ export function mobileSessionRouter() {
 			const timeline = await claudeTimeline(key);
 			const messages: MobileMessage[] = timeline.items.flatMap(
 				(item): MobileMessage[] => {
+					if ("parentToolUseId" in item && item.parentToolUseId) return [];
 					if (item.kind === "user")
 						return [
 							{
 								id: item.id,
 								kind: "user",
 								text: item.text,
-								images: item.attachments?.map((a) => ({
+								images: item.attachments?.map((a, index) => ({
 									name: a.name,
-									source: a.thumbnail,
+									index: a.thumbnail ? index : undefined,
 								})),
 							},
 						];
@@ -354,9 +418,8 @@ export function mobileSessionRouter() {
 								id: item.id,
 								kind: "activity",
 								title: item.name,
-								text: `${JSON.stringify(item.input, null, 2)}\n${item.output ?? ""}`.slice(
-									-16_000,
-								),
+								text: "",
+								detailAvailable: true,
 								status: item.status,
 							},
 						];
@@ -366,7 +429,7 @@ export function mobileSessionRouter() {
 				},
 			);
 			res.json({
-				...messagePage(messages, before),
+				...presentedPage(messages, before),
 				provider,
 				title:
 					sessionNames.get({
@@ -377,26 +440,91 @@ export function mobileSessionRouter() {
 							undefined,
 					}) ?? "Claude",
 				context: timeline.usage,
-				working: claude.isRunning(key) && claude.isBusy(key),
+				working: claudeWorking(key),
 				questions: (timeline.permissions ?? []).map((p) => ({
 					id: p.id,
-					title: `Allow ${p.tool}?`,
+					title:
+						p.tool === "AskUserQuestion"
+							? "Claude has a question"
+							: `Allow ${p.tool}?`,
 					detail: JSON.stringify(p.input, null, 2),
-					questions: [],
+					questions:
+						p.tool === "AskUserQuestion"
+							? (parseClaudeQuestions(p.input) ?? []).map((q) => ({
+									id: q.question,
+									question: q.question,
+									options: q.options.map((o) => o.label),
+									descriptions: q.options.map((o) => o.description),
+									multiSelect: q.multiSelect,
+								}))
+							: [],
 				})),
 			});
 		}),
 	);
 	router.get(
-		"/codex/:key/image/:item/:index",
+		"/:provider/:key/activity/:item",
 		handle(async (req, res) => {
-			res.json(
-				await codex.attachment(
-					String(req.params.key),
-					String(req.params.item),
-					z.coerce.number().int().min(0).max(100).parse(req.params.index),
-				),
-			);
+			const { provider, key } = providerKey(req);
+			if (provider === "codex") {
+				const item = codexState(key).items.find(
+					(i) => i.id === req.params.item && i.kind === "activity",
+				);
+				if (!item) throw new Error("This activity is no longer available.");
+				res.json({
+					text: [item.command, item.input, item.text]
+						.filter(Boolean)
+						.join("\n")
+						.slice(-16_000),
+				});
+			} else {
+				const item = (await claudeTimeline(key)).items.find(
+					(i) => i.id === req.params.item && i.kind === "tool",
+				);
+				if (item?.kind !== "tool")
+					throw new Error("This activity is no longer available.");
+				res.json({
+					text: `${JSON.stringify(item.input, null, 2)}\n${item.output ?? ""}`.slice(
+						-16_000,
+					),
+				});
+			}
+		}),
+	);
+	router.get(
+		"/:provider/:key/image/:item/:index",
+		handle(async (req, res) => {
+			const { provider, key } = providerKey(req);
+			const index = z.coerce
+				.number()
+				.int()
+				.min(0)
+				.max(100)
+				.parse(req.params.index);
+			if (provider === "claude") {
+				const item = (await claudeTimeline(key)).items.find(
+					(i) => i.id === req.params.item,
+				);
+				const attachment =
+					item?.kind === "user" ? item.attachments?.[index] : undefined;
+				if (!attachment?.thumbnail)
+					throw new Error("This image is no longer available.");
+				res.json({ source: attachment.thumbnail, name: attachment.name });
+			} else {
+				const item = codexState(key).items.find(
+					(i) => i.id === req.params.item,
+				);
+				if (item?.images?.[index])
+					res.json({ source: item.images[index], name: "Attached image" });
+				else
+					res.json(
+						await codex.attachment(
+							key,
+							String(req.params.item),
+							index - (item?.images?.length ?? 0),
+						),
+					);
+			}
 		}),
 	);
 	router.post(
@@ -404,39 +532,42 @@ export function mobileSessionRouter() {
 		handle(async (req, res) => {
 			const { provider, key } = providerKey(req);
 			const body = promptSchema.parse(req.body);
+			const validateSend = () => {
+				if (provider !== "claude") return;
+				if (!claude.isRunning(key))
+					throw new Error("Resume this session from History before sending.");
+				if (
+					claudeWorking(key) ||
+					buildTimeline(claude.getBufferedEvents(key)).permissions?.length
+				)
+					throw new Error(
+						"Claude is busy or needs input. Answer or dismiss its question, or wait for the turn to finish, then retry.",
+					);
+			};
 			res.json(
-				await once(req, async () => {
-					if (provider === "codex") {
-						const state = codexState(key);
-						await codex.send({
-							key,
-							text: body.text,
-							model: state.model,
-							effort: state.effort,
-							permission: state.permission ?? defaultCodexPermission(),
-							images: body.images.map(
-								(i) => `data:${i.mediaType};base64,${i.data}`,
-							),
-						});
-					} else {
-						if (!claude.isRunning(key))
-							throw new Error(
-								"Resume this session from History before sending.",
-							);
-						// Permissions are live buffer state, never stored history. Keep
-						// this check synchronous with send so a new turn cannot slip in
-						// while a transcript read is awaiting disk.
-						if (
-							claude.isBusy(key) ||
-							buildTimeline(claude.getBufferedEvents(key)).permissions?.length
-						)
-							throw new Error(
-								"Claude is busy or needs input. Queue this message in Flock or wait for the turn to finish.",
-							);
-						claude.send(key, body.text, false, body.images);
-					}
-					return { ok: true };
-				}),
+				await once(
+					req,
+					async () => {
+						if (provider === "codex") {
+							const state = codexState(key);
+							await codex.send({
+								key,
+								text: body.text,
+								model: state.model,
+								effort: state.effort,
+								permission: state.permission ?? defaultCodexPermission(),
+								images: body.images.map(
+									(i) => `data:${i.mediaType};base64,${i.data}`,
+								),
+							});
+						} else {
+							validateSend();
+							claude.send(key, body.text, false, body.images);
+						}
+						return { ok: true };
+					},
+					validateSend,
+				),
 			);
 		}),
 	);
@@ -464,17 +595,21 @@ export function mobileSessionRouter() {
 				const pending = codexState(key).approvals.find((p) => p.id === body.id);
 				if (!pending)
 					throw new Error("This question has already been answered.");
-				if (pending.questions.some((q) => !body.answers?.[q.id]?.trim()))
+				if (
+					body.allow &&
+					pending.questions.some((q) => !body.answers?.[q.id]?.trim())
+				)
 					throw new Error("Answer every question first.");
 				await codex.answer(key, body.id, body.allow, body.answers);
 			} else {
-				if (
-					!buildTimeline(claude.getBufferedEvents(key)).permissions?.some(
-						(p) => p.id === body.id,
-					)
-				)
+				const pending = buildTimeline(
+					claude.getBufferedEvents(key),
+				).permissions?.find((p) => p.id === body.id);
+				if (!pending)
 					throw new Error("This permission request has already been answered.");
-				claude.answerPermission(key, body.id, body.allow);
+				if (body.allow && pending.tool === "AskUserQuestion")
+					validateClaudeQuestionAnswers(pending.input, body.answers);
+				claude.answerPermission(key, body.id, body.allow, body.answers);
 			}
 			res.json({ ok: true });
 		}),

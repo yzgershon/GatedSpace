@@ -1,10 +1,49 @@
 import { expect, test } from "bun:test";
 import {
 	defaultCodexEffort,
+	isCodexModelError,
 	mentionedSkills,
 	normalizeCodexLimits,
 	normalizeCodexSkills,
+	resolveCodexEffort,
 } from "./controls";
+
+test("GPT-6.2 choices survive catalog refreshes and valid model changes", () => {
+	const model = {
+		id: "gpt-6.2-astra",
+		name: "GPT-6.2 Astra",
+		defaultEffort: "low",
+		efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+	};
+	for (const effort of model.efforts) {
+		expect(resolveCodexEffort(model, effort)).toBe(effort);
+		expect(resolveCodexEffort(undefined, effort)).toBe(effort);
+	}
+	expect(resolveCodexEffort(model)).toBe("xhigh");
+	expect(resolveCodexEffort(model, "none")).toBe("xhigh");
+	expect(
+		resolveCodexEffort({ ...model, efforts: ["low", "medium"] }, "ultra"),
+	).toBe("low");
+	expect(
+		defaultCodexEffort({
+			...model,
+			defaultEffort: "invalid",
+			efforts: ["medium"],
+		}),
+	).toBe("medium");
+});
+
+test("model rejection is distinct from account setup and usage errors", () => {
+	expect(
+		isCodexModelError(
+			`Error running remote compact task: {"error":{"message":"The 'gpt-6.2-astra' model is not supported when using Codex with a ChatGPT account.","code":"model_not_found"}}`,
+		),
+	).toBe(true);
+	expect(isCodexModelError("Model unavailable")).toBe(true);
+	expect(isCodexModelError("Authentication expired")).toBe(false);
+	expect(isCodexModelError("You've hit your usage limit")).toBe(false);
+	expect(isCodexModelError(null)).toBe(false);
+});
 
 test("Extra High wins over the CLI default when the model supports it", () => {
 	expect(

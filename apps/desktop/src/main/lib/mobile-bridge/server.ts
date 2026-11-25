@@ -23,6 +23,7 @@ import { randomUUID } from "node:crypto";
 import type { Server } from "node:http";
 import { networkInterfaces } from "node:os";
 import express from "express";
+import gatedSpaceIconPath from "../../../resources/build/icons/icon.png?asset";
 import type { UserImagePayload } from "../../../shared/claude-session/events";
 import { buildTimeline } from "../../../shared/claude-session/timeline";
 import { builtInThemes } from "../../../shared/themes/built-in";
@@ -39,10 +40,11 @@ import {
 } from "./binding";
 import { readBridgeState } from "./bridge-state";
 import { MOBILE_BRIDGE_HTML } from "./client-html";
+import { MAX_MOBILE_PROMPT_BYTES } from "./limits";
 import { pushService } from "./push";
 import { isAllowedPushEndpoint } from "./push-endpoint";
 import {
-	MOBILE_BRIDGE_ICON_SVG,
+	MOBILE_BRIDGE_ICON_URL,
 	MOBILE_BRIDGE_MANIFEST,
 	MOBILE_BRIDGE_PAGE_VERSION,
 	MOBILE_BRIDGE_SERVICE_WORKER,
@@ -470,7 +472,7 @@ export class MobileBridge {
 			res
 				.type("html")
 				.send(
-					MOBILE_BRIDGE_HTML.replace(
+					MOBILE_BRIDGE_HTML.replaceAll(
 						"__PAGE_VERSION__",
 						MOBILE_BRIDGE_PAGE_VERSION,
 					),
@@ -478,9 +480,7 @@ export class MobileBridge {
 		});
 
 		// Lets the page be installed to the home screen and run without browser
-		// chrome. No service worker: this is useless offline by design (it drives
-		// a desktop that has to be reachable), and a stale service worker is a
-		// worse version of the caching problem above.
+		// chrome. The notification worker deliberately does not cache these assets.
 		app.get("/manifest.webmanifest", (_req, res) => {
 			res.setHeader("Cache-Control", "no-store");
 			res.type("application/manifest+json").send(MOBILE_BRIDGE_MANIFEST);
@@ -488,7 +488,12 @@ export class MobileBridge {
 
 		app.get("/icon.svg", (_req, res) => {
 			res.setHeader("Cache-Control", "no-store");
-			res.type("image/svg+xml").send(MOBILE_BRIDGE_ICON_SVG);
+			res.redirect(MOBILE_BRIDGE_ICON_URL);
+		});
+
+		app.get("/icon.png", (_req, res) => {
+			res.setHeader("Cache-Control", "no-store");
+			res.type("image/png").sendFile(gatedSpaceIconPath);
 		});
 
 		// Unauthenticated on purpose: a service worker script is fetched by the
@@ -524,7 +529,7 @@ export class MobileBridge {
 		);
 		app.use(
 			"/api/mobile/:provider/:key/send",
-			express.json({ limit: MAX_PROMPT_BYTES }),
+			express.json({ limit: MAX_MOBILE_PROMPT_BYTES }),
 		);
 		app.use("/api", express.json({ limit: MAX_CONTROL_JSON_BYTES }));
 		app.use("/api", (_req, res, next) => {

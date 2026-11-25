@@ -22,7 +22,11 @@
  * releases for a one-line CSS fix. Bump the last part for each change worth
  * confirming on the device.
  */
-export const MOBILE_BRIDGE_PAGE_VERSION = "1.4.1";
+export const MOBILE_BRIDGE_PAGE_VERSION = "1.5.0";
+
+// A new URL replaces the old placeholder in browser/launcher icon caches.
+// Served from the same PNG used by the desktop installer, without redrawing it.
+export const MOBILE_BRIDGE_ICON_URL = "/icon.png?v=gatedspace-1";
 
 export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
 	name: "GatedSpace",
@@ -38,27 +42,13 @@ export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
 	theme_color: "#0e0e0e",
 	icons: [
 		{
-			src: "/icon.svg",
-			sizes: "any",
-			type: "image/svg+xml",
-			purpose: "any maskable",
+			src: MOBILE_BRIDGE_ICON_URL,
+			sizes: "1024x1024",
+			type: "image/png",
+			purpose: "any",
 		},
 	],
 });
-
-/**
- * SVG rather than a set of PNGs: one file covers every density, and the app
- * has no build step to generate raster sizes from.
- *
- * `maskable` in the manifest means Android may crop this to a circle or
- * squircle, so the mark is kept well inside the safe zone — the middle 80% —
- * rather than running to the edges.
- */
-export const MOBILE_BRIDGE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#0e0e0e"/>
-  <path d="M256 132 L352 300 L160 300 Z" fill="#d97757"/>
-  <circle cx="256" cy="356" r="26" fill="#d97757"/>
-</svg>`;
 
 /**
  * The service worker. Its entire job is notifications.
@@ -101,8 +91,8 @@ self.addEventListener("push", function (event) {
         lastNoticeId = notice && notice.id;
         return self.registration.showNotification(title, {
           body: body,
-          icon: "/icon.svg",
-          badge: "/icon.svg",
+          icon: "${MOBILE_BRIDGE_ICON_URL}",
+          badge: "${MOBILE_BRIDGE_ICON_URL}",
           // Same tag for everything: a phone left alone for an hour should
           // show the latest state, not a stack of twenty.
           tag: "gatedspace-agent",

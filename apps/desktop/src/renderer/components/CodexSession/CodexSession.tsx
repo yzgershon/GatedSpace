@@ -1,13 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
-import { bindCodexDraftSession } from "renderer/lib/codex-session/draft";
+import {
+	bindCodexDraftSession,
+	getCodexDraft,
+} from "renderer/lib/codex-session/draft";
 import {
 	getCodexSession,
 	publishCodexSession,
 	subscribeCodexSession,
 } from "renderer/lib/codex-session/store";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
+import { isCodexModelError } from "shared/codex-session/controls";
 import type { CodexTurnReview } from "shared/codex-session/review";
 import { CodexAccount } from "./components/CodexAccount/CodexAccount";
 import { CodexComposer } from "./components/CodexComposer/CodexComposer";
@@ -50,6 +54,7 @@ export function CodexSession(props: CodexSessionProps) {
 		let disposed = false;
 		if (resumeSessionId && !forkSession)
 			bindCodexDraftSession(paneId, resumeSessionId);
+		const preferences = getCodexDraft(paneId);
 		const subscription = electronTrpcClient.codexSession.stream.subscribe(
 			{ key: paneId },
 			{
@@ -65,7 +70,8 @@ export function CodexSession(props: CodexSessionProps) {
 			.mutate({
 				key: paneId,
 				cwd,
-				model,
+				model: preferences.model || model,
+				effort: preferences.effort,
 				resumeSessionId,
 				forkSession,
 				workspaceId,
@@ -74,6 +80,7 @@ export function CodexSession(props: CodexSessionProps) {
 				if (!disposed) {
 					publishCodexSession(next);
 					setError(null);
+					void models.refetch();
 				}
 			})
 			.catch((e: Error) => {
@@ -121,15 +128,31 @@ export function CodexSession(props: CodexSessionProps) {
 			{state?.usageLimit && <CodexUsageRecovery state={state} />}
 			{!state?.usageLimit && (error || state?.error) && (
 				<div className="codex-error select-text cursor-text" role="alert">
-					<span>{error || state?.error}</span>
-					<AgentSetup
-						agent="codex"
-						compact
-						onReady={() => {
-							setError(null);
-							setRetry((n) => n + 1);
-						}}
-					/>
+					{isCodexModelError(error || state?.error) ? (
+						<div className="min-w-0">
+							<p>
+								Codex rejected this model. Update Codex, then reopen GatedSpace,
+								or choose an available model from Model and effort. Your
+								conversation is preserved.
+							</p>
+							<details className="mt-2 text-muted-foreground break-words">
+								<summary className="cursor-pointer">Error details</summary>
+								{error || state?.error}
+							</details>
+						</div>
+					) : (
+						<>
+							<span>{error || state?.error}</span>
+							<AgentSetup
+								agent="codex"
+								compact
+								onReady={() => {
+									setError(null);
+									setRetry((n) => n + 1);
+								}}
+							/>
+						</>
+					)}
 					{state?.status === "error" && (
 						<button
 							type="button"
@@ -148,6 +171,11 @@ export function CodexSession(props: CodexSessionProps) {
 				paneId={paneId}
 				state={state}
 				models={models.data ?? []}
+				modelsLoading={models.isFetching}
+				modelsError={models.error?.message}
+				onRefreshModels={() => {
+					void models.refetch();
+				}}
 				onError={setError}
 			/>
 		</section>

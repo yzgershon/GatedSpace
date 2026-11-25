@@ -1,3 +1,8 @@
+import {
+	MAX_MOBILE_ATTACHMENTS,
+	MAX_MOBILE_IMAGE_BASE64,
+	MAX_MOBILE_PROMPT_BYTES,
+} from "./limits";
 import { MOBILE_SESSION_CLIENT_JS } from "./session-client";
 /**
  * The phone app's behaviour.
@@ -55,7 +60,7 @@ function api(path, options) {
   var generation = viewGeneration, controller = new AbortController();
   var deadline = setTimeout(function () { controller.abort(); }, options && options.method === "POST" ? 120000 : 15000);
   return fetch("/api" + path, Object.assign({
-    headers: { "x-bridge-token": TOKEN, "content-type": "application/json" }, signal: controller.signal
+    headers: { "x-bridge-token": TOKEN, "content-type": "application/json" }, signal: controller.signal, cache:"no-store"
   }, options || {})).then(function (r) {
     return r.json().catch(function () { return {}; }).then(function (data) {
       if (r.status === 401) {
@@ -63,14 +68,17 @@ function api(path, options) {
         throw new Error("This phone is no longer paired. Open the link from GatedSpace settings again.");
       }
       if (!r.ok) throw new Error(data.error || "Request failed (" + r.status + ")");
-      if ((!options || !options.method || options.method === "GET") && generation !== viewGeneration) throw new Error("View changed.");
+      if (path !== "/themes" && (!options || !options.method || options.method === "GET") && generation !== viewGeneration) throw new Error("View changed.");
       return data;
     });
+  }).catch(function(error) {
+    if (error.name === "AbortError") throw new Error("The desktop took too long to respond. Check its connection and try again.");
+    throw error;
   }).finally(function () { clearTimeout(deadline); });
 }
 function fail(message) {
   if (message === "View changed.") return;
-  networkMessage(message);
+  showHint(message, true);
 }
 
 /* ---------------------------------------------------------------- theming */
@@ -114,6 +122,7 @@ function loadThemes() {
   return api("/themes").then(function (data) {
     themes = data.themes || [];
     applyTheme(currentTheme());
+    if (tab === "settings" && !current) renderSettings();
   }).catch(function () { /* fallback palette stays */ });
 }
 
@@ -121,6 +130,7 @@ function loadThemes() {
 
 function setTab(next) {
   saveDraft(); viewGeneration++; networkMessage("");
+  imageObserver.disconnect(); sessionData = null; refreshBusy = false;
   tab = next;
   current = null;
   clearInterval(timer); timer = null;
@@ -678,7 +688,9 @@ input.addEventListener("input", autosize);
 /** Long edge, in px, after downscaling. Screenshots stay legible well below this. */
 var MAX_IMAGE_EDGE = 1600;
 /** Enough for a bug report; a guard against selecting an entire camera roll. */
-var MAX_ATTACHMENTS = 6;
+var MAX_ATTACHMENTS = ${MAX_MOBILE_ATTACHMENTS};
+var MAX_IMAGE_BASE64 = ${MAX_MOBILE_IMAGE_BASE64};
+var MAX_PROMPT_BYTES = ${MAX_MOBILE_PROMPT_BYTES};
 
 var pending = [];   // images chosen but not yet sent
 var attachmentJob = null;
@@ -707,7 +719,7 @@ function readImage(file) {
       var mediaType = source.slice(5, source.indexOf(";")), data = source.slice(comma + 1);
       // The bridge limit is on base64 characters, not the source file size.
       if (["image/png", "image/jpeg", "image/webp", "image/gif"].indexOf(mediaType) < 0 ||
-          !source.startsWith("data:" + mediaType + ";base64,") || !data || data.length > 5000000) return null;
+          !source.startsWith("data:" + mediaType + ";base64,") || !data || data.length > MAX_IMAGE_BASE64) return null;
       return { name: name, mediaType: mediaType, data: data,
         width: img.naturalWidth, height: img.naturalHeight,
         thumbnail: original.length <= 200000 ? original : undefined };
@@ -722,6 +734,7 @@ function readImage(file) {
         canvas.width = w; canvas.height = h;
         var context = canvas.getContext("2d");
         if (!context) throw new Error("Image memory unavailable");
+        context.fillStyle = "#ffffff"; context.fillRect(0, 0, w, h);
         context.drawImage(img, 0, 0, w, h);
 
         // A separate, much smaller render for the chip and the desktop's own
@@ -736,7 +749,7 @@ function readImage(file) {
         thumbContext.drawImage(canvas, 0, 0, thumb.width, thumb.height);
         var data = canvas.toDataURL("image/jpeg", 0.85).split(",")[1];
         var thumbnail = thumb.toDataURL("image/jpeg", 0.6);
-        if (!data || data.length > 5000000 || !thumbnail.startsWith("data:image/jpeg;base64,")) {
+        if (!data || data.length > MAX_IMAGE_BASE64 || !thumbnail.startsWith("data:image/jpeg;base64,")) {
           throw new Error("Image encoding failed");
         }
 
@@ -777,7 +790,7 @@ function readImage(file) {
 function updateAttachmentState() {
   attachBtn.disabled = !!attachmentJob;
   var preparing = attachmentJob && attachmentJob.key === draftKey();
-  sendBtn.disabled = !!sending[draftKey()] || !!preparing;
+  sendBtn.disabled = !!sending[draftKey()] || !!preparing || !!(sessionData && sessionData.loading);
   if (preparing) showHint("Preparing photo " + attachmentJob.index + " of " + attachmentJob.total + "…", false);
 }
 
@@ -805,6 +818,10 @@ function renderShelf() {
     chip.appendChild(preview); chip.appendChild(remove);
     shelf.appendChild(chip);
   });
+  if (attachmentJob && attachmentJob.key === draftKey()) {
+    shelf.hidden = false;
+    var preparing = document.createElement("div"); preparing.className = "preparing-photo"; preparing.setAttribute("role", "status"); preparing.textContent = "Preparing photo " + attachmentJob.index + " of " + attachmentJob.total + "…"; shelf.appendChild(preparing);
+  }
 }
 
 attachBtn.onclick = function () { fileInput.click(); };
@@ -826,7 +843,7 @@ fileInput.onchange = function () {
     if (job.index >= job.total) {
       attachmentJob = null;
       // Now it is safe to reset, and selecting the same photo again still works.
-      fileInput.value = ""; updateAttachmentState();
+      fileInput.value = ""; updateAttachmentState(); renderShelf();
       if (job.key === draftKey()) {
         if (failures.length) showHint((added ? added + " photo(s) attached. " : "") + failures.join(" "), true);
         else if (truncated) showHint("Only the first " + job.total + " images were added.", true);
@@ -834,7 +851,7 @@ fileInput.onchange = function () {
       }
       return;
     }
-    var file = files[job.index++]; updateAttachmentState();
+    var file = files[job.index++]; updateAttachmentState(); renderShelf();
     // One decoded photo at a time: a camera roll can otherwise exhaust Safari's
     // image/canvas memory. A failed file must not discard the other selections.
     readImage(file).then(function (image) {
@@ -894,10 +911,11 @@ function sessionFromHash() {
 }
 
 if (!TOKEN) fail("Open this page using the link from GatedSpace.");
-else loadThemes().then(function () {
+else {
+  loadThemes();
   var wanted = sessionFromHash();
   setTab("sessions");
   if (wanted) openSession(wanted);
   restorePush();
-});
+}
 `;

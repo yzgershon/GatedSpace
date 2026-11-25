@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+	MAX_MOBILE_ATTACHMENTS,
+	MAX_MOBILE_IMAGE_BASE64,
+	MAX_MOBILE_IMAGE_BYTES,
+} from "./limits";
 
 export const providerSchema = z.enum(["claude", "codex"]);
 export type MobileProvider = z.infer<typeof providerSchema>;
@@ -8,8 +13,19 @@ export const imageSchema = z.object({
 	data: z
 		.string()
 		.min(4)
-		.max(5_000_000)
-		.regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+		.max(MAX_MOBILE_IMAGE_BASE64)
+		.refine((data) => {
+			// Repeating a four-character regex group over MB-sized uploads
+			// overflows V8's stack. A single character class is linear and safe.
+			if (
+				data.length > MAX_MOBILE_IMAGE_BASE64 ||
+				data.length % 4 !== 0 ||
+				!/^[A-Za-z0-9+/]+={0,2}$/.test(data)
+			)
+				return false;
+			const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
+			return (data.length / 4) * 3 - padding <= MAX_MOBILE_IMAGE_BYTES;
+		}, "Invalid or oversized image data."),
 	thumbnail: z
 		.string()
 		.max(200_000)
@@ -20,7 +36,7 @@ export const promptSchema = z
 	.object({
 		requestId: z.string().uuid(),
 		text: z.string().max(200_000).default(""),
-		images: z.array(imageSchema).max(6).default([]),
+		images: z.array(imageSchema).max(MAX_MOBILE_ATTACHMENTS).default([]),
 	})
 	.refine(
 		(p) => p.text.trim() || p.images.length,
@@ -31,8 +47,11 @@ export interface MobileMessage {
 	id: string;
 	kind: "user" | "assistant" | "activity" | "notice";
 	text: string;
+	/** Server-rendered Markdown, with all transcript HTML escaped. */
+	html?: string;
 	title?: string;
 	status?: string;
+	detailAvailable?: boolean;
 	images?: { name: string; source?: string; index?: number }[];
 }
 
@@ -42,7 +61,12 @@ export class RequestLedger {
 		string,
 		{ signature: string; value: Promise<unknown>; at: number }
 	>();
-	run<T>(id: string, signature: string, action: () => Promise<T>): Promise<T> {
+	run<T>(
+		id: string,
+		signature: string,
+		action: () => Promise<T>,
+		validate?: () => void,
+	): Promise<T> {
 		for (const [key, entry] of this.entries) {
 			if (Date.now() - entry.at > 30 * 60_000) this.entries.delete(key);
 		}
@@ -58,6 +82,14 @@ export class RequestLedger {
 			return Promise.reject(
 				new Error("Too many recent requests. Try again shortly."),
 			);
+		// A rejected preflight never called the provider, so a later manual retry
+		// may proceed. Once the action starts, retain even failures to prevent
+		// duplicate sends after an ambiguous connection loss.
+		try {
+			validate?.();
+		} catch (error) {
+			return Promise.reject(error);
+		}
 		const value = Promise.resolve().then(action);
 		this.entries.set(id, { signature, value, at: Date.now() });
 		return value;
@@ -67,7 +99,7 @@ export class RequestLedger {
 export function messagePage(
 	items: MobileMessage[],
 	before?: string,
-	pageSize = 300,
+	pageSize = 60,
 ) {
 	const end = before
 		? items.findIndex((item) => item.id === before)

@@ -1,5 +1,8 @@
 import { MOBILE_BRIDGE_HTML } from "../../src/main/lib/mobile-bridge/client-html";
+import { mobileMarkdown } from "../../src/main/lib/mobile-bridge/message-format";
+import { MOBILE_BRIDGE_PAGE_VERSION } from "../../src/main/lib/mobile-bridge/pwa-assets";
 import type { MobileMessage } from "../../src/main/lib/mobile-bridge/session-contract";
+import { messagePage } from "../../src/main/lib/mobile-bridge/session-contract";
 import { builtInThemes } from "../../src/shared/themes/built-in";
 
 const pixel =
@@ -91,7 +94,10 @@ Bun.serve({
 			);
 		if (!path.startsWith("/api"))
 			return new Response(
-				MOBILE_BRIDGE_HTML.replaceAll("__PAGE_VERSION__", "1.4.0-preview"),
+				MOBILE_BRIDGE_HTML.replaceAll(
+					"__PAGE_VERSION__",
+					`${MOBILE_BRIDGE_PAGE_VERSION}-preview`,
+				),
 				{
 					headers: { "Content-Type": "text/html", "Cache-Control": "no-store" },
 				},
@@ -155,6 +161,34 @@ Bun.serve({
 			return Response.json({ ok: true });
 		}
 		if (path === "/api/preview/received") return Response.json(received);
+		if (path === "/api/preview/state" && req.method === "POST") {
+			const body = await req.json();
+			Object.assign(snapshots[body.provider], body.state);
+			return Response.json({ ok: true });
+		}
+		const imageMatch =
+			/^\/api\/mobile\/(codex|claude)\/[^/]+\/image\/([^/]+)\/(\d+)$/.exec(
+				path,
+			);
+		if (imageMatch) {
+			const item = snapshots[imageMatch[1]].messages.find(
+				(i) => i.id === decodeURIComponent(imageMatch[2]),
+			);
+			return Response.json(
+				item?.images?.[Number(imageMatch[3])] ?? {
+					source: pixel,
+					name: "Attached image",
+				},
+			);
+		}
+		const activityMatch =
+			/^\/api\/mobile\/(codex|claude)\/[^/]+\/activity\/([^/]+)$/.exec(path);
+		if (activityMatch) {
+			const item = snapshots[activityMatch[1]].messages.find(
+				(i) => i.id === decodeURIComponent(activityMatch[2]),
+			);
+			return Response.json({ text: item?.text || "Fixture activity" });
+		}
 		const match =
 			/^\/api\/mobile\/(codex|claude)\/[^/]+(?:\/(send|stop|answer))?$/.exec(
 				path,
@@ -180,7 +214,7 @@ Bun.serve({
 					});
 				return Response.json({ ok: true });
 			}
-			if (url.searchParams.has("before"))
+			if (url.searchParams.has("before") && data.messages.length <= 60)
 				return Response.json({
 					...data,
 					messages: Array.from({ length: 20 }, (_, i) => ({
@@ -190,7 +224,27 @@ Bun.serve({
 					})),
 					hasEarlier: false,
 				});
-			return Response.json(data);
+			const page = messagePage(
+				data.messages,
+				url.searchParams.get("before") ?? undefined,
+			);
+			return Response.json({
+				...data,
+				hasEarlier: page.hasEarlier || data.hasEarlier,
+				messages: page.messages.map((item) => ({
+					...item,
+					...(item.kind === "assistant"
+						? { html: mobileMarkdown(item.text) }
+						: {}),
+					...(item.kind === "activity"
+						? { text: "", detailAvailable: true }
+						: {}),
+					images: item.images?.map((image, index) => ({
+						name: image.name,
+						index,
+					})),
+				})),
+			});
 		}
 		return Response.json(
 			{ error: "Preview route unavailable" },

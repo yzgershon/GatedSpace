@@ -24,6 +24,7 @@
  */
 import { MOBILE_BRIDGE_APP_JS } from "./client-app";
 import { MOBILE_BRIDGE_CSS } from "./client-css";
+import { MOBILE_BRIDGE_ICON_URL } from "./pwa-assets";
 
 const ICON_SESSIONS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
 const ICON_USAGE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>`;
@@ -36,7 +37,8 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
 <link rel="manifest" href="/manifest.webmanifest" />
-<link rel="apple-touch-icon" href="/icon.svg" />
+<link rel="icon" type="image/png" sizes="1024x1024" href="${MOBILE_BRIDGE_ICON_URL}" />
+<link rel="apple-touch-icon" sizes="1024x1024" href="${MOBILE_BRIDGE_ICON_URL}" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

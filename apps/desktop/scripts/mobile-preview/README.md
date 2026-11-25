@@ -8,6 +8,10 @@ The test covers both providers, pagination, offline recovery, draft persistence,
 
 Run `node apps/desktop/scripts/mobile-preview/verify-attachments.mjs` against the same fixture server for photo regressions (Edge required). It covers both providers, camera-size images, same-file reselection, sequential decoding and canvas cleanup, partial failures, read timeouts, canvas-memory fallback, visible errors, and navigation while processing. APIs are simulated; it never sends to a real session. Physical iPhone verification is separate.
 
+Run `node apps/desktop/scripts/mobile-preview/verify-regressions.mjs` for HTTP LAN compatibility (no `crypto.randomUUID`), slow startup, safe Markdown, completion status, question focus/dismissal, tool detail loading, a 20-image shelf at 320px, and a 1,000-message paginated conversation. Receipts and screenshots are in `.tmp/mobile-regressions/`.
+
+Run `node apps/desktop/scripts/mobile-preview/verify-upload-v8.mjs` with Node, not Bun. It bundles the production upload schema and checks 200 KB–5 MB images in V8, the engine Electron actually uses. A repeated-group base64 regex passed Bun/JavaScriptCore tests but overflowed V8's stack on large uploads. This test also checks invalid data and the 20-image limit. Receipts are in `.tmp/mobile-contract-v8/`.
+
 Run manager route and bridge lifecycle tests in separate Bun processes because they mock singleton modules:
 
 - `bun test apps/desktop/src/main/lib/mobile-bridge/session-api.test.ts`

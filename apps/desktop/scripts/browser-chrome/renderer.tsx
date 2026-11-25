@@ -14,6 +14,7 @@ import { createToolPanels } from "../../src/renderer/routes/_authenticated/_dash
 import { BrowserPaneToolbar } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/hooks/usePaneRegistry/components/BrowserPane/BrowserPane";
 import type { PaneViewerData } from "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/types";
 import { draculaTheme } from "../../src/shared/themes/built-in/dracula";
+import { SplitPreviewFixture } from "./SplitPreviewFixture";
 import "../../src/renderer/globals.css";
 import "../../src/renderer/routes/_authenticated/_dashboard/v2-workspace/$workspaceId/components/WorkspaceToolPanels/tool-panels.css";
 
@@ -60,6 +61,7 @@ function Preview() {
 	const ctx = pane
 		? ({
 				pane,
+				tab: tabs.find((tab) => tab.id === active),
 				actions: {
 					updateData: (data: PaneViewerData) =>
 						tools.store.getState().setPaneData({ paneId: pane.id, data }),
@@ -135,4 +137,6 @@ function Preview() {
 }
 const root = document.createElement("main");
 document.body.append(root);
-createRoot(root).render(<Preview />);
+createRoot(root).render(
+	location.search.includes("split") ? <SplitPreviewFixture /> : <Preview />,
+);

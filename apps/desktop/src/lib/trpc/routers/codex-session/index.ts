@@ -57,6 +57,7 @@ export const createCodexSessionRouter = () =>
 					workspaceId: z.string().optional(),
 					cwd: z.string().min(1),
 					model: z.string().optional(),
+					effort: z.string().optional(),
 					resumeSessionId: z.string().optional(),
 					forkSession: z.boolean().optional(),
 				}),

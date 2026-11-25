@@ -18,6 +18,7 @@ class FakeTransport extends CodexTransport {
 	failSend = false;
 	sendGate?: Promise<void>;
 	active = false;
+	models62 = false;
 	historyEntries?: unknown[];
 	historyFailureCursor?: string;
 	steerFailure?: () => void;
@@ -34,6 +35,22 @@ class FakeTransport extends CodexTransport {
 		if (method === "model/list")
 			return {
 				data: [
+					...(this.models62
+						? ["astra", "sol"].map((family) => ({
+								id: `gpt-6.2-${family}`,
+								model: `gpt-6.2-${family}`,
+								displayName: `GPT-6.2 ${family}`,
+								defaultReasoningEffort: "low",
+								supportedReasoningEfforts: [
+									"low",
+									"medium",
+									"high",
+									"xhigh",
+									"max",
+									"ultra",
+								].map((reasoningEffort) => ({ reasoningEffort })),
+							}))
+						: []),
 					{
 						id: "astra",
 						model: "gpt-6-astra",
@@ -54,7 +71,7 @@ class FakeTransport extends CodexTransport {
 			method === "thread/read"
 		)
 			return {
-				model: "gpt-6-astra",
+				model: typeof p.model === "string" ? p.model : "gpt-6-astra",
 				reasoningEffort: "medium",
 				thread: {
 					id: method === "thread/fork" ? "fork-id" : "original-id",
@@ -134,6 +151,81 @@ const fixture = () => {
 	managers.push(manager);
 	return { manager, transport, names };
 };
+
+test("refresh discovers GPT-6.2 from the native catalog without hardcoded effort levels", async () => {
+	const { manager, transport } = fixture();
+	expect((await manager.models()).some((m) => m.id === "gpt-6.2-astra")).toBe(
+		false,
+	);
+	transport.models62 = true;
+	for (const family of ["astra", "sol"]) {
+		expect(
+			(await manager.models()).find((m) => m.id === `gpt-6.2-${family}`),
+		).toMatchObject({
+			defaultEffort: "low",
+			efforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+		});
+	}
+});
+
+test.each([
+	"gpt-6-astra",
+	"gpt-6.2-astra",
+	"gpt-6.2-sol",
+])("saved model and effort override global defaults on resume: %s", async (model) => {
+	const { manager, transport } = fixture();
+	transport.models62 = true;
+	const state = await manager.start({
+		key: "preferences",
+		cwd: "/workspace",
+		resumeSessionId: "original-id",
+		model,
+		effort: "medium",
+	});
+	expect(state.model).toBe(model);
+	expect(state.effort).toBe("medium");
+	expect(
+		transport.calls.find((c) => c.method === "thread/resume")?.params,
+	).toMatchObject({
+		threadId: "original-id",
+		model,
+		config: { model_reasoning_effort: "medium" },
+	});
+	expect(
+		transport.calls.some(
+			(c) =>
+				c.method === "thread/fork" ||
+				c.method === "thread/compact/start" ||
+				c.method === "turn/start",
+		),
+	).toBe(false);
+	await manager.send({
+		key: "preferences",
+		text: "Continue",
+		model,
+		effort: "xhigh",
+		permission: "read-only",
+	});
+	expect(
+		transport.calls.find((c) => c.method === "turn/start")?.params,
+	).toMatchObject({
+		model,
+		effort: "xhigh",
+		collaborationMode: { settings: { model, reasoning_effort: "xhigh" } },
+	});
+});
+
+test("a resumed conversation without an explicit model does not inherit the new-thread fallback", async () => {
+	const { manager, transport } = fixture();
+	await manager.start({
+		key: "no-preferences",
+		cwd: "/workspace",
+		resumeSessionId: "original-id",
+	});
+	expect(
+		transport.calls.find((c) => c.method === "thread/resume")?.params,
+	).not.toHaveProperty("model");
+});
 
 test("a pane rename refreshes live Codex state and the CLI's saved title", async () => {
 	const { manager, transport, names } = fixture();

@@ -181,6 +181,142 @@ try {
 	await page.getByRole("button", { name: "Preview size", exact: true }).click();
 	await page.getByRole("menuitemradio", { name: /Galaxy S24/ }).click();
 	await page.screenshot({ path: resolve(output, "browser-toolbar.png") });
+	await page.goto(`http://127.0.0.1:${server.address().port}/?split`);
+	const closePreview = (id) =>
+		page
+			.locator(`[data-pane-id="${id}"]`)
+			.getByRole("button", { name: "Close preview pane", exact: true });
+	await closePreview("preview-right").waitFor();
+	assert.equal(
+		await page
+			.getByRole("button", { name: "Close preview pane", exact: true })
+			.count(),
+		2,
+	);
+	const tabId = await page.evaluate(
+		() => window.splitPreviewFixture.state().id,
+	);
+	const survivorData = await page.evaluate(
+		() => window.splitPreviewFixture.state().panes["preview-left"].data,
+	);
+	await closePreview("preview-right").click();
+	await page.waitForFunction(
+		() => window.splitPreviewFixture.state().layout.type === "pane",
+	);
+	assert.equal(
+		await page.evaluate(() => window.splitPreviewFixture.state().id),
+		tabId,
+	);
+	assert.deepEqual(
+		await page.evaluate(() =>
+			Object.keys(window.splitPreviewFixture.state().panes),
+		),
+		["preview-left"],
+	);
+	await page.waitForFunction(
+		() => window.splitPreviewFixture.closed.length === 1,
+	);
+	assert.deepEqual(
+		await page.evaluate(() => window.splitPreviewFixture.closed),
+		["preview-right"],
+	);
+	assert.deepEqual(
+		await page.evaluate(
+			() => window.splitPreviewFixture.state().panes["preview-left"].data,
+		),
+		survivorData,
+	);
+	assert.equal(
+		await page
+			.getByRole("button", { name: "Close preview pane", exact: true })
+			.count(),
+		0,
+	);
+	const remaining = await page
+		.locator('[data-pane-id="preview-left"]')
+		.boundingBox();
+	assert.ok(remaining.width > 900);
+
+	await page.evaluate(() => window.splitPreviewFixture.reset("bottom"));
+	await closePreview("preview-left").waitFor();
+	await page.locator("[data-split-preview]").evaluate((el) => {
+		el.style.width = "280px";
+		el.style.zoom = "1.25";
+	});
+	for (const id of ["preview-left", "preview-right"]) {
+		const close = closePreview(id);
+		const bounds = await close.boundingBox();
+		const paneBounds = await page
+			.locator(`[data-pane-id="${id}"]`)
+			.boundingBox();
+		assert.ok(
+			bounds.width >= 28 &&
+				bounds.x >= paneBounds.x &&
+				bounds.x + bounds.width <= paneBounds.x + paneBounds.width + 1,
+		);
+		assert.ok(
+			await close.evaluate((el) => {
+				const b = el.getBoundingClientRect();
+				return el.contains(
+					document.elementFromPoint(b.x + b.width / 2, b.y + b.height / 2),
+				);
+			}),
+		);
+	}
+	await closePreview("preview-left").click();
+	await page.waitForFunction(
+		() => window.splitPreviewFixture.state().layout.type === "pane",
+	);
+	assert.deepEqual(
+		await page.evaluate(() =>
+			Object.keys(window.splitPreviewFixture.state().panes),
+		),
+		["preview-right"],
+	);
+
+	await page.locator("[data-split-preview]").evaluate((el) => {
+		el.style.width = "100%";
+		el.style.zoom = "1";
+	});
+	await page.evaluate(() => window.splitPreviewFixture.reset("right", 3));
+	await closePreview("preview-2").focus();
+	await page.keyboard.press("Enter");
+	await page.waitForFunction(
+		() => Object.keys(window.splitPreviewFixture.state().panes).length === 2,
+	);
+	assert.equal(
+		await page.evaluate(() => window.splitPreviewFixture.state().layout.type),
+		"split",
+	);
+	await page.evaluate(() => window.splitPreviewFixture.allowClose(false));
+	await closePreview("preview-left").click();
+	assert.equal(
+		await page
+			.getByRole("button", { name: "Close preview pane", exact: true })
+			.count(),
+		2,
+	);
+	await page.evaluate(() => {
+		window.splitPreviewFixture.allowClose(true);
+		window.splitPreviewFixture.maximize("preview-left");
+	});
+	await closePreview("preview-left").click();
+	await page.waitForFunction(
+		() => window.splitPreviewFixture.state().layout.type === "pane",
+	);
+	assert.equal(
+		await page.evaluate(
+			() => window.splitPreviewFixture.state().maximizedPaneId,
+		),
+		null,
+	);
+	assert.deepEqual(
+		await page.evaluate(() =>
+			Object.keys(window.splitPreviewFixture.state().panes),
+		),
+		["preview-right"],
+	);
+	await page.screenshot({ path: resolve(output, "unsplit-preview.png") });
 	assert.deepEqual(errors, []);
 	const result = {
 		ok: true,
@@ -194,6 +330,10 @@ try {
 			"toolbar fits 340/420/720px",
 			"address entry and Chrome IPC callback",
 			"preview size menu",
+			"close one preview retains its sibling's pane ID, URL and tab; survivor fills the panel",
+			"both split directions and nested splits close independently",
+			"close stays clickable in 280px panes at 125% zoom",
+			"keyboard close, close guards and closing a maximized split",
 		],
 		errors,
 	};

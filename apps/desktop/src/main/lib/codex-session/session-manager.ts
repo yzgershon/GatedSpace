@@ -5,10 +5,10 @@ import { basename, extname } from "node:path";
 import { chatImageUrlSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { z } from "zod";
 import {
-	defaultCodexEffort,
 	mentionedSkills,
 	normalizeCodexLimits,
 	normalizeCodexSkills,
+	resolveCodexEffort,
 } from "../../../shared/codex-session/controls";
 import { questionChoices } from "../../../shared/codex-session/question-choices";
 import {
@@ -47,6 +47,7 @@ export interface StartCodexSession {
 	key: string;
 	cwd: string;
 	model?: string;
+	effort?: string;
 	resumeSessionId?: string;
 	forkSession?: boolean;
 	accountId?: string;
@@ -456,7 +457,7 @@ export class CodexSessionManager extends EventEmitter {
 			cwd: input.cwd,
 			title: "Codex",
 			model: input.model ?? "",
-			effort: previous?.effort || "xhigh",
+			effort: input.effort || previous?.effort || "xhigh",
 			status: "loading",
 			turnId: null,
 			items: previous?.items ?? [],
@@ -505,10 +506,11 @@ export class CodexSessionManager extends EventEmitter {
 			const selected =
 				input.model ||
 				previous?.model ||
-				models.find((m) => m.id === "gpt-6-astra")?.id;
-			const effort =
-				previous?.effort ||
-				defaultCodexEffort(models.find((m) => m.id === selected));
+				(!id ? models.find((m) => m.id === "gpt-6-astra")?.id : undefined);
+			const effort = resolveCodexEffort(
+				models.find((m) => m.id === selected),
+				input.effort || previous?.effort,
+			);
 			const projectId =
 				!id || input.forkSession
 					? await this.project(input.cwd, transport)
@@ -536,9 +538,9 @@ export class CodexSessionManager extends EventEmitter {
 							"features.default_mode_request_user_input": true,
 						},
 						...(projectId ? { projectId } : {}),
-						...(id
-							? { threadId: id, excludeTurns: true }
-							: { cwd: input.cwd, ...(selected ? { model: selected } : {}) }),
+						// A saved per-session choice must beat the CLI's global default on resume too.
+						...(selected ? { model: selected } : {}),
+						...(id ? { threadId: id, excludeTurns: true } : { cwd: input.cwd }),
 					},
 				),
 			);

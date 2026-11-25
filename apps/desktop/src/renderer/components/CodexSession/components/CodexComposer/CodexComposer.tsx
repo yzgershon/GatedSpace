@@ -31,7 +31,7 @@ import { readChatImage } from "renderer/lib/prepare-chat-image";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import { requestAccountSwap } from "renderer/stores/claude-account-swap";
 import { codexTaskChanges } from "shared/codex-session/changes";
-import { defaultCodexEffort } from "shared/codex-session/controls";
+import { resolveCodexEffort } from "shared/codex-session/controls";
 import { defaultCodexPermission } from "shared/codex-session/permissions";
 import {
 	type CodexModel,
@@ -47,11 +47,17 @@ export function CodexComposer({
 	paneId,
 	state,
 	models,
+	modelsLoading = false,
+	modelsError,
+	onRefreshModels,
 	onError,
 }: {
 	paneId: string;
 	state?: CodexSessionState;
 	models: CodexModel[];
+	modelsLoading?: boolean;
+	modelsError?: string;
+	onRefreshModels?: () => void;
 	onError: (error: string | null) => void;
 }) {
 	const saved = useSyncExternalStore(
@@ -115,7 +121,7 @@ export function CodexComposer({
 	const fileInput = useRef<HTMLInputElement>(null);
 	const model = chosenModel || state?.model || models[0]?.id || "";
 	const selected = models.find((m) => m.id === model);
-	const effort = chosenEffort || state?.effort || defaultCodexEffort(selected);
+	const effort = resolveCodexEffort(selected, chosenEffort || state?.effort);
 	const working = state?.status === "working";
 	const answeringQuestion = state?.approvals.some(isCodexUserQuestion) ?? false;
 	const queue = useMessageQueue(paneId);
@@ -240,7 +246,7 @@ export function CodexComposer({
 					`Use /model followed by a model ID, or choose one from the model menu.`,
 				);
 			setChosenModel(next.id);
-			setChosenEffort(defaultCodexEffort(next));
+			setChosenEffort(resolveCodexEffort(next, effort));
 			setNotice(`Model set to ${next.name || next.id}.`);
 		} else if (name === "effort") {
 			const next = /^(extra[- ]?high)$/i.test(args)
@@ -569,10 +575,16 @@ export function CodexComposer({
 						provider="Codex"
 						model={model}
 						models={models.map((m) => ({ id: m.id, name: m.name || m.id }))}
+						onModelMenuOpenChange={(open) => {
+							if (open) onRefreshModels?.();
+						}}
 						onModelChange={(id) => {
 							setChosenModel(id);
 							setChosenEffort(
-								defaultCodexEffort(models.find((m) => m.id === id)),
+								resolveCodexEffort(
+									models.find((m) => m.id === id),
+									effort,
+								),
 							);
 						}}
 						mode={plan ? "plan" : permission}
@@ -611,11 +623,22 @@ export function CodexComposer({
 							);
 						}}
 						effort={effort}
-						efforts={selected?.efforts ?? [effort]}
+						efforts={selected?.efforts ?? []}
+						effortUnavailableReason={
+							selected?.efforts.length
+								? undefined
+								: modelsLoading
+									? "Checking available models…"
+									: modelsError
+										? `Could not load models: ${modelsError}. Reopen this menu to retry.`
+										: !selected
+											? "This model is not listed by your Codex CLI. Choose an available model, or update Codex and reopen GatedSpace to load newer models."
+											: "This model does not advertise adjustable reasoning effort."
+						}
 						onEffortChange={setChosenEffort}
 						fast={fast}
 						onFastChange={setFast}
-						disabled={working || !selected}
+						disabled={working}
 					/>
 					<FlowMicrophone
 						paneId={paneId}

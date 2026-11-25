@@ -1,7 +1,7 @@
 import type { RendererContext, Tab } from "@superset/panes";
 import { toast } from "@superset/ui/sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@superset/ui/tooltip";
-import { Chrome, GlobeIcon, Loader2 } from "lucide-react";
+import { Chrome, GlobeIcon, Loader2, X } from "lucide-react";
 import { useCallback, useState, useSyncExternalStore } from "react";
 import { electronTrpcClient } from "renderer/lib/trpc-client";
 import type { BrowserPaneData, PaneViewerData } from "../../../../types";
@@ -175,6 +175,29 @@ export function BrowserPaneToolbar({ ctx }: BrowserPaneToolbarProps) {
 						ctx.actions.updateData({ ...data, previewMode, previewOrientation })
 					}
 				/>
+				{Object.keys(ctx.tab.panes).length > 1 && (
+					<Tooltip>
+						<TooltipTrigger asChild>
+							<button
+								type="button"
+								aria-label="Close preview pane"
+								className="gs-browser-nav-button"
+								onPointerDown={(event) => event.stopPropagation()}
+								onClick={(event) => {
+									event.stopPropagation();
+									// The tab-strip close removes every pane. This closes only
+									// this leaf, using the normal close guards and split cleanup.
+									void ctx.actions.close();
+								}}
+							>
+								<X className="size-4" />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent side="bottom" showArrow={false}>
+							Close this preview pane
+						</TooltipContent>
+					</Tooltip>
+				)}
 			</div>
 		</div>
 	);

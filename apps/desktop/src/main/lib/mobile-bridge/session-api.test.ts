@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, expect, mock, test } from "bun:test";
 import type { Server } from "node:http";
 import express from "express";
+import type { ClaudeStreamEvent } from "../../../shared/claude-session/events";
 import type { CodexSessionState } from "../../../shared/codex-session/types";
 import { SessionNameStore } from "../session-names/store";
 
@@ -72,6 +73,7 @@ mock.module("../codex-session/session-manager", () => ({
 	codexSessionManager: fakeCodex,
 }));
 let claudeBusy = false;
+let claudeExtra: ClaudeStreamEvent[] = [];
 let claudePermissions: Array<{ id: string; tool: string; input: object }> = [];
 mock.module("../claude-session/session-manager", () => ({
 	claudeSessionManager: {
@@ -82,6 +84,7 @@ mock.module("../claude-session/session-manager", () => ({
 		isBusy: () => claudeBusy,
 		getBufferedEvents: () => [
 			{ type: "local_user_message", id: "user", text: "Claude prompt" },
+			...claudeExtra,
 			{ type: "local_permissions", requests: claudePermissions },
 		],
 		answerPermission: (...args: unknown[]) => {
@@ -139,6 +142,231 @@ const post = (path: string, body: unknown) =>
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(body),
 	});
+test("a live Claude process is not reported as a working turn", async () => {
+	const list = await (await fetch(`${origin}/sessions`)).json();
+	expect(
+		list.sessions.find((s: { provider: string }) => s.provider === "claude")
+			.running,
+	).toBe(false);
+	claudeBusy = true;
+	claudeExtra = [
+		{ type: "local_notice", id: "stopped", text: "Stopped", fatal: true },
+	];
+	try {
+		const response = await fetch(`${origin}/claude/claude-pane`);
+		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect((await response.json()).working).toBe(false);
+	} finally {
+		claudeExtra = [];
+		claudeBusy = false;
+	}
+});
+test("completed Claude results override late busy frames until the next user turn", async () => {
+	claudeBusy = true;
+	claudeExtra = [
+		{
+			type: "result",
+			subtype: "success",
+			is_error: false,
+			result: "Done",
+			session_id: "claude-thread",
+			uuid: "done",
+			num_turns: 1,
+			duration_ms: 1,
+			duration_api_ms: 1,
+			total_cost_usd: 0,
+			stop_reason: "end_turn",
+			terminal_reason: "success",
+			usage: {},
+			modelUsage: {},
+			permission_denials: [],
+			api_error_status: null,
+		},
+	];
+	try {
+		expect(
+			(await (await fetch(`${origin}/claude/claude-pane`)).json()).working,
+		).toBe(false);
+		claudeExtra.push({
+			type: "local_user_message",
+			id: "next",
+			text: "Continue",
+		});
+		expect(
+			(await (await fetch(`${origin}/claude/claude-pane`)).json()).working,
+		).toBe(true);
+	} finally {
+		claudeExtra = [];
+		claudeBusy = false;
+	}
+});
+
+test("large Codex images load on demand instead of in every transcript poll", async () => {
+	const original = codexState.items;
+	const source = `data:image/png;base64,${"YQ==".repeat(100_000)}`;
+	codexState.items = [
+		{
+			id: "photo",
+			kind: "user",
+			turnId: "turn",
+			title: "",
+			text: "Photo",
+			images: [source],
+		},
+	];
+	try {
+		const response = await fetch(`${origin}/codex/pane`);
+		const body = await response.text();
+		expect(body.length).toBeLessThan(2_000);
+		expect(JSON.parse(body).messages[0].images).toEqual([
+			{ name: "Attached image", index: 0 },
+		]);
+		const image = await (
+			await fetch(`${origin}/codex/pane/image/photo/0`)
+		).json();
+		expect(image.source).toBe(source);
+	} finally {
+		codexState.items = original;
+	}
+});
+
+test("Codex command code stays behind the activity disclosure", async () => {
+	const original = codexState.items;
+	const command = 'powershell.exe -Command "Get-Content app.ts"';
+	codexState.items = [
+		{
+			id: "command",
+			turnId: "turn",
+			kind: "activity",
+			title: command,
+			command,
+			activityType: "commandExecution",
+			text: "File contents",
+		},
+	];
+	try {
+		const page = await (await fetch(`${origin}/codex/pane`)).json();
+		expect(page.messages[0]).toMatchObject({
+			title: "Ran a command",
+			text: "",
+			detailAvailable: true,
+		});
+		expect(JSON.stringify(page)).not.toContain("powershell.exe");
+		const detail = await (
+			await fetch(`${origin}/codex/pane/activity/command`)
+		).json();
+		expect(detail.text).toContain(command);
+		expect(detail.text).toContain("File contents");
+	} finally {
+		codexState.items = original;
+	}
+});
+
+test("Claude saved images and question answers use the mobile contract", async () => {
+	const source = "data:image/png;base64,YQ==";
+	claudeExtra = [
+		{
+			type: "local_user_message",
+			id: "photo",
+			text: "",
+			attachments: [
+				{ name: "photo.png", mediaType: "image/png", thumbnail: source },
+			],
+		},
+	];
+	claudePermissions = [
+		{
+			id: "ask",
+			tool: "AskUserQuestion",
+			input: {
+				questions: [
+					{
+						question: "Which layout?",
+						options: [{ label: "Compact" }],
+						multiSelect: false,
+					},
+				],
+			},
+		},
+	];
+	try {
+		const data = await (await fetch(`${origin}/claude/claude-pane`)).json();
+		expect(data.messages.at(-1).images).toEqual([
+			{ name: "photo.png", index: 0 },
+		]);
+		expect(data.questions[0].questions[0].id).toBe("Which layout?");
+		expect(
+			(await (await fetch(`${origin}/claude/claude-pane/image/photo/0`)).json())
+				.source,
+		).toBe(source);
+		expect(
+			(await post("/claude/claude-pane/answer", { id: "ask", allow: true }))
+				.status,
+		).toBe(409);
+		expect(
+			(
+				await post("/claude/claude-pane/answer", {
+					id: "ask",
+					allow: true,
+					answers: { "Which layout?": "Compact" },
+				})
+			).status,
+		).toBe(200);
+		expect(answers.at(-1)).toEqual([
+			"claude-pane",
+			"ask",
+			true,
+			{ "Which layout?": "Compact" },
+		]);
+	} finally {
+		claudeExtra = [];
+		claudePermissions = [];
+	}
+});
+
+test("Codex questions can be dismissed without inventing an answer", async () => {
+	expect(
+		(await post("/codex/pane/answer", { id: "question", allow: false })).status,
+	).toBe(200);
+	expect(answers.at(-1)).toEqual(["pane", "question", false, undefined]);
+});
+test("a busy rejection can be retried once Claude is ready without sending twice", async () => {
+	const body = {
+		requestId: crypto.randomUUID(),
+		text: "Retry after finishing",
+	};
+	const before = sent.length;
+	claudeBusy = true;
+	try {
+		expect((await post("/claude/claude-pane/send", body)).status).toBe(409);
+	} finally {
+		claudeBusy = false;
+	}
+	expect((await post("/claude/claude-pane/send", body)).status).toBe(200);
+	expect((await post("/claude/claude-pane/send", body)).status).toBe(200);
+	expect(sent.length - before).toBe(1);
+});
+
+test("large histories start with sixty messages and format only replies", async () => {
+	const original = codexState.items;
+	codexState.items = Array.from({ length: 1_000 }, (_, n) => ({
+		id: String(n),
+		kind: "assistant",
+		turnId: "turn",
+		title: "",
+		text: `**Reply ${n}**`,
+	}));
+	try {
+		const data = await (await fetch(`${origin}/codex/pane`)).json();
+		expect(data.messages).toHaveLength(60);
+		expect(data.hasEarlier).toBe(true);
+		expect(data.messages.at(-1).html).toContain("<strong>Reply 999</strong>");
+		const older = await (await fetch(`${origin}/codex/pane?before=940`)).json();
+		expect(older.messages.at(-1).id).toBe("939");
+	} finally {
+		codexState.items = original;
+	}
+});
 test("Codex unavailable history does not hide live sessions from either provider", async () => {
 	const data = await (await fetch(`${origin}/sessions`)).json();
 	expect(data.sessions.map((s: { provider: string }) => s.provider)).toEqual([

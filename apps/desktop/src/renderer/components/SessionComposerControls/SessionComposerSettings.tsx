@@ -35,6 +35,7 @@ export function SessionComposerSettings({
 	onModeChange,
 	effort,
 	efforts,
+	effortUnavailableReason,
 	onEffortChange,
 	fast,
 	onFastChange,
@@ -51,6 +52,7 @@ export function SessionComposerSettings({
 	onModeChange: (value: string) => void;
 	effort: string;
 	efforts: readonly string[];
+	effortUnavailableReason?: string;
 	onEffortChange: (value: string) => void;
 	fast: boolean;
 	onFastChange?: (value: boolean) => void;
@@ -180,16 +182,22 @@ export function SessionComposerSettings({
 				)}
 				{section !== "permissions" && (
 					<div className="session-settings-effort">
-						<SessionEffortSlider
-							value={effort}
-							options={efforts}
-							onChange={onEffortChange}
-							model={name}
-							compact
-							fast={fast}
-							onFastChange={onFastChange}
-							disabled={disabled}
-						/>
+						{effortUnavailableReason ? (
+							<output className="block text-sm text-muted-foreground select-text cursor-text">
+								{effortUnavailableReason}
+							</output>
+						) : (
+							<SessionEffortSlider
+								value={effort}
+								options={efforts}
+								onChange={onEffortChange}
+								model={name}
+								compact
+								fast={fast}
+								onFastChange={onFastChange}
+								disabled={disabled}
+							/>
+						)}
 					</div>
 				)}
 			</PopoverContent>

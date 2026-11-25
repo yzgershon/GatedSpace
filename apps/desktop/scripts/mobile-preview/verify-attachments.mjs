@@ -226,7 +226,7 @@ try {
 			fault === "oversized"
 				? {
 						...photo(),
-						buffer: Buffer.concat([png, Buffer.alloc(4_000_000)]),
+						buffer: Buffer.concat([png, Buffer.alloc(6_000_000)]),
 					}
 				: photo(),
 		);
