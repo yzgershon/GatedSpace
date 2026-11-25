@@ -210,6 +210,27 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.66",
+		title: "Meet GatedDuet",
+		changes: [
+			{
+				title: "A calmer mobile conversation",
+				detail:
+					"GatedDuet replaces the mobile companion with quieter reply bubbles, a compact navigation dock, and a recent-session menu. Tool traces and repeated message labels stay out of the conversation.",
+			},
+			{
+				title: "Keep directing your agents",
+				detail:
+					"Send messages and photos while Claude or Codex is working. Mobile messages steer the active turn, and switching conversations preserves your drafts.",
+			},
+			{
+				title: "Tasks, saved work, and themes",
+				detail:
+					"Organize conversations into channels, track tasks, and save useful replies from the conversation menu. Choose a theme, text size, and motion preference in the new settings sheet.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

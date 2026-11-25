@@ -186,15 +186,18 @@ describe("the tabbed shell", () => {
 	const script = scriptBody();
 
 	it("has all three tabs in the markup", () => {
-		for (const tab of ["sessions", "usage", "settings"]) {
+		for (const tab of ["sessions", "tasks", "make"]) {
 			expect(MOBILE_BRIDGE_HTML).toContain(`data-tab="${tab}"`);
 		}
 	});
 
-	it("hides the tab bar inside a conversation", () => {
-		// The composer takes the bottom of the screen there; both at once would
-		// stack two fixed bars over the text being read.
-		expect(script).toContain("tabs.hidden = true");
+	it("keeps the dock available in a conversation, with space above it for the composer", () => {
+		const open = script.slice(
+			script.indexOf("function openSession("),
+			script.indexOf("function send()"),
+		);
+		expect(open.includes("tabs.hidden = false")).toBe(true);
+		expect(MOBILE_BRIDGE_HTML.includes("--dock-space:")).toBe(true);
 	});
 
 	it("stops polling when leaving a conversation", () => {

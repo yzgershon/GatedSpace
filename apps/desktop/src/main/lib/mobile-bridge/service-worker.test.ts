@@ -37,9 +37,9 @@ describe("the service worker", () => {
 	it("still shows something when the desktop cannot be reached", () => {
 		// A push that resolves without showing a notification is a permission
 		// browsers take back.
-		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain('"GatedSpace"');
+		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain('"GatedDuet"');
 		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain(
-			"Open GatedSpace for the latest session status.",
+			"Open GatedDuet for the latest session status.",
 		);
 		expect(MOBILE_BRIDGE_SERVICE_WORKER).toContain(".catch(");
 	});
@@ -62,27 +62,49 @@ describe("the service worker", () => {
 });
 
 function workerFixture() {
-	const listeners = new Map<
-		string,
-		(event: { waitUntil: (promise: Promise<unknown>) => void }) => void
-	>();
+	type NoticeData = {
+		noticeId?: string;
+		sessionKey?: string;
+		provider?: string;
+	};
+	type WorkerEvent = {
+		waitUntil: (promise: Promise<unknown>) => void;
+		notification?: { data: NoticeData; close: () => void };
+	};
+	const listeners = new Map<string, (event: WorkerEvent) => void>();
 	const shown: Array<{
 		title: string;
 		options: {
 			body: string;
 			renotify: boolean;
-			data: { noticeId?: string; sessionKey?: string };
+			data: NoticeData;
 		};
 	}> = [];
 	let notice: unknown = null;
+	let existingClients = false;
+	let focused = 0;
+	const opened: string[] = [];
+	const messages: unknown[] = [];
 	const self = {
 		location: { href: "https://example.test/sw.js?t=test" },
-		addEventListener: (
-			name: string,
-			callback: (event: {
-				waitUntil: (promise: Promise<unknown>) => void;
-			}) => void,
-		) => listeners.set(name, callback),
+		addEventListener: (name: string, callback: (event: WorkerEvent) => void) =>
+			listeners.set(name, callback),
+		clients: {
+			matchAll: async () =>
+				existingClients
+					? [
+							{
+								postMessage: (message: unknown) => messages.push(message),
+								focus: async () => {
+									focused++;
+								},
+							},
+						]
+					: [],
+			openWindow: async (url: string) => {
+				opened.push(url);
+			},
+		},
 		registration: {
 			getNotifications: async () =>
 				shown.slice(-1).map((n) => ({ data: n.options.data })),
@@ -100,6 +122,24 @@ function workerFixture() {
 	);
 	return {
 		shown,
+		opened,
+		messages,
+		get focused() {
+			return focused;
+		},
+		async click(data: NoticeData, withOpenApp = false) {
+			existingClients = withOpenApp;
+			let pending: Promise<unknown> = Promise.resolve();
+			const handler = listeners.get("notificationclick");
+			if (!handler) throw new Error("Missing notification click handler");
+			handler({
+				notification: { data, close: () => {} },
+				waitUntil: (promise) => {
+					pending = promise;
+				},
+			});
+			await pending;
+		},
 		async push(value: unknown) {
 			notice = value;
 			let pending: Promise<unknown> = Promise.resolve();
@@ -134,8 +174,39 @@ it("push delivery shows the session title and does not re-alert for duplicate wa
 it("a stale or invalidated wake cannot claim the session finished", async () => {
 	const w = workerFixture();
 	await w.push(null);
-	expect(w.shown[0]?.title).toBe("GatedSpace");
+	expect(w.shown[0]?.title).toBe("GatedDuet");
 	expect(w.shown[0]?.options.body).toBe(
-		"Open GatedSpace for the latest session status.",
+		"Open GatedDuet for the latest session status.",
 	);
+});
+
+it("carries Codex metadata from push through a cold-launch URL", async () => {
+	const w = workerFixture();
+	await w.push({
+		id: "codex-done",
+		title: "Codex done",
+		body: "Finished",
+		sessionKey: "pane/codex",
+		provider: "codex",
+	});
+	const data = w.shown[0]?.options.data;
+	expect(data?.provider).toBe("codex");
+	await w.click(data ?? {});
+	expect(w.opened).toEqual(["/#session=pane%2Fcodex&provider=codex"]);
+});
+
+it("focuses an existing app and delivers Codex identity without opening another window", async () => {
+	const w = workerFixture();
+	await w.click({ sessionKey: "pane-codex", provider: "codex" }, true);
+	expect(w.messages).toEqual([
+		{ type: "open-session", sessionKey: "pane-codex", provider: "codex" },
+	]);
+	expect(w.focused).toBe(1);
+	expect(w.opened).toEqual([]);
+});
+
+it("keeps legacy Claude notification URLs readable", async () => {
+	const w = workerFixture();
+	await w.click({ sessionKey: "old-claude" });
+	expect(w.opened).toEqual(["/#session=old-claude"]);
 });

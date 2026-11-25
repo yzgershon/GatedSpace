@@ -1,9 +1,14 @@
 import { MOBILE_BRIDGE_HTML } from "../../src/main/lib/mobile-bridge/client-html";
+import {
+	type HubState,
+	MobileHubStore,
+} from "../../src/main/lib/mobile-bridge/hub-store";
 import { mobileMarkdown } from "../../src/main/lib/mobile-bridge/message-format";
 import { MOBILE_BRIDGE_PAGE_VERSION } from "../../src/main/lib/mobile-bridge/pwa-assets";
 import type { MobileMessage } from "../../src/main/lib/mobile-bridge/session-contract";
 import { messagePage } from "../../src/main/lib/mobile-bridge/session-contract";
 import { builtInThemes } from "../../src/shared/themes/built-in";
+import { MOBILE_PREVIEW_SHELL } from "./preview-shell";
 
 const pixel =
 	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/8P8AAAAASUVORK5CYII=";
@@ -11,6 +16,7 @@ const snapshots: Record<
 	string,
 	{
 		provider: string;
+		sessionId: string;
 		title: string;
 		working: boolean;
 		questions: unknown[];
@@ -21,21 +27,10 @@ const snapshots: Record<
 > = {
 	codex: {
 		provider: "codex",
+		sessionId: "codex-thread",
 		title: "GatedSpace",
 		working: true,
-		questions: [
-			{
-				id: "q1",
-				title: "Preview preference",
-				questions: [
-					{
-						id: "layout",
-						question: "Which layout should I use?",
-						options: ["Compact", "Comfortable"],
-					},
-				],
-			},
-		],
+		questions: [],
 		context: { contextTokens: 34000, contextWindow: 128000 },
 		hasEarlier: true,
 		messages: [
@@ -65,6 +60,7 @@ const snapshots: Record<
 	},
 	claude: {
 		provider: "claude",
+		sessionId: "claude-thread",
 		title: "Filtrsoft",
 		working: false,
 		questions: [],
@@ -78,9 +74,41 @@ const snapshots: Record<
 			},
 		],
 	},
+	yuta: {
+		provider: "claude",
+		sessionId: "yuta-thread",
+		title: "Yuta",
+		working: true,
+		questions: [],
+		hasEarlier: false,
+		messages: [
+			{
+				id: "y1",
+				kind: "user",
+				text: "Can we make the welcome screen feel a little more personal?",
+			},
+			{
+				id: "y2",
+				kind: "assistant",
+				text: "Yes. I’ll start with a calmer greeting and keep your recent work within reach.",
+			},
+			{
+				id: "y3",
+				kind: "assistant",
+				text: "I’m checking how it feels on a smaller screen, too.",
+			},
+		],
+	},
 };
 const initialSnapshots = JSON.stringify(snapshots);
 const received: unknown[] = [];
+let hubState: HubState | null = null;
+let hub = new MobileHubStore({
+	load: async () => hubState,
+	save: async (state) => {
+		hubState = state;
+	},
+});
 Bun.serve({
 	hostname: "127.0.0.1",
 	port: Number(process.env.MOBILE_PREVIEW_PORT || 52132),
@@ -88,9 +116,14 @@ Bun.serve({
 		const url = new URL(req.url),
 			path = url.pathname;
 		if (path === "/preview")
+			return new Response(MOBILE_PREVIEW_SHELL, {
+				headers: { "Content-Type": "text/html" },
+			});
+		if (path === "/icon.png")
 			return new Response(
-				'<html><title>GatedSpace mobile preview</title><body style="margin:0;background:#19191e;color:#eee;font:15px system-ui;display:grid;place-items:center;min-height:100vh"><div><p>GatedSpace · Mobile preview · Simulated sessions</p><iframe title="Phone preview" src="/?t=preview-token" style="width:390px;height:780px;max-height:88vh;border:1px solid #454550;border-radius:24px"></iframe></div></body></html>',
-				{ headers: { "Content-Type": "text/html" } },
+				Bun.file(
+					new URL("../../src/resources/build/icons/icon.png", import.meta.url),
+				),
 			);
 		if (!path.startsWith("/api"))
 			return new Response(
@@ -104,9 +137,48 @@ Bun.serve({
 			);
 		if (req.headers.get("x-bridge-token") !== "preview-token")
 			return Response.json({ error: "unauthorized" }, { status: 401 });
+		if (path.startsWith("/api/mobile/hub")) {
+			try {
+				if (path === "/api/mobile/hub/references" && req.method === "POST")
+					return Response.json(await hub.resolveReference(await req.json()));
+				if (path === "/api/mobile/hub")
+					return Response.json({
+						...(await hub.list()),
+						execution: "desktop",
+						cloudAvailable: false,
+					});
+				const match =
+					/^\/api\/mobile\/hub\/(channels|tasks|outputs)(?:\/([^/]+))?$/.exec(
+						path,
+					);
+				if (!match)
+					return Response.json({ error: "Not found" }, { status: 404 });
+				const kind = match[1] as "channels" | "tasks" | "outputs";
+				if (req.method === "GET" && kind === "outputs") {
+					const item = await hub.get("outputs", match[2]);
+					return Response.json({ ...item, html: mobileMarkdown(item.body) });
+				}
+				const { expectedVersion, ...data } = await req.json();
+				return Response.json(
+					await hub.write(
+						kind,
+						match[2] ? { ...data, id: match[2] } : data,
+						req.method === "PATCH" ? expectedVersion : undefined,
+					),
+				);
+			} catch (error) {
+				return Response.json(
+					{ error: error instanceof Error ? error.message : "Failed" },
+					{ status: 409 },
+				);
+			}
+		}
 		if (path === "/api/themes")
 			return Response.json({
-				themes: builtInThemes.filter((t) => t.id.includes("dracula")),
+				themes: [
+					...builtInThemes.filter((t) => t.id.includes("dracula")),
+					...builtInThemes.filter((t) => !t.id.includes("dracula")),
+				],
 			});
 		if (path === "/api/mobile/usage/codex")
 			return Response.json({
@@ -124,6 +196,16 @@ Bun.serve({
 			return Response.json({
 				workspaces: [{ id: "workspace", name: "local", project: "GatedSpace" }],
 			});
+		if (path === "/api/mobile/computer")
+			return Response.json({
+				name: "Your desktop",
+				platform: "win32",
+				connected: true,
+				execution: "desktop",
+				browserHandoff: false,
+				cloudAvailable: false,
+				workspaces: [{ id: "workspace", name: "local", project: "GatedSpace" }],
+			});
 		if (path === "/api/mobile/sessions")
 			return Response.json({
 				sessions: [
@@ -133,6 +215,15 @@ Bun.serve({
 						title: "GatedSpace mobile",
 						sessionId: "codex-thread",
 						running: true,
+						lastModified: Date.now() - 60_000,
+					},
+					{
+						key: "yuta",
+						provider: "claude",
+						title: "Yuta",
+						sessionId: "yuta-thread",
+						running: true,
+						lastModified: Date.now() - 120_000,
 					},
 					{
 						key: "claude",
@@ -140,6 +231,7 @@ Bun.serve({
 						title: "Filtrsoft",
 						sessionId: "claude-thread",
 						running: false,
+						lastModified: Date.now() - 3_600_000,
 					},
 				],
 				history: [
@@ -156,6 +248,13 @@ Bun.serve({
 			return Response.json({ key: b.provider, provider: b.provider });
 		}
 		if (path === "/api/preview/reset") {
+			hubState = null;
+			hub = new MobileHubStore({
+				load: async () => hubState,
+				save: async (state) => {
+					hubState = state;
+				},
+			});
 			Object.assign(snapshots, JSON.parse(initialSnapshots));
 			received.length = 0;
 			return Response.json({ ok: true });
@@ -194,7 +293,7 @@ Bun.serve({
 				path,
 			);
 		if (match) {
-			const data = snapshots[match[1] as keyof typeof snapshots];
+			const data = snapshots[path.split("/")[4] === "yuta" ? "yuta" : match[1]];
 			if (match[2]) {
 				const body = await req.json();
 				received.push({ provider: match[1], action: match[2], body });

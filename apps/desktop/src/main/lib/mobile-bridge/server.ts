@@ -40,6 +40,7 @@ import {
 } from "./binding";
 import { readBridgeState } from "./bridge-state";
 import { MOBILE_BRIDGE_HTML } from "./client-html";
+import { mobileHubRouter } from "./hub-api";
 import { MAX_MOBILE_PROMPT_BYTES } from "./limits";
 import { pushService } from "./push";
 import { isAllowedPushEndpoint } from "./push-endpoint";
@@ -536,6 +537,7 @@ export class MobileBridge {
 			res.setHeader("Cache-Control", "no-store");
 			next();
 		});
+		app.use("/api/mobile/hub", mobileHubRouter());
 		app.use("/api/mobile", mobileSessionRouter());
 
 		app.get("/api/sessions", (_req, res) => {

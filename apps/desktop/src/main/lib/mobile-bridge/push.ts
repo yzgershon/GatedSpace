@@ -6,7 +6,9 @@ import {
 	ensureSupersetHomeDirExists,
 	SUPERSET_HOME_DIR,
 } from "../app-environment";
+import { sessionEvents } from "../notifications/session-events";
 import { writeSecureFile } from "../secure-file";
+import type { MobileProvider } from "./session-contract";
 import {
 	audienceOf,
 	buildVapidAuthorization,
@@ -65,6 +67,8 @@ export interface PendingPushNotice {
 	title: string;
 	body: string;
 	sessionKey: string | null;
+	/** Native session metadata, retained so clicks reach the correct provider. */
+	provider?: MobileProvider;
 	at: number;
 }
 
@@ -93,6 +97,8 @@ export class PushService {
 		private readSubscriptions: () => PushSubscription[] = () =>
 			readJsonFile<PushSubscription[]>(SUBSCRIPTIONS_FILE) ?? [],
 		private now: () => number = Date.now,
+		private providerForSession: (key: string) => string | undefined = (key) =>
+			sessionEvents.get(key)?.provider,
 	) {}
 	private keys: VapidKeys | null = null;
 	private subscriptions: PushSubscription[] | null = null;
@@ -162,7 +168,16 @@ export class PushService {
 	 * show a generic notification for an event we could have named.
 	 */
 	async notify(notice: Omit<PendingPushNotice, "at" | "id">): Promise<void> {
-		this.pending = { ...notice, id: randomUUID(), at: this.now() };
+		const provider = notice.sessionKey
+			? (this.providerForSession(notice.sessionKey) ?? notice.provider)
+			: undefined;
+		this.pending = {
+			...notice,
+			provider:
+				provider === "claude" || provider === "codex" ? provider : undefined,
+			id: randomUUID(),
+			at: this.now(),
+		};
 
 		const subscriptions = this.loadSubscriptions();
 		if (!subscriptions.length) return;

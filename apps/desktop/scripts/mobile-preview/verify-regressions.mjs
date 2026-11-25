@@ -130,11 +130,11 @@ try {
 	await poll();
 	await page
 		.getByRole("status")
-		.filter({ hasText: /^Working$/ })
+		.filter({ hasText: /Claude is working/ })
 		.waitFor();
 	await state("claude", { working: false });
 	await poll();
-	assert.equal(await page.locator(".thinking-word").count(), 0);
+	assert.equal(await page.locator(".typing-bubble").count(), 0);
 	assert.equal(await page.locator(".session-ready").textContent(), "Ready");
 	assert(await page.locator("#stop").isHidden());
 	check("working indicator and Stop settle when the agent completes");
@@ -204,12 +204,14 @@ try {
 		],
 	});
 	await open("codex");
-	assert.equal(await page.locator("details.activity[open]").count(), 0);
-	await page.locator("details.activity summary").click();
-	await page
-		.getByText("const internal = 'tool output';", { exact: true })
-		.waitFor();
-	check("tool output loads only when its collapsed activity is opened");
+	assert.equal(await page.locator("details.activity").count(), 0);
+	assert.equal(
+		await page
+			.getByText("const internal = 'tool output';", { exact: true })
+			.count(),
+		0,
+	);
+	check("tool activity and command output stay out of the mobile conversation");
 	await page
 		.locator("#input")
 		.fill("A multiline draft\nSecond line\nThird line\nFourth line");

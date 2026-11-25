@@ -9,6 +9,8 @@
  * Split out of the HTML because the page is now four views rather than one, and
  * a single 900-line template string is a file nobody reads twice.
  */
+import { MOBILE_HUB_CSS } from "./hub-css";
+
 export const MOBILE_BRIDGE_CSS = `
 :root {
   /* Fallbacks only. Overwritten the moment /api/themes answers, so the app
@@ -346,4 +348,5 @@ body:has(#composer:not([hidden])) main { padding-bottom: calc(var(--composer-hei
 .attachment-preview { padding: 0; min-height: 54px; background: none; }
 .turn + .turn { border-top: none; }
 .turn + .turn.you { border: 1px solid var(--border); }
+${MOBILE_HUB_CSS}
 `;

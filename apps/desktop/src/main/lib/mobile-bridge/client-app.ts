@@ -1,8 +1,12 @@
+import { MOBILE_HUB_CLIENT_JS } from "./hub-client";
 import {
 	MAX_MOBILE_ATTACHMENTS,
 	MAX_MOBILE_IMAGE_BASE64,
 	MAX_MOBILE_PROMPT_BYTES,
 } from "./limits";
+import { MOBILE_NAVIGATION_CLIENT_JS } from "./navigation-client";
+import { MOBILE_NOTIFICATION_CLIENT_JS } from "./notification-client";
+import { MOBILE_PREFERENCES_CLIENT_JS } from "./preferences-client";
 import { MOBILE_SESSION_CLIENT_JS } from "./session-client";
 /**
  * The phone app's behaviour.
@@ -31,7 +35,7 @@ export const MOBILE_BRIDGE_APP_JS = `
   var fromUrl = new URLSearchParams(location.search).get("t");
   if (fromUrl) {
     localStorage.setItem("bridge-token", fromUrl);
-    history.replaceState(null, "", location.pathname);
+    history.replaceState(null, "", location.pathname + location.hash);
   }
   // One-time carry-over so an already-paired phone doesn't have to re-scan.
   var legacy = sessionStorage.getItem("bridge-token");
@@ -129,9 +133,10 @@ function loadThemes() {
 /* ------------------------------------------------------------------ views */
 
 function setTab(next) {
-  saveDraft(); viewGeneration++; networkMessage("");
+  rememberChat(); saveDraft(); viewGeneration++; networkMessage("");
   imageObserver.disconnect(); sessionData = null; refreshBusy = false;
   tab = next;
+  document.body.dataset.view = next;
   current = null;
   clearInterval(timer); timer = null;
   composer.hidden = true;
@@ -150,10 +155,13 @@ function setTab(next) {
   }
   tabs.hidden = false;
   render();
+  animateMobileView(main,1);
 }
 
 function render() {
   if (tab === "sessions") return renderSessions();
+  if (tab === "tasks") return renderTasks();
+  if (tab === "make") return renderMake();
   if (tab === "usage") return renderUsage();
   return renderSettings();
 }
@@ -306,112 +314,6 @@ function relFuture(value) {
   return "in " + Math.round(hours / 24) + "d";
 }
 
-function renderSettings() {
-  title.textContent = "Settings";
-  main.innerHTML = "";
-  main.appendChild(sectionHeader("Theme"));
-
-  themes.forEach(function (t) {
-    var opt = document.createElement("div");
-    opt.className = "opt";
-
-    var sw = document.createElement("div");
-    sw.className = "swatch";
-    [t.ui.background, t.ui.card, t.ui.primary].forEach(function (c) {
-      var i = document.createElement("i");
-      i.style.background = c;
-      i.style.boxShadow = "inset 0 0 0 1px rgba(128,128,128,0.25)";
-      sw.appendChild(i);
-    });
-
-    var body = document.createElement("div");
-    body.className = "body";
-    var n = document.createElement("div");
-    n.className = "name";
-    n.textContent = t.name;
-    var s = document.createElement("div");
-    s.className = "sub muted";
-    s.textContent = t.type === "dark" ? "Dark" : "Light";
-    body.appendChild(n); body.appendChild(s);
-
-    opt.appendChild(sw); opt.appendChild(body);
-    if (t.id === (currentTheme() || {}).id) {
-      var tick = document.createElement("span");
-      tick.className = "check";
-      tick.textContent = "✓";
-      opt.appendChild(tick);
-    }
-    opt.onclick = function () {
-      themeId = t.id;
-      localStorage.setItem("gs-theme", t.id);
-      applyTheme(t);
-      renderSettings();
-    };
-    main.appendChild(opt);
-  });
-
-  main.appendChild(sectionHeader("Claude accounts"));
-  var accountBox = document.createElement("div");
-  accountBox.className = "muted";
-  accountBox.textContent = "Loading…";
-  main.appendChild(accountBox);
-  renderAccounts(accountBox);
-
-  main.appendChild(sectionHeader("Notifications"));
-  var status = document.createElement("p");
-  status.className = "muted";
-  main.appendChild(status);
-
-  if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-    status.textContent = "This browser can't do push notifications.";
-    return;
-  }
-  if (!window.isSecureContext) {
-    // Same rule as the microphone: no secure context, no permission. Saying so
-    // beats a button that fails with nothing to explain it.
-    status.textContent = "Needs the HTTPS link. Switch the bridge to Tailscale HTTPS on the desktop.";
-    return;
-  }
-
-  if (Notification.permission === "denied") {
-    status.textContent = "Blocked. Turn notifications back on for this app in your phone's settings.";
-    return;
-  }
-  if (Notification.permission === "granted" && pushReady) {
-    status.textContent = "On. You'll get a notification when an agent finishes or needs you.";
-    return;
-  }
-
-  status.textContent = "Get a notification when an agent finishes or needs you.";
-  var turnOn = document.createElement("button");
-  turnOn.className = "primary";
-  turnOn.textContent = "Turn on notifications";
-  turnOn.onclick = function () {
-    turnOn.disabled = true;
-    turnOn.textContent = "Asking…";
-    enablePush().then(function () {
-      renderSettings();
-    }).catch(function (e) {
-      turnOn.disabled = false;
-      turnOn.textContent = "Turn on notifications";
-      status.className = "err";
-      status.textContent = e.message;
-    });
-  };
-  main.appendChild(turnOn);
-
-  if (isIos() && !window.matchMedia("(display-mode: standalone)").matches) {
-    var ios = document.createElement("p");
-    ios.className = "muted";
-    // iOS refuses push to a page in a browser tab, with no error worth reading.
-    // Better to say so up front than let the button fail.
-    ios.textContent = "On iPhone you have to add this to your home screen first — Share, then Add to Home Screen — and open it from there.";
-    main.appendChild(ios);
-  }
-
-  renderConnection();
-}
-
 /**
  * Switching which Claude account the next session uses.
  *
@@ -486,8 +388,9 @@ function renderAccounts(box) {
 }
 
 /** What this phone is connected to, and how. Diagnostics, not decoration. */
-function renderConnection() {
-  main.appendChild(sectionHeader("Connection"));
+function renderConnection(parent) {
+  parent = parent || main;
+  parent.appendChild(sectionHeader("Connection"));
   var list = document.createElement("div");
   list.className = "facts";
   [
@@ -505,7 +408,7 @@ function renderConnection() {
     row.appendChild(k); row.appendChild(v);
     list.appendChild(row);
   });
-  main.appendChild(list);
+  parent.appendChild(list);
 
   var unpair = document.createElement("button");
   unpair.className = "danger";
@@ -516,7 +419,7 @@ function renderConnection() {
     localStorage.removeItem("bridge-token");
     location.reload();
   };
-  main.appendChild(unpair);
+  parent.appendChild(unpair);
 }
 
 /* ------------------------------------------------------------ notifications */
@@ -578,6 +481,7 @@ function enablePush() {
  * quietly re-registers it with the current token.
  */
 function restorePush() {
+  if(localStorage.getItem("gatedduet-push-off") === "true") return;
   if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
   if (!window.isSecureContext || Notification.permission !== "granted") return;
   registerWorker().then(function (registration) {
@@ -596,10 +500,12 @@ function restorePush() {
   }).catch(function () { /* notifications stay off; nothing else breaks */ });
 }
 
+${MOBILE_NOTIFICATION_CLIENT_JS}
+
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("message", function (event) {
     if (event.data && event.data.type === "open-session" && event.data.sessionKey) {
-      openSession(event.data.sessionKey);
+      openNotifiedSession(event.data.sessionKey, event.data.provider);
     }
   });
 }
@@ -889,12 +795,16 @@ function showHint(message, warn) {
 }
 
 ${MOBILE_SESSION_CLIENT_JS}
+${MOBILE_HUB_CLIENT_JS}
+${MOBILE_NAVIGATION_CLIENT_JS}
+${MOBILE_PREFERENCES_CLIENT_JS}
 
 /* ------------------------------------------------------------------- boot */
 
 for (var i = 0; i < tabs.children.length; i++) {
   (function (btn) {
-    btn.onclick = function () { setTab(btn.dataset.tab); };
+    if(!btn.dataset.tab) return;
+    btn.onclick = function () { if(btn.dataset.tab === "sessions") openHubChat(); else setTab(btn.dataset.tab); };
   })(tabs.children[i]);
 }
 
@@ -903,19 +813,12 @@ for (var i = 0; i < tabs.children.length; i++) {
  * rather than delivering a message, because there is no page yet to receive
  * one. Read once and cleared, so a later reload does not reopen it.
  */
-function sessionFromHash() {
-  var match = /#session=([^&]+)/.exec(location.hash || "");
-  if (!match) return null;
-  history.replaceState(null, "", location.pathname);
-  try { return decodeURIComponent(match[1]); } catch (e) { return null; }
-}
-
 if (!TOKEN) fail("Open this page using the link from GatedSpace.");
 else {
   loadThemes();
   var wanted = sessionFromHash();
   setTab("sessions");
-  if (wanted) openSession(wanted);
+  if (wanted) openNotifiedSession(wanted.key, wanted.provider);
   restorePush();
 }
 `;

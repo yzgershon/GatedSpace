@@ -897,6 +897,53 @@ describe("native Codex session lifecycle", () => {
 		expect(manager.get("optimistic")?.items).toHaveLength(1);
 		expect(manager.get("optimistic")?.items[0].id).toBe("server-user");
 	});
+	test("mobile sends steer active work with images and start normally once idle", async () => {
+		const { manager, transport } = fixture();
+		const state = await manager.start({
+			key: "mobile-steer",
+			cwd: "/workspace",
+		});
+		transport.emit("notification", {
+			method: "turn/started",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "active", status: "inProgress" },
+			},
+		});
+		const input = {
+			key: state.key,
+			text: "Use this screenshot",
+			images: ["data:image/png;base64,YWJj"],
+			model: state.model,
+			effort: state.effort,
+			permission: "default" as const,
+			steerIfWorking: true,
+		};
+		await manager.send(input);
+		expect(
+			transport.calls.filter((c) => c.method === "turn/start"),
+		).toHaveLength(0);
+		expect(
+			transport.calls.find((c) => c.method === "turn/steer")?.params,
+		).toMatchObject({
+			expectedTurnId: "active",
+			input: [
+				{ type: "text", text: input.text, text_elements: [] },
+				{ type: "image", url: input.images[0] },
+			],
+		});
+		transport.emit("notification", {
+			method: "turn/completed",
+			params: {
+				threadId: state.threadId,
+				turn: { id: "active", status: "interrupted" },
+			},
+		});
+		await manager.send({ ...input, text: "Continue after stopping" });
+		expect(
+			transport.calls.filter((c) => c.method === "turn/start"),
+		).toHaveLength(1);
+	});
 	test("queued steering reconciles an early echo and rolls back rejected delivery", async () => {
 		const { manager, transport } = fixture();
 		const state = await manager.start({ key: "steer", cwd: "/workspace" });

@@ -740,7 +740,10 @@ export class CodexSessionManager extends EventEmitter {
 		plan?: boolean;
 		fast?: boolean;
 		images?: string[];
+		/** Mobile sends are direction for the active turn, not a second writer. */
+		steerIfWorking?: boolean;
 	}) {
+		if (input.steerIfWorking) await this.turnStarts.get(input.key);
 		const state = this.require(input.key);
 		z.array(chatImageUrlSchema)
 			.max(MAX_CHAT_IMAGES)
@@ -748,7 +751,10 @@ export class CodexSessionManager extends EventEmitter {
 		const questions = state.approvals
 			.filter(isCodexUserQuestion)
 			.map((a) => a.id);
-		if (state.status === "working" && questions.length)
+		if (
+			state.status === "working" &&
+			(questions.length || input.steerIfWorking)
+		)
 			return this.steer(input);
 		if (state.status !== "idle")
 			throw new Error(

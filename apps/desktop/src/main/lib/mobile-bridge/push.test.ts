@@ -28,3 +28,44 @@ test("phone completions expire and are invalidated when that session resumes", a
 	now += 30001;
 	expect(push.takePending()).toBeNull();
 });
+
+test("push records provider from native metadata for unprefixed pane keys", async () => {
+	const push = new PushService(
+		() => [],
+		Date.now,
+		(key) => (key === "codex-pane" ? "codex" : "claude"),
+	);
+	await push.notify({
+		title: "Done",
+		body: "Finished",
+		sessionKey: "codex-pane",
+	});
+	expect(push.takePending()?.provider).toBe("codex");
+	await push.notify({
+		title: "Done",
+		body: "Finished",
+		sessionKey: "claude-pane",
+	});
+	expect(push.takePending()?.provider).toBe("claude");
+});
+
+test("unknown providers are not mislabeled and explicit supported providers survive", async () => {
+	const push = new PushService(
+		() => [],
+		Date.now,
+		() => undefined,
+	);
+	await push.notify({
+		title: "Done",
+		body: "Finished",
+		sessionKey: "legacy-pane",
+	});
+	expect(push.takePending()?.provider).toBeUndefined();
+	await push.notify({
+		title: "Done",
+		body: "Finished",
+		sessionKey: "closed-codex",
+		provider: "codex",
+	});
+	expect(push.takePending()?.provider).toBe("codex");
+});

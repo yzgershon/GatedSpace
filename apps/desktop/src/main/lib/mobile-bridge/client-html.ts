@@ -27,8 +27,10 @@ import { MOBILE_BRIDGE_CSS } from "./client-css";
 import { MOBILE_BRIDGE_ICON_URL } from "./pwa-assets";
 
 const ICON_SESSIONS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`;
-const ICON_USAGE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>`;
-const ICON_SETTINGS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`;
+const ICON_TASKS = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 6 2 2 4-4M13 6h8M13 13h8M13 20h8"/><circle cx="5" cy="14" r="2"/><circle cx="5" cy="21" r="1"/></svg>`;
+const ICON_MAKE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 4 5 5M13 6l5-5 5 5-5 5-7 7-6 1 1-6zM3 6H2v16h16v-2"/></svg>`;
+const ICON_PROFILE = `<svg viewBox="0 0 32 32" fill="none"><circle cx="16" cy="16" r="16" fill="#65608b"/><circle cx="16" cy="12" r="5" fill="#e6dff4"/><path d="M7 28v-3a9 9 0 0 1 18 0v3" fill="#e6dff4"/></svg>`;
+const ICON_COMPUTER = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="12" rx="2"/><path d="M2 19h20M9 15v4m6-4v4"/></svg>`;
 
 export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 <html lang="en">
@@ -42,18 +44,19 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="GatedSpace" />
+<meta name="apple-mobile-web-app-title" content="GatedDuet" />
 <meta name="theme-color" content="#0e0e0e" />
-<title>GatedSpace</title>
+<title>GatedDuet</title>
 <style>${MOBILE_BRIDGE_CSS}</style>
 </head>
 <body>
 <header>
-  <span class="dot" id="dot"></span>
-  <h1 id="title">Sessions</h1>
+  <button class="iconbtn" id="space-menu" aria-label="Open conversations"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h12"/></svg></button>
+  <button class="iconbtn" id="back" hidden aria-label="Back">‹</button>
+  <div class="mobile-brand"><img src="${MOBILE_BRIDGE_ICON_URL}" alt="" /><h1 id="title">GatedDuet</h1></div>
   <span class="ver" id="ver"></span>
-  <button class="iconbtn" id="back" hidden aria-label="Back">Back</button>
   <button class="iconbtn" id="new" hidden aria-label="New session">+</button>
+  <button class="iconbtn" id="profile-menu" aria-label="Profile and settings">${ICON_PROFILE}<span class="dot" id="dot"></span></button>
 </header>
 
 <p id="connection" class="connection" role="status" hidden></p>
@@ -78,12 +81,12 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
       <path d="M12 5v14M5 12h14"/>
     </svg>
   </button>
-  <textarea id="input" aria-label="Message" rows="1" placeholder="Send a prompt…" enterkeyhint="send"></textarea>
+  <textarea id="input" aria-label="Message" rows="1" placeholder="Message" enterkeyhint="send"></textarea>
   <!-- An arrow, not the word "Send". On a phone the composer is one row and
        every character of that button is width the prompt does not get. The mic
        that used to sit here is gone for the same reason: the keyboard has its
        own dictation key, which works in more places than ours did. -->
-  <button id="stop" aria-label="Stop response" hidden>Stop</button>
+  <button id="stop" aria-label="Stop response" hidden><svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="3"/></svg></button>
   <button id="send" aria-label="Send">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>
@@ -91,11 +94,14 @@ export const MOBILE_BRIDGE_HTML = `<!DOCTYPE html>
   </button>
 </footer>
 
-<nav id="tabs" hidden>
-  <button data-tab="sessions" class="sel">${ICON_SESSIONS}<span>Sessions</span></button>
-  <button data-tab="usage">${ICON_USAGE}<span>Usage</span></button>
-  <button data-tab="settings">${ICON_SETTINGS}<span>Settings</span></button>
+<div id="mobile-dock">
+<nav id="tabs" aria-label="Main navigation" hidden>
+  <button data-tab="sessions" class="sel">${ICON_SESSIONS}<span>Chat</span></button>
+  <button data-tab="tasks">${ICON_TASKS}<span>Tasks</span></button>
+  <button data-tab="make">${ICON_MAKE}<span>Make</span></button>
 </nav>
+<button id="computer-menu" aria-label="Computers">${ICON_COMPUTER}</button>
+</div>
 
 <script>${MOBILE_BRIDGE_APP_JS}</script>
 </body>

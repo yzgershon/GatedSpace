@@ -36,11 +36,11 @@ function createButton(text, action, className) {
   var button = document.createElement("button"); button.type = "button";
   button.textContent = text; button.className = className || ""; button.onclick = action; return button;
 }
-function renderNewSession() {
+function renderNewSession(context) {
   saveDraft(); current = null; viewGeneration++; clearInterval(timer); timer = null;
   imageObserver.disconnect(); sessionData = null;
   var generation = viewGeneration;
-  title.textContent = "New session"; newBtn.hidden = true; back.hidden = false; tabs.hidden = true;
+  title.textContent = "New session"; newBtn.hidden = true; back.hidden = true; tabs.hidden = false; document.body.dataset.view="new-session";
   composer.hidden = true; shelf.hidden = true; main.replaceChildren();
   var label = document.createElement("p"); label.className = "muted"; label.textContent = "Choose an agent and a workspace on this computer."; main.appendChild(label);
   var provider = document.createElement("select"); provider.setAttribute("aria-label", "Agent");
@@ -57,7 +57,17 @@ function renderNewSession() {
     var go = createButton("Create session", function () {
       go.disabled = true;
       api("/mobile/new", {method:"POST", body:JSON.stringify({provider:provider.value, workspaceId:workspace.value, requestId:creationId})})
-        .then(function (res) { if (generation === viewGeneration) openSession(res.key, res.provider); })
+        .then(function (res) {
+          if (generation !== viewGeneration) return;
+          if(context && context.task) {
+            return saveHub("tasks",context.task,{session:{key:res.key,provider:res.provider}}).then(function() {
+              if(generation !== viewGeneration) return;
+              openSession(res.key,res.provider); input.value=context.task.title + (context.task.notes ? "\\n\\n" + context.task.notes : ""); autosize(); saveDraft();
+            }).catch(function(e) { if(generation===viewGeneration) { openSession(res.key,res.provider); fail("Conversation created, but the task could not be linked: " + e.message); } });
+          }
+          openSession(res.key, res.provider);
+          if(context && context.prompt) { input.value=context.prompt; autosize(); saveDraft(); }
+        })
         .catch(function (e) { if (generation === viewGeneration) fail(e.message); })
         .finally(function () { go.disabled = false; });
     }, "primary");
@@ -67,8 +77,10 @@ function renderNewSession() {
 }
 function renderSessions() {
   var generation = viewGeneration;
-  title.textContent = "Sessions"; main.replaceChildren(); newBtn.hidden = false;
-  var intro = document.createElement("p"); intro.className = "muted"; intro.textContent = "Your desktop, within reach."; main.appendChild(intro);
+  title.textContent = "GatedDuet"; main.replaceChildren(); newBtn.hidden = false;
+  var channel = selectedChannel();
+  hubHeading(channel ? channel.title : "Pick up the conversation.",channel ? "Conversations in this channel." : "Your agents. Your projects. Right here.");
+  newBtn.textContent="+ New conversation"; main.querySelector(".hub-heading").appendChild(newBtn);
   var search = document.createElement("input"); search.type = "search"; search.placeholder = "Find a conversation"; search.setAttribute("aria-label", "Search sessions"); main.appendChild(search);
   var filters = document.createElement("div"); filters.className = "agent-filters"; main.appendChild(filters);
   var result = document.createElement("div"); result.textContent = "Loading sessions…"; main.appendChild(result);
@@ -76,9 +88,7 @@ function renderSessions() {
   function draw() {
     if (!loaded) return;
     result.replaceChildren();
-    var liveIds = {};
-    loaded.sessions.forEach(function (s) { liveIds[s.provider + ":" + s.sessionId] = true; });
-    function matches(s) { return (sessionFilter === "all" || s.provider === sessionFilter) && (s.title + " " + (s.cwd || "")).toLowerCase().includes(search.value.toLowerCase()); }
+    function matches(s) { return channelMatches(s) && (sessionFilter === "all" || s.provider === sessionFilter) && (s.title + " " + (s.cwd || "")).toLowerCase().includes(search.value.toLowerCase()); }
     function row(s, live) {
       var providerName = s.provider === "codex" ? "Codex" : "Claude";
       var item = sessionRow(s.title || providerName + " session", providerName + " · " + (live ? "Open on desktop" : "Saved conversation"), s.running, function () {
@@ -92,10 +102,9 @@ function renderSessions() {
       });
       item.dataset.provider = s.provider; result.appendChild(item);
     }
-    var live = loaded.sessions.filter(matches), past = loaded.history.filter(function (s) { return !liveIds[s.provider + ":" + s.sessionId] && matches(s); });
-    result.appendChild(sectionHeader("Open sessions", live.length)); live.forEach(function (s) { row(s, true); });
-    result.appendChild(sectionHeader("Recent history", past.length)); past.forEach(function (s) { row(s, false); });
-    if (!live.length && !past.length) { var empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "No matching conversations."; result.appendChild(empty); }
+    var recent=orderedSessions(loaded).filter(matches);
+    result.appendChild(sectionHeader("Recent conversations",recent.length)); recent.forEach(function(s) { row(s,s.live); });
+    if (!recent.length) { var empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "No matching conversations."; result.appendChild(empty); }
   }
   ["all", "claude", "codex"].forEach(function (name) {
     var button = createButton(name === "all" ? "All agents" : name === "codex" ? "Codex" : "Claude", function () {
@@ -105,7 +114,7 @@ function renderSessions() {
   search.oninput = draw;
   function load() { api("/mobile/sessions").then(function (data) {
     if (generation !== viewGeneration) return;
-    loaded = data; draw(); networkMessage((data.warnings || []).join(" "));
+    loaded = data; sessionDirectory=data; draw(); networkMessage((data.warnings || []).join(" "));
     if (data.historyLoading) setTimeout(function () { if (generation === viewGeneration) load(); }, 3000);
   }).catch(function (e) { if (generation === viewGeneration) fail(e.message); }); }
   load();
@@ -120,12 +129,10 @@ function showImage(source, name) {
 function renderMessage(item) {
   var node = document.createElement(item.kind === "activity" ? "details" : "article");
   node.dataset.message = item.id; node.className = "turn " + (item.kind === "user" ? "you" : item.kind);
+  node.dataset.provider=currentProvider;
   if (item.kind === "activity") {
     var summary = document.createElement("summary"); summary.textContent = item.title || "Used a tool"; node.appendChild(summary);
-  } else {
-    var who = document.createElement("div"); who.className = "who";
-    who.textContent = item.kind === "user" ? "You" : currentProvider === "codex" ? "Codex" : "Claude"; node.appendChild(who);
-  }
+  } else node.setAttribute("aria-label",item.kind === "user" ? "Your message" : "Agent response");
   if (item.images && item.images.length) {
     var images = document.createElement("div"); images.className = "message-images";
     item.images.forEach(function (attachment) {
@@ -223,8 +230,13 @@ function renderQuestions(questions, target) {
     target.appendChild(card);
   });
 }
-function thinkingRow(label) {
-  var row = document.createElement("div"); row.className = "thinking-word"; row.setAttribute("role", "status"); row.textContent = label; return row;
+function thinkingRow(label, animate) {
+  var row = document.createElement("div"); row.className = animate ? "typing-bubble" : "conversation-status"; row.setAttribute("role", "status"); row.dataset.provider=currentProvider;
+  if(animate) {
+    var text=document.createElement("span"); text.className="sr-only"; text.textContent=(currentProvider==="codex" ? "Codex" : "Claude") + " is working"; row.appendChild(text);
+    for(var i=0;i<3;i++) { var dot=document.createElement("i"); dot.setAttribute("aria-hidden","true"); row.appendChild(dot); }
+  } else row.textContent=label;
+  return row;
 }
 function drawConversation(data, prepend) {
 	if (data.title) title.textContent = data.title;
@@ -249,15 +261,18 @@ function drawConversation(data, prepend) {
     }, "earlier"));
   }
   combined.forEach(function (item) {
+    // Keep activity in the pagination cursor/history, but never mount command
+    // traces or tool output in the phone's conversation.
+    if(item.kind === "activity") return;
     var signature = JSON.stringify(item), node = oldNodes.get(item.id);
     if (!node || node.dataset.signature !== signature) { node = renderMessage(item); node.dataset.signature = signature; }
     if (openDetails.includes(item.id)) node.open = true;
     nodes.push(node);
   });
-  if (!combined.length) { var empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "Ready when you are. Send the first message below."; nodes.push(empty); }
+  if (!combined.some(function(item) { return item.kind !== "activity"; })) { var empty = document.createElement("p"); empty.className = "muted"; empty.textContent = "Ready when you are. Send the first message below."; nodes.push(empty); }
   if (data.questions && data.questions.length) nodes.push(thinkingRow("Waiting for your reply"));
   else if (data.loading) nodes.push(thinkingRow("Loading conversation…"));
-  else if (data.working) nodes.push(thinkingRow("Working"));
+  else if (data.working) nodes.push(main.querySelector(".typing-bubble") || thinkingRow("Working",true));
   else if (combined.length) { var ready = document.createElement("p"); ready.className = "session-ready"; ready.setAttribute("role", "status"); ready.textContent = data.error ? "Needs attention" : "Ready"; nodes.push(ready); }
   var questions = document.createElement("div"); questions.className = "questions";
   if (preserveQuestions) questions = existingQuestions;
@@ -277,6 +292,7 @@ function drawConversation(data, prepend) {
   nodes.forEach(function(node, index) { if (main.children[index] !== node) main.insertBefore(node, main.children[index] || null); });
   while (main.children.length > nodes.length) main.lastElementChild.remove();
   stopBtn.hidden = !data.working;
+  sendBtn.hidden = false;
   updateAttachmentState();
   dot.className = "dot" + (data.working ? " on" : "");
   dot.setAttribute("aria-label", data.working ? "Agent working" : "Agent ready");
@@ -294,7 +310,7 @@ function refresh() {
   refreshBusy = operation;
   api(path).then(function (data) {
     if (generation !== viewGeneration) return;
-    networkMessage(""); sessionData = data;
+    networkMessage(""); sessionData = data; resolveHubReference();
     var snapshot = JSON.stringify(data);
     if (snapshot !== lastSnapshot) { drawConversation(data, false); lastSnapshot = snapshot; }
   }).catch(function (e) { if (generation === viewGeneration) networkMessage(e.message + " Reconnecting…"); })
@@ -305,7 +321,10 @@ function openSession(id, provider) {
   imageObserver.disconnect();
   historyMessages = []; lastSnapshot = ""; sessionData = {loading:true}; initialScroll = true; refreshBusy = false;
   title.textContent = currentProvider === "codex" ? "Codex" : "Claude";
-  back.hidden = false; composer.hidden = false; tabs.hidden = true; newBtn.hidden = true; stopBtn.hidden = true;
+  tab = "sessions"; document.body.dataset.view = "conversation"; lastChat = {key:id,provider:currentProvider};
+  Array.from(tabs.children).forEach(function(b) { b.className = b.dataset.tab === "sessions" ? "sel" : ""; });
+  back.hidden = true; composer.hidden = false; tabs.hidden = false; newBtn.hidden = true; stopBtn.hidden = true; sendBtn.hidden=false;
+  document.body.dataset.provider=currentProvider;
   networkMessage(""); hint.hidden = true; main.replaceChildren(thinkingRow("Loading conversation…")); restoreDraft(); refresh(); clearInterval(timer); timer = setInterval(refresh, 2500);
 }
 function send() {
@@ -349,6 +368,7 @@ composerObserver.observe(composer); composerObserver.observe(shelf);
 function fitKeyboard() {
   var viewport = window.visualViewport;
   var inset = viewport ? Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop) : 0;
+  document.body.classList.toggle("keyboard-open",inset > 100);
   document.documentElement.style.setProperty("--keyboard-inset", inset + "px");
 }
 if (window.visualViewport) { window.visualViewport.addEventListener("resize", fitKeyboard); window.visualViewport.addEventListener("scroll", fitKeyboard); }

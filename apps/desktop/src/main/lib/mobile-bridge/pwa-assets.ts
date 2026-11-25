@@ -22,15 +22,15 @@
  * releases for a one-line CSS fix. Bump the last part for each change worth
  * confirming on the device.
  */
-export const MOBILE_BRIDGE_PAGE_VERSION = "1.5.0";
+export const MOBILE_BRIDGE_PAGE_VERSION = "1.6.0";
 
 // A new URL replaces the old placeholder in browser/launcher icon caches.
 // Served from the same PNG used by the desktop installer, without redrawing it.
 export const MOBILE_BRIDGE_ICON_URL = "/icon.png?v=gatedspace-1";
 
 export const MOBILE_BRIDGE_MANIFEST = JSON.stringify({
-	name: "GatedSpace",
-	short_name: "GatedSpace",
+	name: "GatedDuet",
+	short_name: "GatedDuet",
 	description: "Continue Claude and Codex sessions from your phone",
 	// standalone, not fullscreen: fullscreen hides the status bar too, which
 	// costs the clock and battery for no gain on a page that is mostly text.
@@ -84,8 +84,8 @@ self.addEventListener("push", function (event) {
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; })
       .then(function (notice) {
-        var title = (notice && notice.title) || "GatedSpace";
-        var body = (notice && notice.body) || "Open GatedSpace for the latest session status.";
+        var title = (notice && notice.title) || "GatedDuet";
+        var body = (notice && notice.body) || "Open GatedDuet for the latest session status.";
         return self.registration.getNotifications({ tag: "gatedspace-agent" }).then(function (existing) {
         var duplicate = Boolean(notice && notice.id && (lastNoticeId === notice.id || existing.some(function (n) { return n.data && n.data.noticeId === notice.id; })));
         lastNoticeId = notice && notice.id;
@@ -97,7 +97,7 @@ self.addEventListener("push", function (event) {
           // show the latest state, not a stack of twenty.
           tag: "gatedspace-agent",
           renotify: !duplicate,
-          data: { sessionKey: (notice && notice.sessionKey) || null, noticeId: notice && notice.id }
+          data: { sessionKey: (notice && notice.sessionKey) || null, provider: notice && notice.provider, noticeId: notice && notice.id }
         });
         });
       })
@@ -107,7 +107,10 @@ self.addEventListener("push", function (event) {
 self.addEventListener("notificationclick", function (event) {
   event.notification.close();
   var key = event.notification.data && event.notification.data.sessionKey;
+  var provider = event.notification.data && event.notification.data.provider;
+  if (provider !== "claude" && provider !== "codex") provider = null;
   var url = key ? "/#session=" + encodeURIComponent(key) : "/";
+  if (key && provider) url += "&provider=" + provider;
   event.waitUntil(
     self.clients.matchAll({ type: "window", includeUncontrolled: true })
       .then(function (list) {
@@ -115,7 +118,7 @@ self.addEventListener("notificationclick", function (event) {
         // copy, and tell it which session to show.
         for (var i = 0; i < list.length; i++) {
           if ("focus" in list[i]) {
-            list[i].postMessage({ type: "open-session", sessionKey: key });
+            list[i].postMessage({ type: "open-session", sessionKey: key, provider: provider });
             return list[i].focus();
           }
         }

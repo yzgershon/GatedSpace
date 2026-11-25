@@ -330,21 +330,44 @@ test("Codex questions can be dismissed without inventing an answer", async () =>
 	).toBe(200);
 	expect(answers.at(-1)).toEqual(["pane", "question", false, undefined]);
 });
-test("a busy rejection can be retried once Claude is ready without sending twice", async () => {
+test("mobile direction reaches busy Claude once and retries do not duplicate it", async () => {
 	const body = {
 		requestId: crypto.randomUUID(),
-		text: "Retry after finishing",
+		text: "Use this new direction while working",
 	};
 	const before = sent.length;
 	claudeBusy = true;
 	try {
-		expect((await post("/claude/claude-pane/send", body)).status).toBe(409);
+		expect((await post("/claude/claude-pane/send", body)).status).toBe(200);
 	} finally {
 		claudeBusy = false;
 	}
 	expect((await post("/claude/claude-pane/send", body)).status).toBe(200);
 	expect((await post("/claude/claude-pane/send", body)).status).toBe(200);
 	expect(sent.length - before).toBe(1);
+});
+
+test("mobile Codex messages request steering with images during an active turn", async () => {
+	const originalStatus = codexState.status;
+	codexState.status = "working";
+	try {
+		const body = {
+			requestId: crypto.randomUUID(),
+			text: "Look at this screenshot",
+			images: [{ name: "screen.png", mediaType: "image/png", data: "AAAA" }],
+		};
+		const before = sent.length;
+		expect((await post("/codex/pane/send", body)).status).toBe(200);
+		expect((await post("/codex/pane/send", body)).status).toBe(200);
+		expect(sent.length - before).toBe(1);
+		expect(sent.at(-1)).toMatchObject({
+			key: "pane",
+			steerIfWorking: true,
+			images: ["data:image/png;base64,AAAA"],
+		});
+	} finally {
+		codexState.status = originalStatus;
+	}
 });
 
 test("large histories start with sixty messages and format only replies", async () => {
@@ -388,7 +411,7 @@ test("Claude waits for disk history before merging the live buffer", async () =>
 		data.messages.map((message: { text: string }) => message.text),
 	).toEqual(["Earlier saved prompt", "Claude prompt"]);
 });
-test("Claude send and approval checks use current permissions without waiting on disk", async () => {
+test("mobile direction leaves tool permissions pending for an explicit answer", async () => {
 	const before = sent.length;
 	claudePermissions = [{ id: "approval", tool: "Bash", input: {} }];
 	try {
@@ -396,11 +419,12 @@ test("Claude send and approval checks use current permissions without waiting on
 			(
 				await post("/claude/claude-pane/send", {
 					requestId: crypto.randomUUID(),
-					text: "Wait for approval",
+					text: "Use the other file instead",
 				})
 			).status,
-		).toBe(409);
-		expect(sent.length).toBe(before);
+		).toBe(200);
+		expect(sent.length).toBe(before + 1);
+		expect(claudePermissions).toHaveLength(1);
 		expect(
 			(
 				await post("/claude/claude-pane/answer", {
@@ -542,7 +566,7 @@ test("renames appear in both mobile lists and open conversations immediately", a
 	}
 });
 
-test("peer delivery cannot interrupt a busy Claude turn and live activity wins over replay", async () => {
+test("mobile direction can reach a busy Claude turn and idle status settles", async () => {
 	const before = sent.length;
 	claudeBusy = true;
 	try {
@@ -550,10 +574,10 @@ test("peer delivery cannot interrupt a busy Claude turn and live activity wins o
 		expect(view.working).toBe(true);
 		const response = await post("/claude/claude-pane/send", {
 			requestId: crypto.randomUUID(),
-			text: "Peer context",
+			text: "New direction from my phone",
 		});
-		expect(response.status).toBe(409);
-		expect(sent.length).toBe(before);
+		expect(response.status).toBe(200);
+		expect(sent.length).toBe(before + 1);
 	} finally {
 		claudeBusy = false;
 	}

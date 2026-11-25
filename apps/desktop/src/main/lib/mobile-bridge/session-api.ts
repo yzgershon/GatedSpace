@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { hostname, platform } from "node:os";
 import express from "express";
 import { z } from "zod";
 import {
@@ -178,6 +179,22 @@ export function mobileSessionRouter() {
 	};
 
 	router.get(
+		"/computer",
+		handle(async (_req, res) => {
+			res.json({
+				name: hostname(),
+				platform: platform(),
+				connected: true,
+				execution: "desktop",
+				browserHandoff: false,
+				cloudAvailable: false,
+				workspaces: listBridgeWorkspaceTargets().map(
+					({ id, name, project }) => ({ id, name, project }),
+				),
+			});
+		}),
+	);
+	router.get(
 		"/usage/codex",
 		handle(async (_req, res) => {
 			res.json(await codex.limits());
@@ -197,6 +214,7 @@ export function mobileSessionRouter() {
 						...s,
 						running: claudeWorking(s.key),
 						provider: "claude",
+						lastModified: titles.get(s.sessionId ?? "")?.lastModified ?? 0,
 						title:
 							sessionNames.get({
 								provider: "claude",
@@ -210,6 +228,11 @@ export function mobileSessionRouter() {
 					key: s.key,
 					sessionId: s.threadId,
 					provider: "codex",
+					lastModified: s.items.reduce(
+						(latest, item) =>
+							Math.max(latest, item.startedAt ?? 0, item.completedAt ?? 0),
+						0,
+					),
 					title:
 						sessionNames.get({
 							provider: "codex",
@@ -244,7 +267,24 @@ export function mobileSessionRouter() {
 					"Codex history is unavailable. Check Codex sign-in on the desktop.",
 				);
 			}
-			res.json({ sessions, history, warnings, historyLoading });
+			const historyTimes = new Map(
+				history.map((s) => [
+					`${s.provider}:${s.sessionId}`,
+					s.lastModified ?? 0,
+				]),
+			);
+			res.json({
+				sessions: sessions.map((s) => ({
+					...s,
+					lastModified: Math.max(
+						s.lastModified,
+						historyTimes.get(`${s.provider}:${s.sessionId}`) ?? 0,
+					),
+				})),
+				history,
+				warnings,
+				historyLoading,
+			});
 		}),
 	);
 	router.post(
@@ -373,6 +413,7 @@ export function mobileSessionRouter() {
 				);
 				res.json({
 					...page,
+					sessionId: current.threadId,
 					hasEarlier: page.hasEarlier || !!current.historyCursor,
 					provider,
 					title:
@@ -430,6 +471,7 @@ export function mobileSessionRouter() {
 			);
 			res.json({
 				...presentedPage(messages, before),
+				sessionId: claude.listSessions().find((s) => s.key === key)?.sessionId,
 				provider,
 				title:
 					sessionNames.get({
@@ -536,13 +578,6 @@ export function mobileSessionRouter() {
 				if (provider !== "claude") return;
 				if (!claude.isRunning(key))
 					throw new Error("Resume this session from History before sending.");
-				if (
-					claudeWorking(key) ||
-					buildTimeline(claude.getBufferedEvents(key)).permissions?.length
-				)
-					throw new Error(
-						"Claude is busy or needs input. Answer or dismiss its question, or wait for the turn to finish, then retry.",
-					);
 			};
 			res.json(
 				await once(
@@ -553,6 +588,7 @@ export function mobileSessionRouter() {
 							await codex.send({
 								key,
 								text: body.text,
+								steerIfWorking: true,
 								model: state.model,
 								effort: state.effort,
 								permission: state.permission ?? defaultCodexPermission(),
