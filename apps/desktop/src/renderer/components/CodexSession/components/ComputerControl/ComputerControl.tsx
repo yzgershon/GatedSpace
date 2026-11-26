@@ -98,14 +98,13 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 				>
 					<strong>Computer control</strong>
 					<p>
-						Let this Codex pane see your desktop and use the mouse and keyboard.
-						GatedSpace downloads any missing components on first use. No
-						terminal commands or restart needed.
+						Let this pane see your screen and use your mouse and keyboard.
+						Required tools are prepared automatically.
 					</p>
 					<p className="computer-control-hint">
-						The controller pauses after 60 idle seconds or a completed task and
-						resumes on this pane's next desktop request. Stop, closing the
-						session, restart, sleep, or locking Windows removes approval.
+						Once enabled, this pane reconnects automatically after idle time or
+						a finished task. Full Access and desktop approval are separate.
+						Stop, session close, restart, sleep, or lock ends approval.
 					</p>
 					{(error || state.error) && (
 						<p
@@ -125,7 +124,7 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 										? "Stopping computer control…"
 										: mine
 											? state.phase === "paused"
-												? "Paused; approved for this pane"
+												? "Approved · reconnects when needed"
 												: "Enabled for this pane"
 											: "Enabled in another pane"}
 							</output>
@@ -172,7 +171,7 @@ export function ComputerControl({ paneId }: { paneId: string }) {
 									? state.activity
 										? `Computer · ${state.activity}`
 										: state.phase === "paused"
-											? "Computer paused"
+											? "Computer approved"
 											: "Computer ready"
 									: "Computer in use"}
 					</span>

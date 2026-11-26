@@ -4,6 +4,7 @@ import type {
 	Notification as ElectronNotification,
 } from "electron";
 import { Notification } from "electron";
+import { computerUseService } from "main/lib/computer-use/service";
 import { setBadgeCount } from "main/lib/dock-icon";
 import { shouldShowBanner } from "main/lib/notifications/banner-dedupe";
 import {
@@ -97,6 +98,21 @@ export const createNotificationsRouter = (
 	getWindow: () => BrowserWindow | null,
 ) => {
 	return router({
+		returnToComputerSession: publicProcedure.mutation(() => {
+			const owner = computerUseService.get().owner;
+			const key = owner?.startsWith("codex:") ? owner.slice(6) : undefined;
+			const context = key ? sessionEvents.get(key) : undefined;
+			focusWindow(getWindow);
+			if (key && context?.workspaceId)
+				notificationsEmitter.emit(
+					NOTIFICATION_EVENTS.FOCUS_V2_NOTIFICATION_SOURCE,
+					{
+						workspaceId: context.workspaceId,
+						source: { type: "session", id: key },
+					} satisfies V2NotificationSourceFocusTarget,
+				);
+			return { success: true };
+		}),
 		sessionStates: publicProcedure.subscription(() =>
 			observable<SessionNotificationState[]>((emit) => {
 				const update = () => emit.next(sessionEvents.list());

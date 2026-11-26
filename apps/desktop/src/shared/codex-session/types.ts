@@ -65,6 +65,8 @@ export interface CodexSessionState {
 	accountId?: string;
 	/** Last explicitly selected permission; collaboration must never elevate it. */
 	permission?: CodexPermission;
+	fast?: boolean;
+	plan?: boolean;
 	key: string;
 	threadId: string | null;
 	cwd: string;
@@ -78,6 +80,7 @@ export interface CodexSessionState {
 	error: string | null;
 	/** One quota incident; used to offer recovery once without losing the thread. */
 	usageLimit?: { id: string; accountId: string };
+	usageRecovery?: import("../usage-recovery").UsageRecoveryState;
 	historyCursor: string | null;
 	diff: string;
 	contextTokens: number | null;

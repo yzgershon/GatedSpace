@@ -18,6 +18,7 @@
 import type { SessionStatus } from "shared/claude-session/timeline";
 
 export interface SessionActivity {
+	usageBlocked?: boolean;
 	/** Mirrors `SessionTimeline.status` for the pane. */
 	status: SessionStatus | "attention";
 	/**
@@ -67,7 +68,12 @@ export function publishSessionActivity(
 	if (fromSessionTransport) authoritative.add(paneId);
 	else if (authoritative.has(paneId)) return;
 	const prev = activity.get(paneId);
-	if (prev && prev.status === next.status && prev.turnKey === next.turnKey) {
+	if (
+		prev &&
+		prev.status === next.status &&
+		prev.turnKey === next.turnKey &&
+		Boolean(prev.usageBlocked) === Boolean(next.usageBlocked)
+	) {
 		return;
 	}
 	activity.set(paneId, next);

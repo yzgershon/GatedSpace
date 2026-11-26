@@ -8,14 +8,23 @@
 	</head>
 	<body>
 		<div id="control-border" aria-hidden="true"></div>
+		<div id="control-pointer" aria-hidden="true" hidden>
+			<div class="pointer-halo"></div>
+			<svg aria-hidden="true" width="24" height="30" viewBox="0 0 24 30" fill="none"><path d="M3 2v22l5-6 5 10 4-2-5-10h9L3 2Z" fill="#bd93f9" stroke="#f5eaff" stroke-width="1.5" stroke-linejoin="round"/></svg>
+			<span>GatedSpace</span>
+		</div>
 		<main id="control-toolbar" aria-label="GatedSpace computer control">
 			<div class="control-mark" aria-hidden="true"><svg aria-hidden="true" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
 			<div class="control-copy">
-				<div class="control-brand">CODEX <span>·</span> GATEDSPACE</div>
+				<div class="control-brand"><i aria-hidden="true"></i> GatedSpace <span>·</span> Codex</div>
 				<div id="control-status" role="status">Connecting to Windows…</div>
+				<div id="control-detail" hidden>Drag to move · Ctrl + Alt + Shift + Esc to stop</div>
 			</div>
-			<kbd title="Emergency stop">Ctrl Alt Shift Esc</kbd>
-			<button id="control-stop" type="button" aria-label="Stop computer control"><span aria-hidden="true"></span> Stop</button>
+			<div class="control-actions">
+				<button id="control-return" class="control-icon" type="button" title="Return to session" aria-label="Return to session"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8m-4-4v4m2-13-4 3 4 3"/></svg></button>
+				<button id="control-help" class="control-icon" type="button" aria-label="Show control shortcuts" aria-expanded="false" title="Shortcuts and moving the toolbar"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></svg></button>
+				<button id="control-stop" type="button" aria-label="Stop computer control"><span aria-hidden="true"></span> Stop</button>
+			</div>
 		</main>
 		<script type="module" src="/computer-overlay.ts"></script>
 	</body>

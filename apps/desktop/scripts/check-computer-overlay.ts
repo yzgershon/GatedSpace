@@ -33,7 +33,16 @@ const service = new ComputerUseService(() => ({
 }));
 const t = initTRPC.create({ transformer: superjson });
 const router = t.router({
+	notifications: t.router({
+		returnToComputerSession: t.procedure.mutation(() => ({ success: true })),
+	}),
 	codexSession: t.router({
+		computerPointer: t.procedure.subscription(() =>
+			observable((emit) => {
+				emit.next(null);
+				return () => {};
+			}),
+		),
 		computerStop: t.procedure.mutation(async () => {
 			await service.stop();
 			return service.get();
@@ -95,7 +104,7 @@ void (async () => {
 	await until(
 		async () =>
 			toolbar()?.isVisible() === true &&
-			(await status()) === "Computer control ready",
+			(await status()) === "Ready for the next step",
 		"Toolbar did not become ready",
 	);
 	let bar = toolbar();
@@ -120,7 +129,7 @@ void (async () => {
 		computerOverlayBounds({
 			workArea: { x: -1920, y: 0, width: 1920, height: 1040 },
 		}),
-		{ x: -1160, y: 12, width: 400, height: 52 },
+		{ x: -1190, y: 12, width: 460, height: 74 },
 	);
 	const layout = await bar.webContents.executeJavaScript(
 		"({width:innerWidth, overflow:document.documentElement.scrollWidth > innerWidth, transparent:getComputedStyle(document.body).backgroundColor})",
@@ -131,7 +140,7 @@ void (async () => {
 		const glow = await border.webContents.executeJavaScript(
 			"(() => {const s=getComputedStyle(document.getElementById('control-border'));return {border:s.borderTopWidth,shadow:s.boxShadow,inset:s.top}})()",
 		);
-		assert.equal(glow.border, "0px");
+		assert.equal(glow.border, "1px");
 		assert.notEqual(glow.shadow, "none");
 		assert.equal(glow.inset, "0px");
 	}
@@ -151,10 +160,10 @@ void (async () => {
 	finishAction?.();
 	await action;
 	await until(
-		async () => (await status()) === "Computer control ready",
+		async () => (await status()) === "Ready for the next step",
 		"Idle state not restored",
 	);
-	bar.setBounds({ x: -10000, y: -10000, width: 400, height: 52 });
+	bar.setBounds({ x: -10000, y: -10000, width: 460, height: 74 });
 	screen.emit("display-metrics-changed");
 	assert.ok(bar.getBounds().x > -10000);
 	await bar.webContents.executeJavaScript(
@@ -174,7 +183,7 @@ void (async () => {
 	await until(
 		async () =>
 			toolbar()?.isVisible() === true &&
-			(await status()) === "Computer control ready",
+			(await status()) === "Ready for the next step",
 		"Re-enable failed",
 	);
 	bar = toolbar();
@@ -196,7 +205,7 @@ void (async () => {
 			"always on top without focus",
 			"DPI and negative-origin geometry",
 			"transparent and fits",
-			"soft full-screen glow with no hard border",
+			"soft full-screen glow and one pixel edge",
 			"pause closes indicators without losing approval",
 			"stale overlay load failures do not revoke a later grant",
 			"live action and idle labels",
@@ -216,7 +225,7 @@ void (async () => {
 		await until(
 			async () =>
 				toolbar()?.isVisible() === true &&
-				(await status()) === "Computer control ready",
+				(await status()) === "Ready for the next step",
 			"Preview failed",
 		);
 		await toolbar()?.webContents.executeJavaScript(

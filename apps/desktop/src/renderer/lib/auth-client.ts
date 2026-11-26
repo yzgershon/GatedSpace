@@ -7,21 +7,36 @@ import {
 	organizationClient,
 } from "better-auth/client/plugins";
 import { createAuthClient } from "better-auth/react";
+import { useEffect, useSyncExternalStore } from "react";
 import { env } from "renderer/env.renderer";
 import {
 	isLocalMode,
 	LOCAL_ORG_ID,
 	LOCAL_USER_ID,
 } from "renderer/lib/local-mode";
+import {
+	createWorkspaceSessionCache,
+	isWorkspaceSessionCacheEnabled,
+} from "./workspace-session-cache";
+
+const workspaceSessionCache = createWorkspaceSessionCache(
+	env.NEXT_PUBLIC_API_URL,
+	() => window.localStorage,
+);
 
 let authToken: string | null = null;
 
 export function setAuthToken(token: string | null) {
 	authToken = token;
+	return workspaceSessionCache.setCredential(token);
 }
 
 export function getAuthToken(): string | null {
 	return authToken;
+}
+
+export function hasRestorableWorkspaceSession(): boolean {
+	return workspaceSessionCache.getSnapshot() !== null;
 }
 
 let jwt: string | null = null;
@@ -76,7 +91,32 @@ const realAuthClient = createAuthClient({
 	},
 });
 
-type SessionData = (typeof realAuthClient)["$Infer"]["Session"];
+export type SessionData = (typeof realAuthClient)["$Infer"]["Session"];
+
+function useRestorableWorkspaceSession() {
+	const session = realAuthClient.useSession();
+	const saved = useSyncExternalStore(
+		workspaceSessionCache.subscribe,
+		workspaceSessionCache.getSnapshot,
+		workspaceSessionCache.getSnapshot,
+	);
+	useEffect(() => {
+		if (session.data?.user && getAuthToken())
+			void workspaceSessionCache.remember(session.data);
+	}, [session.data]);
+	const data = session.data ?? saved;
+	return { ...session, data, isPending: data ? false : session.isPending };
+}
+
+function buildRestorableWorkspaceAuthClient(): typeof realAuthClient {
+	return new Proxy(realAuthClient, {
+		get(target, property, receiver) {
+			return property === "useSession"
+				? useRestorableWorkspaceSession
+				: Reflect.get(target, property, receiver);
+		},
+	});
+}
 
 /**
  * Static session used in local-only mode: fixed local user/org ids, onboarded
@@ -186,4 +226,6 @@ function buildLocalAuthClient(): typeof realAuthClient {
 
 export const authClient = isLocalMode()
 	? buildLocalAuthClient()
-	: realAuthClient;
+	: isWorkspaceSessionCacheEnabled(env.NEXT_PUBLIC_API_URL)
+		? buildRestorableWorkspaceAuthClient()
+		: realAuthClient;

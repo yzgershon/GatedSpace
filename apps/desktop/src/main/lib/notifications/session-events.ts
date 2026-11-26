@@ -53,6 +53,16 @@ export class SessionEvents extends EventEmitter {
 	bindTurn(key: string, turnId: string) {
 		if (this.active.has(key)) this.active.set(key, turnId);
 	}
+	usageBlocked(key: string, blocked: boolean) {
+		const state = this.sessions.get(key);
+		if (!state || Boolean(state.usageBlocked) === blocked) return;
+		state.usageBlocked = blocked;
+		if (blocked) {
+			state.status = "error";
+			state.turnId ??= this.active.get(key) ?? `quota:${crypto.randomUUID()}`;
+		}
+		this.changed(key);
+	}
 	status(key: string, status: "working" | "attention" | "idle" | "error") {
 		const state = this.sessions.get(key);
 		if (state && status === "error" && state.status !== "error")
@@ -70,7 +80,7 @@ export class SessionEvents extends EventEmitter {
 			key,
 			pending ? "attention" : successful ? "completed" : "idle",
 		);
-		if (successful && !pending) {
+		if (successful && !pending && !state.usageBlocked) {
 			if (this.hasQueuedContinuation(key)) this.deferredCompletions.add(key);
 			else this.emit("notice", this.get(key));
 		}
@@ -111,6 +121,7 @@ export class SessionEvents extends EventEmitter {
 	}
 	private setStatus(key: string, status: SessionNotificationState["status"]) {
 		const state = this.sessions.get(key);
+		if (state?.usageBlocked) status = "error";
 		if (!state || state.status === status) return;
 		state.status = status;
 		this.changed(key);

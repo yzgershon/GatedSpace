@@ -1,3 +1,4 @@
+import { release } from "node:os";
 import { join } from "node:path";
 import { BrowserWindow, type Display, type Rectangle, screen } from "electron";
 import type { ComputerUseState } from "../../../shared/computer-use";
@@ -7,12 +8,12 @@ export function computerOverlayBounds(
 	display: Pick<Display, "workArea">,
 ): Rectangle {
 	const area = display.workArea;
-	const width = Math.min(400, Math.max(240, area.width - 24));
+	const width = Math.min(460, Math.max(240, area.width - 24));
 	return {
 		x: Math.round(area.x + (area.width - width) / 2),
 		y: area.y + 12,
 		width,
-		height: 52,
+		height: 74,
 	};
 }
 
@@ -84,6 +85,14 @@ export class ComputerUseOverlay {
 		});
 		window.setMenu(null);
 		window.setAlwaysOnTop(true, "screen-saver");
+		// Keep indicators out of captured images; they should guide the person,
+		// not obscure text or targets in the agent's next observation.
+		// Older Windows turns protected windows into opaque black captures.
+		if (
+			process.platform === "win32" &&
+			Number(release().split(".")[2]) >= 19041
+		)
+			window.setContentProtection(true);
 		if (kind === "border") window.setIgnoreMouseEvents(true);
 		this.attach(window);
 		window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));

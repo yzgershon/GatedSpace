@@ -98,6 +98,9 @@ export function CodexSession(props: CodexSessionProps) {
 	useEffect(() => {
 		if (state?.accountId) setError(null);
 	}, [state?.accountId]);
+	useEffect(() => {
+		if (state?.usageLimit || state?.status === "working") setError(null);
+	}, [state?.usageLimit, state?.status]);
 	return (
 		<section className="codex-native" aria-label="Codex conversation">
 			<CodexAccount paneId={paneId} compact />

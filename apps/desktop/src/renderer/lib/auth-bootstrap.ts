@@ -83,7 +83,7 @@ export async function applyStoredAuthTokenBeforeRender(): Promise<StoredTokenOut
 			return outcome;
 		}
 
-		setAuthToken(stored.token);
+		await setAuthToken(stored.token);
 		outcome = "applied";
 		return outcome;
 	} catch {

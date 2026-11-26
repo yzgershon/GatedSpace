@@ -39,6 +39,21 @@ const startInput = z.object({
 
 export const createClaudeSessionRouter = () => {
 	return router({
+		continueAfterUsageLimit: publicProcedure
+			.input(z.object({ key: z.string().min(1).max(200) }))
+			.mutation(({ input }) =>
+				claudeSessionManager.usageRecovery.continue(input.key),
+			),
+		autoContinueAfterUsageLimit: publicProcedure
+			.input(
+				z.object({ key: z.string().min(1).max(200), enabled: z.boolean() }),
+			)
+			.mutation(({ input }) =>
+				claudeSessionManager.usageRecovery.setAutoContinue(
+					input.key,
+					input.enabled,
+				),
+			),
 		models: publicProcedure
 			.input(z.object({ key: z.string() }))
 			.query(({ input }) => claudeSessionManager.getModels(input.key)),

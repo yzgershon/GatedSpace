@@ -182,6 +182,7 @@ export interface HookResponseEvent {
 
 /** A complete assistant turn (or a coalesced snapshot during streaming). */
 export interface AssistantEvent {
+	error?: string;
 	type: "assistant";
 	message: AnthropicMessage;
 	parent_tool_use_id: string | null;
@@ -339,6 +340,10 @@ export interface LocalPermissionsEvent {
 }
 
 export type ClaudeStreamEvent =
+	| {
+			type: "local_usage_recovery";
+			recovery: import("../usage-recovery").UsageRecoveryState | null;
+	  }
 	| LocalPermissionsEvent
 	| LocalNoticeEvent
 	| LocalUserMessageEvent

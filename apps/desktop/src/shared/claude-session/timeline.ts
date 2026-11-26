@@ -206,6 +206,7 @@ export interface DraftBlock {
 }
 
 export interface SessionTimeline {
+	usageRecovery?: import("../usage-recovery").UsageRecoveryState | null;
 	permissions?: ClaudePermissionRequest[];
 	header?: SessionHeader;
 	items: TimelineItem[];
@@ -592,6 +593,12 @@ export function applyEvent(
 	event: ClaudeStreamEvent,
 ): SessionTimeline {
 	switch (event.type) {
+		case "local_usage_recovery":
+			return {
+				...state,
+				usageRecovery: event.recovery,
+				...(event.recovery ? { status: "error" as const, drafts: [] } : {}),
+			};
 		case "local_permissions":
 			return { ...state, permissions: event.requests };
 		// GatedSpace's own echo of the prompt we wrote to stdin (the CLI doesn't
@@ -632,7 +639,11 @@ export function applyEvent(
 			const settledBefore = state.status === "idle" || state.status === "error";
 			return {
 				...state,
-				status: settledBefore ? "streaming" : state.status,
+				status: state.usageRecovery
+					? "error"
+					: settledBefore
+						? "streaming"
+						: state.status,
 				// A new process starts its cost count at zero, so the running total
 				// must stop measuring deltas against the old one. `costUsd` itself is
 				// deliberately untouched — that is the number this fixes.
@@ -816,7 +827,7 @@ export function applyEvent(
 					: undefined;
 			return {
 				...state,
-				status: event.is_error ? "error" : "done",
+				status: event.is_error || state.usageRecovery ? "error" : "done",
 				...(usage ? { usage } : {}),
 				...accrueCost(state, event.total_cost_usd),
 				items: [

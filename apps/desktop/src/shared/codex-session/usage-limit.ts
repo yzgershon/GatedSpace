@@ -1,4 +1,29 @@
+import { latestQuotaReset, resetEpochMs } from "../usage-recovery";
 import { record, text } from "./types";
+
+export function codexQuotaReset(
+	value: unknown,
+	model?: string,
+	now = Date.now(),
+): number | null {
+	const response = record(value);
+	const buckets = record(response.rateLimitsByLimitId);
+	const matching = model
+		? Object.values(buckets).find((b) => record(b).normalModelSlug === model)
+		: undefined;
+	const limit = record(matching ?? buckets.codex ?? response.rateLimits);
+	return latestQuotaReset(
+		[limit.primary, limit.secondary].map((raw) => {
+			const window = record(raw);
+			return {
+				used:
+					typeof window.usedPercent === "number" ? window.usedPercent : null,
+				reset: resetEpochMs(window.resetsAt),
+			};
+		}),
+		now,
+	);
+}
 
 /** Quota exhaustion is actionable; transient throttling/network errors are not. */
 export function isCodexUsageLimit(error: unknown): boolean {

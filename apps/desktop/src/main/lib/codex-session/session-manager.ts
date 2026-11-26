@@ -23,7 +23,11 @@ import {
 	record,
 	text,
 } from "../../../shared/codex-session/types";
-import { isCodexUsageLimit } from "../../../shared/codex-session/usage-limit";
+import {
+	codexQuotaReset,
+	isCodexUsageLimit,
+} from "../../../shared/codex-session/usage-limit";
+import { USAGE_CONTINUE_MESSAGE } from "../../../shared/usage-recovery";
 import {
 	type CodexProfiles,
 	codexProfiles,
@@ -38,6 +42,7 @@ import { computerUseInstructions } from "../computer-use/tools";
 import { sessionEvents } from "../notifications/session-events";
 import { sessionNames, sessionNamingInstructions } from "../session-names";
 import type { SessionNameStore } from "../session-names/store";
+import { UsageRecovery } from "../usage-recovery/usage-recovery";
 import { resolveCodexProject } from "./projects";
 import type { AsyncQuestionInput } from "./questions";
 import { CodexRpcError, CodexTransport } from "./transport";
@@ -54,6 +59,59 @@ export interface StartCodexSession {
 }
 
 export class CodexSessionManager extends EventEmitter {
+	readonly usageRecovery = new UsageRecovery({
+		changed: (key, recovery) => {
+			const state = this.get(key);
+			if (!state) return;
+			state.usageRecovery = recovery ?? undefined;
+			state.usageLimit = recovery
+				? { id: recovery.id, accountId: state.accountId ?? "default" }
+				: undefined;
+			sessionEvents.usageBlocked(key, Boolean(recovery));
+			this.publish(state);
+		},
+		resume: async (key) => {
+			let state = this.require(key);
+			if (state.approvals.length)
+				throw new Error(
+					"Answer or dismiss the pending question before continuing.",
+				);
+			if (state.status === "error") {
+				if (!state.threadId)
+					throw new Error("Reconnect this session before continuing.");
+				state = await this.start({
+					key,
+					cwd: state.cwd,
+					workspaceId: state.workspaceId,
+					resumeSessionId: state.threadId,
+					model: state.model,
+					effort: state.effort,
+					accountId: state.accountId,
+				});
+			}
+			if (!this.usageRecovery.isContinuing(key))
+				throw new Error("Continuation canceled.");
+			await this.send({
+				key,
+				text: USAGE_CONTINUE_MESSAGE,
+				usageContinuation: true,
+				model: state.model,
+				effort: state.effort,
+				permission: state.permission ?? "default",
+				fast: state.fast,
+				plan: state.plan,
+			});
+		},
+		reset: async (key) => {
+			const state = this.require(key);
+			return codexQuotaReset(
+				await this.forAccount(state.accountId ?? "default").request(
+					"account/rateLimits/read",
+				),
+				state.model,
+			);
+		},
+	});
 	private connections = new Map<string, CodexTransport>();
 	private sessions = new Map<string, CodexSessionState>();
 	private starts = new Map<string, Promise<CodexSessionState>>();
@@ -185,6 +243,7 @@ export class CodexSessionManager extends EventEmitter {
 				"Wait for this turn to finish or stop it before switching accounts.",
 			);
 		if (state.accountId === accountId) return state;
+		this.usageRecovery.cancel(key);
 		const original = { ...state };
 		const oldTransport = this.connection(state.threadId);
 		const nextTransport = this.forAccount(accountId);
@@ -232,16 +291,33 @@ export class CodexSessionManager extends EventEmitter {
 				? error.message
 				: text(record(error).message) || text(error);
 		if (isCodexUsageLimit(error)) {
-			state.usageLimit ??= {
-				id: randomUUID(),
-				accountId: state.accountId ?? "default",
-			};
 			state.error ||= "This Codex account has reached its usage limit.";
+			this.usageRecovery.block(state.key, state.error);
+			void this.usageRecovery.refresh(state.key).catch(() => {});
 		}
 	}
 
 	get(key: string) {
 		return this.sessions.get(key);
+	}
+
+	setRecoveryPreferences(
+		key: string,
+		preferences?: Partial<
+			Pick<
+				CodexSessionState,
+				"model" | "effort" | "fast" | "plan" | "permission"
+			>
+		>,
+	) {
+		const state = this.require(key);
+		if (!this.usageRecovery.get(key) || this.usageRecovery.isContinuing(key))
+			return;
+		if (preferences?.model) state.model = preferences.model;
+		if (preferences?.effort) state.effort = preferences.effort;
+		if (preferences?.permission) state.permission = preferences.permission;
+		if (preferences?.fast !== undefined) state.fast = preferences.fast;
+		if (preferences?.plan !== undefined) state.plan = preferences.plan;
 	}
 	liveIds() {
 		return [...this.sessions.values()].flatMap((s) =>
@@ -261,6 +337,7 @@ export class CodexSessionManager extends EventEmitter {
 			}) ?? state.title;
 		if (state.threadId)
 			sessionEvents.bind(state.key, state.threadId, state.title);
+		if (state.usageLimit) sessionEvents.usageBlocked(state.key, true);
 		if (state.approvals.length) sessionEvents.status(state.key, "attention");
 		else if (state.status === "working")
 			sessionEvents.status(state.key, "working");
@@ -451,7 +528,10 @@ export class CodexSessionManager extends EventEmitter {
 			workspaceId: input.workspaceId ?? previous?.workspaceId,
 			accountId,
 			usageLimit: previous?.usageLimit,
+			usageRecovery: previous?.usageRecovery,
 			permission: previous?.permission,
+			fast: previous?.fast,
+			plan: previous?.plan,
 			key: input.key,
 			threadId: previous?.threadId ?? null,
 			cwd: input.cwd,
@@ -580,7 +660,8 @@ export class CodexSessionManager extends EventEmitter {
 			state.effort = effort;
 			if (id) await this.history(state, false, list(thread.turns));
 			this.profiles?.bind(state.threadId, accountId);
-			state.usageLimit = undefined;
+			if (previous && previous.accountId !== accountId)
+				this.usageRecovery.forget(state.key);
 			state.status = "idle";
 			// Only restore the last conversation message; never resurrect an older question.
 			const lastMessage = state.items
@@ -742,6 +823,8 @@ export class CodexSessionManager extends EventEmitter {
 		images?: string[];
 		/** Mobile sends are direction for the active turn, not a second writer. */
 		steerIfWorking?: boolean;
+		/** Internal continuation only; ordinary messages cancel any pending resume. */
+		usageContinuation?: boolean;
 	}) {
 		if (input.steerIfWorking) await this.turnStarts.get(input.key);
 		const state = this.require(input.key);
@@ -761,9 +844,14 @@ export class CodexSessionManager extends EventEmitter {
 				"Wait for this turn to finish or stop it before sending another message.",
 			);
 		state.error = null;
-		state.usageLimit = undefined;
+		if (input.usageContinuation) this.usageRecovery.clear(state.key);
+		else this.usageRecovery.forget(state.key);
 		state.status = "working";
 		state.permission = input.permission;
+		state.model = input.model || state.model;
+		state.effort = input.effort || state.effort;
+		state.fast = input.fast ?? false;
+		state.plan = input.plan ?? false;
 		sessionEvents.work(input.key, "starting");
 		state.workingSince = Date.now();
 		state.diff = "";
@@ -805,6 +893,11 @@ export class CodexSessionManager extends EventEmitter {
 									excludeSlashTmp: false,
 								},
 							};
+			if (
+				this.sessions.get(input.key) !== state ||
+				(input.usageContinuation && !this.usageRecovery.isContinuing(input.key))
+			)
+				throw new Error("Continuation canceled.");
 			const started = this.connection(state.threadId).request("turn/start", {
 				threadId: state.threadId,
 				input: [
@@ -901,6 +994,7 @@ export class CodexSessionManager extends EventEmitter {
 		}
 	}
 	async interrupt(key: string) {
+		this.usageRecovery.cancel(key);
 		sessionEvents.status(key, "idle");
 		computerUseService.release(`codex:${key}`);
 		// Stop/close can arrive before turn/start has returned its turn ID.
@@ -918,7 +1012,7 @@ export class CodexSessionManager extends EventEmitter {
 			throw new Error("Wait for Codex to finish before running this command.");
 		state.status = "working";
 		state.error = null;
-		state.usageLimit = undefined;
+		this.usageRecovery.clear(state.key);
 		sessionEvents.work(key, "starting");
 		state.workingSince = Date.now();
 		this.publish(state);
@@ -989,10 +1083,18 @@ export class CodexSessionManager extends EventEmitter {
 				{ ...turn, id: text(turn.id) || turnId },
 				text(turn.status) || "completed",
 			);
-			this.finishActivity(state, text(turn.status) || "completed");
+			if (turn.error) this.recordFailure(state, turn.error);
+			this.finishActivity(
+				state,
+				state.usageLimit ? "failed" : text(turn.status) || "completed",
+			);
 			// Some clients finish a streamed message without an item/completed
 			// payload. Recover only the newest conversation message for this turn.
-			if (!turn.error && (!turn.status || turn.status === "completed")) {
+			if (
+				!state.usageLimit &&
+				!turn.error &&
+				(!turn.status || turn.status === "completed")
+			) {
 				const lastMessage = state.items
 					.filter((item) => item.kind !== "activity")
 					.at(-1);
@@ -1003,10 +1105,10 @@ export class CodexSessionManager extends EventEmitter {
 			state.turnId = null;
 			state.error =
 				text(record(turn.error).message) ||
+				(state.usageLimit ? state.error : null) ||
 				(turn.status === "interrupted"
 					? "Stopped. You can continue below."
 					: null);
-			if (turn.error) this.recordFailure(state, turn.error);
 			state.approvals = state.approvals.filter(
 				(approval) => approval.isBlocking === false,
 			);
@@ -1020,7 +1122,7 @@ export class CodexSessionManager extends EventEmitter {
 			sessionEvents.finish(
 				state.key,
 				text(turn.id) || turnId,
-				turn.status === "completed" && !turn.error,
+				turn.status === "completed" && !turn.error && !state.usageLimit,
 				state.approvals.length > 0,
 			);
 		}
@@ -1548,6 +1650,7 @@ export class CodexSessionManager extends EventEmitter {
 		this.publish(state);
 	}
 	async close(key: string) {
+		this.usageRecovery.forget(key);
 		computerUseService.dismissRequest(`codex:${key}`);
 		computerUseService.release(`codex:${key}`);
 		await this.starts.get(key)?.catch(() => {});
@@ -1580,6 +1683,7 @@ export class CodexSessionManager extends EventEmitter {
 				.catch(() => {});
 	}
 	dispose() {
+		this.usageRecovery.dispose();
 		this.names.off("change", this.refreshNames);
 		void computerUseService.stop();
 		for (const key of this.sessions.keys()) {

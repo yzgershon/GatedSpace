@@ -2,6 +2,7 @@ import { useLayoutEffect, useMemo, useRef } from "react";
 import { usePresetIcon } from "renderer/assets/app-icons/preset-icons";
 import { AgentSetup } from "renderer/components/AgentSetup/AgentSetup";
 import type { ClaudeAccount } from "renderer/components/ClaudeAccountSwap";
+import { ClaudeUsageRecovery } from "renderer/components/UsageRecoveryPanel/components/ClaudeUsageRecovery";
 import { SessionTranscriptSkeleton } from "renderer/routes/_authenticated/_dashboard/v2-workspace/components/SessionPaneSkeleton";
 import { claudeTaskChanges } from "shared/claude-session/changes";
 import type { UserImagePayload } from "shared/claude-session/events";
@@ -217,7 +218,9 @@ export function SessionView({
 							requests={timeline.permissions ?? []}
 						/>
 					)}
-					{timeline.status === "error" && onRestart ? (
+					{timeline.status === "error" &&
+					!timeline.usageRecovery &&
+					onRestart ? (
 						// A dead session isn't a dead pane: the conversation is still on disk,
 						// so offer the way back rather than making the user close the tab.
 						// It sits at the END of the conversation, where the session stopped,
@@ -253,6 +256,12 @@ export function SessionView({
 					) : null}
 				</div>
 			</section>
+			{timeline.usageRecovery && draftKey && (
+				<ClaudeUsageRecovery
+					paneId={draftKey}
+					recovery={timeline.usageRecovery}
+				/>
+			)}
 			<SessionComposer
 				hasPendingQuestion={timeline.permissions?.some(
 					(request) => request.tool === "AskUserQuestion",

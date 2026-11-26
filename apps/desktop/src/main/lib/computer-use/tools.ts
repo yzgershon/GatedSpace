@@ -1,10 +1,18 @@
+import { nativeImage } from "electron";
 import { z } from "zod";
 import { agentBrowserService } from "../browser/agent-browser-service";
+import { prepareComputerImages } from "./image-quality";
 import { computerUseService } from "./service";
 
 const session = z.string().startsWith("codex:").min(7).max(240);
 const discoverInput = z.object({ session });
 const callInput = discoverInput.extend({
+	imageQuality: z
+		.enum(["balanced", "original"])
+		.default("balanced")
+		.describe(
+			"Balanced preserves screenshot dimensions and uses high-quality JPEG only when smaller. Use original for lossless inspection of fine text or pixels.",
+		),
 	tool: z.string().min(1).max(80),
 	arguments: z.record(z.string(), z.unknown()),
 	observeAfter: z
@@ -107,11 +115,16 @@ export const computerUseTools = [
 		run: async (input: unknown) => {
 			try {
 				const parsed = callInput.parse(input);
-				return await computerUseService.call(
+				const response = await computerUseService.call(
 					parsed.session,
 					parsed.tool,
 					parsed.arguments,
 					parsed.observeAfter,
+				);
+				return prepareComputerImages(
+					response,
+					(png) => nativeImage.createFromBuffer(png).toJPEG(90),
+					parsed.imageQuality === "original",
 				);
 			} catch (error) {
 				return { ...result({ error: String(error) }), isError: true };

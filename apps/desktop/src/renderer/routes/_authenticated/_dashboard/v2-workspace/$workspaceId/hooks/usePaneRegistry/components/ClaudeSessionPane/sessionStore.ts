@@ -163,6 +163,7 @@ function update(
 			? "attention"
 			: snapshot.timeline.status,
 		turnKey: lastFinishedTurnId(snapshot.timeline),
+		usageBlocked: Boolean(snapshot.timeline.usageRecovery),
 	});
 	for (const listener of entry.listeners) listener();
 }
@@ -434,7 +435,10 @@ export function getSessionLastPrompt(key: string): string | undefined {
  * healthy session every time the CLI grew a new status.
  */
 export function isSessionRateLimited(key: string): boolean {
-	const status = entries.get(key)?.snapshot.timeline.rateLimit?.status;
+	const timeline = entries.get(key)?.snapshot.timeline;
+	if (timeline?.usageRecovery !== undefined)
+		return Boolean(timeline.usageRecovery);
+	const status = timeline?.rateLimit?.status;
 	return typeof status === "string" && status.toLowerCase().includes("reject");
 }
 
@@ -604,15 +608,22 @@ export function swapSessionAccount(key: string, account: PinnedAccount): void {
  * command is `/effort <low|medium|high|xhigh|max|auto>` (verified against the
  * installed CLI; `ultracode` is accepted too and needs an xhigh-capable model)
  * — so it goes over stdin as a control message. `silent` keeps it from
- * rendering as something the user typed; the CLI's one-line confirmation still
- * shows, which is the feedback you want.
+ * rendering as something the user typed. Main suppresses the CLI's automatic
+ * acknowledgement; deliberate slider changes have their own switch marker.
  */
 function applyEffort(key: string, effort: EffortLevel): void {
-	void electronTrpcClient.claudeSession.send.mutate({
-		key,
-		text: `/effort ${effort}`,
-		silent: true,
-	});
+	void electronTrpcClient.claudeSession.send
+		.mutate({
+			key,
+			text: `/effort ${effort}`,
+			silent: true,
+		})
+		.catch((error) => {
+			addSwitchMarker(
+				key,
+				`Couldn't update Claude's effort: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		});
 }
 
 /**

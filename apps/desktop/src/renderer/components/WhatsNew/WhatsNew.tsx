@@ -1,16 +1,7 @@
-import { Button } from "@superset/ui/button";
-import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
-} from "@superset/ui/dialog";
-import { Check, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
 import { electronTrpc } from "renderer/lib/electron-trpc";
 import { releaseHighlightsFor } from "shared/release-highlights";
+import { ReleaseGallery } from "./components/ReleaseGallery/ReleaseGallery";
 
 const STORAGE_KEY = "gatedspace:whats-new:seen-version";
 export const OPEN_WHATS_NEW = "gatedspace:open-whats-new";
@@ -29,7 +20,7 @@ export function WhatsNew() {
 		try {
 			seen = localStorage.getItem(STORAGE_KEY);
 		} catch {
-			/* Session-only when storage is unavailable. */
+			/* Storage is optional. */
 		}
 		const unread = releaseHighlightsFor(version, seen);
 		setEntries(unread);
@@ -43,58 +34,20 @@ export function WhatsNew() {
 	}, [version, isDev]);
 	const changeOpen = (next: boolean) => {
 		setOpen(next);
-		if (!next && appVersion && !appVersion.isDev) {
+		if (!next && version && !isDev) {
 			try {
-				localStorage.setItem(STORAGE_KEY, appVersion.version);
+				localStorage.setItem(STORAGE_KEY, version);
 			} catch {
-				/* Do not block the app. */
+				/* Do not block work. */
 			}
 		}
 	};
 	return (
-		<Dialog open={open} onOpenChange={changeOpen}>
-			<DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-[520px]">
-				<DialogHeader>
-					<Sparkles className="mb-3 size-6 text-primary" aria-hidden="true" />
-					<DialogTitle>What’s new in GatedSpace</DialogTitle>
-					<DialogDescription>Version {appVersion?.version}</DialogDescription>
-				</DialogHeader>
-				<div className="space-y-6 py-2">
-					{entries.length ? (
-						entries.map((entry) => (
-							<section key={entry.version}>
-								<h3 className="mb-4 text-sm font-medium">{entry.title}</h3>
-								<ul className="space-y-4">
-									{entry.changes.map((change) => (
-										<li key={change.title} className="flex gap-3">
-											<Check
-												className="mt-0.5 size-4 shrink-0 text-primary"
-												aria-hidden="true"
-											/>
-											<div>
-												<h4 className="text-sm font-medium">{change.title}</h4>
-												<p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-													{change.detail}
-												</p>
-											</div>
-										</li>
-									))}
-								</ul>
-							</section>
-						))
-					) : (
-						<p className="text-sm text-muted-foreground">
-							You’re running GatedSpace {appVersion?.version}. Release
-							highlights will appear here after your next update.
-						</p>
-					)}
-				</div>
-				<DialogFooter>
-					<Button onClick={() => changeOpen(false)}>
-						Back to my workspace
-					</Button>
-				</DialogFooter>
-			</DialogContent>
-		</Dialog>
+		<ReleaseGallery
+			open={open}
+			onOpenChange={changeOpen}
+			version={version ?? ""}
+			entries={entries}
+		/>
 	);
 }

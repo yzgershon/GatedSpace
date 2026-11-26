@@ -1,17 +1,47 @@
 import { observable } from "@trpc/server/observable";
 import { codexSessionManager as manager } from "main/lib/codex-session/session-manager";
 import { enableComputerUse } from "main/lib/computer-use/lifecycle";
+import { observeComputerPointer } from "main/lib/computer-use/pointer";
 import { computerUseService } from "main/lib/computer-use/service";
 import type { CodexSessionState } from "shared/codex-session/types";
-import type { ComputerUseState } from "shared/computer-use";
+import type { ComputerPointer, ComputerUseState } from "shared/computer-use";
 import { chatImageUrlSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
 import { z } from "zod";
 import { publicProcedure, router } from "../..";
 
 const keyInput = z.object({ key: z.string().min(1).max(200) });
+const recoveryInput = keyInput.extend({
+	preferences: z
+		.object({
+			model: z.string().max(200).optional(),
+			effort: z.string().max(30).optional(),
+			fast: z.boolean().optional(),
+			plan: z.boolean().optional(),
+			permission: z.enum(["default", "read-only", "full-access"]).optional(),
+		})
+		.optional(),
+});
 export const createCodexSessionRouter = () =>
 	router({
+		continueAfterUsageLimit: publicProcedure
+			.input(recoveryInput)
+			.mutation(({ input }) => {
+				manager.setRecoveryPreferences(input.key, input.preferences);
+				return manager.usageRecovery.continue(input.key);
+			}),
+		autoContinueAfterUsageLimit: publicProcedure
+			.input(recoveryInput.extend({ enabled: z.boolean() }))
+			.mutation(({ input }) => {
+				if (input.enabled)
+					manager.setRecoveryPreferences(input.key, input.preferences);
+				return manager.usageRecovery.setAutoContinue(input.key, input.enabled);
+			}),
 		computerState: publicProcedure.query(() => computerUseService.get()),
+		computerPointer: publicProcedure.subscription(() =>
+			observable<ComputerPointer | null>((emit) =>
+				observeComputerPointer((point) => emit.next(point)),
+			),
+		),
 		computerDismissRequest: publicProcedure
 			.input(keyInput)
 			.mutation(({ input }) =>

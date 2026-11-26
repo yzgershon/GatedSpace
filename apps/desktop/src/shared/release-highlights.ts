@@ -231,6 +231,38 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.67",
+		title: "Return straight to your workspace",
+		changes: [
+			{
+				title: "Reliable session restoration",
+				detail:
+					"Large profile pictures no longer interrupt sign-in. Your personal installation remembers its workspace so temporary local-service failures do not send you back to the welcome screen. Signing out clears the saved identity.",
+			},
+		],
+	},
+	{
+		version: "1.18.68",
+		title: "Clearer recovery and computer control",
+		changes: [
+			{
+				title: "Pick up when your usage resets",
+				detail:
+					"Claude and Codex both mark usage-limited sessions red. Continue session explains how to resume the same conversation, and Auto-continue at reset can make one attempt when your allowance returns while GatedSpace stays open.",
+			},
+			{
+				title: "See computer control at work",
+				detail:
+					"A glowing GatedSpace cursor marker and softer screen-edge glow show when desktop control is active. The compact toolbar adds Return to session and shortcuts beside Stop, with fewer duplicate captures and clearer approval status.",
+			},
+			{
+				title: "Quieter updates, useful details",
+				detail:
+					"Automatic Claude effort confirmations stay out of your conversation. What's New now presents compact illustrated cards, keyboard navigation, and more detail when you want it.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

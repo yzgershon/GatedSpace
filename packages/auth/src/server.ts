@@ -34,6 +34,7 @@ import {
 	resolveSessionOrganizationState,
 	type SessionOrganizationContext,
 } from "./lib/resolve-session-organization-state";
+import { sessionOptions } from "./session-options";
 import { stripeClient } from "./stripe";
 import { formatPrice, getOrganizationOwners } from "./utils";
 
@@ -118,15 +119,7 @@ export const auth = betterAuth({
 			? ["exp://", "exp://**", "exp://192.168.*.*:*/**"]
 			: []),
 	],
-	session: {
-		expiresIn: 60 * 60 * 24 * 30,
-		updateAge: 60 * 60 * 24,
-		storeSessionInDatabase: true,
-		cookieCache: {
-			enabled: true,
-			maxAge: 60 * 5,
-		},
-	},
+	session: sessionOptions,
 	user: userOptions,
 	advanced: {
 		crossSubDomainCookies: {

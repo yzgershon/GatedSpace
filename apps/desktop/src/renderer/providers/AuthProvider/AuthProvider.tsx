@@ -4,7 +4,12 @@ import {
 	MIN_SPLASH_MS,
 } from "renderer/components/BootScreen/BootScreen";
 import { getStoredTokenOutcome } from "renderer/lib/auth-bootstrap";
-import { authClient, setAuthToken, setJwt } from "renderer/lib/auth-client";
+import {
+	authClient,
+	hasRestorableWorkspaceSession,
+	setAuthToken,
+	setJwt,
+} from "renderer/lib/auth-client";
 import { isLocalMode } from "renderer/lib/local-mode";
 import { markStartupOnce } from "renderer/lib/startup-mark";
 import { electronTrpc } from "../../lib/electron-trpc";
@@ -105,9 +110,12 @@ function CloudAuthProvider({ children }: { children: ReactNode }) {
 			if (storedToken?.token && storedToken?.expiresAt) {
 				const isExpired = new Date(storedToken.expiresAt) < new Date();
 				if (!isExpired) {
-					// Synchronous and local, and it must happen before either request
-					// below so both go out authenticated.
-					setAuthToken(storedToken.token);
+					// Restore the token-bound local identity before mounting children.
+					// The bearer itself is still applied synchronously.
+					await setAuthToken(storedToken.token);
+					if (!cancelled && hasRestorableWorkspaceSession()) {
+						setIsHydrated(true);
+					}
 
 					/*
 					 * The JWT fetch is STARTED here but not awaited.
@@ -118,7 +126,7 @@ function CloudAuthProvider({ children }: { children: ReactNode }) {
 					 * mount needs the JWT. Awaiting it charged a full round-trip of
 					 * launch time for a value that arrives in time regardless.
 					 *
-					 * The session refetch below IS awaited on this path, deliberately.
+					 * Without a saved local identity the session refetch is awaited.
 					 * Reaching here means the token was applied late, so the session
 					 * store's first attempt already went out unauthenticated; the layout
 					 * would read `!isSignedIn` and redirect to sign-in. Mounting before

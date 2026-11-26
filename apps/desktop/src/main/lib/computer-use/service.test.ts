@@ -15,6 +15,7 @@ class FakeBackend implements ComputerBackend {
 	callGate?: Promise<void>;
 	closeGate?: Promise<void>;
 	fail?: string;
+	imageInAction = false;
 	signal?: AbortSignal;
 	onDisconnect?: () => void;
 	onSetupProgress?: (message: string) => void;
@@ -28,9 +29,9 @@ class FakeBackend implements ComputerBackend {
 		this.calls.push(name);
 		await this.callGate;
 		if (this.fail) throw new Error(this.fail);
-		return {
-			content: [{ type: "image", data: "fixture", mimeType: "image/png" }],
-		};
+		return name === "Screenshot" || name === "Snapshot" || this.imageInAction
+			? { content: [{ type: "image", data: "fixture", mimeType: "image/png" }] }
+			: { content: [{ type: "text", text: "Action completed" }] };
 	}
 	async close() {
 		this.closed++;
@@ -303,10 +304,20 @@ test("a single action returns its fresh screenshot without another agent round t
 	await service.enable("codex:a");
 	const result = await service.call("codex:a", "Click", {}, true);
 	expect(backend.calls).toEqual(["Click", "Screenshot"]);
-	expect(result.content.filter((c) => c.type === "image")).toHaveLength(2);
+	expect(result.content.filter((c) => c.type === "image")).toHaveLength(1);
 	backend.calls = [];
 	await service.call("codex:a", "Screenshot", {}, true);
 	expect(backend.calls).toEqual(["Screenshot"]);
+	await service.stop();
+});
+
+test("an action carrying its own observation skips a redundant screenshot", async () => {
+	const { service, backend } = fixture();
+	backend.imageInAction = true;
+	await service.enable("codex:a");
+	const result = await service.call("codex:a", "Click", {}, true);
+	expect(backend.calls).toEqual(["Click"]);
+	expect(result.content.filter((c) => c.type === "image")).toHaveLength(1);
 	await service.stop();
 });
 test("idle control shuts down but never expires during an action", async () => {

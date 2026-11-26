@@ -228,6 +228,7 @@ export class ComputerUseService extends EventEmitter {
 			if (
 				observeAfter &&
 				!result.isError &&
+				!result.content.some((item) => item.type === "image") &&
 				!["Snapshot", "Screenshot", "Wait"].includes(name) &&
 				this.tools.some((tool) => tool.name === "Screenshot")
 			) {

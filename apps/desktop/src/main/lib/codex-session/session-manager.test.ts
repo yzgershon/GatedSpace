@@ -1742,6 +1742,56 @@ describe("Codex account switching", () => {
 			},
 		};
 	}
+	test("quota followed by a completed event stays red; Continue preserves settings and conversation", async () => {
+		const { manager, original } = accountsFixture();
+		const state = await manager.start({
+			key: "quota-status",
+			cwd: "/workspace",
+		});
+		await manager.send({
+			key: state.key,
+			text: "Existing work",
+			model: "gpt-6-astra",
+			effort: "low",
+			permission: "read-only",
+			fast: true,
+			plan: true,
+		});
+		const threadId = state.threadId;
+		original.emit("notification", {
+			method: "error",
+			params: {
+				threadId,
+				error: {
+					codexErrorInfo: "usageLimitExceeded",
+					message: "Usage limit reached",
+				},
+				willRetry: false,
+			},
+		});
+		original.emit("notification", {
+			method: "turn/completed",
+			params: { threadId, turn: { id: "turn", status: "completed" } },
+		});
+		expect(sessionEvents.get(state.key)).toMatchObject({
+			status: "error",
+			usageBlocked: true,
+		});
+		expect(state.usageRecovery?.autoContinue).toBe(false);
+		await manager.usageRecovery.continue(state.key);
+		const sent = original.calls.filter((c) => c.method === "turn/start");
+		expect(sent).toHaveLength(2);
+		expect(sent[1]?.params).toMatchObject({
+			threadId,
+			model: "gpt-6-astra",
+			effort: "low",
+			serviceTier: "fast",
+			sandboxPolicy: { type: "readOnly" },
+			collaborationMode: { mode: "plan" },
+		});
+		expect(state.usageLimit).toBeUndefined();
+		expect(sessionEvents.get(state.key)?.usageBlocked).toBe(false);
+	});
 	test("a quota-rejected send offers recovery without leaving a phantom user message", async () => {
 		const { manager, original } = accountsFixture();
 		const state = await manager.start({

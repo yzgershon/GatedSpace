@@ -11,3 +11,10 @@ export const COMPUTER_IDLE_TIMEOUT_MS = 60_000;
 
 export const COMPUTER_STOP_SHORTCUT = "Control+Alt+Shift+Escape";
 export const COMPUTER_STOP_LABEL = "Ctrl + Alt + Shift + Esc";
+
+export interface ComputerPointer {
+	x: number;
+	y: number;
+	displayX: number;
+	displayY: number;
+}

@@ -6,5 +6,6 @@ export interface SessionNotificationState {
 	title?: string;
 	visible?: boolean;
 	turnId?: string;
+	usageBlocked?: boolean;
 	status: "idle" | "working" | "attention" | "completed" | "error";
 }

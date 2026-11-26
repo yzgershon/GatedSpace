@@ -28,6 +28,7 @@ import {
 	toQuotaSnapshot,
 	type UsageReport,
 } from "shared/claude-session/usage-report";
+import { latestQuotaReset, resetEpochMs } from "shared/usage-recovery";
 import { resolveUsageWindow } from "shared/usage-window";
 import { resolveExecutable } from "./resolve-executable";
 
@@ -236,6 +237,30 @@ export interface ProfileLimits {
 	weeklyPercent: number | null;
 	weeklyResets: string | null;
 	updatedAt: number | null;
+}
+
+/** Exact timestamps for scheduling; display labels are never parsed back. */
+export function readProfileQuotaReset(
+	configDir: string,
+	now = Date.now(),
+): number | null {
+	try {
+		const snapshot = JSON.parse(
+			readFileSync(join(configDir, "cache", "rate-limits.json"), "utf8"),
+		);
+		return latestQuotaReset(
+			[snapshot.five_hour, snapshot.seven_day].map((window) => ({
+				used:
+					typeof window?.used_percentage === "number"
+						? window.used_percentage
+						: null,
+				reset: resetEpochMs(window?.resets_at),
+			})),
+			now,
+		);
+	} catch {
+		return null;
+	}
 }
 
 /**

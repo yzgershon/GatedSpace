@@ -26,17 +26,22 @@ import type {
 	ClaudeStreamEvent,
 	UserImagePayload,
 } from "shared/claude-session/events";
+import { claudeUsageLimit } from "shared/claude-session/usage-limit";
 import { chatImageSchema, MAX_CHAT_IMAGES } from "shared/image-attachments";
+import { USAGE_CONTINUE_MESSAGE } from "shared/usage-recovery";
 import { z } from "zod";
 import { SUPERSET_HOME_DIR } from "../app-environment";
 import { ClaudeTurnNotifications } from "../notifications/claude-turn-notifications";
 import { sessionEvents } from "../notifications/session-events";
 import { sessionNames } from "../session-names";
+import { UsageRecovery } from "../usage-recovery/usage-recovery";
 import { CompactionGuard } from "./compaction-guard";
 import { getSessionCost, recordSessionCost } from "./cost-store";
+import { QuietEffortUpdates } from "./quiet-effort";
 import { resolveResumeClaim } from "./resume-claim";
 import { canResumeUnderConfigDir } from "./transcript";
 import { type ClaudeSessionOptions, ClaudeSessionTransport } from "./transport";
+import { readProfileQuotaReset, refreshProfileUsage } from "./usage-refresh";
 
 /**
  * Where cross-process claims on a session id live. Under SUPERSET_HOME_DIR
@@ -92,11 +97,119 @@ function isCapturedEventType(event: ClaudeStreamEvent): boolean {
 }
 
 interface PendingCapture {
+	command: string;
 	settle: (text: string | null) => void;
 	timer: ReturnType<typeof setTimeout>;
 }
 
-class ClaudeSessionManager extends EventEmitter {
+export class ClaudeSessionManager extends EventEmitter {
+	constructor(
+		private createTransport = (options: ClaudeSessionOptions) =>
+			new ClaudeSessionTransport(options),
+	) {
+		super();
+	}
+	private options = new Map<string, ClaudeSessionOptions>();
+	private efforts = new Map<string, string>();
+	private quietEfforts = new Map<string, QuietEffortUpdates>();
+	readonly usageRecovery = new UsageRecovery({
+		changed: (key, recovery) => {
+			sessionEvents.usageBlocked(key, Boolean(recovery));
+			const event: ClaudeStreamEvent = {
+				type: "local_usage_recovery",
+				recovery,
+			};
+			const buffer = this.buffers.get(key);
+			if (buffer) {
+				// One current snapshot, so reopening a pane never replays old schedules.
+				this.buffers.set(
+					key,
+					buffer.filter((e) => e.type !== "local_usage_recovery"),
+				);
+				this.record(key, event);
+			}
+			this.emit(`event:${key}`, event);
+		},
+		resume: async (key) => {
+			if (this.busy.has(key) || this.captures.has(key))
+				throw new Error(
+					"Wait for the current turn or settings change to finish before continuing.",
+				);
+			const permissions = this.buffers
+				.get(key)
+				?.findLast((e) => e.type === "local_permissions");
+			if (
+				permissions?.type === "local_permissions" &&
+				permissions.requests.length
+			)
+				throw new Error(
+					"Answer or dismiss the pending question before continuing.",
+				);
+			if (!this.isRunning(key)) {
+				const options = this.options.get(key);
+				const sessionId = this.sessionIds.get(key);
+				if (!options || !sessionId)
+					throw new Error("Reopen this saved conversation before continuing.");
+				await new Promise<void>((resolve, reject) => {
+					const cleanup = () => {
+						clearTimeout(timer);
+						this.off(`event:${key}`, ready);
+						this.off(`exit:${key}`, exited);
+					};
+					const ready = (event: ClaudeStreamEvent) => {
+						if (event.type === "system" && event.subtype === "init") {
+							cleanup();
+							resolve();
+						} else if (event.type === "local_notice" && event.fatal) {
+							cleanup();
+							reject(new Error(event.text));
+						}
+					};
+					const exited = () => {
+						cleanup();
+						reject(
+							new Error(
+								"Claude disconnected before continuing. Your conversation is saved.",
+							),
+						);
+					};
+					const timer = setTimeout(() => {
+						cleanup();
+						reject(
+							new Error(
+								"Claude did not reconnect in time. Try Continue session again.",
+							),
+						);
+					}, 30_000);
+					this.on(`event:${key}`, ready);
+					this.on(`exit:${key}`, exited);
+					try {
+						this.start(
+							key,
+							{ ...options, resumeSessionId: sessionId, forkSession: false },
+							true,
+						);
+					} catch (error) {
+						cleanup();
+						reject(error);
+					}
+				});
+				if (!this.usageRecovery.isContinuing(key))
+					throw new Error("Continuation canceled.");
+				const effort = this.efforts.get(key);
+				if (effort) this.send(key, `/effort ${effort}`, true);
+			}
+			if (!this.usageRecovery.isContinuing(key))
+				throw new Error("Continuation canceled.");
+			this.send(key, USAGE_CONTINUE_MESSAGE, false, [], true);
+		},
+		reset: async (key) => {
+			const configDir = this.options.get(key)?.configDir;
+			if (!configDir) return null;
+			await refreshProfileUsage(configDir);
+			return readProfileQuotaReset(configDir);
+		},
+	});
 	private readonly contexts = new Map<
 		string,
 		{ cwd: string; workspaceId?: string }
@@ -160,8 +273,9 @@ class ClaudeSessionManager extends EventEmitter {
 	}
 
 	/** Spawn a session for `key`. No-op if one already exists for that key. */
-	start(key: string, opts: ClaudeSessionOptions): void {
+	start(key: string, opts: ClaudeSessionOptions, strictResume = false): void {
 		if (this.sessions.has(key)) return;
+		this.quietEfforts.set(key, new QuietEffortUpdates());
 		this.contexts.set(key, { cwd: opts.cwd, workspaceId: opts.workspaceId });
 		sessionEvents.open(key, "claude", opts.workspaceId);
 		this.turnNotifications.clear(key);
@@ -181,6 +295,10 @@ class ClaudeSessionManager extends EventEmitter {
 		 */
 		if (opts.resumeSessionId && opts.configDir) {
 			if (!canResumeUnderConfigDir(opts.configDir, opts.resumeSessionId)) {
+				if (strictResume)
+					throw new Error(
+						"This account cannot find the saved conversation. Reopen it from Recent sessions before continuing.",
+					);
 				this.notice(
 					key,
 					"This account keeps its own session history and has no copy of this conversation, so it starts a new session. What is above stays here; the new account picks up from your next message.",
@@ -221,7 +339,12 @@ class ClaudeSessionManager extends EventEmitter {
 		// the conversation still carries over, but into a new session id, so the
 		// two writers can't overwrite each other's transcript.
 		const blocked = Boolean(blockedBy) || blockedByExternal === true;
+		if (blocked && strictResume)
+			throw new Error(
+				"This conversation is open in another pane. Continue there instead.",
+			);
 		const options = blocked ? { ...opts, forkSession: true } : opts;
+		this.options.set(key, options);
 		sessionNames.open(
 			{
 				provider: "claude",
@@ -248,7 +371,7 @@ class ClaudeSessionManager extends EventEmitter {
 			);
 		}
 
-		const transport = new ClaudeSessionTransport({
+		const transport = this.createTransport({
 			...options,
 			sessionKey: key,
 		});
@@ -290,6 +413,10 @@ class ClaudeSessionManager extends EventEmitter {
 				// measured from zero again.
 				this.costThisRun.set(key, 0);
 			}
+			// An automatic preference acknowledgement is not an agent reply or a
+			// completed turn. Filter before costs, busy state, notifications/replay.
+			if (!this.captures.has(key) && this.quietEfforts.get(key)?.consume(event))
+				return;
 			if (event.type === "result") {
 				this.accrueCost(key, event.total_cost_usd);
 			}
@@ -313,6 +440,11 @@ class ClaudeSessionManager extends EventEmitter {
 				}
 				return;
 			}
+			const quota = claudeUsageLimit(event);
+			if (quota) {
+				this.usageRecovery.block(key, quota.message, quota.resetAt);
+				void this.usageRecovery.refresh(key).catch(() => {});
+			}
 			this.turnNotifications.event(key, event);
 			this.record(key, event);
 			this.emit(`event:${key}`, event);
@@ -329,6 +461,7 @@ class ClaudeSessionManager extends EventEmitter {
 		});
 		transport.on("exit", (info: SessionExitInfo) => {
 			if (!isCurrent()) return;
+			this.busy.delete(key);
 			this.turnNotifications.clear(key);
 			sessionEvents.status(key, info.code ? "error" : "idle");
 			this.emit(`exit:${key}`, info);
@@ -366,6 +499,7 @@ class ClaudeSessionManager extends EventEmitter {
 		});
 		this.sessions.set(key, transport);
 		if (!this.buffers.has(key)) this.buffers.set(key, []);
+		if (this.usageRecovery.get(key)) sessionEvents.usageBlocked(key, true);
 		transport.start();
 	}
 
@@ -379,6 +513,9 @@ class ClaudeSessionManager extends EventEmitter {
 	 * rather than replaying it as events, so nothing duplicates in the timeline.
 	 */
 	restart(key: string, opts: ClaudeSessionOptions): void {
+		this.usageRecovery.cancel(key);
+		if (this.options.get(key)?.configDir !== opts.configDir)
+			this.usageRecovery.forget(key);
 		const existing = this.sessions.get(key);
 		if (existing) {
 			this.sessions.delete(key);
@@ -438,6 +575,7 @@ class ClaudeSessionManager extends EventEmitter {
 		text: string,
 		silent = false,
 		images: UserImagePayload[] = [],
+		usageContinuation = false,
 	): void {
 		const transport = this.sessions.get(key);
 		if (!transport)
@@ -447,8 +585,21 @@ class ClaudeSessionManager extends EventEmitter {
 
 		const usable = z.array(chatImageSchema).max(MAX_CHAT_IMAGES).parse(images);
 
-		transport.sendUserMessage(text, usable, !silent);
+		const effort = /^\/effort\s+([\w-]+)$/.exec(text)?.[1];
+		if (silent && effort && !this.captures.has(key)) {
+			if (!this.quietEfforts.get(key)?.track(effort)) return;
+		}
+		try {
+			transport.sendUserMessage(text, usable, !silent);
+		} catch (error) {
+			if (silent && effort) this.quietEfforts.get(key)?.failed(effort);
+			throw error;
+		}
+		if (effort) this.efforts.set(key, effort);
+		if (effort && !silent) this.quietEfforts.get(key)?.manual(effort);
 		if (!silent) {
+			if (usageContinuation) this.usageRecovery.clear(key);
+			else this.usageRecovery.forget(key);
 			sessionNames.firstPrompt({ provider: "claude", key }, text);
 			const event: ClaudeStreamEvent = {
 				type: "local_user_message",
@@ -478,6 +629,14 @@ class ClaudeSessionManager extends EventEmitter {
 		if (!pending) return;
 		this.captures.delete(key);
 		clearTimeout(pending.timer);
+		const options = this.options.get(key);
+		if (options && text) {
+			const model = /^\/model\s+([\w.[\]-]+)$/.exec(pending.command)?.[1];
+			if (model && /set model to/i.test(text)) options.model = model;
+			const fast = /^\/fast (on|off)$/.exec(pending.command)?.[1];
+			if (fast && new RegExp(`fast mode\\s+(?:is\\s+)?${fast}`, "i").test(text))
+				options.fast = fast === "on";
+		}
 		pending.settle(text);
 	}
 
@@ -505,7 +664,7 @@ class ClaudeSessionManager extends EventEmitter {
 			const timer = setTimeout(() => {
 				this.resolveCapture(key, null);
 			}, CAPTURE_TIMEOUT_MS);
-			this.captures.set(key, { settle: resolve, timer });
+			this.captures.set(key, { command, settle: resolve, timer });
 			// Silent: the user didn't type this into the conversation, and the panel
 			// is where the answer is going.
 			this.send(key, command, true);
@@ -513,6 +672,7 @@ class ClaudeSessionManager extends EventEmitter {
 	}
 
 	interrupt(key: string): void {
+		this.usageRecovery.cancel(key);
 		this.turnNotifications.clear(key);
 		sessionEvents.status(key, "idle");
 		this.sessions.get(key)?.interrupt();
@@ -531,6 +691,10 @@ class ClaudeSessionManager extends EventEmitter {
 
 	/** Terminate and forget the session for `key`, transcript included. */
 	stop(key: string): void {
+		this.usageRecovery.forget(key);
+		this.options.delete(key);
+		this.efforts.delete(key);
+		this.quietEfforts.delete(key);
 		this.turnNotifications.clear(key);
 		sessionEvents.close(key);
 		// Let go of a capture before the process does: its caller is awaiting a
@@ -622,6 +786,10 @@ class ClaudeSessionManager extends EventEmitter {
 
 	/** Tear everything down (app shutdown). */
 	disposeAll(): void {
+		this.usageRecovery.dispose();
+		this.options.clear();
+		this.efforts.clear();
+		this.quietEfforts.clear();
 		for (const key of this.sessions.keys()) {
 			this.turnNotifications.clear(key);
 			sessionEvents.close(key);

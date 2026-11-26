@@ -17,7 +17,7 @@ function fixture(): Map<string, Buffer> {
 		[
 			"dist/main/index.js",
 			Buffer.from(
-				`${endpoints}\n${REQUIRED_MARKERS.join("\n")}\nGatedSpace control border\nThe desktop control indicator closed.\ncontrol-border\ncontrol-toolbar\nComputer control ready\nReading the screen\n/Windows/i.test(navigator.userAgent) ? "dom" : "webgl"`,
+				`${endpoints}\n${REQUIRED_MARKERS.join("\n")}\nGatedSpace control border\nThe desktop control indicator closed.\ncontrol-border\ncontrol-toolbar\ncontrol-pointer\nReady for the next step\nReading the screen\n/Windows/i.test(navigator.userAgent) ? "dom" : "webgl"`,
 			),
 		],
 		["dist/renderer/assets/index.js", Buffer.from(endpoints)],

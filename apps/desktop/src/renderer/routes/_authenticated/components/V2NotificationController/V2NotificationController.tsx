@@ -80,6 +80,7 @@ export function V2NotificationController() {
 									? "done"
 									: state.status,
 						turnKey: state.turnId,
+						usageBlocked: state.usageBlocked,
 					},
 					true,
 				);

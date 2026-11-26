@@ -37,6 +37,25 @@ const result = (
 	...extra,
 });
 describe("authoritative session completion", () => {
+	test.each([
+		"claude",
+		"codex",
+	] as const)("%s quota stays red without a completion notice", (provider) => {
+		const { sessions, notices } = fixture();
+		sessions.open("pane", provider);
+		sessions.work("pane", "quota");
+		sessions.usageBlocked("pane", true);
+		sessions.finish("pane", "quota", true);
+		sessions.status("pane", "idle");
+		expect(sessions.get("pane")).toMatchObject({
+			status: "error",
+			usageBlocked: true,
+		});
+		expect(notices).toHaveLength(0);
+		sessions.usageBlocked("pane", false);
+		sessions.work("pane", "continue");
+		expect(sessions.get("pane")?.status).toBe("working");
+	});
 	test("errors carry an acknowledgement key, remain stable, and relight on the next failed turn", () => {
 		const { sessions } = fixture();
 		sessions.work("pane", "quota-turn");

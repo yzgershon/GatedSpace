@@ -8,6 +8,15 @@ const activity = (
 ): SessionActivity => ({ status, turnKey });
 
 describe("deriveSessionPaneStatus", () => {
+	it("keeps quota exhaustion red even after viewing the session or a late completed event", () => {
+		for (const status of ["error", "done", "idle"] as const)
+			expect(
+				deriveSessionPaneStatus({
+					activity: { status, turnKey: "quota", usageBlocked: true },
+					seenTurn: "quota",
+				}),
+			).toBe("error");
+	});
 	it("shows nothing for a pane with no session yet", () => {
 		expect(
 			deriveSessionPaneStatus({ activity: undefined, seenTurn: undefined }),
