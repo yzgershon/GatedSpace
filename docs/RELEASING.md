@@ -265,7 +265,7 @@ checks with release styles, packages without another native rebuild, verifies th
 actual installer, then checks copied-file hashes and local Update discovery. It
 never installs or publishes. The standard `apps/desktop/release` output is retained.
 
-The personal worker enters electron-builder through `windows-packager.cjs`. On
+Personal and public builds enter electron-builder through `windows-packager.cjs`. On
 Windows it uses fs-extra's native Windows realpath implementation, preserving
 Promise/callback behavior and all of electron-builder's path safety checks. No
 path results are cached. A same-snapshot ARM64 comparison reduced unpacked-app
@@ -278,6 +278,13 @@ benchmark should not be used to predict a full worker's duration.
 The wrapper falls back to standard resolution if an upstream module layout changes.
 Run `node --test scripts/release/windows-packager.test.cjs` to check junction
 retargeting, missing files, callbacks, and rejection of links into Windows.
+
+The current packaging layout, cache workflow, and measured size/timing comparisons
+are documented in [installer performance](../apps/desktop/docs/installer-performance.md).
+Release jobs restore the dependency/native/voice caches maintained on `main` by
+`cache-desktop.yml`; they do not spend the release's critical path uploading caches
+that the next release tag cannot restore. Cache hits never replace native validation,
+packaged startup checks, or final installer verification.
 
 `personal-checkpoints.json` beside the reusable checkout records successful phases
 with input and output hashes. A resumed job reuses compilation/packaging only when

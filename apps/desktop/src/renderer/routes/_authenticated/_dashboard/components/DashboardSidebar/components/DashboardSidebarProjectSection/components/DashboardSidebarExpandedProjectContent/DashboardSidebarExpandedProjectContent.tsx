@@ -5,6 +5,7 @@ import {
 } from "@dnd-kit/sortable";
 import { AnimatePresence, motion } from "framer-motion";
 import { createPortal } from "react-dom";
+import { useWorkspaceRecency } from "renderer/stores/workspace-recency";
 import { useSidebarDnd } from "../../../../hooks/useSidebarDnd";
 import { parseId } from "../../../../hooks/useSidebarDnd/useSidebarDnd";
 import type { DashboardSidebarProjectChild } from "../../../../types";
@@ -33,6 +34,7 @@ export function DashboardSidebarExpandedProjectContent({
 	onRenameSection,
 	onToggleSectionCollapse,
 }: DashboardSidebarExpandedProjectContentProps) {
+	const recentFirst = useWorkspaceRecency((state) => state.recentFirst);
 	const {
 		sensors,
 		measuring,
@@ -62,7 +64,7 @@ export function DashboardSidebarExpandedProjectContent({
 				>
 					<div className="pb-1">
 						<DndContext
-							sensors={sensors}
+							sensors={recentFirst ? [] : sensors}
 							collisionDetection={collisionDetection}
 							measuring={measuring}
 							{...handlers}

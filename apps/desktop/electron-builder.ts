@@ -8,6 +8,11 @@ import { join } from "node:path";
 import type { Configuration } from "electron-builder";
 import pkg from "./package.json";
 import {
+	packagedDistFilter,
+	packagedSourceResourceFilter,
+	verifyPackagedResourceLayout,
+} from "./packaging-layout";
+import {
 	crossPlatformBinaryExcludes,
 	nodeModulesResidueExcludes,
 	nonRuntimeArtifactExcludes,
@@ -106,13 +111,12 @@ const config: Configuration = {
 	],
 
 	files: [
-		"dist/**/*",
-		"!dist/resources/flow-dictation/**/*",
+		{ from: "dist", to: "dist", filter: packagedDistFilter },
 		"package.json",
 		{
 			from: pkg.resources,
 			to: "resources",
-			filter: ["**/*"],
+			filter: packagedSourceResourceFilter,
 		},
 		// Runtime modules that stay external to the main bundle.
 		// bun creates symlinks for direct deps in workspace node_modules.
@@ -120,8 +124,8 @@ const config: Configuration = {
 		// before building (required for Bun 1.3+ isolated installs).
 		...packagedNodeModuleCopies,
 		"!**/.DS_Store",
-		// Applies to `dist/**/*` and to everything electron-builder pulls in
-		// automatically from `dependencies`. The explicit copies above carry the
+		// Applies to everything electron-builder pulls in automatically from
+		// `dependencies`. The explicit dist and module copies above carry their
 		// same excludes via their own `filter`, because a filter on a `from`/`to`
 		// entry replaces these top-level patterns rather than combining with them.
 		...nonRuntimeArtifactExcludes,
@@ -143,11 +147,16 @@ const config: Configuration = {
 			verifyFlowBundle("dist/resources/flow-dictation", targetArch);
 	},
 	afterPack: async (context) => {
-		if (context.electronPlatformName === "win32")
+		if (context.electronPlatformName === "win32") {
 			verifyFlowBundle(
 				join(context.appOutDir, "resources/resources/flow-dictation"),
 				targetArch,
 			);
+			verifyPackagedResourceLayout(
+				context.appOutDir,
+				context.packager.projectDir,
+			);
+		}
 	},
 	// Rebuild native modules for Electron's Node.js version — only when building
 	// for the host arch. Cross-arch node-gyp rebuilds can't run locally (winpty

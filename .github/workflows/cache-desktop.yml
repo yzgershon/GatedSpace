@@ -1,0 +1,89 @@
+name: Warm desktop build caches
+
+# A release tag can restore main's caches, but not another release tag's cache.
+# Only trusted pushes/manual runs populate main; no PR code runs in this scope.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - bun.lock
+      - .bun-version
+      - patches/**
+      - vendored/**
+      - packages/macos-process-metrics/**
+      - scripts/vendor-native-win-arm64.ts
+      - scripts/release/desktop-build-cache.ts
+      - scripts/release/prepare-native-deps.mjs
+      - apps/desktop/native/flow-dictation/**
+      - apps/desktop/scripts/build-flow-dictation.ts
+      - apps/desktop/scripts/flow-bundle.ts
+      - .github/actions/desktop-build-cache/**
+      - .github/workflows/cache-desktop.yml
+
+permissions:
+  contents: read
+
+jobs:
+  warm:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ${{ matrix.os }}
+    concurrency:
+      group: desktop-cache-${{ matrix.arch }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            os: windows-2022
+          - arch: arm64
+            os: windows-11-arm
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - run: git config --system core.longpaths true
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - id: cache
+        uses: ./.github/actions/desktop-build-cache
+        with:
+          arch: ${{ matrix.arch }}
+      - name: Install dependencies on cache misses
+        if: steps.cache.outputs.dependencies-hit != 'true' || steps.cache.outputs.native-hit != 'true' || steps.cache.outputs.flow-hit != 'true'
+        run: bun install --frozen-lockfile --ignore-scripts
+      - name: Prepare native dependency cache
+        if: steps.cache.outputs.native-hit != 'true'
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          bun scripts/vendor-native-win-arm64.ts
+          bun run --cwd apps/desktop install:deps
+      - name: Prepare verified offline dictation cache
+        if: steps.cache.outputs.flow-hit != 'true'
+        working-directory: apps/desktop
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bun run bundle:flow
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: steps.cache.outputs.dependencies-hit != 'true'
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ steps.cache.outputs.dependencies-key }}
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: steps.cache.outputs.native-hit != 'true'
+        with:
+          path: |
+            ~/.electron-rebuild-cache
+            ~/.electron-gyp
+          key: ${{ steps.cache.outputs.native-key }}
+      - uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        if: steps.cache.outputs.flow-hit != 'true'
+        with:
+          path: |
+            ~/AppData/Local/GatedSpaceBuild/flow/*/bundle
+            ~/AppData/Local/GatedSpaceBuild/flow/*/bundle.json
+          key: ${{ steps.cache.outputs.flow-key }}

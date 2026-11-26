@@ -1,4 +1,4 @@
-/** Personal-build entry point. Keep electron-builder's path safety checks intact. */
+/** Shared Windows packager. Keep electron-builder's path safety checks intact. */
 const { createRequire } = require("node:module");
 const { join } = require("node:path");
 

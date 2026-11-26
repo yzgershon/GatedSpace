@@ -1,0 +1,54 @@
+name: Restore desktop build caches
+description: Restore dependency downloads, ABI-keyed native builds, and verified offline dictation bundles
+inputs:
+  arch:
+    required: true
+    description: Native Windows runner architecture
+outputs:
+  dependencies-key:
+    value: ${{ steps.dependencies.outputs.cache-primary-key }}
+    description: Exact dependency cache key
+  dependencies-hit:
+    value: ${{ steps.dependencies.outputs.cache-hit }}
+    description: Exact dependency cache hit
+  native-key:
+    value: ${{ steps.native.outputs.cache-primary-key }}
+    description: Exact native cache key
+  native-hit:
+    value: ${{ steps.native.outputs.cache-hit }}
+    description: Exact native cache hit
+  flow-key:
+    value: ${{ steps.flow.outputs.cache-primary-key }}
+    description: Exact dictation cache key
+  flow-hit:
+    value: ${{ steps.flow.outputs.cache-hit }}
+    description: Exact dictation cache hit
+runs:
+  using: composite
+  steps:
+    - id: identity
+      shell: bash
+      run: bun scripts/release/desktop-build-cache.ts >> "$GITHUB_OUTPUT"
+    # Restore-only in releases: tag-scoped uploads cost minutes and cannot be
+    # read by the next tag. cache-desktop.yml maintains these on main instead.
+    - id: dependencies
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/.bun/install/cache
+        key: ${{ runner.os }}-${{ inputs.arch }}-desktop-bun-v2-${{ steps.identity.outputs.dependencies }}
+        restore-keys: ${{ runner.os }}-${{ inputs.arch }}-desktop-bun-v2-
+    - id: native
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: |
+          ~/.electron-rebuild-cache
+          ~/.electron-gyp
+        key: ${{ runner.os }}-${{ inputs.arch }}-desktop-native-v2-${{ steps.identity.outputs.native }}
+        restore-keys: ${{ runner.os }}-${{ inputs.arch }}-desktop-native-v2-
+    - id: flow
+      uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: |
+          ~/AppData/Local/GatedSpaceBuild/flow/*/bundle
+          ~/AppData/Local/GatedSpaceBuild/flow/*/bundle.json
+        key: ${{ runner.os }}-${{ inputs.arch }}-desktop-flow-v2-${{ steps.identity.outputs.flow }}

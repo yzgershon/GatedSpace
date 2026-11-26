@@ -238,6 +238,7 @@ try {
 		await hashFiles([
 			join(repo, "bun.lock"),
 			join(repo, "scripts/vendor-native-win-arm64.ts"),
+			join(repo, "scripts/release/prepare-native-deps.mjs"),
 			join(desktop, "runtime-dependencies.ts"),
 		]),
 		[join(repo, "node_modules/.personal-native-ready")],
@@ -378,6 +379,24 @@ try {
 				"scripts/check-organizer-release.mjs",
 				repo,
 			]),
+		true,
+	);
+	await phase(
+		"Compact workspaces",
+		`${job.sourceCommit}:${compiled}`,
+		[join(repo, ".tmp/compact-workspaces-check/checks.json")],
+		async () => {
+			await bun("compact-workspaces-fixture", [
+				"scripts/build-compact-workspaces-check.ts",
+			]);
+			await command(
+				"compact-workspaces",
+				"node",
+				["scripts/check-compact-workspaces.mjs"],
+				desktop,
+				{ COMPACT_PACKAGED: "1" },
+			);
+		},
 		true,
 	);
 	const release = join(desktop, "release");

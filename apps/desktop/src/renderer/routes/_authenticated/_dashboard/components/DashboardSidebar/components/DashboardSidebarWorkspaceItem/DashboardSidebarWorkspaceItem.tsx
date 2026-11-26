@@ -4,10 +4,15 @@ import { useV2WorkspaceNotificationStatus } from "renderer/hooks/host-service/us
 import { useSkinTokens } from "renderer/hooks/useSkinTokens";
 import { useOptimisticCollectionActions } from "renderer/routes/_authenticated/hooks/useOptimisticCollectionActions";
 import { useDeletingWorkspaces } from "renderer/routes/_authenticated/providers/DeletingWorkspacesProvider";
+import { useWorkspaceRecency } from "renderer/stores/workspace-recency";
 import { useDashboardSidebarHover } from "../../providers/DashboardSidebarHoverProvider";
 import type { DashboardSidebarWorkspace } from "../../types";
+import {
+	CompactWorkspaceHeader,
+	type CompactWorkspaceProject,
+} from "../CompactWorkspaceSessions/CompactWorkspaceHeader";
+import { CompactWorkspaceSessions } from "../CompactWorkspaceSessions/CompactWorkspaceSessions";
 import { DashboardSidebarDeleteDialog } from "../DashboardSidebarDeleteDialog";
-import { DashboardSidebarWorkspaceSessions } from "../DashboardSidebarWorkspaceSessions";
 import { DashboardSidebarCollapsedWorkspaceButton } from "./components/DashboardSidebarCollapsedWorkspaceButton";
 import { DashboardSidebarExpandedWorkspaceRow } from "./components/DashboardSidebarExpandedWorkspaceRow";
 import { DashboardSidebarWorkspaceContextMenu } from "./components/DashboardSidebarWorkspaceContextMenu/DashboardSidebarWorkspaceContextMenu";
@@ -20,6 +25,7 @@ interface DashboardSidebarWorkspaceItemProps {
 	shortcutLabel?: string;
 	isCollapsed?: boolean;
 	isInSection?: boolean;
+	compactProject?: CompactWorkspaceProject;
 }
 
 export function DashboardSidebarWorkspaceItem({
@@ -28,6 +34,7 @@ export function DashboardSidebarWorkspaceItem({
 	shortcutLabel,
 	isCollapsed = false,
 	isInSection = false,
+	compactProject,
 }: DashboardSidebarWorkspaceItemProps) {
 	const {
 		id,
@@ -45,7 +52,7 @@ export function DashboardSidebarWorkspaceItem({
 	const {
 		cancelRename,
 		handleClearStatus,
-		handleClick,
+		handleClick: navigateToWorkspace,
 		handleCopyPath,
 		handleCopyBranchName,
 		handleCreateSection,
@@ -70,6 +77,11 @@ export function DashboardSidebarWorkspaceItem({
 		branch,
 		isMainWorkspace,
 	});
+
+	const handleClick = () => {
+		useWorkspaceRecency.getState().markOpened(id);
+		navigateToWorkspace();
+	};
 
 	const { v2Workspaces: v2WorkspaceActions } = useOptimisticCollectionActions();
 	const { sidebarSessions } = useSkinTokens();
@@ -214,38 +226,50 @@ export function DashboardSidebarWorkspaceItem({
 			// summary cluster for the full badges while the item is hovered.
 			className="group/item"
 		>
-			<DashboardSidebarExpandedWorkspaceRow
-				workspace={workspace}
-				isActive={isActive}
-				isRenaming={isRenaming}
-				renameValue={renameValue}
-				shortcutLabel={shortcutLabel}
-				workspaceStatus={workspaceStatus}
-				isInSection={isInSection}
-				onClick={handleClick}
-				onDoubleClick={isPending || isMainWorkspace ? undefined : startRename}
-				onRemoveFromSidebarClick={handleRemoveFromSidebar}
-				onCloseWorkspaceClick={() => setIsDeleteDialogOpen(true)}
-				onRenameValueChange={setRenameValue}
-				onSubmitRename={submitRename}
-				onCancelRename={cancelRename}
-			>
-				{!isPending && (
-					<DashboardSidebarWorkspaceDetails
-						workspaceId={id}
-						isInSection={isInSection}
-						onClick={handleClick}
-					/>
-				)}
-			</DashboardSidebarExpandedWorkspaceRow>
+			{compactProject ? (
+				<CompactWorkspaceHeader
+					project={compactProject}
+					branch={branch || name}
+					active={isActive}
+					onOpen={handleClick}
+				/>
+			) : (
+				<DashboardSidebarExpandedWorkspaceRow
+					workspace={workspace}
+					isActive={isActive}
+					isRenaming={isRenaming}
+					renameValue={renameValue}
+					shortcutLabel={shortcutLabel}
+					workspaceStatus={workspaceStatus}
+					isInSection={isInSection}
+					onClick={handleClick}
+					onDoubleClick={isPending || isMainWorkspace ? undefined : startRename}
+					onRemoveFromSidebarClick={handleRemoveFromSidebar}
+					onCloseWorkspaceClick={() => setIsDeleteDialogOpen(true)}
+					onRenameValueChange={setRenameValue}
+					onSubmitRename={submitRename}
+					onCancelRename={cancelRename}
+				>
+					{!isPending && (
+						<DashboardSidebarWorkspaceDetails
+							workspaceId={id}
+							isInSection={isInSection}
+							onClick={handleClick}
+						/>
+					)}
+				</DashboardSidebarExpandedWorkspaceRow>
+			)}
 			{/*
 			 * The workspace's live sessions, nested under its row.
 			 *
 			 * Only the active workspace publishes its pane layout into the shared
 			 * group store. Session identity is available before its transport starts.
 			 */}
-			{sidebarSessions && isActive && !isPending ? (
-				<DashboardSidebarWorkspaceSessions workspaceId={id} />
+			{sidebarSessions &&
+			isActive &&
+			!isPending &&
+			!compactProject?.isCollapsed ? (
+				<CompactWorkspaceSessions workspaceId={id} />
 			) : null}
 		</div>
 	);

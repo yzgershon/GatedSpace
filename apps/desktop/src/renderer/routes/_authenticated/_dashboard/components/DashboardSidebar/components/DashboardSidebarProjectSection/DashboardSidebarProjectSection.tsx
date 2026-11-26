@@ -2,10 +2,18 @@ import type {
 	DraggableAttributes,
 	DraggableSyntheticListeners,
 } from "@dnd-kit/core";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "@superset/ui/dropdown-menu";
 import { AnimatePresence, motion } from "framer-motion";
+import { MoreHorizontal } from "lucide-react";
 import { useMemo } from "react";
 import type { DashboardSidebarProject } from "../../types";
 import { getProjectChildrenWorkspaces } from "../../utils/projectChildren";
+import { DashboardSidebarWorkspaceItem } from "../DashboardSidebarWorkspaceItem";
 import { DashboardSidebarCollapsedProjectContent } from "./components/DashboardSidebarCollapsedProjectContent";
 import { DashboardSidebarExpandedProjectContent } from "./components/DashboardSidebarExpandedProjectContent";
 import { DashboardSidebarProjectContextMenu } from "./components/DashboardSidebarProjectContextMenu";
@@ -81,6 +89,64 @@ export function DashboardSidebarProjectSection({
 					/>
 				</div>
 			</DashboardSidebarProjectContextMenu>
+		);
+	}
+
+	const onlyChild =
+		project.children.length === 1 ? project.children[0] : undefined;
+	// A local project's only checkout does not need a second, repeated header.
+	if (
+		onlyChild?.type === "workspace" &&
+		onlyChild.workspace.type === "main" &&
+		!onlyChild.workspace.pendingTransaction &&
+		!isRenaming
+	) {
+		return (
+			<DashboardSidebarWorkspaceItem
+				workspace={onlyChild.workspace}
+				shortcutLabel={workspaceShortcutLabels.get(onlyChild.workspace.id)}
+				onHoverCardOpen={() => {
+					void onWorkspaceHover(onlyChild.workspace.id);
+				}}
+				compactProject={{
+					name: project.name,
+					isCollapsed: project.isCollapsed,
+					onToggle: () => onToggleCollapse(project.id),
+					onNewWorkspace: handleNewWorkspace,
+					dragAttributes: dragHandleAttributes,
+					dragListeners: dragHandleListeners,
+					actions: (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<button
+									type="button"
+									className="compact-workspace-action"
+									aria-label={`${project.name} workspace actions`}
+								>
+									<MoreHorizontal size={14} />
+								</button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start">
+								<DropdownMenuItem onSelect={startRename}>
+									Rename project
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={handleOpenInFinder}>
+									Open in File Explorer
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={handleOpenSettings}>
+									Project settings
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={handleNewSection}>
+									New group
+								</DropdownMenuItem>
+								<DropdownMenuItem onSelect={confirmRemoveFromSidebar}>
+									Remove from sidebar
+								</DropdownMenuItem>
+							</DropdownMenuContent>
+						</DropdownMenu>
+					),
+				}}
+			/>
 		);
 	}
 

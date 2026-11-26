@@ -15,8 +15,8 @@
  * config that claims to strip maps and silently doesn't, the files are removed
  * outright. A missing file cannot be re-included by matcher semantics.
  *
- * ORDERING MATTERS. This runs at the start of `build`, which is after
- * `prebuild`. That order is load-bearing:
+ * ORDERING MATTERS. This runs at the start of `build`, after `prebuild`, and
+ * at the end of `prepackage` for public CI. That order is load-bearing:
  *
  *   - `validate-native-runtime.ts` READS `dist/main/index.js.map` to prove
  *     libsql and @parcel/watcher stayed external. It runs in `prebuild` and

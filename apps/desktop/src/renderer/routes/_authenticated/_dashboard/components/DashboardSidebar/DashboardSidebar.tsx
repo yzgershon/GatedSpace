@@ -2,6 +2,8 @@ import { toast } from "@superset/ui/sonner";
 import { Pin } from "lucide-react";
 import { useNativeSessionStates } from "renderer/hooks/useNativeSessionStates/useNativeSessionStates";
 import { focusExistingSession } from "renderer/stores/workspace-creates/focusExistingSession";
+import { useWorkspaceRecency } from "renderer/stores/workspace-recency";
+import { sortWorkspaceProjects } from "./utils/workspaceRecency";
 import "./components/DashboardSidebarPanels/collections.css";
 import {
 	closestCenter,
@@ -103,7 +105,10 @@ const SortableProjectWrapper = memo(function SortableProjectWrapper({
 		transform,
 		transition,
 		isDragging,
-	} = useSortable({ id: project.id });
+	} = useSortable({
+		id: project.id,
+		disabled: useWorkspaceRecency((state) => state.recentFirst),
+	});
 
 	return (
 		// The separator lives here, not on DashboardSidebarProjectSection: these
@@ -296,6 +301,13 @@ export function DashboardSidebar({
 	const v2RouteMatch = matchRoute({ to: "/v2-workspace/$workspaceId" });
 	const activeV2WorkspaceId = v2RouteMatch ? v2RouteMatch.workspaceId : null;
 
+	const recentFirst = useWorkspaceRecency((state) => state.recentFirst);
+	const openedAt = useWorkspaceRecency((state) => state.openedAt);
+	useEffect(() => {
+		if (activeV2WorkspaceId)
+			useWorkspaceRecency.getState().markOpened(activeV2WorkspaceId);
+	}, [activeV2WorkspaceId]);
+
 	const sensors = useSensors(
 		useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
 		useSensor(TouchSensor, {
@@ -350,7 +362,12 @@ export function DashboardSidebar({
 			.filter((s) => s.status === "working" || s.status === "attention")
 			.map((s) => s.workspaceId),
 	);
-	const visibleGroups = orderedGroups
+	const visibleGroups = sortWorkspaceProjects(
+		orderedGroups,
+		openedAt,
+		recentFirst,
+		favorites,
+	)
 		.map((project) => {
 			const query = workspaceQuery.trim().toLowerCase();
 			const projectMatches = project.name.toLowerCase().includes(query);
@@ -374,10 +391,6 @@ export function DashboardSidebar({
 		})
 		.filter(
 			(project) => project.children.length || (!workspaceQuery && !activeOnly),
-		)
-		.sort(
-			(a, b) =>
-				Number(favorites.includes(b.id)) - Number(favorites.includes(a.id)),
 		);
 	const toggleFavorite = (id: string) =>
 		setFavorites((previous) => {

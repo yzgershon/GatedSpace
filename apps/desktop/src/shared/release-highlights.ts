@@ -263,6 +263,27 @@ export const RELEASE_HIGHLIGHTS = [
 			},
 		],
 	},
+	{
+		version: "1.18.69",
+		title: "More room, smaller downloads",
+		changes: [
+			{
+				title: "A more compact workspace sidebar",
+				detail:
+					"Dev and its local checkout share one header. Single-session tabs use one row; multi-session tabs expand only when you need them. Click the workspace name to open it, or use the separate arrow to fold its sessions.",
+			},
+			{
+				title: "Your latest workspace, within reach",
+				detail:
+					"The sidebar can keep recently opened workspaces at the top while preserving pinned projects. Change Most recently used workspace first in Appearance settings to return to your manual order.",
+			},
+			{
+				title: "Smaller installers, the same built-in tools",
+				detail:
+					"Duplicate tools, development maps, and unused build files have been removed from Windows installers. Agent runtimes, bundled Git, voice typing, and native integrations are still included and verified.",
+			},
+		],
+	},
 ] as const;
 
 function versionParts(version: string): number[] | null {

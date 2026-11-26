@@ -23,6 +23,7 @@ export const SETTING_ITEM_ID = {
 	APPEARANCE_EDITOR_FONT: "appearance-editor-font",
 	APPEARANCE_TERMINAL_FONT: "appearance-terminal-font",
 	APPEARANCE_SCALE: "appearance-scale",
+	APPEARANCE_WORKSPACE_ORDER: "appearance-workspace-order",
 
 	RINGTONES_NOTIFICATION: "ringtones-notification",
 	RINGTONES_MATRIX: "ringtones-matrix",
@@ -138,6 +139,7 @@ export const SETTING_ITEM_VARIANT: Record<SettingItemId, SettingVariant> = {
 	[SETTING_ITEM_ID.APPEARANCE_EDITOR_FONT]: "shared",
 	[SETTING_ITEM_ID.APPEARANCE_TERMINAL_FONT]: "shared",
 	[SETTING_ITEM_ID.APPEARANCE_SCALE]: "shared",
+	[SETTING_ITEM_ID.APPEARANCE_WORKSPACE_ORDER]: "shared",
 
 	[SETTING_ITEM_ID.RINGTONES_NOTIFICATION]: "shared",
 	[SETTING_ITEM_ID.RINGTONES_MATRIX]: "shared",
@@ -418,6 +420,14 @@ export const SETTINGS_ITEMS: SettingsItem[] = [
 			"system",
 			"visual",
 		],
+	},
+	{
+		id: SETTING_ITEM_ID.APPEARANCE_WORKSPACE_ORDER,
+		section: "appearance",
+		title: "Most recently used workspace first",
+		description:
+			"Keep recent workspaces at the top of the sidebar or use manual order",
+		keywords: ["workspace", "sidebar", "recent", "sort", "order", "compact"],
 	},
 	{
 		id: SETTING_ITEM_ID.APPEARANCE_SCALE,

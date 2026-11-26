@@ -37,16 +37,9 @@ export const nonRuntimeArtifactExcludes = [
 	"!**/*.iobj",
 	"!**/*.ipdb",
 	"!**/*.tlog",
-	/*
-	 * `dist/**` needs its OWN negation, and this is not redundant.
-	 *
-	 * Measured on the 1.17.43 build: `!**\/*.map` alone stripped every map under
-	 * node_modules but left all 633 in `dist/` — 107.8 MB — because the explicit
-	 * `dist/**\/*` include in `files` outranks a later bare negation. Scoping the
-	 * negation to the same root is what makes it win.
-	 *
-	 * If you ever see the installer jump ~20 MB, check this line first.
-	 */
+	"!**/*.tsbuildinfo",
+	// Defense in depth only. The public app-file walk ignored this top-level
+	// negation; prepackage strips maps and packaging-layout verifies the archive.
 	"!dist/**/*.map",
 ];
 
@@ -162,6 +155,8 @@ export const rendererBundledPackageExcludes = [
 	"!**/node_modules/mermaid/**",
 	"!**/node_modules/emojibase-data/**",
 	"!**/node_modules/posthog-js/**",
+	// Packaged graph-library demos are not used by the renderer.
+	"!**/node_modules/cytoscape-fcose/demo/**",
 ];
 
 /**
@@ -178,6 +173,8 @@ const residuePatterns = [
 	"*.md",
 	"*.markdown",
 	"*.ts",
+	"*.d.mts",
+	"*.d.cts",
 	"*.flow",
 	"test/**",
 	"tests/**",
@@ -190,6 +187,13 @@ const residuePatterns = [
 /** Anchored inside node_modules, for the top-level `files` array. */
 export const nodeModulesResidueExcludes = residuePatterns.map(
 	(pattern) => `!**/node_modules/**/${pattern}`,
+);
+// Only these measured build inputs are excluded; native loaders and licenses stay.
+nodeModulesResidueExcludes.push(
+	"!**/node_modules/@superset/*/.cache/**",
+	"!**/node_modules/better-sqlite3/deps/sqlite3/sqlite3.c",
+	"!**/node_modules/better-sqlite3/deps/sqlite3/sqlite3.h",
+	"!**/node_modules/better-sqlite3/deps/sqlite3/sqlite3ext.h",
 );
 
 /** Relative form, for a `from`/`to` copy that filters inside the module. */
@@ -216,7 +220,13 @@ const externalizedRuntimeModules: ExternalizedRuntimeModule[] = [
 	{
 		specifier: "better-sqlite3",
 		materialize: ["better-sqlite3"],
-		packagedCopies: [copyWholeModule("better-sqlite3")],
+		packagedCopies: [
+			copyWholeModule("better-sqlite3", [
+				"!deps/sqlite3/sqlite3.c",
+				"!deps/sqlite3/sqlite3.h",
+				"!deps/sqlite3/sqlite3ext.h",
+			]),
+		],
 		asarUnpackGlobs: ["**/node_modules/better-sqlite3/**/*"],
 	},
 	{

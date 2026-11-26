@@ -64,12 +64,9 @@ describe("nonRuntimeArtifactExcludes", () => {
 		}
 	});
 
-	/**
-	 * Regression: on the 1.17.43 build the bare `!**\/*.map` stripped every map
-	 * under node_modules but left all 633 in dist/ (107.8 MB), because the
-	 * explicit `dist/**\/*` include in `files` outranks a later bare negation.
-	 */
-	it("strips maps from dist/, which needs its own scoped negation", () => {
+	// This checks the pattern intent only. packaging-layout.test.ts exercises
+	// electron-builder's FileSet matcher and the actual-archive regression guard.
+	it("declares dist source maps as non-runtime files", () => {
 		for (const file of [
 			"dist/renderer/assets/index-B4OVYK9b.js.map",
 			"dist/main/host-service.js.map",

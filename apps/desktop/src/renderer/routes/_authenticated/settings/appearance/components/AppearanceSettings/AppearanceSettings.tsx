@@ -10,6 +10,7 @@ import { MarkdownStyleSection } from "./components/MarkdownStyleSection";
 import { ScaleSection } from "./components/ScaleSection";
 import { SkinSection } from "./components/SkinSection";
 import { ThemeSection } from "./components/ThemeSection";
+import { WorkspaceSidebarSection } from "./components/WorkspaceSidebarSection";
 import { WorkspaceToolsSection } from "./components/WorkspaceToolsSection";
 
 /**
@@ -74,6 +75,10 @@ export function AppearanceSettings({ visibleItems }: AppearanceSettingsProps) {
 				{showScale && <ScaleSection key="scale" />}
 				<AgentToolbarSection key="agent-toolbar" />
 				<WorkspaceToolsSection key="workspace-tools" />
+				{isItemVisible(
+					SETTING_ITEM_ID.APPEARANCE_WORKSPACE_ORDER,
+					visibleItems,
+				) && <WorkspaceSidebarSection key="workspace-sidebar" />}
 				{showMarkdown && <MarkdownStyleSection key="markdown" />}
 				{showEditorFont && (
 					<FontSettingSection key="editor-font" variant="editor" />

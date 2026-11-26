@@ -66,14 +66,10 @@ jobs:
         with:
           bun-version-file: .bun-version
 
-      - name: Cache dependencies
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+      - name: Restore desktop build caches
+        uses: ./.github/actions/desktop-build-cache
         with:
-          path: |
-            ~/.bun/install/cache
-          key: ${{ runner.os }}-${{ matrix.arch }}-bun-${{ steps.setup-bun.outputs.bun-revision }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-${{ matrix.arch }}-bun-${{ steps.setup-bun.outputs.bun-revision }}-
+          arch: ${{ matrix.arch }}
 
       - name: Install dependencies
         run: bun install --frozen --ignore-scripts
@@ -140,7 +136,8 @@ jobs:
         working-directory: apps/desktop
         env:
           TARGET_ARCH: ${{ matrix.arch }}
-        run: bun run package -- --publish never --config ${{ inputs.electron_builder_config }} --${{ matrix.arch }}
+        # Native dependencies were prepared above and are validated by prepackage.
+        run: bun run package -- --publish never --config ${{ inputs.electron_builder_config }} --${{ matrix.arch }} --config.npmRebuild=false
 
       - name: Verify packaged app
         working-directory: apps/desktop
@@ -213,6 +210,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: ${{ inputs.artifact_prefix }}-win-${{ matrix.arch }}-installer
+          # NSIS payloads are already compressed; ZIP compression wastes runner time.
+          compression-level: 0
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/*.exe.blockmap
